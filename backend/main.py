@@ -1,6 +1,8 @@
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 
 from api_computers import router as computers_router
@@ -12,11 +14,6 @@ app = FastAPI(title="ITDB dev", docs_url="/docs")
 app.include_router(computers_router)
 app.include_router(import_router)
 app.include_router(import_apply_router)
-
-
-@app.get("/")
-def index():
-    return {"app": "ITDB", "env": "dev"}
 
 
 @app.get("/api/health")
@@ -33,3 +30,13 @@ def health():
         return {"db": "ok"}
     except Exception as e:
         return {"db": "error", "error": str(e)}
+
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / "static"
+
+if STATIC_DIR.exists():
+    app.mount(
+        "/",
+        StaticFiles(directory=str(STATIC_DIR), html=True),
+        name="static",
+    )
