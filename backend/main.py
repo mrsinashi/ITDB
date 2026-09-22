@@ -3,7 +3,11 @@ import os
 from fastapi import FastAPI
 from sqlalchemy import create_engine, text
 
+from api_import import router as import_router
+
 app = FastAPI(title="ITDB dev", docs_url="/docs")
+
+app.include_router(import_router)
 
 
 @app.get("/")
@@ -14,6 +18,7 @@ def index():
 @app.get("/api/health")
 def health():
     url = os.environ.get("DATABASE_URL")
+
     if not url:
         return {"db": "no DATABASE_URL"}
 
