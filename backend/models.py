@@ -140,3 +140,13 @@ class VacuumAccountComputer(Base):
     id = Column(Integer, primary_key=True)
     account_id = Column(Integer, ForeignKey("vacuum_accounts.id"), nullable=False)
     computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
+
+class History(Base):
+    __tablename__ = "history"
+
+    id = Column(Integer, primary_key=True)
+    entity = Column(Text, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    user_name = Column(Text, nullable=True)
+    at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    changes = Column(JSONB, nullable=False)

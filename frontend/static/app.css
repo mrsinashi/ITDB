@@ -42,3 +42,8 @@ body,
 .ag-theme-alpine {
   --ag-font-size: 12px;
 }
+
+.dup-red {
+  background-color: #ffd6d6 !important;
+  color: #b00000 !important;
+}

@@ -1,11 +1,14 @@
 from collections import defaultdict
+from datetime import datetime, timezone
+import re
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, HTTPException
 
 from db import SessionLocal
 from models import (
     Computer,
     ComputerPerson,
+    History,
     Location,
     Person,
     VacuumAccount,
@@ -13,6 +16,129 @@ from models import (
 )
 
 router = APIRouter(prefix="/api", tags=["computers"])
+
+SINGLE_FIELDS = {
+    "status",
+    "hostname",
+    "inv_no",
+    "serial",
+    "type",
+    "model",
+    "os",
+    "cpu",
+    "ram",
+    "gpu",
+    "vnc",
+}
+
+MULTILINE_FIELDS = {
+    "drive",
+    "note",
+}
+
+EXTRA_FIELDS = {
+    "gsit": "GSIT",
+    "state": "Сост.",
+    "label": "Метка",
+}
+
+
+def normalize_single(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    return text if text else None
+
+
+def normalize_multiline(value):
+    if value is None:
+        return None
+
+    text = str(value)
+
+    lines = []
+
+    for line in text.splitlines():
+        line = line.strip()
+
+        if line:
+            lines.append(line)
+
+    if not lines:
+        return None
+
+    return "\n".join(lines)
+
+
+def normalize_ip(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    if not text:
+        return None
+
+    parts = []
+
+    for part in re.split(r"[\s,;]+", text):
+        part = part.strip()
+
+        if part:
+            parts.append(part)
+
+    if not parts:
+        return None
+
+    return "\n".join(parts)
+
+
+def normalize_mac(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    if not text:
+        return None
+
+    parts = []
+
+    for part in re.split(r"[\s,;]+", text):
+        part = part.strip().upper()
+
+        if part:
+            parts.append(part)
+
+    if not parts:
+        return None
+
+    return "\n".join(parts)
+
+
+def parse_seat_no(value):
+    text = normalize_single(value)
+
+    if text is None:
+        return None
+
+    try:
+        number = float(text.replace(",", "."))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Номер места должен быть целым числом.",
+        )
+
+    if not number.is_integer():
+        raise HTTPException(
+            status_code=400,
+            detail="Номер места должен быть целым числом.",
+        )
+
+    return int(number)
 
 
 @router.get("/computers")
@@ -163,6 +289,7 @@ def list_computers():
                     "gpu": computer.gpu,
                     "mac": computer.mac,
                     "inv_no": computer.inv_no,
+                    "serial": computer.serial,
                     "gsit": extra.get("GSIT"),
                     "state": extra.get("Сост."),
                     "label": extra.get("Метка"),
@@ -197,6 +324,149 @@ def list_computers():
             "total": len(rows),
             "rows": rows,
         }
+
+    finally:
+        session.close()
+
+
+@router.patch("/computers/{computer_id}")
+def update_computer(
+    computer_id: int,
+    payload: dict = Body(...),
+):
+    session = SessionLocal()
+
+    try:
+        computer = session.get(Computer, computer_id)
+
+        if not computer:
+            raise HTTPException(
+                status_code=404,
+                detail="Компьютер не найден.",
+            )
+
+        changes = {}
+
+        extra = dict(computer.extra or {})
+        extra_changed = False
+
+        allowed_fields = (
+            SINGLE_FIELDS
+            | MULTILINE_FIELDS
+            | EXTRA_FIELDS.keys()
+            | {"ip", "mac", "seat_no"}
+        )
+
+        for field, value in payload.items():
+            if field not in allowed_fields:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Неизвестное поле: {field}",
+                )
+
+            if field == "seat_no":
+                new_value = parse_seat_no(value)
+                old_value = computer.seat_no
+
+            elif field == "ip":
+                new_value = normalize_ip(value)
+                old_value = computer.ip
+
+            elif field == "mac":
+                new_value = normalize_mac(value)
+                old_value = computer.mac
+
+            elif field in MULTILINE_FIELDS:
+                new_value = normalize_multiline(value)
+                old_value = getattr(computer, field)
+
+            elif field in SINGLE_FIELDS:
+                new_value = normalize_single(value)
+                old_value = getattr(computer, field)
+
+                if field == "status" and new_value is None:
+                    new_value = "установлен"
+
+            elif field in EXTRA_FIELDS:
+                extra_key = EXTRA_FIELDS[field]
+                new_value = normalize_single(value)
+                old_value = extra.get(extra_key)
+
+                if old_value != new_value:
+                    changes[f"extra.{extra_key}"] = {
+                        "old": old_value,
+                        "new": new_value,
+                    }
+
+                    if new_value is None:
+                        extra.pop(extra_key, None)
+                    else:
+                        extra[extra_key] = new_value
+
+                    extra_changed = True
+
+                continue
+
+            else:
+                continue
+
+            if old_value != new_value:
+                changes[field] = {
+                    "old": old_value,
+                    "new": new_value,
+                }
+
+                setattr(computer, field, new_value)
+
+        if changes:
+            if extra_changed:
+                computer.extra = extra
+
+            computer.version = (computer.version or 1) + 1
+            computer.updated_at = datetime.now(timezone.utc)
+
+            session.add(
+                History(
+                    entity="computers",
+                    entity_id=computer.id,
+                    user_name=None,
+                    changes=changes,
+                )
+            )
+
+            session.commit()
+
+        updated = {
+            "seat_no": computer.seat_no,
+            "ip": computer.ip,
+            "mac": computer.mac,
+            "drive": computer.drive,
+            "note": computer.note,
+        }
+
+        for field in SINGLE_FIELDS:
+            updated[field] = getattr(computer, field)
+
+        for frontend_key, extra_key in EXTRA_FIELDS.items():
+            updated[frontend_key] = extra.get(extra_key)
+
+        return {
+            "ok": True,
+            "id": computer.id,
+            "changes": changes,
+            "updated": updated,
+        }
+
+    except HTTPException:
+        session.rollback()
+        raise
+
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Не удалось сохранить изменения: {e}",
+        )
 
     finally:
         session.close()
