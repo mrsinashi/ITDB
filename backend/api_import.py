@@ -52,13 +52,20 @@ IMPORTANT_FIELDS = (
 
 MAC_RE = re.compile(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
 
-DRIVE_RE = re.compile(
-    r"^(?P<type>SSD|HDD|NVME)\s*[-_]?\s*(?P<size>\d+)(?:\s*(?:GB|ГБ|Г))?$",
+HOSTNAME_RE = re.compile(r"^[0-9A-ZА-ЯЁ][0-9A-ZА-ЯЁ._-]*$", re.I)
+
+DRIVE_TYPED_RE = re.compile(
+    r"(?P<type>SSD|HDD|NVME)\s*[-_]?\s*(?P<size>\d+)\s*(?P<unit>TB|GB|ТБ|ГБ|Т|Г)?",
     re.I,
 )
 
 DRIVE_REVERSE_RE = re.compile(
-    r"^(?P<size>\d+)\s*(?P<type>SSD|HDD|NVME)$",
+    r"(?P<size>\d+)\s*(?P<unit>TB|GB|ТБ|ГБ|Т|Г)?\s*(?P<type>SSD|HDD|NVME)",
+    re.I,
+)
+
+BARE_DRIVE_RE = re.compile(
+    r"\b(?P<size>\d+)\s*(?P<unit>TB|GB|ТБ|ГБ|Т|Г)?\b",
     re.I,
 )
 
@@ -142,29 +149,50 @@ def clean_text(value):
     return " ".join(text.split())
 
 
-def normalize_ip(value):
+def looks_like_hostname(value):
+    if not value:
+        return False
+
+    if value.isdigit():
+        return False
+
+    return bool(HOSTNAME_RE.match(value))
+
+
+def parse_ips(value):
     text = clean_text(value)
 
-    if text is None:
-        return None, True
+    if not text:
+        return [], []
 
-    try:
-        ipaddress.ip_address(text)
-        return text, True
-    except ValueError:
-        return text, False
+    ips = []
+    issues = []
+
+    for part in re.split(r"[\n\r,;\s]+", text):
+        part = part.strip()
+
+        if not part:
+            continue
+
+        try:
+            ipaddress.ip_address(part)
+            ips.append(part)
+        except ValueError:
+            issues.append((part, "IP не распознаётся"))
+
+    return ips, issues
 
 
-def normalize_mac(value):
+def parse_macs(value):
     text = cell_to_text(value)
 
     if not text:
         return [], []
 
     macs = []
-    bad = []
+    issues = []
 
-    for part in re.split(r"[\n\r,;]+", text):
+    for part in re.split(r"[\n\r,;\s]+", text):
         part = part.strip().upper()
 
         if not part:
@@ -173,28 +201,70 @@ def normalize_mac(value):
         if MAC_RE.match(part):
             macs.append(part)
         else:
-            bad.append(part)
+            issues.append((part, "Неправильное значение MAC"))
 
-    return macs, bad
+    return macs, issues
 
 
-def normalize_drive(value):
+def normalize_drive_size(size, unit):
+    if unit:
+        unit_upper = unit.upper()
+
+        if unit_upper in ("TB", "ТБ", "Т"):
+            return f"{size}TB"
+
+    return str(size)
+
+
+def parse_drive_text(value):
     text = clean_text(value)
 
     if text is None:
-        return None, True
+        return [], []
 
     upper = " ".join(text.upper().split())
 
-    match = DRIVE_RE.match(upper)
-    if match:
-        return f"{match.group('type').upper()} {match.group('size')}", True
+    if not upper:
+        return [], []
 
-    match = DRIVE_REVERSE_RE.match(upper)
-    if match:
-        return f"{match.group('type').upper()} {match.group('size')}", True
+    values = []
+    issues = []
 
-    return text, False
+    def remove_matches(source, regex, typed):
+        parts = []
+        last_end = 0
+
+        for match in regex.finditer(source):
+            size = match.group("size")
+            unit = match.group("unit")
+
+            if typed:
+                drive_type = match.group("type").upper()
+                values.append(f"{drive_type} {normalize_drive_size(size, unit)}")
+            else:
+                normalized = normalize_drive_size(size, unit)
+                values.append(normalized)
+                issues.append(f"Указан только объём накопителя: {normalized}")
+
+            parts.append(source[last_end:match.start()])
+            last_end = match.end()
+
+        parts.append(source[last_end:])
+        return " ".join(parts)
+
+    remaining = remove_matches(upper, DRIVE_TYPED_RE, True)
+    remaining = remove_matches(remaining, DRIVE_REVERSE_RE, True)
+    remaining = remove_matches(remaining, BARE_DRIVE_RE, False)
+
+    leftover = re.sub(r"[^0-9A-ZА-ЯЁ]+", " ", remaining, flags=re.I).strip()
+
+    if not values and upper:
+        values.append(upper)
+        issues.append("Не удалось разобрать значение DRIVE")
+    elif leftover:
+        issues.append(f"Лишняя часть в DRIVE: {leftover}")
+
+    return values, issues
 
 
 def pack_duplicates(counter):
@@ -416,9 +486,6 @@ async def analyze(file: UploadFile = File(...)):
         if not department:
             add_anomaly(row_label, "Отделение", department, "Пустое отделение")
 
-        if not room_code and not room_name:
-            add_anomaly(row_label, "Кабинет", None, "Нет названия или номера кабинета")
-
         if room_code and room_name:
             room_display = f"{room_code} {room_name}"
         else:
@@ -443,11 +510,13 @@ async def analyze(file: UploadFile = File(...)):
                 "Номер места не является целым числом",
             )
 
-        ip_value, ip_ok = normalize_ip(rec.get("ip"))
-        if ip_value:
-            if not ip_ok:
-                add_anomaly(row_label, "IP", ip_value, "IP не распознаётся")
-            dup_ip[ip_value].append(row_label)
+        ips, ip_issues = parse_ips(rec.get("ip"))
+
+        for ip in ips:
+            dup_ip[ip].append(row_label)
+
+        for bad_ip, message in ip_issues:
+            add_anomaly(row_label, "IP", bad_ip, message)
 
         hostname = clean_text(rec.get("hostname"))
         if hostname:
@@ -473,30 +542,26 @@ async def analyze(file: UploadFile = File(...)):
             if value:
                 choices[target_key].add(value)
 
-        drive_value, drive_ok = normalize_drive(rec.get("drive"))
-        if drive_value:
+        drive_values, drive_issues = parse_drive_text(rec.get("drive"))
+
+        for drive_value in drive_values:
             choices["drive"].add(drive_value)
 
-            if not drive_ok:
-                add_anomaly(
-                    row_label,
-                    "DRIVE",
-                    drive_value,
-                    "Значение DRIVE не приведено к виду 'SSD 250' или 'HDD 500'",
-                )
+        for message in drive_issues:
+            add_anomaly(
+                row_label,
+                "DRIVE",
+                clean_text(rec.get("drive")),
+                message,
+            )
 
-        macs, bad_macs = normalize_mac(rec.get("mac"))
+        macs, mac_issues = parse_macs(rec.get("mac"))
 
         for mac in macs:
             dup_mac[mac].append(row_label)
 
-        for bad_mac in bad_macs:
-            add_anomaly(
-                row_label,
-                "MAC",
-                bad_mac,
-                "MAC не похож на формат AA:BB:CC:11:22:33",
-            )
+        for bad_mac, message in mac_issues:
+            add_anomaly(row_label, "MAC", bad_mac, message)
 
         inv_no = clean_text(rec.get("inv_no"))
         if inv_no:
