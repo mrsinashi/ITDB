@@ -1,0 +1,78 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, Arial, sans-serif;
+  font-size: 13px;
+  color: #222;
+  background: #fff;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+.header a {
+  color: #0645ad;
+  text-decoration: none;
+}
+
+.header a:hover {
+  text-decoration: underline;
+}
+
+.tree {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+.node-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 1px 4px;
+  border-radius: 3px;
+  cursor: default;
+}
+
+.node-row:hover {
+  background: #f2f2f2;
+}
+
+.toggle {
+  width: 14px;
+  display: inline-block;
+  text-align: center;
+  color: #555;
+  cursor: pointer;
+}
+
+.kind {
+  color: #777;
+  font-size: 11px;
+  min-width: 78px;
+}
+
+.name {
+  flex: 1;
+}
+
+.count {
+  color: #555;
+  font-size: 12px;
+}
+
+.children {
+  margin-left: 18px;
+}
