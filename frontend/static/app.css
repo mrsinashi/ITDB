@@ -1,0 +1,44 @@
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, Arial, sans-serif;
+  font-size: 13px;
+  color: #222;
+  background: #fff;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+.toolbar input {
+  width: 360px;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+
+.grid {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.ag-cell {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.ag-theme-alpine {
+  --ag-font-size: 12px;
+}
