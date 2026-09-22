@@ -4,10 +4,12 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine, text
 
 from api_import import router as import_router
+from import_apply import router as import_apply_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
 
 app.include_router(import_router)
+app.include_router(import_apply_router)
 
 
 @app.get("/")

@@ -6,6 +6,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -66,3 +67,76 @@ class Computer(Base):
 
     version = Column(Integer, nullable=False, server_default="1")
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class Choice(Base):
+    __tablename__ = "choices"
+    __table_args__ = (
+        UniqueConstraint("field", "value", name="uq_choices_field_value"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    field = Column(Text, nullable=False)
+    value = Column(Text, nullable=False)
+    sort = Column(Integer, nullable=False, server_default="0")
+    color = Column(Text, nullable=True)
+
+
+class Person(Base):
+    __tablename__ = "people"
+    __table_args__ = (
+        UniqueConstraint("full_name", name="uq_people_full_name"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    full_name = Column(Text, nullable=False)
+    position = Column(Text, nullable=True)
+    note = Column(Text, nullable=True)
+    archived = Column(Boolean, nullable=False, server_default="false")
+
+
+class ComputerPerson(Base):
+    __tablename__ = "computer_people"
+    __table_args__ = (
+        UniqueConstraint("computer_id", "person_id", name="uq_computer_people"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
+    person_id = Column(Integer, ForeignKey("people.id"), nullable=False)
+    is_main = Column(Boolean, nullable=False, server_default="false")
+    sort = Column(Integer, nullable=False, server_default="0")
+
+
+class VacuumAccount(Base):
+    __tablename__ = "vacuum_accounts"
+    __table_args__ = (
+        UniqueConstraint("login", name="uq_vacuum_accounts_login"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    login = Column(Text, nullable=False)
+    note = Column(Text, nullable=True)
+    archived = Column(Boolean, nullable=False, server_default="false")
+
+
+class VacuumAccountPerson(Base):
+    __tablename__ = "vacuum_account_people"
+    __table_args__ = (
+        UniqueConstraint("account_id", "person_id", name="uq_vacuum_account_people"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    account_id = Column(Integer, ForeignKey("vacuum_accounts.id"), nullable=False)
+    person_id = Column(Integer, ForeignKey("people.id"), nullable=False)
+
+
+class VacuumAccountComputer(Base):
+    __tablename__ = "vacuum_account_computers"
+    __table_args__ = (
+        UniqueConstraint("account_id", "computer_id", name="uq_vacuum_account_computers"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    account_id = Column(Integer, ForeignKey("vacuum_accounts.id"), nullable=False)
+    computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
