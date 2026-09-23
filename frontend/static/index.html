@@ -2,38 +2,134 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>ITDB — Таблица</title>
+  <title>ITDB</title>
 
-  <link rel="stylesheet" href="/common.css">
   <link rel="stylesheet" href="/vendor/ag-grid.css">
   <link rel="stylesheet" href="/vendor/ag-theme-alpine.css">
   <link rel="stylesheet" href="/app.css">
 </head>
 
 <body>
-  <div id="top-menu"></div>
+  <div id="app" v-cloak>
+    <nav class="top-menu" v-if="user">
+      <span class="brand">ITDB</span>
 
-  <div id="app">
-    <div class="toolbar">
-      <input
-        id="quickFilter"
-        v-model="quickFilter"
-        @input="applyQuickFilter"
-        placeholder="Поиск по всей таблице"
-      >
+      <a href="#" @click.prevent="setView('table')" :class="{ active: view === 'table' }">
+        Таблица
+      </a>
 
-      <span v-if="loading">Загрузка...</span>
-      <span v-else-if="error" style="color: #a00;">{{ error }}</span>
-      <span v-else>{{ rowCount }} записей</span>
+      <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">
+        Дерево
+      </a>
+
+      <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">
+        История
+      </a>
+
+      <a href="#" @click.prevent="downloadExport">
+        Экспорт
+      </a>
+
+      <span class="menu-right">
+        <span class="user">{{ user.login }}</span>
+        <a href="#" @click.prevent="logout">Выход</a>
+      </span>
+    </nav>
+
+    <div v-if="authChecked && !user" class="info-bar">
+      Нет доступа. <a href="/login.html">Войти</a>
     </div>
 
-    <div id="grid" class="ag-theme-alpine grid"></div>
-  </div>
+    <section v-if="user" v-show="view === 'table'" class="view">
+      <div class="toolbar">
+        <input
+          id="quickFilter"
+          v-model="quickFilter"
+          @input="applyQuickFilter"
+          placeholder="Поиск по всей таблице"
+        >
 
-  <script src="/common.js"></script>
-  <script>
-    renderTopMenu("table");
-  </script>
+        <span v-if="tableLoading">Загрузка...</span>
+        <span v-else-if="tableError" style="color: #a00;">{{ tableError }}</span>
+        <span v-else>{{ rowCount }} записей</span>
+      </div>
+
+      <div id="grid" class="ag-theme-alpine grid"></div>
+    </section>
+
+    <section v-if="user && view === 'tree'" class="view">
+      <div class="info-bar">
+        <span v-if="treeLoading">Загрузка...</span>
+        <span v-else-if="treeError" style="color: #a00;">{{ treeError }}</span>
+        <span v-else>Без расположения: {{ unlocated }}</span>
+      </div>
+
+      <div class="tree">
+        <div v-if="treeRoots.length === 0">
+          Расположения не найдены.
+        </div>
+
+        <tree-node
+          v-for="root in treeRoots"
+          :key="root.id"
+          :node="root"
+          :level="0"
+        ></tree-node>
+      </div>
+    </section>
+
+    <section v-if="user && view === 'history'" class="view">
+      <div class="info-bar">
+        История изменений
+      </div>
+
+      <div class="page">
+        <div v-if="historyLoading">Загрузка...</div>
+        <div v-else-if="historyError" style="color: #a00;">{{ historyError }}</div>
+        <div v-else-if="historyItems.length === 0">История пока пуста.</div>
+
+        <table v-else class="history-table">
+          <thead>
+            <tr>
+              <th>Когда</th>
+              <th>Объект</th>
+              <th>Пользователь</th>
+              <th>Изменения</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr v-for="item in historyItems" :key="item.id">
+              <td class="nowrap">{{ formatTime(item.at) }}</td>
+
+              <td class="nowrap">
+                <template v-if="item.title">{{ item.title }}</template>
+                <template v-else>{{ item.entity }} #{{ item.entity_id }}</template>
+              </td>
+
+              <td class="nowrap">
+                <template v-if="item.user_name">{{ item.user_name }}</template>
+                <template v-else>—</template>
+              </td>
+
+              <td>
+                <div
+                  v-for="(change, field) in item.changes"
+                  :key="field"
+                  class="change"
+                >
+                  <span class="field">{{ field }}:</span>
+                  <span class="old">{{ displayValue(change.old) }}</span>
+                  <span class="arrow">→</span>
+                  <span class="new">{{ displayValue(change.new) }}</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 
   <script src="/vendor/vue.global.prod.js"></script>
   <script src="/vendor/ag-grid-community.min.js"></script>
