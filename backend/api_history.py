@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from sqlalchemy import desc
 
 from db import SessionLocal
-from models import Computer, History
+from models import Computer, History, Location
 
 router = APIRouter(prefix="/api", tags=["history"])
 
@@ -26,10 +26,13 @@ def history(limit: int = 200):
         )
 
         computer_ids = set()
+        location_ids = set()
 
         for item in items:
             if item.entity == "computers":
                 computer_ids.add(item.entity_id)
+            elif item.entity == "locations":
+                location_ids.add(item.entity_id)
 
         hostname_by_id = {}
 
@@ -43,6 +46,18 @@ def history(limit: int = 200):
             for computer in computers:
                 hostname_by_id[computer.id] = computer.hostname
 
+        location_name_by_id = {}
+
+        if location_ids:
+            locations = (
+                session.query(Location)
+                .filter(Location.id.in_(location_ids))
+                .all()
+            )
+
+            for location in locations:
+                location_name_by_id[location.id] = location.name
+
         result = []
 
         for item in items:
@@ -50,6 +65,8 @@ def history(limit: int = 200):
 
             if item.entity == "computers":
                 title = hostname_by_id.get(item.entity_id)
+            elif item.entity == "locations":
+                title = location_name_by_id.get(item.entity_id)
 
             result.append(
                 {

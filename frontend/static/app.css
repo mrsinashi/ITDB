@@ -259,11 +259,11 @@ body {
 .card {
     position: absolute;
     top: 0;
-    right: 0;
+    left: 0;
     bottom: 0;
     width: 380px;
     background: #fff;
-    border-left: 1px solid #ccc;
+    border-right: 1px solid #ccc;
     display: flex;
     flex-direction: column;
     font-size: 12px;
@@ -329,4 +329,27 @@ body {
 }
 .muted {
     color: #999;
+}
+/* Правка дерева */
+.tree-add {
+    margin-left: auto;
+}
+.node-actions {
+    display: none;
+    margin-left: 8px;
+    gap: 2px;
+}
+.node-row:hover .node-actions {
+    display: inline-flex;
+}
+.node-actions .act {
+    cursor: pointer;
+    color: #555;
+    padding: 0 3px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+.node-actions .act:hover {
+    background: #e0e0e0;
+    color: #111;
 }

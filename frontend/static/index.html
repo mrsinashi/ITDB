@@ -62,10 +62,48 @@
         <span v-if="treeLoading">Загрузка...</span>
         <span v-else-if="treeError" style="color: #a00;">{{ treeError }}</span>
         <span v-else>Без расположения: {{ unlocated }}</span>
+
+        <span class="tree-add" v-if="!treeForm">
+          <button @click="openAddForm(null)">+ Здание</button>
+        </span>
+      </div>
+
+      <div class="toolbar" v-if="treeForm">
+        <template v-if="treeForm.action === 'add'">
+          <span v-if="treeForm.path">Новый узел в «{{ treeForm.path }}»:</span>
+          <span v-else>Новый узел:</span>
+        </template>
+        <template v-else>
+          <span>Правка «{{ treeForm.path }}»:</span>
+        </template>
+
+        <select v-if="treeForm.kinds.length > 1" v-model="treeForm.kind">
+          <option v-for="k in treeForm.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
+        </select>
+
+        <input
+          v-if="treeForm.kind !== 'floor'"
+          v-model="treeForm.code"
+          @keydown.enter="submitTreeForm"
+          placeholder="Код"
+          style="width: 70px;"
+        >
+        <input
+          v-model="treeForm.name"
+          @keydown.enter="submitTreeForm"
+          placeholder="Название"
+          style="width: 220px;"
+          autofocus
+        >
+
+        <button @click="submitTreeForm">OK</button>
+        <button @click="treeForm = null">Отмена</button>
+
+        <span v-if="treeFormError" style="color: #a00;">{{ treeFormError }}</span>
       </div>
 
       <div class="tree">
-        <div v-if="treeRoots.length === 0">
+        <div v-if="treeRoots.length === 0 && !treeLoading && !treeError">
           Расположения не найдены.
         </div>
 

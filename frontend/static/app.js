@@ -321,6 +321,10 @@ const app = Vue.createApp({
             historyLoading: false,
             historyError: "",
             historyItems: [],
+            treeForm: null,
+            treeFormError: "",
+            treeIndex: {},
+            treeOpenIds: new Set(),
             card: null,
             cardLoading: false,
             cardError: "",
@@ -559,15 +563,42 @@ const app = Vue.createApp({
         async loadTree() {
             this.treeLoading = true;
             this.treeError = "";
+
             try {
                 const response = await apiFetch("/api/locations/tree");
                 const data = await response.json();
                 this.treeRoots = data.roots || [];
                 this.unlocated = data.unlocated || 0;
+                this.buildTreeIndex();
             } catch (e) {
                 this.treeError = String(e);
             }
+
             this.treeLoading = false;
+        },
+
+        buildTreeIndex() {
+            const index = {};
+
+            const walk = (nodes, parts) => {
+                nodes.forEach((node) => {
+                    let title = node.name || node.code || "";
+
+                    if (node.kind === "room" && node.code && node.name && node.code !== node.name) {
+                        title = node.code + " " + node.name;
+                    }
+
+                    const path = parts.concat([title]).join(" → ");
+                    index[node.id] = { node: node, path: path };
+
+                    if (node.children && node.children.length) {
+                        walk(node.children, parts.concat([title]));
+                    }
+                });
+            };
+
+            walk(this.treeRoots, []);
+            this.treeIndex = index;
         },
         async loadHistory() {
             this.historyLoading = true;
@@ -580,6 +611,219 @@ const app = Vue.createApp({
                 this.historyError = String(e);
             }
             this.historyLoading = false;
+        },
+        kindLabel(kind) {
+            return kindLabels[kind] || kind;
+        },
+
+        openAddForm(node) {
+            const allowedChildren = {
+                building: ["department"],
+                department: ["floor", "room"],
+                floor: ["room"]
+            };
+
+            let kinds = ["building"];
+            let path = "";
+
+            if (node) {
+                kinds = allowedChildren[node.kind] || [];
+
+                if (!kinds.length) {
+                    return;
+                }
+
+                const entry = this.treeIndex[node.id];
+                path = entry ? entry.path : "";
+            }
+
+            this.treeForm = {
+                action: "add",
+                parentId: node ? node.id : null,
+                nodeId: null,
+                kind: kinds[0],
+                kinds: kinds,
+                code: "",
+                name: "",
+                path: path
+            };
+            this.treeFormError = "";
+        },
+
+        openEditForm(node) {
+            const entry = this.treeIndex[node.id];
+
+            this.treeForm = {
+                action: "edit",
+                parentId: node.parent_id,
+                nodeId: node.id,
+                kind: node.kind,
+                kinds: [node.kind],
+                code: node.code || "",
+                name: node.name || "",
+                path: entry ? entry.path : ""
+            };
+            this.treeFormError = "";
+        },
+
+        async submitTreeForm() {
+            const form = this.treeForm;
+
+            if (!form) {
+                return;
+            }
+
+            this.treeFormError = "";
+
+            try {
+                let response;
+
+                if (form.action === "add") {
+                    response = await apiFetch("/api/locations", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            parent_id: form.parentId,
+                            kind: form.kind,
+                            name: form.name,
+                            code: form.code
+                        })
+                    });
+                } else {
+                    response = await apiFetch("/api/locations/" + form.nodeId, {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            name: form.name,
+                            code: form.code
+                        })
+                    });
+                }
+
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+
+                this.treeForm = null;
+                await this.loadTree();
+                await this.loadTable();
+            } catch (e) {
+                this.treeFormError = String(e.message || e);
+            }
+        },
+
+        async archiveLocation(node) {
+            const entry = this.treeIndex[node.id];
+            const path = entry ? entry.path : node.name;
+
+            if (!confirm("Архивировать «" + path + "»? Узел исчезнет из дерева.")) {
+                return;
+            }
+
+            try {
+                const response = await apiFetch("/api/locations/" + node.id + "/archive", {
+                    method: "POST"
+                });
+
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+
+                await this.loadTree();
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось архивировать: " + e);
+            }
+        },
+
+        moveLocationUp(node) {
+            this.moveLocation(node, -1);
+        },
+
+        moveLocationDown(node) {
+            this.moveLocation(node, 1);
+        },
+
+        async moveLocation(node, dir) {
+            const parentEntry = node.parent_id ? this.treeIndex[node.parent_id] : null;
+            const siblings = parentEntry ? parentEntry.node.children : this.treeRoots;
+            const index = siblings.findIndex((item) => item.id === node.id);
+            const target = siblings[index + dir];
+
+            if (!target) {
+                return;
+            }
+
+            try {
+                let response;
+
+                if (node.sort === target.sort) {
+                    response = await apiFetch("/api/locations/" + node.id, {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            sort: target.sort + (dir > 0 ? 1 : -1)
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(await this.errorText(response));
+                    }
+                } else {
+                    response = await apiFetch("/api/locations/" + node.id, {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ sort: target.sort })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(await this.errorText(response));
+                    }
+
+                    response = await apiFetch("/api/locations/" + target.id, {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ sort: node.sort })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(await this.errorText(response));
+                    }
+                }
+
+                await this.loadTree();
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось переместить: " + e);
+            }
+        },
+
+        async errorText(response) {
+            let message = "HTTP " + response.status;
+
+            try {
+                const data = await response.json();
+
+                if (data && data.detail) {
+                    message = typeof data.detail === "string"
+                        ? data.detail
+                        : JSON.stringify(data.detail);
+                }
+            } catch (e) {
+                // оставляем HTTP-статус
+            }
+
+            return message;
         },
         formatTime(value) {
             if (!value) {
@@ -633,9 +877,13 @@ app.component("tree-node", {
         level: Number
     },
     data() {
-        return {
-            open: this.level < 2
-        };
+        let open = this.level < 2;
+
+        if (window.itdbTable && window.itdbTable.treeOpenIds.has(this.node.id)) {
+            open = true;
+        }
+
+        return { open: open };
     },
     computed: {
         kindLabel() {
@@ -650,13 +898,30 @@ app.component("tree-node", {
             ) {
                 return this.node.code + " " + this.node.name;
             }
+
             return this.node.name || this.node.code || "";
+        },
+        canAddChild() {
+            return this.node.kind !== "room";
         }
     },
     methods: {
         toggle() {
             if (this.node.children && this.node.children.length) {
                 this.open = !this.open;
+
+                if (window.itdbTable) {
+                    if (this.open) {
+                        window.itdbTable.treeOpenIds.add(this.node.id);
+                    } else {
+                        window.itdbTable.treeOpenIds.delete(this.node.id);
+                    }
+                }
+            }
+        },
+        call(method) {
+            if (window.itdbTable) {
+                window.itdbTable[method](this.node);
             }
         }
     },
@@ -670,6 +935,13 @@ app.component("tree-node", {
                 <span class="kind">{{ kindLabel }}</span>
                 <span class="name">{{ title }}</span>
                 <span class="count">{{ node.total_count }}</span>
+                <span class="node-actions" @click.stop>
+                    <span class="act" title="Выше" @click="call('moveLocationUp')">↑</span>
+                    <span class="act" title="Ниже" @click="call('moveLocationDown')">↓</span>
+                    <span class="act" v-if="canAddChild" title="Добавить внутрь" @click="call('openAddForm')">+</span>
+                    <span class="act" title="Изменить" @click="call('openEditForm')">✎</span>
+                    <span class="act" title="Архивировать" @click="call('archiveLocation')">✕</span>
+                </span>
             </div>
             <div class="children" v-if="open && node.children && node.children.length">
                 <tree-node
