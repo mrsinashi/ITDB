@@ -150,3 +150,29 @@ class History(Base):
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     changes = Column(JSONB, nullable=False)
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("login", name="uq_users_login"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    login = Column(Text, nullable=False)
+    password_hash = Column(Text, nullable=False)
+    role = Column(Text, nullable=False, server_default="reader")
+    archived = Column(Boolean, nullable=False, server_default="false")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserSession(Base):
+    __tablename__ = "sessions"
+    __table_args__ = (
+        UniqueConstraint("token", name="uq_sessions_token"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    token = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)

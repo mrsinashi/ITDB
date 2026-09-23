@@ -11,15 +11,9 @@
 </head>
 
 <body>
-  <div id="app">
-    <nav class="top-menu">
-        <span class="brand">ITDB</span>
-        <a href="/" class="active">Таблица</a>
-        <a href="/tree.html">Дерево</a>
-        <a href="/history.html">История</a>
-        <a href="/api/export/computers.xlsx">Экспорт</a>
-    </nav>
+  <div id="top-menu"></div>
 
+  <div id="app">
     <div class="toolbar">
       <input
         id="quickFilter"
@@ -35,6 +29,11 @@
 
     <div id="grid" class="ag-theme-alpine grid"></div>
   </div>
+
+  <script src="/common.js"></script>
+  <script>
+    renderTopMenu("table");
+  </script>
 
   <script src="/vendor/vue.global.prod.js"></script>
   <script src="/vendor/ag-grid-community.min.js"></script>

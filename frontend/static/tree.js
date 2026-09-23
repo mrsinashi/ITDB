@@ -17,7 +17,7 @@ const app = Vue.createApp({
 
   async mounted() {
     try {
-      const response = await fetch("/api/locations/tree");
+      const response = await apiFetch("/api/locations/tree");
 
       if (!response.ok) {
         throw new Error("HTTP " + response.status);

@@ -354,7 +354,7 @@ const app = Vue.createApp({
     loadColumnState();
 
     try {
-      const response = await fetch("/api/computers");
+      const response = await apiFetch("/api/computers");
 
       if (!response.ok) {
         throw new Error("HTTP " + response.status);
@@ -417,7 +417,7 @@ const app = Vue.createApp({
       payload[field] = value === "" ? null : value;
 
       try {
-        const response = await fetch("/api/computers/" + id, {
+        const response = await apiFetch("/api/computers/" + id, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json"

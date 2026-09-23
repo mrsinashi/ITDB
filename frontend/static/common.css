@@ -1,9 +1,16 @@
+html,
 body {
+  height: 100%;
   margin: 0;
   font-family: system-ui, Arial, sans-serif;
   font-size: 13px;
   color: #222;
   background: #fff;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
 }
 
 .top-menu {
@@ -13,6 +20,7 @@ body {
   padding: 3px 8px;
   border-bottom: 1px solid #ddd;
   background: #f7f7f7;
+  flex: 0 0 auto;
 }
 
 .top-menu .brand {
@@ -35,6 +43,17 @@ body {
   background: #e0e7ff;
   color: #111;
   font-weight: 600;
+}
+
+.top-menu .menu-right {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.top-menu .user {
+  color: #555;
 }
 
 .info-bar {

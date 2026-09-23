@@ -9,15 +9,9 @@
 </head>
 
 <body>
-  <div id="app">
-    <nav class="top-menu">
-    <span class="brand">ITDB</span>
-        <a href="/">Таблица</a>
-        <a href="/tree.html" class="active">Дерево</a>
-        <a href="/history.html">История</a>
-        <a href="/api/export/computers.xlsx">Экспорт</a>
-    </nav>
+  <div id="top-menu"></div>
 
+  <div id="app">
     <div class="info-bar">
       <span v-if="loading">Загрузка...</span>
       <span v-else-if="error" style="color: #a00;">{{ error }}</span>
@@ -37,6 +31,11 @@
       ></tree-node>
     </div>
   </div>
+
+  <script src="/common.js"></script>
+  <script>
+    renderTopMenu("tree");
+  </script>
 
   <script src="/vendor/vue.global.prod.js"></script>
   <script src="/tree.js"></script>

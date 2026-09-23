@@ -9,15 +9,9 @@
 </head>
 
 <body>
-  <div id="app">
-    <nav class="top-menu">
-        <span class="brand">ITDB</span>
-        <a href="/">Таблица</a>
-        <a href="/tree.html">Дерево</a>
-        <a href="/history.html" class="active">История</a>
-        <a href="/api/export/computers.xlsx">Экспорт</a>
-    </nav>
+  <div id="top-menu"></div>
 
+  <div id="app">
     <div class="page">
       <div v-if="loading">Загрузка...</div>
       <div v-else-if="error" style="color: #a00;">{{ error }}</div>
@@ -64,6 +58,11 @@
       </table>
     </div>
   </div>
+
+  <script src="/common.js"></script>
+  <script>
+    renderTopMenu("history");
+  </script>
 
   <script src="/vendor/vue.global.prod.js"></script>
   <script src="/history.js"></script>

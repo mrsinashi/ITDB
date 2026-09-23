@@ -9,7 +9,7 @@ const app = Vue.createApp({
 
   async mounted() {
     try {
-      const response = await fetch("/api/history?limit=200");
+      const response = await apiFetch("/api/history?limit=200");
 
       if (!response.ok) {
         throw new Error("HTTP " + response.status);
