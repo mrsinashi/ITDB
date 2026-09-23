@@ -204,7 +204,7 @@ const columnDefs = [
         field: "hostname",
         headerName: "HOSTNAME",
         width: 150,
-        editable: true,
+        cellStyle: { cursor: "pointer", color: "#0645ad" },
         cellClassRules: {
             "dup-red": function (params) { return hasDuplicate(params, "hostname"); }
         }
@@ -295,7 +295,12 @@ const gridOptions = {
     onColumnMoved: scheduleSaveColumnState,
     onColumnResized: scheduleSaveColumnState,
     onColumnVisible: scheduleSaveColumnState,
-    onCellValueChanged: onCellValueChanged
+    onCellValueChanged: onCellValueChanged,
+    onCellClicked: function (params) {
+        if (params.colDef.field === "hostname" && window.itdbTable) {
+            window.itdbTable.openCard(params.data);
+        }
+    }
 };
 
 const app = Vue.createApp({
@@ -315,8 +320,23 @@ const app = Vue.createApp({
             unlocated: 0,
             historyLoading: false,
             historyError: "",
-            historyItems: []
+            historyItems: [],
+            card: null,
+            cardLoading: false,
+            cardError: "",
+            cardHostname: "",
+            cardPeople: [],
+            cardVacuum: [],
+            cardHistory: []
         };
+    },
+    computed: {
+        cardRoom() {
+            if (!this.card) {
+                return "";
+            }
+            return [this.card.room_code, this.card.room_name].filter(Boolean).join(" ");
+        }
     },
     async mounted() {
         window.itdbTable = this;
@@ -358,6 +378,82 @@ const app = Vue.createApp({
                 this.loadTree();
             } else if (view === "history") {
                 this.loadHistory();
+            }
+        },
+        async openCard(row) {
+            this.card = row;
+            this.cardHostname = row.hostname || "";
+            this.cardLoading = true;
+            this.cardError = "";
+            this.cardPeople = [];
+            this.cardVacuum = [];
+            this.cardHistory = [];
+
+            try {
+                const response = await apiFetch("/api/computers/" + row.id);
+                const data = await response.json();
+                this.cardPeople = data.people || [];
+                this.cardVacuum = data.vacuum || [];
+                this.cardHistory = data.history || [];
+            } catch (e) {
+                this.cardError = String(e);
+            }
+
+            this.cardLoading = false;
+        },
+
+        closeCard() {
+            this.card = null;
+        },
+
+        async saveHostname() {
+            if (!this.card) {
+                return;
+            }
+
+            const newValue = this.cardHostname.trim();
+            const id = this.card.id;
+
+            if (newValue === (this.card.hostname || "")) {
+                return;
+            }
+
+            try {
+                const response = await apiFetch("/api/computers/" + id, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        hostname: newValue === "" ? null : newValue
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
+
+                const result = await response.json();
+                const updated = result.updated || {};
+                const index = this.rows.findIndex(function (row) {
+                    return row.id === id;
+                });
+
+                if (index >= 0) {
+                    const updatedRow = Object.assign({}, this.rows[index], updated);
+                    this.rows[index] = updatedRow;
+                    duplicateSets = buildDuplicateSets(this.rows);
+
+                    if (gridApi.applyTransaction) {
+                        gridApi.applyTransaction({ update: [updatedRow] });
+                    } else {
+                        this.setRowData(this.rows);
+                    }
+
+                    this.card = updatedRow;
+                }
+            } catch (e) {
+                alert("Не удалось сохранить: " + e);
             }
         },
         async loadTable() {
@@ -600,5 +696,11 @@ window.addEventListener("keydown", function (event) {
             input.focus();
             input.select();
         }
+    }
+});
+
+window.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && window.itdbTable && window.itdbTable.card) {
+        window.itdbTable.closeCard();
     }
 });

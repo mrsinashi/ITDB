@@ -2,7 +2,9 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import re
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
+
+from auth import get_current_user
 
 from db import SessionLocal
 from models import (
@@ -333,6 +335,7 @@ def list_computers():
 def update_computer(
     computer_id: int,
     payload: dict = Body(...),
+    user=Depends(get_current_user),
 ):
     session = SessionLocal()
 
@@ -429,7 +432,7 @@ def update_computer(
                 History(
                     entity="computers",
                     entity_id=computer.id,
-                    user_name=None,
+                    user_name=user["login"],
                     changes=changes,
                 )
             )
@@ -467,6 +470,122 @@ def update_computer(
             status_code=400,
             detail=f"Не удалось сохранить изменения: {e}",
         )
+
+    finally:
+        session.close()
+
+@router.get("/computers/{computer_id}/history")
+def computer_history(computer_id: int):
+    session = SessionLocal()
+
+    try:
+        computer = session.get(Computer, computer_id)
+
+        if not computer:
+            raise HTTPException(
+                status_code=404,
+                detail="Компьютер не найден.",
+            )
+
+        items = (
+            session.query(History)
+            .filter(
+                History.entity == "computers",
+                History.entity_id == computer_id,
+            )
+            .order_by(History.at.desc())
+            .limit(20)
+            .all()
+        )
+
+        return {
+            "items": [
+                {
+                    "id": item.id,
+                    "at": item.at,
+                    "user_name": item.user_name,
+                    "changes": item.changes or {},
+                }
+                for item in items
+            ]
+        }
+
+    finally:
+        session.close()
+
+@router.get("/computers/{computer_id}")
+def get_computer(computer_id: int):
+    session = SessionLocal()
+
+    try:
+        computer = session.get(Computer, computer_id)
+
+        if not computer:
+            raise HTTPException(
+                status_code=404,
+                detail="Компьютер не найден.",
+            )
+
+        links = (
+            session.query(ComputerPerson, Person)
+            .join(Person, ComputerPerson.person_id == Person.id)
+            .filter(ComputerPerson.computer_id == computer_id)
+            .all()
+        )
+
+        people = [
+            {
+                "person_id": person.id,
+                "full_name": person.full_name,
+                "position": person.position,
+                "is_main": link.is_main,
+                "sort": link.sort or 0,
+            }
+            for link, person in links
+        ]
+
+        people.sort(
+            key=lambda item: (not item["is_main"], item["sort"], item["person_id"])
+        )
+
+        vacuum_rows = (
+            session.query(VacuumAccount.login)
+            .join(
+                VacuumAccountComputer,
+                VacuumAccountComputer.account_id == VacuumAccount.id,
+            )
+            .filter(VacuumAccountComputer.computer_id == computer_id)
+            .all()
+        )
+
+        vacuum = sorted([row[0] for row in vacuum_rows], key=str.lower)
+
+        items = (
+            session.query(History)
+            .filter(
+                History.entity == "computers",
+                History.entity_id == computer_id,
+            )
+            .order_by(History.at.desc(), History.id.desc())
+            .limit(20)
+            .all()
+        )
+
+        history = [
+            {
+                "id": item.id,
+                "at": item.at,
+                "user_name": item.user_name,
+                "changes": item.changes or {},
+            }
+            for item in items
+        ]
+
+        return {
+            "people": people,
+            "vacuum": vacuum,
+            "history": history,
+        }
 
     finally:
         session.close()
