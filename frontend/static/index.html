@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>ITDB</title>
+  <title>ITDB — Таблица</title>
 
+  <link rel="stylesheet" href="/common.css">
   <link rel="stylesheet" href="/vendor/ag-grid.css">
   <link rel="stylesheet" href="/vendor/ag-theme-alpine.css">
   <link rel="stylesheet" href="/app.css">
@@ -11,6 +12,13 @@
 
 <body>
   <div id="app">
+    <nav class="top-menu">
+      <span class="brand">ITDB</span>
+      <a href="/" class="active">Таблица</a>
+      <a href="/tree.html">Дерево</a>
+      <a href="/history.html">История</a>
+    </nav>
+
     <div class="toolbar">
       <input
         id="quickFilter"

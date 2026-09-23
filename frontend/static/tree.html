@@ -2,16 +2,22 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>ITDB — Дерево расположений</title>
+  <title>ITDB — Дерево</title>
+
+  <link rel="stylesheet" href="/common.css">
   <link rel="stylesheet" href="/tree.css">
 </head>
 
 <body>
   <div id="app">
-    <div class="header">
-      <a href="/">← Таблица</a>
-      <strong>Дерево расположений</strong>
+    <nav class="top-menu">
+      <span class="brand">ITDB</span>
+      <a href="/">Таблица</a>
+      <a href="/tree.html" class="active">Дерево</a>
+      <a href="/history.html">История</a>
+    </nav>
 
+    <div class="info-bar">
       <span v-if="loading">Загрузка...</span>
       <span v-else-if="error" style="color: #a00;">{{ error }}</span>
       <span v-else>Без расположения: {{ unlocated }}</span>

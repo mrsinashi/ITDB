@@ -1,34 +1,7 @@
-html,
-body {
-  height: 100%;
-  margin: 0;
-  font-family: system-ui, Arial, sans-serif;
-  font-size: 13px;
-  color: #222;
-  background: #fff;
-}
-
 #app {
   display: flex;
   flex-direction: column;
   height: 100%;
-}
-
-.header {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 6px 10px;
-  border-bottom: 1px solid #ddd;
-}
-
-.header a {
-  color: #0645ad;
-  text-decoration: none;
-}
-
-.header a:hover {
-  text-decoration: underline;
 }
 
 .tree {
