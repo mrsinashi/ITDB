@@ -1,22 +1,6 @@
-let gridApi = null;
-let saveTimer = null;
-
-const COLUMN_STATE_KEY = "itdb.gridColumnState.v1";
-
-let duplicateSets = {
-    ip: new Set(),
-    mac: new Set(),
-    hostname: new Set(),
-    inv_no: new Set(),
-    vacuum: new Set()
-};
-
-const kindLabels = {
-    building: "Здание",
-    department: "Отделение",
-    floor: "Этаж",
-    room: "Кабинет"
-};
+// ============================================================
+// Общие утилиты
+// ============================================================
 
 async function apiFetch(url, options) {
     const response = await fetch(url, options);
@@ -45,6 +29,14 @@ function normalizeKey(value) {
     }
     return String(value).trim().toLowerCase();
 }
+
+let duplicateSets = {
+    ip: new Set(),
+    mac: new Set(),
+    hostname: new Set(),
+    inv_no: new Set(),
+    vacuum: new Set()
+};
 
 function buildDuplicateSets(rows) {
     const counters = {
@@ -88,8 +80,7 @@ function buildDuplicateSets(rows) {
     };
 }
 
-function hasDuplicate(params, field) {
-    const value = params.value;
+function hasDuplicateValue(value, field) {
     if (value === null || value === undefined || value === "") {
         return false;
     }
@@ -99,7 +90,7 @@ function hasDuplicate(params, field) {
     }
     const multiFields = ["ip", "mac", "vacuum"];
     let values;
-    if (multiFields.includes(field)) {
+    if (multiFields.indexOf(field) !== -1) {
         values = splitMulti(value);
     } else {
         values = [String(value)];
@@ -109,337 +100,195 @@ function hasDuplicate(params, field) {
     });
 }
 
-function saveColumnState() {
-    if (!gridApi || !gridApi.getColumnState) {
-        return;
-    }
-    try {
-        const fullState = gridApi.getColumnState();
-        const state = fullState.map(function (column) {
-            return {
-                colId: column.colId,
-                hide: column.hide
-            };
-        });
-        localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(state));
-    } catch (e) {
-        // игнорируем
-    }
-}
-
-function scheduleSaveColumnState() {
-    if (saveTimer) {
-        clearTimeout(saveTimer);
-    }
-    saveTimer = setTimeout(saveColumnState, 300);
-}
-
-function loadColumnState() {
-    if (!gridApi || !gridApi.applyColumnState) {
-        return;
-    }
-    try {
-        const raw = localStorage.getItem(COLUMN_STATE_KEY);
-        if (!raw) {
-            return;
-        }
-        const state = JSON.parse(raw);
-        if (!Array.isArray(state)) {
-            return;
-        }
-        gridApi.applyColumnState({
-            state: state.map(function (item) {
-                return { colId: item.colId, hide: item.hide };
-            }),
-            applyOrder: true
-        });
-    } catch (e) {
-        // игнорируем
-    }
-}
-
-function onCellValueChanged(params) {
-    if (window.itdbTable) {
-        window.itdbTable.saveCellChange(params);
-    }
-}
+const kindLabels = {
+    building: "Здание",
+    department: "Отделение",
+    floor: "Этаж",
+    room: "Кабинет"
+};
 
 const statusColors = {
     "ремонт": "#d97706",
     "списан": "#8a8a8a"
 };
 
-// Редактор нескольких строк прямо внутри ячейки, как в Excel.
-// Enter — сохранить, Shift+Enter или Alt+Enter — перенос строки,
-// Escape — отмена, Tab — переход к соседней ячейке.
-function MultilineEditor() {}
+// ============================================================
+// Определения столбцов таблицы
+// ============================================================
 
-MultilineEditor.prototype.init = function (params) {
-    this.params = params;
-    this.cancelled = false;
+const COLUMN_DEFS = [
+    { field: "user", headerName: "ФИО" },
+    { field: "building", headerName: "Адрес" },
+    { field: "department", headerName: "Отделение" },
+    { field: "floor", headerName: "Эт.", center: true },
+    { field: "room_code", headerName: "Каб", center: true },
+    { field: "room_name", headerName: "Кабинет" },
+    { field: "seat_no", headerName: "№", center: true },
+    { field: "hostname", headerName: "HOSTNAME", link: true, sticky: true },
+    { field: "ip", headerName: "IP", sticky: true },
+    { field: "vacuum", headerName: "VACUUM" },
+    { field: "os", headerName: "OS", center: true },
+    { field: "type", headerName: "ТИП", center: true },
+    { field: "model", headerName: "Модель", center: true },
+    { field: "cpu", headerName: "CPU", center: true },
+    { field: "ram", headerName: "RAM", center: true },
+    { field: "drive", headerName: "DRIVE", center: true },
+    { field: "gpu", headerName: "GPU", center: true },
+    { field: "mac", headerName: "MAC" },
+    { field: "inv_no", headerName: "ИНВ" },
+    { field: "gsit", headerName: "GSIT", center: true },
+    { field: "state", headerName: "Сост.", center: true },
+    { field: "label", headerName: "Метка", center: true },
+    { field: "status", headerName: "Статус", center: true },
+    { field: "note", headerName: "Примечание", note: true, maxWidth: 260 }
+];
 
-    this.textarea = document.createElement("textarea");
-    this.textarea.className = "cell-multiline-editor";
-    this.textarea.value =
-        params.value === null || params.value === undefined ? "" : String(params.value);
+// Поля, дубли в которых подсвечиваются красным
+const DUP_FIELDS = ["ip", "mac", "hostname", "inv_no", "vacuum"];
 
-    const self = this;
+// ============================================================
+// Замер ширины текста и автоматический размер столбцов
+// ============================================================
 
-    this.textarea.addEventListener("keydown", function (event) {
-        if (event.key === "Enter" && (event.altKey || event.shiftKey)) {
-            // перенос строки — текстовое поле сделает его само
-            event.stopPropagation();
-        } else if (event.key === "Enter") {
-            event.preventDefault();
-            params.api.stopEditing();
-        } else if (event.key === "Escape") {
-            event.preventDefault();
-            self.cancelled = true;
-            params.api.stopEditing();
-        } else if (event.key === "Tab") {
-            event.preventDefault();
-            if (event.shiftKey) {
-                params.api.tabToPreviousCell();
-            } else {
-                params.api.tabToNextCell();
-            }
-        }
-    });
-};
+const TABLE_WIDTHS_KEY = "itdb.tableWidths.v1";
+const TABLE_FONT = '12px "Segoe UI", system-ui, Arial, sans-serif';
+const CELL_PAD = 12;       // запас на отступы внутри ячейки
+const HEADER_EXTRA = 20;   // запас на стрелку сортировки
+const DEFAULT_MAX_WIDTH = 400;
+const WIDTH_EXTRA = 0;
+let widthProbe = null;
 
-MultilineEditor.prototype.getGui = function () {
-    return this.textarea;
-};
+const measureCtx = document.createElement("canvas").getContext("2d");
 
-MultilineEditor.prototype.afterGuiAttached = function () {
-    this.textarea.focus();
-    const length = this.textarea.value.length;
-    this.textarea.setSelectionRange(length, length);
-};
-
-MultilineEditor.prototype.getValue = function () {
-    if (this.cancelled) {
-        return this.params.value;
+function ensureWidthProbe() {
+    if (widthProbe) {
+        return widthProbe;
     }
-    return this.textarea.value;
-};
-
-MultilineEditor.prototype.isPopup = function () {
-    return false;
-};
-
-// Автоматическая ширина столбцов: по самому длинному значению,
-// но не больше предела столбца (дальше текст переносится).
-// Автоматическая ширина столбцов: по самому длинному значению,
-// но не больше предела столбца (дальше текст переносится).
-const DEFAULT_MAX_WIDTH = 420;
-const autoSizeCtx = document.createElement("canvas").getContext("2d");
-const GRID_FONT = '12px "Segoe UI", system-ui, Arial, sans-serif';
-
-function measureTextWidth(text) {
-    autoSizeCtx.font = GRID_FONT;
-    return autoSizeCtx.measureText(text).width;
+    widthProbe = document.createElement("span");
+    widthProbe.style.position = "absolute";
+    widthProbe.style.left = "-9999px";
+    widthProbe.style.top = "0";
+    widthProbe.style.visibility = "hidden";
+    widthProbe.style.whiteSpace = "pre";
+    document.body.appendChild(widthProbe);
+    return widthProbe;
 }
 
-function autoSizeColumns() {
-    if (!gridApi || !gridApi.getColumnState) {
+function syncProbeFont() {
+    const sample =
+        document.querySelector(".data-table td") ||
+        document.querySelector(".data-table th");
+    if (!sample) {
         return;
     }
+    const style = window.getComputedStyle(sample);
+    widthProbe.style.fontFamily = style.fontFamily;
+    widthProbe.style.fontSize = style.fontSize;
+    widthProbe.style.fontWeight = style.fontWeight;
+    widthProbe.style.fontStyle = style.fontStyle;
+    widthProbe.style.letterSpacing = style.letterSpacing;
+}
 
-    const rows = window.itdbTable ? window.itdbTable.rows : [];
-    const state = [];
+function measureTextWidth(text) {
+    const probe = ensureWidthProbe();
+    probe.textContent = text || "";
+    return probe.getBoundingClientRect().width;
+}
 
-    columnDefs.forEach(function (col) {
-        // запас на стрелку сортировки и фильтр
-        let max = measureTextWidth(col.headerName || col.field || "") + 28;
+function cellOverhead() {
+    const sample = document.querySelector(".data-table td");
+    if (!sample) {
+        return 13;
+    }
+    const style = window.getComputedStyle(sample);
+    const left = parseFloat(style.paddingLeft) || 0;
+    const right = parseFloat(style.paddingRight) || 0;
+    const border = parseFloat(style.borderRightWidth) || 0;
+    return left + right + border;
+}
 
+function computeAutoWidths(rows) {
+    ensureWidthProbe();
+    syncProbeFont();
+    const overhead = cellOverhead();
+    const probe = ensureWidthProbe();
+    // Стрелка сортировки рисуется шрифтом 9px (см. .sort-arrow) + отступ 3px
+    const savedFontSize = probe.style.fontSize;
+    probe.style.fontSize = "9px";
+    probe.textContent = "▲";
+    const arrowWidth = probe.getBoundingClientRect().width;
+    probe.style.fontSize = savedFontSize;
+    probe.textContent = "";
+    const sortArrowSpace = arrowWidth + 3;
+    const widths = {};
+    COLUMN_DEFS.forEach(function (col) {
+        // Заголовок рисуется жирным (см. .data-table th) — меряем жирным
+        probe.style.fontWeight = "600";
+        let max = measureTextWidth(col.headerName) + sortArrowSpace;
+        // Значения в ячейках обычные — меряем обычным
+        probe.style.fontWeight = "400";
         rows.forEach(function (row) {
             const value = row[col.field];
             if (value === null || value === undefined || value === "") {
                 return;
             }
             String(value).split("\n").forEach(function (line) {
-                const width = measureTextWidth(line);
-                if (width > max) {
-                    max = width;
+                const w = measureTextWidth(line);
+                if (w > max) {
+                    max = w;
                 }
             });
         });
-
-        let width = Math.ceil(max) + 20;
+        let width = Math.ceil(max) + overhead + WIDTH_EXTRA;
         const cap = col.maxWidth || DEFAULT_MAX_WIDTH;
-
         if (width > cap) {
             width = cap;
         }
-        if (width < 46) {
-            width = 46;
-        }
-
-        state.push({
-            colId: col.field,
-            width: width
-        });
+        widths[col.field] = width;
     });
+    return widths;
+}
 
-    gridApi.applyColumnState({ state: state });
-
-    if (gridApi.resetRowHeights) {
-        gridApi.resetRowHeights();
+function loadManualWidths() {
+    try {
+        const raw = localStorage.getItem(TABLE_WIDTHS_KEY);
+        if (!raw) {
+            return {};
+        }
+        const parsed = JSON.parse(raw);
+        if (typeof parsed !== "object" || parsed === null) {
+            return {};
+        }
+        return parsed;
+    } catch (e) {
+        return {};
     }
 }
 
-const columnDefs = [
-    { field: "user", headerName: "ФИО", width: 190 },
-    { field: "building", headerName: "Адрес", width: 140 },
-    { field: "department", headerName: "Отделение", width: 120 },
-    {
-        field: "floor",
-        headerName: "Эт.",
-        width: 60,
-        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
-    },
-    {
-        field: "room_code",
-        headerName: "Каб",
-        width: 70,
-        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
-    },
-    { field: "room_name", headerName: "Кабинет", width: 150 },
-    {
-        field: "seat_no",
-        headerName: "№",
-        width: 60,
-        editable: true,
-        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
-    },
-    {
-        field: "ip",
-        headerName: "IP",
-        width: 130,
-        maxWidth: 220,
-        editable: true,
-        cellEditor: MultilineEditor,
-        cellClassRules: {
-            "dup-red": function (params) { return hasDuplicate(params, "ip"); }
-        }
-    },
-    {
-        field: "hostname",
-        headerName: "HOSTNAME",
-        width: 150,
-        cellStyle: { cursor: "pointer", color: "#0645ad", whiteSpace: "pre-line" },
-        cellClassRules: {
-            "dup-red": function (params) { return hasDuplicate(params, "hostname"); }
-        }
-    },
-    {
-        field: "vacuum",
-        headerName: "VACUUM",
-        width: 140,
-        cellClassRules: {
-            "dup-red": function (params) { return hasDuplicate(params, "vacuum"); }
-        }
-    },
-    { field: "os", headerName: "OS", width: 120, editable: true },
-    { field: "type", headerName: "ТИП", width: 100, editable: true },
-    { field: "model", headerName: "Модель", width: 140, editable: true },
-    { field: "cpu", headerName: "CPU", width: 170, editable: true },
-    {
-        field: "ram",
-        headerName: "RAM",
-        width: 70,
-        editable: true,
-        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
-    },
-    {
-        field: "drive",
-        headerName: "DRIVE",
-        width: 130,
-        maxWidth: 240,
-        editable: true,
-        cellEditor: MultilineEditor
-    },
-    { field: "gpu", headerName: "GPU", width: 140, editable: true },
-    {
-        field: "mac",
-        headerName: "MAC",
-        width: 165,
-        maxWidth: 220,
-        editable: true,
-        cellEditor: MultilineEditor,
-        cellClassRules: {
-            "dup-red": function (params) { return hasDuplicate(params, "mac"); }
-        }
-    },
-    {
-        field: "inv_no",
-        headerName: "ИНВ",
-        width: 90,
-        editable: true,
-        cellClassRules: {
-            "dup-red": function (params) { return hasDuplicate(params, "inv_no"); }
-        }
-    },
-    { field: "gsit", headerName: "GSIT", width: 80, editable: true },
-    { field: "state", headerName: "Сост.", width: 80, editable: true },
-    { field: "label", headerName: "Метка", width: 90, editable: true },
-    {
-        field: "status",
-        headerName: "Статус",
-        width: 100,
-        editable: true,
-        cellStyle: function (params) {
-            const style = { fontWeight: "600" };
-            const color = statusColors[String(params.value || "").toLowerCase()];
-            if (color) {
-                style.color = color;
-            }
-            return style;
-        }
-    },
-    {
-        field: "note",
-        headerName: "Примечание",
-        width: 230,
-        maxWidth: 500,
-        editable: true,
-        cellEditor: MultilineEditor
-    }
-];
+// ============================================================
+// Сортировка значений
+// ============================================================
 
-const gridOptions = {
-    columnDefs: columnDefs,
-    defaultColDef: {
-        sortable: true,
-        filter: true,
-        resizable: true,
-        autoHeight: true,
-        cellStyle: { whiteSpace: "pre-line" }
-    },
-    rowData: [],
-    rowHeight: 24,
-    headerHeight: 26,
-    animateRows: false,
-    stopEditingWhenCellsLoseFocus: true,
-    getRowId: function (params) {
-        return String(params.data.id);
-    },
-    onColumnMoved: scheduleSaveColumnState,
-    onColumnResized: scheduleSaveColumnState,
-    onColumnVisible: scheduleSaveColumnState,
-    onCellValueChanged: onCellValueChanged,
-    onModelUpdated: function () {
-        if (window.itdbTable) {
-            window.itdbTable.updateDisplayedCount();
-        }
-    },
-    onCellClicked: function (params) {
-        if (params.colDef.field === "hostname" && window.itdbTable) {
-            window.itdbTable.openCard(params.data);
-        }
+function compareCellValues(a, b) {
+    const aEmpty = a === null || a === undefined || a === "";
+    const bEmpty = b === null || b === undefined || b === "";
+    if (aEmpty && bEmpty) {
+        return 0;
     }
-};
+    if (aEmpty) {
+        return 1; // пустые всегда внизу
+    }
+    if (bEmpty) {
+        return -1;
+    }
+    const sa = String(a).split("\n")[0];
+    const sb = String(b).split("\n")[0];
+    return sa.localeCompare(sb, "ru", { numeric: true, sensitivity: "base" });
+}
+
+// ============================================================
+// Приложение
+// ============================================================
 
 const app = Vue.createApp({
     data() {
@@ -447,23 +296,36 @@ const app = Vue.createApp({
             authChecked: false,
             user: null,
             view: "table",
+
+            // Таблица
             tableLoading: true,
             tableError: "",
             rowCount: 0,
-            displayedCount: 0,
             quickFilter: "",
             rows: [],
+            noteTooltip: { visible: false, text: "", top: 0, left: 0, width: 0 },
+            stickyStuck: false,
+            autoWidths: {},
+            manualWidths: loadManualWidths(),
+            sortField: null,
+            sortDir: null,
+
+            // Дерево
             treeLoading: false,
             treeError: "",
             treeRoots: [],
             unlocated: 0,
-            historyLoading: false,
-            historyError: "",
-            historyItems: [],
             treeForm: null,
             treeFormError: "",
             treeIndex: {},
             treeOpenIds: new Set(),
+
+            // История
+            historyLoading: false,
+            historyError: "",
+            historyItems: [],
+
+            // Карточка
             card: null,
             cardLoading: false,
             cardError: "",
@@ -474,7 +336,70 @@ const app = Vue.createApp({
             cardHistory: []
         };
     },
+
     computed: {
+        columns() {
+            const self = this;
+            return COLUMN_DEFS.map(function (col) {
+                const manual = self.manualWidths[col.field];
+                const auto = self.autoWidths[col.field];
+                return Object.assign({}, col, {
+                    width: manual !== undefined ? manual : (auto || 100)
+                });
+            });
+        },
+
+        totalWidth() {
+            return this.columns.reduce(function (sum, col) {
+                return sum + col.width;
+            }, 0);
+        },
+
+        filteredRows() {
+            const query = this.quickFilter.trim().toLowerCase();
+            if (!query) {
+                return this.rows;
+            }
+            const fields = COLUMN_DEFS.map(function (col) {
+                return col.field;
+            });
+            return this.rows.filter(function (row) {
+                return fields.some(function (field) {
+                    const value = row[field];
+                    if (value === null || value === undefined) {
+                        return false;
+                    }
+                    return String(value).toLowerCase().indexOf(query) !== -1;
+                });
+            });
+        },
+
+        displayRows() {
+            const rows = this.filteredRows;
+            if (!this.sortField || !this.sortDir) {
+                return rows;
+            }
+            const field = this.sortField;
+            const dir = this.sortDir === "asc" ? 1 : -1;
+            return rows.slice().sort(function (a, b) {
+                return compareCellValues(a[field], b[field]) * dir;
+            });
+        },
+
+        displayedCount() {
+          return this.displayRows.length;
+        },
+
+        lastStickyField() {
+          let last = null;
+          for (const col of COLUMN_DEFS) {
+            if (col.sticky) {
+              last = col.field;
+            }
+          }
+          return last;
+        },
+
         cardRoom() {
             if (!this.card) {
                 return "";
@@ -482,28 +407,23 @@ const app = Vue.createApp({
             return [this.card.room_code, this.card.room_name].filter(Boolean).join(" ");
         }
     },
+
     async mounted() {
         window.itdbTable = this;
-
+        this.hoverRowEl = null;
+        this.lastMouseX = undefined;
+        this.lastMouseY = undefined;
+        this.rafId = null;
         await this.checkAuth();
         this.authChecked = true;
-
         if (this.user) {
-            await this.$nextTick();
-            const gridDiv = document.getElementById("grid");
-            if (gridDiv) {
-                if (agGrid.createGrid) {
-                    gridApi = agGrid.createGrid(gridDiv, gridOptions);
-                } else {
-                    new agGrid.Grid(gridDiv, gridOptions);
-                    gridApi = gridOptions.api;
-                }
-                loadColumnState();
-                await this.loadTable();
-            }
+            await this.loadTable();
         }
     },
+
     methods: {
+        // ---------- Авторизация ----------
+
         async checkAuth() {
             try {
                 const response = await apiFetch("/api/auth/me");
@@ -512,18 +432,259 @@ const app = Vue.createApp({
                 this.user = null;
             }
         },
+
         setView(view) {
             this.view = view;
-            if (view === "table" && gridApi) {
-                setTimeout(function () {
-                    gridApi.onSizeChanged();
-                }, 0);
-            } else if (view === "tree") {
+            if (view === "tree") {
                 this.loadTree();
             } else if (view === "history") {
                 this.loadHistory();
             }
         },
+
+        async logout() {
+            try {
+                await apiFetch("/api/auth/logout", { method: "POST" });
+            } catch (e) {
+                // сессия уже могла истечь
+            }
+            window.location.replace("/login.html");
+        },
+
+        // ---------- Таблица ----------
+
+        async loadTable() {
+            this.tableLoading = true;
+            this.tableError = "";
+            try {
+                const response = await apiFetch("/api/computers");
+                const data = await response.json();
+                this.rows = data.rows || [];
+                this.rowCount = data.total || this.rows.length;
+                duplicateSets = buildDuplicateSets(this.rows);
+                this.autoWidths = computeAutoWidths(this.rows);
+            } catch (e) {
+                this.tableError = String(e);
+            }
+            this.tableLoading = false;
+        },
+
+        sortBy(col) {
+            if (this.sortField !== col.field) {
+                this.sortField = col.field;
+                this.sortDir = "asc";
+            } else if (this.sortDir === "asc") {
+                this.sortDir = "desc";
+            } else {
+                this.sortField = null;
+                this.sortDir = null;
+            }
+        },
+
+        resetSort() {
+            this.sortField = null;
+            this.sortDir = null;
+        },
+
+        startResize(event, col) {
+            const startX = event.clientX;
+            const startWidth = col.width;
+            const tableEl = this.$refs.table;
+            if (!tableEl) {
+                return;
+            }
+            const colEl = tableEl.querySelector('col[data-field="' + col.field + '"]');
+            if (!colEl) {
+                return;
+            }
+            const startTotal = this.totalWidth;
+
+            function onMouseMove(e) {
+                const delta = e.clientX - startX;
+                let newWidth = startWidth + delta;
+                if (newWidth < 40) {
+                    newWidth = 40;
+                }
+                const appliedDelta = newWidth - startWidth;
+                colEl.style.width = newWidth + "px";
+                tableEl.style.width = (startTotal + appliedDelta) + "px";
+            }
+
+            const self = this;
+            function onMouseUp(e) {
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+                const delta = e.clientX - startX;
+                let newWidth = startWidth + delta;
+                if (newWidth < 40) {
+                    newWidth = 40;
+                }
+                self.setColumnWidth(col.field, Math.round(newWidth));
+            }
+
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        },
+
+        setColumnWidth(field, width) {
+            const updated = Object.assign({}, this.manualWidths);
+            updated[field] = width;
+            this.manualWidths = updated;
+            this.saveWidths();
+            this.updateStickyShadow();
+        },
+
+        saveWidths() {
+            try {
+                localStorage.setItem(TABLE_WIDTHS_KEY, JSON.stringify(this.manualWidths));
+            } catch (e) {
+                // ignore
+            }
+        },
+
+        resetWidths() {
+            this.manualWidths = {};
+            this.saveWidths();
+        },
+
+        cellClass(row, col) {
+            const cls = {
+                center: col.center,
+                link: col.link,
+                sticky: col.sticky
+            };
+            if (col.note) {
+                cls["note-cell"] = true;
+            }
+            if (col.field === this.lastStickyField) {
+                cls["sticky-edge"] = true;
+            }
+            if (DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
+                cls["dup-red"] = true;
+            }
+            return cls;
+        },
+
+        cellValueStyle(row, col) {
+            const style = {};
+            if (col.field === "status") {
+                const color = statusColors[String(row.status || "").toLowerCase()];
+                if (color) {
+                    style.color = color;
+                    style.fontWeight = "600";
+                }
+            }
+            if (col.field === "hostname") {
+                style.fontWeight = "700";
+            }
+            return Object.keys(style).length ? style : null;
+        },
+
+        stickyLeft(col) {
+            let left = 0;
+            for (const c of this.columns) {
+                if (c.field === col.field) {
+                    break;
+                }
+                if (c.sticky) {
+                    left += c.width;
+                }
+            }
+            return left;
+        },
+
+        handleNoteEnter(event, row, col) {
+            if (!col.note) {
+                return;
+            }
+            const td = event.currentTarget;
+            const span = td.querySelector(".note-text");
+            if (!span) {
+                return;
+            }
+            if (span.scrollWidth > span.clientWidth) {
+                const rect = td.getBoundingClientRect();
+                this.noteTooltip = {
+                    visible: true,
+                    text: row.note || "",
+                    top: rect.bottom,
+                    left: rect.left,
+                    width: rect.width
+                };
+            }
+        },
+
+        hideNoteTooltip() {
+            this.noteTooltip.visible = false;
+        },
+
+        onTableScroll() {
+            this.hideNoteTooltip();
+            if (this.rafId) {
+                cancelAnimationFrame(this.rafId);
+            }
+            this.rafId = requestAnimationFrame(() => {
+                this.rafId = null;
+                this.updateStickyShadow();
+                this.refreshHoverFromPoint();
+            });
+        },
+
+        updateStickyShadow() {
+            const wrap = this.$refs.tableWrap;
+            if (!wrap) {
+                return;
+            }
+            let threshold = 0;
+            for (const col of this.columns) {
+                if (col.sticky) {
+                    break;
+                }
+                threshold += col.width;
+            }
+            this.stickyStuck = wrap.scrollLeft >= threshold;
+        },
+        
+        onTableMouseMove(event) {
+            this.lastMouseX = event.clientX;
+            this.lastMouseY = event.clientY;
+            const tr = event.target.closest("tbody tr");
+            this.setHoverRow(tr);
+        },
+        
+        onTableMouseLeave() {
+            this.lastMouseX = undefined;
+            this.lastMouseY = undefined;
+            this.setHoverRow(null);
+        },
+        
+        refreshHoverFromPoint() {
+            if (this.lastMouseX === undefined || this.lastMouseY === undefined) {
+                return;
+            }
+            const el = document.elementFromPoint(this.lastMouseX, this.lastMouseY);
+            const tr = el ? el.closest("tbody tr") : null;
+            this.setHoverRow(tr);
+        },
+        
+        setHoverRow(tr) {
+        if (this.hoverRowEl && this.hoverRowEl !== tr) {
+            this.hoverRowEl.classList.remove("row-hover");
+        }
+        if (tr && tr !== this.hoverRowEl) {
+            tr.classList.add("row-hover");
+        }
+            this.hoverRowEl = tr || null;
+        },
+
+        onCellClick(row, col) {
+            if (col.field === "hostname") {
+                this.openCard(row);
+            }
+        },
+
+        // ---------- Карточка ----------
+
         async openCard(row) {
             this.card = row;
             this.cardHostname = row.hostname || "";
@@ -533,7 +694,6 @@ const app = Vue.createApp({
             this.cardPeople = [];
             this.cardVacuum = [];
             this.cardHistory = [];
-
             try {
                 const response = await apiFetch("/api/computers/" + row.id);
                 const data = await response.json();
@@ -543,7 +703,6 @@ const app = Vue.createApp({
             } catch (e) {
                 this.cardError = String(e);
             }
-
             this.cardLoading = false;
         },
 
@@ -572,49 +731,32 @@ const app = Vue.createApp({
             if (!this.card || !this.editingHostname) {
                 return;
             }
-
             const newValue = this.cardHostname.trim();
             const id = this.card.id;
-
             if (newValue === (this.card.hostname || "")) {
                 this.editingHostname = false;
                 return;
             }
-
             this.editingHostname = false;
-
             try {
                 const response = await apiFetch("/api/computers/" + id, {
                     method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        hostname: newValue === "" ? null : newValue
-                    })
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ hostname: newValue === "" ? null : newValue })
                 });
-
                 if (!response.ok) {
                     throw new Error("HTTP " + response.status);
                 }
-
                 const result = await response.json();
                 const updated = result.updated || {};
                 const index = this.rows.findIndex(function (row) {
                     return row.id === id;
                 });
-
                 if (index >= 0) {
                     const updatedRow = Object.assign({}, this.rows[index], updated);
                     this.rows[index] = updatedRow;
                     duplicateSets = buildDuplicateSets(this.rows);
-
-                    if (gridApi.applyTransaction) {
-                        gridApi.applyTransaction({ update: [updatedRow] });
-                    } else {
-                        this.setRowData(this.rows);
-                    }
-
+                    this.autoWidths = computeAutoWidths(this.rows);
                     this.card = updatedRow;
                 }
             } catch (e) {
@@ -622,127 +764,12 @@ const app = Vue.createApp({
                 alert("Не удалось сохранить: " + e);
             }
         },
-        async loadTable() {
-            this.tableLoading = true;
-            this.tableError = "";
-            try {
-                const response = await apiFetch("/api/computers");
-                const data = await response.json();
-                this.rows = data.rows || [];
-                duplicateSets = buildDuplicateSets(this.rows);
-                this.setRowData(this.rows);
-                this.rowCount = data.total || 0;
-                this.displayedCount = this.rowCount;
-                autoSizeColumns();
-            } catch (e) {
-                this.tableError = String(e);
-            }
-            this.tableLoading = false;
-        },
-        setRowData(rows) {
-            if (!gridApi) {
-                return;
-            }
-            if (gridApi.setGridOption) {
-                gridApi.setGridOption("rowData", rows);
-            } else {
-                gridApi.setRowData(rows);
-            }
-        },
-        applyQuickFilter() {
-            if (!gridApi) {
-                return;
-            }
-            if (gridApi.setGridOption) {
-                gridApi.setGridOption("quickFilterText", this.quickFilter);
-            } else {
-                gridApi.setQuickFilterText(this.quickFilter);
-            }
-        },
-        resetSort() {
-            if (!gridApi || !gridApi.getColumnState) {
-                return;
-            }
-            const state = gridApi.getColumnState().map(function (column) {
-                return { colId: column.colId, sort: null };
-            });
-            gridApi.applyColumnState({ state: state });
-        },
-        updateDisplayedCount() {
-            if (!gridApi || !gridApi.getDisplayedRowCount) {
-                return;
-            }
-            this.displayedCount = gridApi.getDisplayedRowCount();
-        },
-        async saveCellChange(params) {
-            const field = params.colDef.field;
-            const id = params.data.id;
-            let value = params.newValue;
-            if (value === undefined) {
-                value = null;
-            }
-            if (value === params.oldValue) {
-                return;
-            }
-            const payload = {};
-            payload[field] = value === "" ? null : value;
-            try {
-                const response = await apiFetch("/api/computers/" + id, {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(payload)
-                });
-                if (!response.ok) {
-                    let errorMessage = "HTTP " + response.status;
-                    try {
-                        const errorData = await response.json();
-                        if (errorData && errorData.detail) {
-                            if (typeof errorData.detail === "string") {
-                                errorMessage = errorData.detail;
-                            } else {
-                                errorMessage = JSON.stringify(errorData.detail);
-                            }
-                        }
-                    } catch (e) {
-                        // оставляем HTTP-статус
-                    }
-                    throw new Error(errorMessage);
-                }
-                const result = await response.json();
-                const updated = result.updated || {};
-                const index = this.rows.findIndex(function (row) {
-                    return row.id === id;
-                });
-                if (index >= 0) {
-                    const updatedRow = Object.assign({}, this.rows[index], updated);
-                    this.rows[index] = updatedRow;
-                    duplicateSets = buildDuplicateSets(this.rows);
-                    if (gridApi.applyTransaction) {
-                        gridApi.applyTransaction({ update: [updatedRow] });
-                    } else {
-                        this.setRowData(this.rows);
-                    }
-                }
-            } catch (e) {
-                alert("Не удалось сохранить: " + e);
-                const index = this.rows.findIndex(function (row) {
-                    return row.id === id;
-                });
-                if (index >= 0) {
-                    if (gridApi.applyTransaction) {
-                        gridApi.applyTransaction({ update: [this.rows[index]] });
-                    } else {
-                        this.setRowData(this.rows);
-                    }
-                }
-            }
-        },
+
+        // ---------- Дерево ----------
+
         async loadTree() {
             this.treeLoading = true;
             this.treeError = "";
-
             try {
                 const response = await apiFetch("/api/locations/tree");
                 const data = await response.json();
@@ -752,45 +779,28 @@ const app = Vue.createApp({
             } catch (e) {
                 this.treeError = String(e);
             }
-
             this.treeLoading = false;
         },
 
         buildTreeIndex() {
             const index = {};
-
             const walk = (nodes, parts) => {
                 nodes.forEach((node) => {
                     let title = node.name || node.code || "";
-
                     if (node.kind === "room" && node.code && node.name && node.code !== node.name) {
                         title = node.code + " " + node.name;
                     }
-
                     const path = parts.concat([title]).join(" → ");
                     index[node.id] = { node: node, path: path };
-
                     if (node.children && node.children.length) {
                         walk(node.children, parts.concat([title]));
                     }
                 });
             };
-
             walk(this.treeRoots, []);
             this.treeIndex = index;
         },
-        async loadHistory() {
-            this.historyLoading = true;
-            this.historyError = "";
-            try {
-                const response = await apiFetch("/api/history?limit=200");
-                const data = await response.json();
-                this.historyItems = data.items || [];
-            } catch (e) {
-                this.historyError = String(e);
-            }
-            this.historyLoading = false;
-        },
+
         kindLabel(kind) {
             return kindLabels[kind] || kind;
         },
@@ -801,21 +811,16 @@ const app = Vue.createApp({
                 department: ["floor", "room"],
                 floor: ["room"]
             };
-
             let kinds = ["building"];
             let path = "";
-
             if (node) {
                 kinds = allowedChildren[node.kind] || [];
-
                 if (!kinds.length) {
                     return;
                 }
-
                 const entry = this.treeIndex[node.id];
                 path = entry ? entry.path : "";
             }
-
             this.treeForm = {
                 action: "add",
                 parentId: node ? node.id : null,
@@ -831,7 +836,6 @@ const app = Vue.createApp({
 
         openEditForm(node) {
             const entry = this.treeIndex[node.id];
-
             this.treeForm = {
                 action: "edit",
                 parentId: node.parent_id,
@@ -847,22 +851,16 @@ const app = Vue.createApp({
 
         async submitTreeForm() {
             const form = this.treeForm;
-
             if (!form) {
                 return;
             }
-
             this.treeFormError = "";
-
             try {
                 let response;
-
                 if (form.action === "add") {
                     response = await apiFetch("/api/locations", {
                         method: "POST",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             parent_id: form.parentId,
                             kind: form.kind,
@@ -873,20 +871,16 @@ const app = Vue.createApp({
                 } else {
                     response = await apiFetch("/api/locations/" + form.nodeId, {
                         method: "PATCH",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             name: form.name,
                             code: form.code
                         })
                     });
                 }
-
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-
                 this.treeForm = null;
                 await this.loadTree();
                 await this.loadTable();
@@ -898,20 +892,16 @@ const app = Vue.createApp({
         async archiveLocation(node) {
             const entry = this.treeIndex[node.id];
             const path = entry ? entry.path : node.name;
-
             if (!confirm("Архивировать «" + path + "»? Узел исчезнет из дерева.")) {
                 return;
             }
-
             try {
                 const response = await apiFetch("/api/locations/" + node.id + "/archive", {
                     method: "POST"
                 });
-
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-
                 await this.loadTree();
                 await this.loadTable();
             } catch (e) {
@@ -932,54 +922,40 @@ const app = Vue.createApp({
             const siblings = parentEntry ? parentEntry.node.children : this.treeRoots;
             const index = siblings.findIndex((item) => item.id === node.id);
             const target = siblings[index + dir];
-
             if (!target) {
                 return;
             }
-
             try {
                 let response;
-
                 if (node.sort === target.sort) {
                     response = await apiFetch("/api/locations/" + node.id, {
                         method: "PATCH",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             sort: target.sort + (dir > 0 ? 1 : -1)
                         })
                     });
-
                     if (!response.ok) {
                         throw new Error(await this.errorText(response));
                     }
                 } else {
                     response = await apiFetch("/api/locations/" + node.id, {
                         method: "PATCH",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ sort: target.sort })
                     });
-
                     if (!response.ok) {
                         throw new Error(await this.errorText(response));
                     }
-
                     response = await apiFetch("/api/locations/" + target.id, {
                         method: "PATCH",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ sort: node.sort })
                     });
-
                     if (!response.ok) {
                         throw new Error(await this.errorText(response));
                     }
                 }
-
                 await this.loadTree();
                 await this.loadTable();
             } catch (e) {
@@ -987,12 +963,27 @@ const app = Vue.createApp({
             }
         },
 
+        // ---------- История ----------
+
+        async loadHistory() {
+            this.historyLoading = true;
+            this.historyError = "";
+            try {
+                const response = await apiFetch("/api/history?limit=200");
+                const data = await response.json();
+                this.historyItems = data.items || [];
+            } catch (e) {
+                this.historyError = String(e);
+            }
+            this.historyLoading = false;
+        },
+
+        // ---------- Общие ----------
+
         async errorText(response) {
             let message = "HTTP " + response.status;
-
             try {
                 const data = await response.json();
-
                 if (data && data.detail) {
                     message = typeof data.detail === "string"
                         ? data.detail
@@ -1001,15 +992,16 @@ const app = Vue.createApp({
             } catch (e) {
                 // оставляем HTTP-статус
             }
-
             return message;
         },
+
         formatTime(value) {
             if (!value) {
                 return "";
             }
             return new Date(value).toLocaleString();
         },
+
         displayValue(value) {
             if (value === null || value === undefined) {
                 return "—";
@@ -1019,6 +1011,7 @@ const app = Vue.createApp({
             }
             return String(value);
         },
+
         async downloadExport() {
             try {
                 const response = await apiFetch("/api/export/computers.xlsx");
@@ -1037,14 +1030,6 @@ const app = Vue.createApp({
             } catch (e) {
                 // если экспорт не удался, не ломаем интерфейс
             }
-        },
-        async logout() {
-            try {
-                await apiFetch("/api/auth/logout", { method: "POST" });
-            } catch (e) {
-                // если сессия уже истекла, просто уходим на страницу входа
-            }
-            window.location.replace("/login.html");
         }
     }
 });
@@ -1057,11 +1042,9 @@ app.component("tree-node", {
     },
     data() {
         let open = this.level < 2;
-
         if (window.itdbTable && window.itdbTable.treeOpenIds.has(this.node.id)) {
             open = true;
         }
-
         return { open: open };
     },
     computed: {
@@ -1077,7 +1060,6 @@ app.component("tree-node", {
             ) {
                 return this.node.code + " " + this.node.name;
             }
-
             return this.node.name || this.node.code || "";
         },
         canAddChild() {
@@ -1088,7 +1070,6 @@ app.component("tree-node", {
         toggle() {
             if (this.node.children && this.node.children.length) {
                 this.open = !this.open;
-
                 if (window.itdbTable) {
                     if (this.open) {
                         window.itdbTable.treeOpenIds.add(this.node.id);

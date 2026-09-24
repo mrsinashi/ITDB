@@ -1,263 +1,218 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <title>ITDB</title>
-
-  <link rel="stylesheet" href="/vendor/ag-grid.css">
-  <link rel="stylesheet" href="/vendor/ag-theme-alpine.css">
-  <link rel="stylesheet" href="/app.css">
+    <meta charset="utf-8">
+    <title>ITDB</title>
+    <link rel="stylesheet" href="/app.css">
 </head>
-
 <body>
-  <div id="app" v-cloak>
-    <nav class="top-menu" v-if="user">
-      <span class="brand">ITDB</span>
+    <div id="app" v-cloak>
+        <nav class="top-menu" v-if="user">
+            <span class="brand">ITDB</span>
+            <a href="#" @click.prevent="setView('table')" :class="{ active: view === 'table' }">Таблица</a>
+            <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">Дерево</a>
+            <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">История</a>
+            <a href="#" @click.prevent="downloadExport">Экспорт</a>
+            <span class="menu-right">
+                <span class="user">{{ user.login }}</span>
+                <a href="#" @click.prevent="logout">Выход</a>
+            </span>
+        </nav>
 
-      <a href="#" @click.prevent="setView('table')" :class="{ active: view === 'table' }">
-        Таблица
-      </a>
+        <div v-if="authChecked && !user" class="info-bar">
+            Нет доступа. <a href="/login.html">Войти</a>
+        </div>
 
-      <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">
-        Дерево
-      </a>
-
-      <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">
-        История
-      </a>
-
-      <a href="#" @click.prevent="downloadExport">
-        Экспорт
-      </a>
-
-      <span class="menu-right">
-        <span class="user">{{ user.login }}</span>
-        <a href="#" @click.prevent="logout">Выход</a>
-      </span>
-    </nav>
-
-    <div v-if="authChecked && !user" class="info-bar">
-      Нет доступа. <a href="/login.html">Войти</a>
-    </div>
-
-    <section v-if="user" v-show="view === 'table'" class="view">
+        <section v-if="user" v-show="view === 'table'" class="view">
             <div class="toolbar">
-        <span class="row-count">Количество строк: {{ displayedCount === rowCount ? rowCount : displayedCount + " из " + rowCount }}</span>
+                <span class="row-count">Количество строк: {{ displayedCount === rowCount ? rowCount : displayedCount + " из " + rowCount }}</span>
+                <span class="search-wrap">
+                    <input id="quickFilter" v-model="quickFilter" placeholder="Поиск по всей таблице">
+                </span>
+                <span class="toolbar-right">
+                    <button @click="resetWidths">Выровнять</button>
+                    <button @click="resetSort">Сброс сортировки</button>
+                    <span v-if="tableLoading">Загрузка...</span>
+                    <span v-else-if="tableError" style="color: #ffd0d0;">{{ tableError }}</span>
+                </span>
+            </div>
 
-        <span class="search-wrap">
-          <input
-            id="quickFilter"
-            v-model="quickFilter"
-            @input="applyQuickFilter"
-            placeholder="Поиск по всей таблице"
-          >
-        </span>
+            <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @scroll="onTableScroll" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
+                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck }" ref="table" :style="{ width: totalWidth + 'px' }">
+                    <colgroup>
+                        <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th v-for="col in columns" :key="'th-' + col.field"
+                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === lastStickyField }"
+                                :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
+                                @click="sortBy(col)">
+                                <span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
+                                <span class="resize-handle" @mousedown.stop.prevent="startResize($event, col)" @click.stop></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="row in displayRows" :key="row.id">
+                            <td v-for="col in columns" :key="col.field"
+                                :class="cellClass(row, col)"
+                                :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
+                                @click="onCellClick(row, col)"
+                                @mouseenter="handleNoteEnter($event, row, col)"
+                                @mouseleave="hideNoteTooltip">
+                                <span :class="{ 'note-text': col.note }" :style="cellValueStyle(row, col)">{{ row[col.field] }}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="note-tooltip" v-if="noteTooltip.visible"
+                :style="{ top: noteTooltip.top + 'px', left: noteTooltip.left + 'px', width: noteTooltip.width + 'px' }">{{ noteTooltip.text }}</div>
+        </section>
 
-        <span class="toolbar-right">
-          <button @click="resetSort">Сбросить сортировку</button>
-          <span v-if="tableLoading">Загрузка...</span>
-          <span v-else-if="tableError" style="color: #ffd0d0;">{{ tableError }}</span>
-        </span>
-      </div>
+        <section v-if="user && view === 'tree'" class="view">
+            <div class="info-bar">
+                <span v-if="treeLoading">Загрузка...</span>
+                <span v-else-if="treeError" style="color: #a00;">{{ treeError }}</span>
+                <span v-else>Без расположения: {{ unlocated }}</span>
+                <span class="tree-add" v-if="!treeForm">
+                    <button @click="openAddForm(null)">+ Здание</button>
+                </span>
+            </div>
+            <div class="toolbar" v-if="treeForm">
+                <template v-if="treeForm.action === 'add'">
+                    <span v-if="treeForm.path">Новый узел в «{{ treeForm.path }}»:</span>
+                    <span v-else>Новый узел:</span>
+                </template>
+                <template v-else>
+                    <span>Правка «{{ treeForm.path }}»:</span>
+                </template>
+                <select v-if="treeForm.kinds.length > 1" v-model="treeForm.kind">
+                    <option v-for="k in treeForm.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
+                </select>
+                <input v-if="treeForm.kind !== 'floor'" v-model="treeForm.code" @keydown.enter="submitTreeForm" placeholder="Код" style="width: 70px;">
+                <input v-model="treeForm.name" @keydown.enter="submitTreeForm" placeholder="Название" style="width: 220px;" autofocus>
+                <button @click="submitTreeForm">OK</button>
+                <button @click="treeForm = null">Отмена</button>
+                <span v-if="treeFormError" style="color: #a00;">{{ treeFormError }}</span>
+            </div>
+            <div class="tree">
+                <div v-if="treeRoots.length === 0 && !treeLoading && !treeError">Расположения не найдены.</div>
+                <tree-node v-for="root in treeRoots" :key="root.id" :node="root" :level="0"></tree-node>
+            </div>
+        </section>
 
-      <div id="grid" class="ag-theme-alpine grid"></div>
-    </section>
+        <section v-if="user && view === 'history'" class="view">
+            <div class="info-bar">История изменений</div>
+            <div class="page">
+                <div v-if="historyLoading">Загрузка...</div>
+                <div v-else-if="historyError" style="color: #a00;">{{ historyError }}</div>
+                <div v-else-if="historyItems.length === 0">История пока пуста.</div>
+                <table v-else class="history-table">
+                    <thead>
+                        <tr><th>Когда</th><th>Объект</th><th>Пользователь</th><th>Изменения</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in historyItems" :key="item.id">
+                            <td class="nowrap">{{ formatTime(item.at) }}</td>
+                            <td class="nowrap">
+                                <template v-if="item.title">{{ item.title }}</template>
+                                <template v-else>{{ item.entity }} #{{ item.entity_id }}</template>
+                            </td>
+                            <td class="nowrap">
+                                <template v-if="item.user_name">{{ item.user_name }}</template>
+                                <template v-else>—</template>
+                            </td>
+                            <td>
+                                <div v-for="(change, field) in item.changes" :key="field" class="change">
+                                    <span class="field">{{ field }}:</span>
+                                    <span class="old">{{ displayValue(change.old) }}</span>
+                                    <span class="arrow">→</span>
+                                    <span class="new">{{ displayValue(change.new) }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-    <section v-if="user && view === 'tree'" class="view">
-      <div class="info-bar">
-        <span v-if="treeLoading">Загрузка...</span>
-        <span v-else-if="treeError" style="color: #a00;">{{ treeError }}</span>
-        <span v-else>Без расположения: {{ unlocated }}</span>
-
-        <span class="tree-add" v-if="!treeForm">
-          <button @click="openAddForm(null)">+ Здание</button>
-        </span>
-      </div>
-
-      <div class="toolbar" v-if="treeForm">
-        <template v-if="treeForm.action === 'add'">
-          <span v-if="treeForm.path">Новый узел в «{{ treeForm.path }}»:</span>
-          <span v-else>Новый узел:</span>
-        </template>
-        <template v-else>
-          <span>Правка «{{ treeForm.path }}»:</span>
-        </template>
-
-        <select v-if="treeForm.kinds.length > 1" v-model="treeForm.kind">
-          <option v-for="k in treeForm.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
-        </select>
-
-        <input
-          v-if="treeForm.kind !== 'floor'"
-          v-model="treeForm.code"
-          @keydown.enter="submitTreeForm"
-          placeholder="Код"
-          style="width: 70px;"
-        >
-        <input
-          v-model="treeForm.name"
-          @keydown.enter="submitTreeForm"
-          placeholder="Название"
-          style="width: 220px;"
-          autofocus
-        >
-
-        <button @click="submitTreeForm">OK</button>
-        <button @click="treeForm = null">Отмена</button>
-
-        <span v-if="treeFormError" style="color: #a00;">{{ treeFormError }}</span>
-      </div>
-
-      <div class="tree">
-        <div v-if="treeRoots.length === 0 && !treeLoading && !treeError">
-          Расположения не найдены.
-        </div>
-
-        <tree-node
-          v-for="root in treeRoots"
-          :key="root.id"
-          :node="root"
-          :level="0"
-        ></tree-node>
-      </div>
-    </section>
-
-    <section v-if="user && view === 'history'" class="view">
-      <div class="info-bar">
-        История изменений
-      </div>
-
-      <div class="page">
-        <div v-if="historyLoading">Загрузка...</div>
-        <div v-else-if="historyError" style="color: #a00;">{{ historyError }}</div>
-        <div v-else-if="historyItems.length === 0">История пока пуста.</div>
-
-        <table v-else class="history-table">
-          <thead>
-            <tr>
-              <th>Когда</th>
-              <th>Объект</th>
-              <th>Пользователь</th>
-              <th>Изменения</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr v-for="item in historyItems" :key="item.id">
-              <td class="nowrap">{{ formatTime(item.at) }}</td>
-
-              <td class="nowrap">
-                <template v-if="item.title">{{ item.title }}</template>
-                <template v-else>{{ item.entity }} #{{ item.entity_id }}</template>
-              </td>
-
-              <td class="nowrap">
-                <template v-if="item.user_name">{{ item.user_name }}</template>
-                <template v-else>—</template>
-              </td>
-
-              <td>
-                <div
-                  v-for="(change, field) in item.changes"
-                  :key="field"
-                  class="change"
-                >
-                  <span class="field">{{ field }}:</span>
-                  <span class="old">{{ displayValue(change.old) }}</span>
-                  <span class="arrow">→</span>
-                  <span class="new">{{ displayValue(change.new) }}</span>
+        <div v-if="card" class="card-overlay" @click.self="closeCard">
+            <div class="card">
+                <div class="card-head">
+                    <span v-if="!editingHostname" class="card-hostname">
+                        {{ card.hostname || "Без имени" }}
+                        <span class="card-edit" title="Изменить имя" @click="startEditHostname">✎</span>
+                    </span>
+                    <span v-else class="card-hostname-edit">
+                        <input ref="hostnameInput" v-model="cardHostname" @keydown.enter="saveHostname" @blur="cancelEditHostname">
+                    </span>
+                    <span class="card-close" title="Закрыть" @click="closeCard">×</span>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-    <div v-if="card" class="card-overlay" @click.self="closeCard">
-      <div class="card">
-        <div class="card-head">
-          <span v-if="!editingHostname" class="card-hostname">
-            {{ card.hostname || "Без имени" }}
-            <span class="card-edit" title="Изменить имя" @click="startEditHostname">✎</span>
-          </span>
-          <span v-else class="card-hostname-edit">
-            <input
-              ref="hostnameInput"
-              v-model="cardHostname"
-              @keydown.enter="saveHostname"
-              @blur="cancelEditHostname"
-            >
-          </span>
-          <span class="card-close" title="Закрыть" @click="closeCard">×</span>
-        </div>
-
-        <div class="card-body">
-          <table class="card-table">
-            <tr v-if="card.status"><td class="ct-label">Статус</td><td class="ct-value">{{ card.status }}</td></tr>
-            <tr v-if="card.building"><td class="ct-label">Адрес</td><td class="ct-value">{{ card.building }}</td></tr>
-            <tr v-if="card.department"><td class="ct-label">Отделение</td><td class="ct-value">{{ card.department }}</td></tr>
-            <tr v-if="card.floor"><td class="ct-label">Этаж</td><td class="ct-value">{{ card.floor }}</td></tr>
-            <tr v-if="cardRoom"><td class="ct-label">Кабинет</td><td class="ct-value">{{ cardRoom }}</td></tr>
-            <tr v-if="card.seat_no"><td class="ct-label">Место</td><td class="ct-value">{{ card.seat_no }}</td></tr>
-            <tr v-if="card.ip"><td class="ct-label">IP</td><td class="ct-value">{{ card.ip }}</td></tr>
-            <tr v-if="card.mac"><td class="ct-label">MAC</td><td class="ct-value">{{ card.mac }}</td></tr>
-            <tr v-if="card.inv_no"><td class="ct-label">ИНВ</td><td class="ct-value">{{ card.inv_no }}</td></tr>
-            <tr v-if="card.serial"><td class="ct-label">Серийный</td><td class="ct-value">{{ card.serial }}</td></tr>
-            <tr v-if="card.type"><td class="ct-label">ТИП</td><td class="ct-value">{{ card.type }}</td></tr>
-            <tr v-if="card.model"><td class="ct-label">Модель</td><td class="ct-value">{{ card.model }}</td></tr>
-            <tr v-if="card.os"><td class="ct-label">OS</td><td class="ct-value">{{ card.os }}</td></tr>
-            <tr v-if="card.cpu"><td class="ct-label">CPU</td><td class="ct-value">{{ card.cpu }}</td></tr>
-            <tr v-if="card.ram"><td class="ct-label">RAM</td><td class="ct-value">{{ card.ram }}</td></tr>
-            <tr v-if="card.drive"><td class="ct-label">DRIVE</td><td class="ct-value">{{ card.drive }}</td></tr>
-            <tr v-if="card.gpu"><td class="ct-label">GPU</td><td class="ct-value">{{ card.gpu }}</td></tr>
-            <tr v-if="card.gsit"><td class="ct-label">GSIT</td><td class="ct-value">{{ card.gsit }}</td></tr>
-            <tr v-if="card.state"><td class="ct-label">Сост.</td><td class="ct-value">{{ card.state }}</td></tr>
-            <tr v-if="card.label"><td class="ct-label">Метка</td><td class="ct-value">{{ card.label }}</td></tr>
-            <tr v-if="card.note"><td class="ct-label">Примечание</td><td class="ct-value">{{ card.note }}</td></tr>
-          </table>
-
-          <div class="card-section">Пользователи</div>
-          <div class="card-sec-body">
-            <div v-if="cardLoading">Загрузка...</div>
-            <div v-else-if="cardPeople.length === 0" class="muted">—</div>
-            <div v-for="person in cardPeople" :key="person.person_id">
-              <b v-if="person.is_main">{{ person.full_name }}</b>
-              <template v-else>{{ person.full_name }}</template>
-              <span v-if="person.position" class="muted"> — {{ person.position }}</span>
+                <div class="card-body">
+                    <table class="card-table">
+                        <tr v-if="card.status"><td class="ct-label">Статус</td><td class="ct-value">{{ card.status }}</td></tr>
+                        <tr v-if="card.building"><td class="ct-label">Адрес</td><td class="ct-value">{{ card.building }}</td></tr>
+                        <tr v-if="card.department"><td class="ct-label">Отделение</td><td class="ct-value">{{ card.department }}</td></tr>
+                        <tr v-if="card.floor"><td class="ct-label">Этаж</td><td class="ct-value">{{ card.floor }}</td></tr>
+                        <tr v-if="cardRoom"><td class="ct-label">Кабинет</td><td class="ct-value">{{ cardRoom }}</td></tr>
+                        <tr v-if="card.seat_no"><td class="ct-label">Место</td><td class="ct-value">{{ card.seat_no }}</td></tr>
+                        <tr v-if="card.ip"><td class="ct-label">IP</td><td class="ct-value">{{ card.ip }}</td></tr>
+                        <tr v-if="card.mac"><td class="ct-label">MAC</td><td class="ct-value">{{ card.mac }}</td></tr>
+                        <tr v-if="card.inv_no"><td class="ct-label">ИНВ</td><td class="ct-value">{{ card.inv_no }}</td></tr>
+                        <tr v-if="card.serial"><td class="ct-label">Серийный</td><td class="ct-value">{{ card.serial }}</td></tr>
+                        <tr v-if="card.type"><td class="ct-label">ТИП</td><td class="ct-value">{{ card.type }}</td></tr>
+                        <tr v-if="card.model"><td class="ct-label">Модель</td><td class="ct-value">{{ card.model }}</td></tr>
+                        <tr v-if="card.os"><td class="ct-label">OS</td><td class="ct-value">{{ card.os }}</td></tr>
+                        <tr v-if="card.cpu"><td class="ct-label">CPU</td><td class="ct-value">{{ card.cpu }}</td></tr>
+                        <tr v-if="card.ram"><td class="ct-label">RAM</td><td class="ct-value">{{ card.ram }}</td></tr>
+                        <tr v-if="card.drive"><td class="ct-label">DRIVE</td><td class="ct-value">{{ card.drive }}</td></tr>
+                        <tr v-if="card.gpu"><td class="ct-label">GPU</td><td class="ct-value">{{ card.gpu }}</td></tr>
+                        <tr v-if="card.gsit"><td class="ct-label">GSIT</td><td class="ct-value">{{ card.gsit }}</td></tr>
+                        <tr v-if="card.state"><td class="ct-label">Сост.</td><td class="ct-value">{{ card.state }}</td></tr>
+                        <tr v-if="card.label"><td class="ct-label">Метка</td><td class="ct-value">{{ card.label }}</td></tr>
+                        <tr v-if="card.note"><td class="ct-label">Примечание</td><td class="ct-value">{{ card.note }}</td></tr>
+                    </table>
+                    <div class="card-section">Пользователи</div>
+                    <div class="card-sec-body">
+                        <div v-if="cardLoading">Загрузка...</div>
+                        <div v-else-if="cardPeople.length === 0" class="muted">—</div>
+                        <div v-for="person in cardPeople" :key="person.person_id">
+                            <b v-if="person.is_main">{{ person.full_name }}</b>
+                            <template v-else>{{ person.full_name }}</template>
+                            <span v-if="person.position" class="muted"> — {{ person.position }}</span>
+                        </div>
+                    </div>
+                    <div class="card-section">VACUUM</div>
+                    <div class="card-sec-body">
+                        <div v-if="cardLoading">Загрузка...</div>
+                        <div v-else-if="cardVacuum.length === 0" class="muted">—</div>
+                        <div v-for="login in cardVacuum" :key="login">{{ login }}</div>
+                    </div>
+                    <div class="card-section">История</div>
+                    <div class="card-sec-body">
+                        <div v-if="cardLoading">Загрузка...</div>
+                        <div v-else-if="cardError" style="color: #a00;">{{ cardError }}</div>
+                        <div v-else-if="cardHistory.length === 0" class="muted">Изменений пока нет.</div>
+                        <div v-for="item in cardHistory" :key="item.id" class="card-history">
+                            <div class="card-history-head">
+                                {{ formatTime(item.at) }}<template v-if="item.user_name"> — {{ item.user_name }}</template>
+                            </div>
+                            <div v-for="(change, field) in item.changes" :key="field" class="change">
+                                <span class="field">{{ field }}:</span>
+                                <span class="old">{{ displayValue(change.old) }}</span>
+                                <span class="arrow">→</span>
+                                <span class="new">{{ displayValue(change.new) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-
-          <div class="card-section">VACUUM</div>
-          <div class="card-sec-body">
-            <div v-if="cardLoading">Загрузка...</div>
-            <div v-else-if="cardVacuum.length === 0" class="muted">—</div>
-            <div v-for="login in cardVacuum" :key="login">{{ login }}</div>
-          </div>
-
-          <div class="card-section">История</div>
-          <div class="card-sec-body">
-            <div v-if="cardLoading">Загрузка...</div>
-            <div v-else-if="cardError" style="color: #a00;">{{ cardError }}</div>
-            <div v-else-if="cardHistory.length === 0" class="muted">Изменений пока нет.</div>
-            <div v-for="item in cardHistory" :key="item.id" class="card-history">
-              <div class="card-history-head">
-                {{ formatTime(item.at) }}<template v-if="item.user_name"> — {{ item.user_name }}</template>
-              </div>
-              <div v-for="(change, field) in item.changes" :key="field" class="change">
-                <span class="field">{{ field }}:</span>
-                <span class="old">{{ displayValue(change.old) }}</span>
-                <span class="arrow">→</span>
-                <span class="new">{{ displayValue(change.new) }}</span>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
     </div>
-  </div>
 
-  <script src="/vendor/vue.global.prod.js"></script>
-  <script src="/vendor/ag-grid-community.min.js"></script>
-  <script src="/app.js"></script>
+    <script src="/vendor/vue.global.prod.js"></script>
+    <script src="/app.js"></script>
 </body>
 </html>
