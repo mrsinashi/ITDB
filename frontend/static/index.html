@@ -41,17 +41,23 @@
     </div>
 
     <section v-if="user" v-show="view === 'table'" class="view">
-      <div class="toolbar">
-        <input
-          id="quickFilter"
-          v-model="quickFilter"
-          @input="applyQuickFilter"
-          placeholder="Поиск по всей таблице"
-        >
+            <div class="toolbar">
+        <span class="row-count">Количество строк: {{ displayedCount === rowCount ? rowCount : displayedCount + " из " + rowCount }}</span>
 
-        <span v-if="tableLoading">Загрузка...</span>
-        <span v-else-if="tableError" style="color: #a00;">{{ tableError }}</span>
-        <span v-else>{{ rowCount }} записей</span>
+        <span class="search-wrap">
+          <input
+            id="quickFilter"
+            v-model="quickFilter"
+            @input="applyQuickFilter"
+            placeholder="Поиск по всей таблице"
+          >
+        </span>
+
+        <span class="toolbar-right">
+          <button @click="resetSort">Сбросить сортировку</button>
+          <span v-if="tableLoading">Загрузка...</span>
+          <span v-else-if="tableError" style="color: #ffd0d0;">{{ tableError }}</span>
+        </span>
       </div>
 
       <div id="grid" class="ag-theme-alpine grid"></div>
@@ -170,68 +176,79 @@
     <div v-if="card" class="card-overlay" @click.self="closeCard">
       <div class="card">
         <div class="card-head">
-          <span>{{ card.hostname || "Компьютер №" + card.id }}</span>
+          <span v-if="!editingHostname" class="card-hostname">
+            {{ card.hostname || "Без имени" }}
+            <span class="card-edit" title="Изменить имя" @click="startEditHostname">✎</span>
+          </span>
+          <span v-else class="card-hostname-edit">
+            <input
+              ref="hostnameInput"
+              v-model="cardHostname"
+              @keydown.enter="saveHostname"
+              @blur="cancelEditHostname"
+            >
+          </span>
           <span class="card-close" title="Закрыть" @click="closeCard">×</span>
         </div>
 
         <div class="card-body">
-          <div class="card-row">
-            <span class="card-label">HOSTNAME</span>
-            <span class="card-value">
-              <input v-model="cardHostname" @keydown.enter="saveHostname">
-              <button @click="saveHostname">OK</button>
-            </span>
-          </div>
-
-          <div class="card-row" v-if="card.status"><span class="card-label">Статус</span><span class="card-value">{{ card.status }}</span></div>
-          <div class="card-row" v-if="card.building"><span class="card-label">Адрес</span><span class="card-value">{{ card.building }}</span></div>
-          <div class="card-row" v-if="card.department"><span class="card-label">Отделение</span><span class="card-value">{{ card.department }}</span></div>
-          <div class="card-row" v-if="card.floor"><span class="card-label">Этаж</span><span class="card-value">{{ card.floor }}</span></div>
-          <div class="card-row" v-if="cardRoom"><span class="card-label">Кабинет</span><span class="card-value">{{ cardRoom }}</span></div>
-          <div class="card-row" v-if="card.seat_no"><span class="card-label">Место</span><span class="card-value">{{ card.seat_no }}</span></div>
-          <div class="card-row" v-if="card.ip"><span class="card-label">IP</span><span class="card-value">{{ card.ip }}</span></div>
-          <div class="card-row" v-if="card.mac"><span class="card-label">MAC</span><span class="card-value">{{ card.mac }}</span></div>
-          <div class="card-row" v-if="card.inv_no"><span class="card-label">ИНВ</span><span class="card-value">{{ card.inv_no }}</span></div>
-          <div class="card-row" v-if="card.serial"><span class="card-label">Серийный</span><span class="card-value">{{ card.serial }}</span></div>
-          <div class="card-row" v-if="card.type"><span class="card-label">ТИП</span><span class="card-value">{{ card.type }}</span></div>
-          <div class="card-row" v-if="card.model"><span class="card-label">Модель</span><span class="card-value">{{ card.model }}</span></div>
-          <div class="card-row" v-if="card.os"><span class="card-label">OS</span><span class="card-value">{{ card.os }}</span></div>
-          <div class="card-row" v-if="card.cpu"><span class="card-label">CPU</span><span class="card-value">{{ card.cpu }}</span></div>
-          <div class="card-row" v-if="card.ram"><span class="card-label">RAM</span><span class="card-value">{{ card.ram }}</span></div>
-          <div class="card-row" v-if="card.drive"><span class="card-label">DRIVE</span><span class="card-value">{{ card.drive }}</span></div>
-          <div class="card-row" v-if="card.gpu"><span class="card-label">GPU</span><span class="card-value">{{ card.gpu }}</span></div>
-          <div class="card-row" v-if="card.gsit"><span class="card-label">GSIT</span><span class="card-value">{{ card.gsit }}</span></div>
-          <div class="card-row" v-if="card.state"><span class="card-label">Сост.</span><span class="card-value">{{ card.state }}</span></div>
-          <div class="card-row" v-if="card.label"><span class="card-label">Метка</span><span class="card-value">{{ card.label }}</span></div>
-          <div class="card-row" v-if="card.note"><span class="card-label">Примечание</span><span class="card-value">{{ card.note }}</span></div>
+          <table class="card-table">
+            <tr v-if="card.status"><td class="ct-label">Статус</td><td class="ct-value">{{ card.status }}</td></tr>
+            <tr v-if="card.building"><td class="ct-label">Адрес</td><td class="ct-value">{{ card.building }}</td></tr>
+            <tr v-if="card.department"><td class="ct-label">Отделение</td><td class="ct-value">{{ card.department }}</td></tr>
+            <tr v-if="card.floor"><td class="ct-label">Этаж</td><td class="ct-value">{{ card.floor }}</td></tr>
+            <tr v-if="cardRoom"><td class="ct-label">Кабинет</td><td class="ct-value">{{ cardRoom }}</td></tr>
+            <tr v-if="card.seat_no"><td class="ct-label">Место</td><td class="ct-value">{{ card.seat_no }}</td></tr>
+            <tr v-if="card.ip"><td class="ct-label">IP</td><td class="ct-value">{{ card.ip }}</td></tr>
+            <tr v-if="card.mac"><td class="ct-label">MAC</td><td class="ct-value">{{ card.mac }}</td></tr>
+            <tr v-if="card.inv_no"><td class="ct-label">ИНВ</td><td class="ct-value">{{ card.inv_no }}</td></tr>
+            <tr v-if="card.serial"><td class="ct-label">Серийный</td><td class="ct-value">{{ card.serial }}</td></tr>
+            <tr v-if="card.type"><td class="ct-label">ТИП</td><td class="ct-value">{{ card.type }}</td></tr>
+            <tr v-if="card.model"><td class="ct-label">Модель</td><td class="ct-value">{{ card.model }}</td></tr>
+            <tr v-if="card.os"><td class="ct-label">OS</td><td class="ct-value">{{ card.os }}</td></tr>
+            <tr v-if="card.cpu"><td class="ct-label">CPU</td><td class="ct-value">{{ card.cpu }}</td></tr>
+            <tr v-if="card.ram"><td class="ct-label">RAM</td><td class="ct-value">{{ card.ram }}</td></tr>
+            <tr v-if="card.drive"><td class="ct-label">DRIVE</td><td class="ct-value">{{ card.drive }}</td></tr>
+            <tr v-if="card.gpu"><td class="ct-label">GPU</td><td class="ct-value">{{ card.gpu }}</td></tr>
+            <tr v-if="card.gsit"><td class="ct-label">GSIT</td><td class="ct-value">{{ card.gsit }}</td></tr>
+            <tr v-if="card.state"><td class="ct-label">Сост.</td><td class="ct-value">{{ card.state }}</td></tr>
+            <tr v-if="card.label"><td class="ct-label">Метка</td><td class="ct-value">{{ card.label }}</td></tr>
+            <tr v-if="card.note"><td class="ct-label">Примечание</td><td class="ct-value">{{ card.note }}</td></tr>
+          </table>
 
           <div class="card-section">Пользователи</div>
-          <div v-if="cardLoading">Загрузка...</div>
-          <div v-else-if="cardPeople.length === 0" class="muted">—</div>
-          <div v-for="person in cardPeople" :key="person.person_id" class="card-value">
-            <b v-if="person.is_main">{{ person.full_name }}</b>
-            <template v-else>{{ person.full_name }}</template>
-            <span v-if="person.position" class="muted"> — {{ person.position }}</span>
+          <div class="card-sec-body">
+            <div v-if="cardLoading">Загрузка...</div>
+            <div v-else-if="cardPeople.length === 0" class="muted">—</div>
+            <div v-for="person in cardPeople" :key="person.person_id">
+              <b v-if="person.is_main">{{ person.full_name }}</b>
+              <template v-else>{{ person.full_name }}</template>
+              <span v-if="person.position" class="muted"> — {{ person.position }}</span>
+            </div>
           </div>
 
           <div class="card-section">VACUUM</div>
-          <div v-if="cardLoading">Загрузка...</div>
-          <div v-else-if="cardVacuum.length === 0" class="muted">—</div>
-          <div v-for="login in cardVacuum" :key="login" class="card-value">{{ login }}</div>
+          <div class="card-sec-body">
+            <div v-if="cardLoading">Загрузка...</div>
+            <div v-else-if="cardVacuum.length === 0" class="muted">—</div>
+            <div v-for="login in cardVacuum" :key="login">{{ login }}</div>
+          </div>
 
           <div class="card-section">История</div>
-          <div v-if="cardLoading">Загрузка...</div>
-          <div v-else-if="cardError" style="color: #a00;">{{ cardError }}</div>
-          <div v-else-if="cardHistory.length === 0" class="muted">Изменений пока нет.</div>
-          <div v-for="item in cardHistory" :key="item.id" class="card-history">
-            <div class="card-history-head">
-              {{ formatTime(item.at) }}<template v-if="item.user_name"> — {{ item.user_name }}</template>
-            </div>
-            <div v-for="(change, field) in item.changes" :key="field" class="change">
-              <span class="field">{{ field }}:</span>
-              <span class="old">{{ displayValue(change.old) }}</span>
-              <span class="arrow">→</span>
-              <span class="new">{{ displayValue(change.new) }}</span>
+          <div class="card-sec-body">
+            <div v-if="cardLoading">Загрузка...</div>
+            <div v-else-if="cardError" style="color: #a00;">{{ cardError }}</div>
+            <div v-else-if="cardHistory.length === 0" class="muted">Изменений пока нет.</div>
+            <div v-for="item in cardHistory" :key="item.id" class="card-history">
+              <div class="card-history-head">
+                {{ formatTime(item.at) }}<template v-if="item.user_name"> — {{ item.user_name }}</template>
+              </div>
+              <div v-for="(change, field) in item.changes" :key="field" class="change">
+                <span class="field">{{ field }}:</span>
+                <span class="old">{{ displayValue(change.old) }}</span>
+                <span class="arrow">→</span>
+                <span class="new">{{ displayValue(change.new) }}</span>
+              </div>
             </div>
           </div>
         </div>

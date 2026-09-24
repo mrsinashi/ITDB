@@ -118,7 +118,6 @@ function saveColumnState() {
         const state = fullState.map(function (column) {
             return {
                 colId: column.colId,
-                width: column.width,
                 hide: column.hide
             };
         });
@@ -149,7 +148,9 @@ function loadColumnState() {
             return;
         }
         gridApi.applyColumnState({
-            state: state,
+            state: state.map(function (item) {
+                return { colId: item.colId, hide: item.hide };
+            }),
             applyOrder: true
         });
     } catch (e) {
@@ -163,39 +164,162 @@ function onCellValueChanged(params) {
     }
 }
 
-const largeTextEditor = {
-    cellEditor: "agLargeTextCellEditor",
-    cellEditorPopup: true,
-    cellEditorParams: {
-        rows: 4,
-        cols: 35
-    }
+const statusColors = {
+    "ремонт": "#d97706",
+    "списан": "#8a8a8a"
 };
+
+// Редактор нескольких строк прямо внутри ячейки, как в Excel.
+// Enter — сохранить, Shift+Enter или Alt+Enter — перенос строки,
+// Escape — отмена, Tab — переход к соседней ячейке.
+function MultilineEditor() {}
+
+MultilineEditor.prototype.init = function (params) {
+    this.params = params;
+    this.cancelled = false;
+
+    this.textarea = document.createElement("textarea");
+    this.textarea.className = "cell-multiline-editor";
+    this.textarea.value =
+        params.value === null || params.value === undefined ? "" : String(params.value);
+
+    const self = this;
+
+    this.textarea.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" && (event.altKey || event.shiftKey)) {
+            // перенос строки — текстовое поле сделает его само
+            event.stopPropagation();
+        } else if (event.key === "Enter") {
+            event.preventDefault();
+            params.api.stopEditing();
+        } else if (event.key === "Escape") {
+            event.preventDefault();
+            self.cancelled = true;
+            params.api.stopEditing();
+        } else if (event.key === "Tab") {
+            event.preventDefault();
+            if (event.shiftKey) {
+                params.api.tabToPreviousCell();
+            } else {
+                params.api.tabToNextCell();
+            }
+        }
+    });
+};
+
+MultilineEditor.prototype.getGui = function () {
+    return this.textarea;
+};
+
+MultilineEditor.prototype.afterGuiAttached = function () {
+    this.textarea.focus();
+    const length = this.textarea.value.length;
+    this.textarea.setSelectionRange(length, length);
+};
+
+MultilineEditor.prototype.getValue = function () {
+    if (this.cancelled) {
+        return this.params.value;
+    }
+    return this.textarea.value;
+};
+
+MultilineEditor.prototype.isPopup = function () {
+    return false;
+};
+
+// Автоматическая ширина столбцов: по самому длинному значению,
+// но не больше предела столбца (дальше текст переносится).
+// Автоматическая ширина столбцов: по самому длинному значению,
+// но не больше предела столбца (дальше текст переносится).
+const DEFAULT_MAX_WIDTH = 420;
+const autoSizeCtx = document.createElement("canvas").getContext("2d");
+const GRID_FONT = '12px "Segoe UI", system-ui, Arial, sans-serif';
+
+function measureTextWidth(text) {
+    autoSizeCtx.font = GRID_FONT;
+    return autoSizeCtx.measureText(text).width;
+}
+
+function autoSizeColumns() {
+    if (!gridApi || !gridApi.getColumnState) {
+        return;
+    }
+
+    const rows = window.itdbTable ? window.itdbTable.rows : [];
+    const state = [];
+
+    columnDefs.forEach(function (col) {
+        // запас на стрелку сортировки и фильтр
+        let max = measureTextWidth(col.headerName || col.field || "") + 28;
+
+        rows.forEach(function (row) {
+            const value = row[col.field];
+            if (value === null || value === undefined || value === "") {
+                return;
+            }
+            String(value).split("\n").forEach(function (line) {
+                const width = measureTextWidth(line);
+                if (width > max) {
+                    max = width;
+                }
+            });
+        });
+
+        let width = Math.ceil(max) + 20;
+        const cap = col.maxWidth || DEFAULT_MAX_WIDTH;
+
+        if (width > cap) {
+            width = cap;
+        }
+        if (width < 46) {
+            width = 46;
+        }
+
+        state.push({
+            colId: col.field,
+            width: width
+        });
+    });
+
+    gridApi.applyColumnState({ state: state });
+
+    if (gridApi.resetRowHeights) {
+        gridApi.resetRowHeights();
+    }
+}
 
 const columnDefs = [
     { field: "user", headerName: "ФИО", width: 190 },
     { field: "building", headerName: "Адрес", width: 140 },
     { field: "department", headerName: "Отделение", width: 120 },
-    { field: "floor", headerName: "Эт.", width: 60, cellStyle: { textAlign: "center" } },
-    { field: "room_code", headerName: "Каб", width: 70, cellStyle: { textAlign: "center" } },
+    {
+        field: "floor",
+        headerName: "Эт.",
+        width: 60,
+        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
+    },
+    {
+        field: "room_code",
+        headerName: "Каб",
+        width: 70,
+        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
+    },
     { field: "room_name", headerName: "Кабинет", width: 150 },
     {
         field: "seat_no",
         headerName: "№",
         width: 60,
         editable: true,
-        cellStyle: { textAlign: "center" }
+        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
     },
     {
         field: "ip",
         headerName: "IP",
         width: 130,
+        maxWidth: 220,
         editable: true,
-        autoHeight: true,
-        cellStyle: { whiteSpace: "pre-line" },
-        cellEditor: largeTextEditor.cellEditor,
-        cellEditorPopup: largeTextEditor.cellEditorPopup,
-        cellEditorParams: largeTextEditor.cellEditorParams,
+        cellEditor: MultilineEditor,
         cellClassRules: {
             "dup-red": function (params) { return hasDuplicate(params, "ip"); }
         }
@@ -204,7 +328,7 @@ const columnDefs = [
         field: "hostname",
         headerName: "HOSTNAME",
         width: 150,
-        cellStyle: { cursor: "pointer", color: "#0645ad" },
+        cellStyle: { cursor: "pointer", color: "#0645ad", whiteSpace: "pre-line" },
         cellClassRules: {
             "dup-red": function (params) { return hasDuplicate(params, "hostname"); }
         }
@@ -213,8 +337,6 @@ const columnDefs = [
         field: "vacuum",
         headerName: "VACUUM",
         width: 140,
-        autoHeight: true,
-        cellStyle: { whiteSpace: "pre-line" },
         cellClassRules: {
             "dup-red": function (params) { return hasDuplicate(params, "vacuum"); }
         }
@@ -223,29 +345,29 @@ const columnDefs = [
     { field: "type", headerName: "ТИП", width: 100, editable: true },
     { field: "model", headerName: "Модель", width: 140, editable: true },
     { field: "cpu", headerName: "CPU", width: 170, editable: true },
-    { field: "ram", headerName: "RAM", width: 70, editable: true, cellStyle: { textAlign: "center" } },
+    {
+        field: "ram",
+        headerName: "RAM",
+        width: 70,
+        editable: true,
+        cellStyle: { textAlign: "center", whiteSpace: "pre-line" }
+    },
     {
         field: "drive",
         headerName: "DRIVE",
         width: 130,
+        maxWidth: 240,
         editable: true,
-        autoHeight: true,
-        cellStyle: { whiteSpace: "pre-line" },
-        cellEditor: largeTextEditor.cellEditor,
-        cellEditorPopup: largeTextEditor.cellEditorPopup,
-        cellEditorParams: largeTextEditor.cellEditorParams
+        cellEditor: MultilineEditor
     },
     { field: "gpu", headerName: "GPU", width: 140, editable: true },
     {
         field: "mac",
         headerName: "MAC",
         width: 165,
+        maxWidth: 220,
         editable: true,
-        autoHeight: true,
-        cellStyle: { whiteSpace: "pre-line" },
-        cellEditor: largeTextEditor.cellEditor,
-        cellEditorPopup: largeTextEditor.cellEditorPopup,
-        cellEditorParams: largeTextEditor.cellEditorParams,
+        cellEditor: MultilineEditor,
         cellClassRules: {
             "dup-red": function (params) { return hasDuplicate(params, "mac"); }
         }
@@ -262,17 +384,27 @@ const columnDefs = [
     { field: "gsit", headerName: "GSIT", width: 80, editable: true },
     { field: "state", headerName: "Сост.", width: 80, editable: true },
     { field: "label", headerName: "Метка", width: 90, editable: true },
-    { field: "status", headerName: "Статус", width: 100, editable: true },
+    {
+        field: "status",
+        headerName: "Статус",
+        width: 100,
+        editable: true,
+        cellStyle: function (params) {
+            const style = { fontWeight: "600" };
+            const color = statusColors[String(params.value || "").toLowerCase()];
+            if (color) {
+                style.color = color;
+            }
+            return style;
+        }
+    },
     {
         field: "note",
         headerName: "Примечание",
         width: 230,
+        maxWidth: 500,
         editable: true,
-        autoHeight: true,
-        cellStyle: { whiteSpace: "pre-line" },
-        cellEditor: largeTextEditor.cellEditor,
-        cellEditorPopup: largeTextEditor.cellEditorPopup,
-        cellEditorParams: largeTextEditor.cellEditorParams
+        cellEditor: MultilineEditor
     }
 ];
 
@@ -281,13 +413,14 @@ const gridOptions = {
     defaultColDef: {
         sortable: true,
         filter: true,
-        resizable: true
+        resizable: true,
+        autoHeight: true,
+        cellStyle: { whiteSpace: "pre-line" }
     },
     rowData: [],
     rowHeight: 24,
     headerHeight: 26,
     animateRows: false,
-    singleClickEdit: true,
     stopEditingWhenCellsLoseFocus: true,
     getRowId: function (params) {
         return String(params.data.id);
@@ -296,6 +429,11 @@ const gridOptions = {
     onColumnResized: scheduleSaveColumnState,
     onColumnVisible: scheduleSaveColumnState,
     onCellValueChanged: onCellValueChanged,
+    onModelUpdated: function () {
+        if (window.itdbTable) {
+            window.itdbTable.updateDisplayedCount();
+        }
+    },
     onCellClicked: function (params) {
         if (params.colDef.field === "hostname" && window.itdbTable) {
             window.itdbTable.openCard(params.data);
@@ -312,6 +450,7 @@ const app = Vue.createApp({
             tableLoading: true,
             tableError: "",
             rowCount: 0,
+            displayedCount: 0,
             quickFilter: "",
             rows: [],
             treeLoading: false,
@@ -329,6 +468,7 @@ const app = Vue.createApp({
             cardLoading: false,
             cardError: "",
             cardHostname: "",
+            editingHostname: false,
             cardPeople: [],
             cardVacuum: [],
             cardHistory: []
@@ -387,6 +527,7 @@ const app = Vue.createApp({
         async openCard(row) {
             this.card = row;
             this.cardHostname = row.hostname || "";
+            this.editingHostname = false;
             this.cardLoading = true;
             this.cardError = "";
             this.cardPeople = [];
@@ -410,8 +551,25 @@ const app = Vue.createApp({
             this.card = null;
         },
 
+        startEditHostname() {
+            this.editingHostname = true;
+            this.$nextTick(() => {
+                const input = this.$refs.hostnameInput;
+                if (input) {
+                    input.focus();
+                    const length = input.value.length;
+                    input.setSelectionRange(length, length);
+                }
+            });
+        },
+
+        cancelEditHostname() {
+            this.cardHostname = this.card ? (this.card.hostname || "") : "";
+            this.editingHostname = false;
+        },
+
         async saveHostname() {
-            if (!this.card) {
+            if (!this.card || !this.editingHostname) {
                 return;
             }
 
@@ -419,8 +577,11 @@ const app = Vue.createApp({
             const id = this.card.id;
 
             if (newValue === (this.card.hostname || "")) {
+                this.editingHostname = false;
                 return;
             }
+
+            this.editingHostname = false;
 
             try {
                 const response = await apiFetch("/api/computers/" + id, {
@@ -457,6 +618,7 @@ const app = Vue.createApp({
                     this.card = updatedRow;
                 }
             } catch (e) {
+                this.editingHostname = true;
                 alert("Не удалось сохранить: " + e);
             }
         },
@@ -470,6 +632,8 @@ const app = Vue.createApp({
                 duplicateSets = buildDuplicateSets(this.rows);
                 this.setRowData(this.rows);
                 this.rowCount = data.total || 0;
+                this.displayedCount = this.rowCount;
+                autoSizeColumns();
             } catch (e) {
                 this.tableError = String(e);
             }
@@ -494,6 +658,21 @@ const app = Vue.createApp({
             } else {
                 gridApi.setQuickFilterText(this.quickFilter);
             }
+        },
+        resetSort() {
+            if (!gridApi || !gridApi.getColumnState) {
+                return;
+            }
+            const state = gridApi.getColumnState().map(function (column) {
+                return { colId: column.colId, sort: null };
+            });
+            gridApi.applyColumnState({ state: state });
+        },
+        updateDisplayedCount() {
+            if (!gridApi || !gridApi.getDisplayedRowCount) {
+                return;
+            }
+            this.displayedCount = gridApi.getDisplayedRowCount();
         },
         async saveCellChange(params) {
             const field = params.colDef.field;
@@ -973,6 +1152,10 @@ window.addEventListener("keydown", function (event) {
 
 window.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && window.itdbTable && window.itdbTable.card) {
-        window.itdbTable.closeCard();
+        if (window.itdbTable.editingHostname) {
+            window.itdbTable.cancelEditHostname();
+        } else {
+            window.itdbTable.closeCard();
+        }
     }
 });
