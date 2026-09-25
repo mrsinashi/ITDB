@@ -711,6 +711,64 @@ body {
 .choice-clear:hover {
     color: #333;
 }
+.choice-style-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #666;
+    user-select: none;
+}
+.choice-style-btn:hover {
+    background: #eee;
+}
+.choice-style-btn.active {
+    background: #8a2828;
+    color: #fff;
+    border-color: #8a2828;
+}
+.field-defs-section {
+    margin-top: 20px;
+    border-top: 1px solid #ddd;
+    padding-top: 12px;
+}
+.field-def-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 12px;
+}
+.field-def-label {
+    font-weight: 500;
+}
+.field-def-add {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+}
+.field-def-add input {
+    padding: 2px 5px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+.field-def-add button {
+    padding: 2px 8px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #f5f5f5;
+    cursor: pointer;
+}
+.field-def-add button:hover {
+    background: #e8e8e8;
+}
 .choice-add {
     display: flex;
     gap: 4px;

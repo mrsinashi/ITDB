@@ -10,6 +10,7 @@ from db import SessionLocal
 from models import (
     Computer,
     ComputerPerson,
+    FieldDef,
     History,
     Location,
     Person,
@@ -249,6 +250,13 @@ def list_computers():
             .all()
         )
 
+        field_defs = (
+            session.query(FieldDef)
+            .filter(FieldDef.archived == False)
+            .order_by(FieldDef.sort, FieldDef.id)
+            .all()
+        )
+
         vacuum_by_computer = defaultdict(list)
 
         for computer_id, login in vacuum_rows:
@@ -298,6 +306,7 @@ def list_computers():
                     "status": computer.status,
                     "note": computer.note,
                     "updated_at": computer.updated_at,
+                    **{fd.key: extra.get(fd.key) for fd in field_defs},
                 }
             )
 
@@ -353,11 +362,18 @@ def update_computer(
         extra = dict(computer.extra or {})
         extra_changed = False
 
+        user_field_defs = (
+            session.query(FieldDef)
+            .filter(FieldDef.archived == False)
+            .all()
+        )
+        user_field_keys = {fd.key for fd in user_field_defs}
         allowed_fields = (
             SINGLE_FIELDS
             | MULTILINE_FIELDS
             | EXTRA_FIELDS.keys()
             | {"ip", "mac", "seat_no"}
+            | user_field_keys
         )
 
         for field, value in payload.items():
@@ -366,6 +382,18 @@ def update_computer(
                     status_code=400,
                     detail=f"Неизвестное поле: {field}",
                 )
+
+            if field in user_field_keys:
+                new_value = normalize_single(value)
+                old_value = extra.get(field)
+                if old_value != new_value:
+                    changes[f"extra.{field}"] = {"old": old_value, "new": new_value}
+                if new_value is None:
+                    extra.pop(field, None)
+                else:
+                    extra[field] = new_value
+                extra_changed = True
+                continue
 
             if field == "seat_no":
                 new_value = parse_seat_no(value)

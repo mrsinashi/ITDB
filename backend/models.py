@@ -74,12 +74,14 @@ class Choice(Base):
     __table_args__ = (
         UniqueConstraint("field", "value", name="uq_choices_field_value"),
     )
-
     id = Column(Integer, primary_key=True)
     field = Column(Text, nullable=False)
     value = Column(Text, nullable=False)
     sort = Column(Integer, nullable=False, server_default="0")
     color = Column(Text, nullable=True)
+    bg_color = Column(Text, nullable=True)
+    bold = Column(Boolean, nullable=False, server_default="false")
+    italic = Column(Boolean, nullable=False, server_default="false")
 
 
 class Person(Base):
@@ -176,3 +178,12 @@ class UserSession(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
+
+class FieldDef(Base):
+    __tablename__ = "field_defs"
+    id = Column(Integer, primary_key=True)
+    key = Column(Text, nullable=False, unique=True)
+    label = Column(Text, nullable=False)
+    field_type = Column(Text, nullable=False, server_default="text")
+    sort = Column(Integer, nullable=False, server_default="0")
+    archived = Column(Boolean, nullable=False, server_default="false")

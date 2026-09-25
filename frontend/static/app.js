@@ -202,12 +202,11 @@ function cellOverhead() {
     return left + right + border;
 }
 
-function computeAutoWidths(rows) {
+function computeAutoWidths(rows, fieldDefs, choiceStyleMap) {
     ensureWidthProbe();
     syncProbeFont();
     const overhead = cellOverhead();
     const probe = ensureWidthProbe();
-    // Стрелка сортировки рисуется шрифтом 9px (см. .sort-arrow) + отступ 3px
     const savedFontSize = probe.style.fontSize;
     probe.style.fontSize = "9px";
     probe.textContent = "▲";
@@ -216,18 +215,23 @@ function computeAutoWidths(rows) {
     probe.textContent = "";
     const sortArrowSpace = arrowWidth + 3;
     const widths = {};
-    COLUMN_DEFS.forEach(function (col) {
-        // Заголовок рисуется жирным (см. .data-table th) — меряем жирным
+    const allCols = COLUMN_DEFS.concat((fieldDefs || []).map(function (fd) {
+        return { field: fd.key, headerName: fd.label };
+    }));
+    const styleMap = choiceStyleMap || {};
+    allCols.forEach(function (col) {
         probe.style.fontWeight = "600";
         let max = measureTextWidth(col.headerName) + sortArrowSpace;
-        // Значения в ячейках обычные — меряем обычным
-        probe.style.fontWeight = "400";
         rows.forEach(function (row) {
             const value = row[col.field];
             if (value === null || value === undefined || value === "") {
                 return;
             }
+            const fieldStyles = styleMap[col.field];
             String(value).split("\n").forEach(function (line) {
+                const trimmed = line.trim().toLowerCase();
+                const s = fieldStyles ? fieldStyles[trimmed] : null;
+                probe.style.fontWeight = (s && s.bold) ? "700" : "400";
                 const w = measureTextWidth(line);
                 if (w > max) {
                     max = w;
@@ -336,20 +340,40 @@ const app = Vue.createApp({
             // Справочники
             choicesLoading: false,
             choicesItems: [],
-            newChoiceValue: {}
+            newChoiceValue: {},
+            // Пользовательские поля
+            fieldDefs: [],
+            fieldDefsLoading: false,
+            newFieldDef: { key: "", label: "", field_type: "text" }
         };
     },
 
     computed: {
         columns() {
             const self = this;
-            return COLUMN_DEFS.map(function (col) {
+            const base = COLUMN_DEFS.map(function (col) {
                 const manual = self.manualWidths[col.field];
                 const auto = self.autoWidths[col.field];
                 return Object.assign({}, col, {
                     width: manual !== undefined ? manual : (auto || 100)
                 });
             });
+            const extra = self.fieldDefs.map(function (fd) {
+                const manual = self.manualWidths[fd.key];
+                const auto = self.autoWidths[fd.key];
+                return {
+                    field: fd.key,
+                    headerName: fd.label,
+                    editable: true,
+                    width: manual !== undefined ? manual : (auto || 100),
+                    extra: true
+                };
+            });
+            const statusIndex = base.findIndex(function (c) { return c.field === "status"; });
+            if (statusIndex >= 0) {
+                return base.slice(0, statusIndex).concat(extra).concat(base.slice(statusIndex));
+            }
+            return base.concat(extra);
         },
 
         totalWidth() {
@@ -418,19 +442,29 @@ const app = Vue.createApp({
                 }
                 result[item.field].push(item);
             });
+            ["gsit", "state", "label"].forEach(function (field) {
+                if (!result[field]) {
+                    result[field] = [];
+                }
+            });
             return result;
         },
 
-        choiceColorMap() {
+        choiceStyleMap() {
             const map = {};
             this.choicesItems.forEach(function (item) {
-                if (!item.color) {
+                if (!item.color && !item.bg_color && !item.bold && !item.italic) {
                     return;
                 }
                 if (!map[item.field]) {
                     map[item.field] = {};
                 }
-                map[item.field][item.value.toLowerCase()] = item.color;
+                map[item.field][item.value.toLowerCase()] = {
+                    color: item.color || null,
+                    bg_color: item.bg_color || null,
+                    bold: item.bold || false,
+                    italic: item.italic || false
+                };
             });
             return map;
         }
@@ -446,8 +480,9 @@ const app = Vue.createApp({
         await this.checkAuth();
         this.authChecked = true;
         if (this.user) {
-            await this.loadTable();
             await this.loadChoices();
+            await this.loadFieldDefs();
+            await this.loadTable();
         }
     },
 
@@ -471,6 +506,7 @@ const app = Vue.createApp({
                 this.loadHistory();
             } else if (view === "choices") {
                 this.loadChoices();
+                this.loadFieldDefs();
             }
         },
 
@@ -494,7 +530,7 @@ const app = Vue.createApp({
                 this.rows = data.rows || [];
                 this.rowCount = data.total || this.rows.length;
                 duplicateSets = buildDuplicateSets(this.rows);
-                this.autoWidths = computeAutoWidths(this.rows);
+                this.autoWidths = computeAutoWidths(this.rows, this.fieldDefs, this.choiceStyleMap);
             } catch (e) {
                 this.tableError = String(e);
             }
@@ -600,17 +636,38 @@ const app = Vue.createApp({
             return cls;
         },
 
-        cellValueStyle(row, col) {
+        cellTextStyle(row, col) {
             const style = {};
-            const fieldColors = this.choiceColorMap[col.field];
-            if (fieldColors) {
+            const fieldStyles = this.choiceStyleMap[col.field];
+            if (fieldStyles) {
                 const value = row[col.field];
                 if (value !== null && value !== undefined && value !== "") {
                     const lines = String(value).split("\n");
                     for (const line of lines) {
-                        const color = fieldColors[line.trim().toLowerCase()];
-                        if (color) {
-                            style.color = color;
+                        const s = fieldStyles[line.trim().toLowerCase()];
+                        if (s && s.color) {
+                            style.color = s.color;
+                            break;
+                        }
+                    }
+                }
+            }
+            return Object.keys(style).length ? style : null;
+        },
+
+        cellTdStyle(row, col) {
+            const style = {};
+            const fieldStyles = this.choiceStyleMap[col.field];
+            if (fieldStyles) {
+                const value = row[col.field];
+                if (value !== null && value !== undefined && value !== "") {
+                    const lines = String(value).split("\n");
+                    for (const line of lines) {
+                        const s = fieldStyles[line.trim().toLowerCase()];
+                        if (s) {
+                            if (s.bg_color) style.backgroundColor = s.bg_color;
+                            if (s.bold) style.fontWeight = "700";
+                            if (s.italic) style.fontStyle = "italic";
                             break;
                         }
                     }
@@ -619,11 +676,14 @@ const app = Vue.createApp({
             if (col.field === "hostname") {
                 style.fontWeight = "700";
             }
+            if (col.sticky) {
+                style.left = this.stickyLeft(col) + "px";
+            }
             return Object.keys(style).length ? style : null;
         },
 
         cellSpanStyle(row, col) {
-            const base = this.cellValueStyle(row, col) || {};
+            const base = this.cellTextStyle(row, col) || {};
             if (this.isEditing(row, col)) {
                 return Object.assign({}, base, { visibility: "hidden" });
             }
@@ -735,14 +795,6 @@ const app = Vue.createApp({
             this.editingField = null;
         },
 
-                cellSpanStyle(row, col) {
-            const style = this.cellValueStyle(row, col) || {};
-            if (this.isEditing(row, col)) {
-                return Object.assign({}, style, { visibility: "hidden" });
-            }
-            return style;
-        },
-
         onEditInput(event, col) {
             this.growEditor(event.target, col);
         },
@@ -817,7 +869,7 @@ const app = Vue.createApp({
                 if (index !== -1) {
                     Object.assign(this.rows[index], updated);
                     duplicateSets = buildDuplicateSets(this.rows);
-                    this.autoWidths = computeAutoWidths(this.rows);
+                    this.autoWidths = computeAutoWidths(this.rows, this.fieldDefs, this.choiceStyleMap);
                 }
             } catch (e) {
                 alert("Не удалось сохранить: " + e);
@@ -964,7 +1016,7 @@ const app = Vue.createApp({
                     const updatedRow = Object.assign({}, this.rows[index], updated);
                     this.rows[index] = updatedRow;
                     duplicateSets = buildDuplicateSets(this.rows);
-                    this.autoWidths = computeAutoWidths(this.rows);
+                    this.autoWidths = computeAutoWidths(this.rows, this.fieldDefs, this.choiceStyleMap);
                     this.card = updatedRow;
                 }
             } catch (e) {
@@ -1208,7 +1260,10 @@ const app = Vue.createApp({
                 cpu: "CPU",
                 gpu: "GPU",
                 drive: "DRIVE",
-                vnc: "VNC"
+                vnc: "VNC",
+                gsit: "GSIT",
+                state: "Сост.",
+                label: "Метка"
             };
             return labels[field] || field;
         },
@@ -1256,6 +1311,75 @@ const app = Vue.createApp({
             }
         },
 
+        async setChoiceBgColor(item, event) {
+            const bg = event.target.value;
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ bg_color: bg })
+                });
+                if (!response.ok) {
+                    alert("Не удалось сохранить фон");
+                    return;
+                }
+                item.bg_color = bg;
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось сохранить фон: " + e);
+            }
+        },
+
+        async clearChoiceBgColor(item) {
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ bg_color: "" })
+                });
+                if (!response.ok) {
+                    alert("Не удалось убрать фон");
+                    return;
+                }
+                item.bg_color = null;
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось убрать фон: " + e);
+            }
+        },
+
+        async toggleChoiceBold(item) {
+            const newVal = !item.bold;
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ bold: newVal })
+                });
+                if (!response.ok) return;
+                item.bold = newVal;
+                await this.loadTable();
+            } catch (e) {
+                // тихо
+            }
+        },
+
+        async toggleChoiceItalic(item) {
+            const newVal = !item.italic;
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ italic: newVal })
+                });
+                if (!response.ok) return;
+                item.italic = newVal;
+                await this.loadTable();
+            } catch (e) {
+                // тихо
+            }
+        },
+
         async clearChoiceColor(item) {
             try {
                 const response = await apiFetch("/api/choices/" + item.id, {
@@ -1271,6 +1395,65 @@ const app = Vue.createApp({
                 await this.loadTable();
             } catch (e) {
                 alert("Не удалось убрать цвет: " + e);
+            }
+        },
+
+        // ---------- Пользовательские поля ----------
+        async loadFieldDefs() {
+            this.fieldDefsLoading = true;
+            try {
+                const response = await apiFetch("/api/field-defs");
+                const data = await response.json();
+                this.fieldDefs = data.items || [];
+            } catch (e) {
+                // тихо
+            }
+            this.fieldDefsLoading = false;
+        },
+
+        async addFieldDef() {
+            const key = this.newFieldDef.key.trim();
+            const label = this.newFieldDef.label.trim();
+            if (!key || !label) {
+                return;
+            }
+            try {
+                const response = await apiFetch("/api/field-defs", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        key: key,
+                        label: label,
+                        field_type: this.newFieldDef.field_type
+                    })
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert(data.detail || "Ошибка");
+                    return;
+                }
+                this.newFieldDef = { key: "", label: "", field_type: "text" };
+                await this.loadFieldDefs();
+            } catch (e) {
+                alert("Не удалось создать: " + e);
+            }
+        },
+
+        async archiveFieldDef(item) {
+            if (!confirm("Архивировать поле «" + item.label + "»? Оно исчезнет из таблицы.")) {
+                return;
+            }
+            try {
+                const response = await apiFetch("/api/field-defs/" + item.id + "/archive", {
+                    method: "POST"
+                });
+                if (!response.ok) {
+                    alert("Не удалось архивировать");
+                    return;
+                }
+                await this.loadFieldDefs();
+            } catch (e) {
+                alert("Не удалось архивировать: " + e);
             }
         },
 

@@ -14,6 +14,7 @@ from api_locations import router as locations_router
 from auth import get_current_user
 from import_apply import router as import_apply_router
 from api_choices import router as choices_router
+from api_field_defs import router as field_defs_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
 
@@ -54,6 +55,10 @@ app.include_router(
     dependencies=[Depends(get_current_user)],
 )
 
+app.include_router(
+    field_defs_router,
+    dependencies=[Depends(get_current_user)],
+)
 
 @app.get("/api/health")
 def health():

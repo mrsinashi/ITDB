@@ -59,7 +59,7 @@
                         <tr v-for="row in displayRows" :key="row.id">
                             <td v-for="col in columns" :key="col.field"
                                 :class="cellClass(row, col)"
-                                :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
+                                :style="cellTdStyle(row, col)"
                                 @click="onCellClick(row, col)"
                                 @dblclick="startEdit(row, col)"
                                 @mouseenter="handleNoteEnter($event, row, col)"
@@ -128,14 +128,33 @@
                     <div v-for="(values, field) in choicesByField" :key="field" class="choice-group">
                         <div class="choice-field-name">{{ choiceFieldLabel(field) }}</div>
                         <div v-for="item in values" :key="item.id" class="choice-item">
-                            <input type="color" class="choice-color" :value="item.color || '#000000'" @change="setChoiceColor(item, $event)" title="Выбрать цвет">
-                            <span class="choice-value" :style="item.color ? { color: item.color } : null">{{ item.value }}</span>
-                            <span v-if="item.color" class="choice-clear" title="Убрать цвет" @click="clearChoiceColor(item)">✕</span>
+                            <input type="color" class="choice-color" :value="item.color || '#000000'" @change="setChoiceColor(item, $event)" title="Цвет текста">
+                            <input type="color" class="choice-color" :value="item.bg_color || '#ffffff'" @change="setChoiceBgColor(item, $event)" title="Цвет фона">
+                            <span class="choice-style-btn" :class="{ active: item.bold }" @click="toggleChoiceBold(item)" title="Жирный">Ж</span>
+                            <span class="choice-style-btn" :class="{ active: item.italic }" @click="toggleChoiceItalic(item)" title="Курсив">К</span>
+                            <span class="choice-value" :style="{ color: item.color, backgroundColor: item.bg_color, fontWeight: item.bold ? '700' : null, fontStyle: item.italic ? 'italic' : null }">{{ item.value }}</span>
+                            <span v-if="item.color" class="choice-clear" title="Убрать цвет текста" @click="clearChoiceColor(item)">✕</span>
+                            <span v-if="item.bg_color" class="choice-clear" title="Убрать фон" @click="clearChoiceBgColor(item)">✕</span>
                         </div>
                         <div class="choice-add">
                             <input v-model="newChoiceValue[field]" placeholder="Новое значение" @keydown.enter="addChoice(field)">
                             <button @click="addChoice(field)">+</button>
                         </div>
+                    </div>
+                </div>
+                <div class="field-defs-section">
+                    <div class="choice-field-name">Пользовательские поля</div>
+                    <div v-if="fieldDefsLoading">Загрузка...</div>
+                    <div v-else-if="fieldDefs.length === 0" class="muted">Пользовательских полей пока нет.</div>
+                    <div v-for="fd in fieldDefs" :key="fd.id" class="field-def-item">
+                        <span class="field-def-label">{{ fd.label }}</span>
+                        <span class="muted">({{ fd.key }})</span>
+                        <span class="choice-clear" title="Архивировать" @click="archiveFieldDef(fd)">✕</span>
+                    </div>
+                    <div class="field-def-add">
+                        <input v-model="newFieldDef.key" placeholder="Ключ (лат.)" style="width: 90px;">
+                        <input v-model="newFieldDef.label" placeholder="Название столбца" style="width: 130px;">
+                        <button @click="addFieldDef">+</button>
                     </div>
                 </div>
             </div>

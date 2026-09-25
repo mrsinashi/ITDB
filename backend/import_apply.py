@@ -484,6 +484,16 @@ async def apply_import(
             for drive_value in drive_values:
                 ensure_choice(session, "drive", drive_value)
 
+            extra_field_map = {
+                "GSIT": "gsit",
+                "Сост.": "state",
+                "Метка": "label",
+            }
+            
+            for extra_key, extra_value in extra.items():
+                field_name = extra_field_map.get(extra_key, extra_key)
+                ensure_choice(session, field_name, extra_value)
+
             if person:
                 link = (
                     session.query(ComputerPerson)
