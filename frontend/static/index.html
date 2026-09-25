@@ -12,6 +12,7 @@
             <a href="#" @click.prevent="setView('table')" :class="{ active: view === 'table' }">Таблица</a>
             <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">Дерево</a>
             <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">История</a>
+            <a href="#" @click.prevent="setView('choices')" :class="{ active: view === 'choices' }">Справочники</a>
             <a href="#" @click.prevent="downloadExport">Экспорт</a>
             <span class="menu-right">
                 <span class="user">{{ user.login }}</span>
@@ -116,6 +117,27 @@
             <div class="tree">
                 <div v-if="treeRoots.length === 0 && !treeLoading && !treeError">Расположения не найдены.</div>
                 <tree-node v-for="root in treeRoots" :key="root.id" :node="root" :level="0"></tree-node>
+            </div>
+        </section>
+
+        <section v-if="user && view === 'choices'" class="view">
+            <div class="info-bar">Справочники значений и цвета</div>
+            <div class="page">
+                <div v-if="choicesLoading">Загрузка...</div>
+                <div v-else class="choices-grid">
+                    <div v-for="(values, field) in choicesByField" :key="field" class="choice-group">
+                        <div class="choice-field-name">{{ choiceFieldLabel(field) }}</div>
+                        <div v-for="item in values" :key="item.id" class="choice-item">
+                            <input type="color" class="choice-color" :value="item.color || '#000000'" @change="setChoiceColor(item, $event)" title="Выбрать цвет">
+                            <span class="choice-value" :style="item.color ? { color: item.color } : null">{{ item.value }}</span>
+                            <span v-if="item.color" class="choice-clear" title="Убрать цвет" @click="clearChoiceColor(item)">✕</span>
+                        </div>
+                        <div class="choice-add">
+                            <input v-model="newChoiceValue[field]" placeholder="Новое значение" @keydown.enter="addChoice(field)">
+                            <button @click="addChoice(field)">+</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 

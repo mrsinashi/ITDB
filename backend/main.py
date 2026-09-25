@@ -13,6 +13,7 @@ from api_import import router as import_router
 from api_locations import router as locations_router
 from auth import get_current_user
 from import_apply import router as import_apply_router
+from api_choices import router as choices_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
 
@@ -45,6 +46,11 @@ app.include_router(
 
 app.include_router(
     import_apply_router,
+    dependencies=[Depends(get_current_user)],
+)
+
+app.include_router(
+    choices_router,
     dependencies=[Depends(get_current_user)],
 )
 

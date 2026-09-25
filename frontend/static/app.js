@@ -107,11 +107,6 @@ const kindLabels = {
     room: "Кабинет"
 };
 
-const statusColors = {
-    "ремонт": "#d97706",
-    "списан": "#8a8a8a"
-};
-
 // ============================================================
 // Определения столбцов таблицы
 // ============================================================
@@ -337,7 +332,11 @@ const app = Vue.createApp({
             editingHostname: false,
             cardPeople: [],
             cardVacuum: [],
-            cardHistory: []
+            cardHistory: [],
+            // Справочники
+            choicesLoading: false,
+            choicesItems: [],
+            newChoiceValue: {}
         };
     },
 
@@ -409,7 +408,33 @@ const app = Vue.createApp({
                 return "";
             }
             return [this.card.room_code, this.card.room_name].filter(Boolean).join(" ");
+        },
+
+        choicesByField() {
+            const result = {};
+            this.choicesItems.forEach(function (item) {
+                if (!result[item.field]) {
+                    result[item.field] = [];
+                }
+                result[item.field].push(item);
+            });
+            return result;
+        },
+
+        choiceColorMap() {
+            const map = {};
+            this.choicesItems.forEach(function (item) {
+                if (!item.color) {
+                    return;
+                }
+                if (!map[item.field]) {
+                    map[item.field] = {};
+                }
+                map[item.field][item.value.toLowerCase()] = item.color;
+            });
+            return map;
         }
+        
     },
 
     async mounted() {
@@ -422,6 +447,7 @@ const app = Vue.createApp({
         this.authChecked = true;
         if (this.user) {
             await this.loadTable();
+            await this.loadChoices();
         }
     },
 
@@ -443,6 +469,8 @@ const app = Vue.createApp({
                 this.loadTree();
             } else if (view === "history") {
                 this.loadHistory();
+            } else if (view === "choices") {
+                this.loadChoices();
             }
         },
 
@@ -574,11 +602,18 @@ const app = Vue.createApp({
 
         cellValueStyle(row, col) {
             const style = {};
-            if (col.field === "status") {
-                const color = statusColors[String(row.status || "").toLowerCase()];
-                if (color) {
-                    style.color = color;
-                    style.fontWeight = "600";
+            const fieldColors = this.choiceColorMap[col.field];
+            if (fieldColors) {
+                const value = row[col.field];
+                if (value !== null && value !== undefined && value !== "") {
+                    const lines = String(value).split("\n");
+                    for (const line of lines) {
+                        const color = fieldColors[line.trim().toLowerCase()];
+                        if (color) {
+                            style.color = color;
+                            break;
+                        }
+                    }
                 }
             }
             if (col.field === "hostname") {
@@ -625,9 +660,9 @@ const app = Vue.createApp({
                 this.noteTooltip = {
                     visible: true,
                     text: row.note || "",
-                    top: rect.top,
-                    left: rect.left,
-                    width: rect.width
+                    top: rect.top - 1,
+                    left: rect.left - 1,
+                    width: rect.width + 1
                 };
             }
         },
@@ -1149,6 +1184,94 @@ const app = Vue.createApp({
                 this.historyError = String(e);
             }
             this.historyLoading = false;
+        },
+
+        // ---------- Справочники ----------
+        async loadChoices() {
+            this.choicesLoading = true;
+            try {
+                const response = await apiFetch("/api/choices");
+                const data = await response.json();
+                this.choicesItems = data.items || [];
+            } catch (e) {
+                // тихо
+            }
+            this.choicesLoading = false;
+        },
+
+        choiceFieldLabel(field) {
+            const labels = {
+                status: "Статус",
+                os: "OS",
+                type: "ТИП",
+                model: "Модель",
+                cpu: "CPU",
+                gpu: "GPU",
+                drive: "DRIVE",
+                vnc: "VNC"
+            };
+            return labels[field] || field;
+        },
+
+        async addChoice(field) {
+            const value = (this.newChoiceValue[field] || "").trim();
+            if (!value) {
+                return;
+            }
+            try {
+                const response = await apiFetch("/api/choices", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ field: field, value: value })
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert(data.detail || "Ошибка");
+                    return;
+                }
+                this.newChoiceValue[field] = "";
+                await this.loadChoices();
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось добавить: " + e);
+            }
+        },
+
+        async setChoiceColor(item, event) {
+            const color = event.target.value;
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ color: color })
+                });
+                if (!response.ok) {
+                    alert("Не удалось сохранить цвет");
+                    return;
+                }
+                item.color = color;
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось сохранить цвет: " + e);
+            }
+        },
+
+        async clearChoiceColor(item) {
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ color: "" })
+                });
+                if (!response.ok) {
+                    alert("Не удалось убрать цвет");
+                    return;
+                }
+                item.color = null;
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось убрать цвет: " + e);
+            }
         },
 
         // ---------- Общие ----------
