@@ -30,6 +30,7 @@
                     <input id="quickFilter" v-model="quickFilter" placeholder="Поиск по всей таблице">
                 </span>
                 <span class="toolbar-right">
+                    <button @click="editMode = !editMode" :class="{ active: editMode }" title="Режим редактирования">✎</button>
                     <button @click="resetWidths">Выровнять</button>
                     <button @click="resetSort">Сброс сортировки</button>
                     <span v-if="tableLoading">Загрузка...</span>
@@ -59,9 +60,24 @@
                                 :class="cellClass(row, col)"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
                                 @click="onCellClick(row, col)"
+                                @dblclick="startEdit(row, col)"
                                 @mouseenter="handleNoteEnter($event, row, col)"
                                 @mouseleave="hideNoteTooltip">
-                                <span :class="{ 'note-text': col.note }" :style="cellValueStyle(row, col)">{{ row[col.field] }}</span>
+                                <span :class="{ 'note-text': col.note }" :style="cellSpanStyle(row, col)">{{ row[col.field] }}</span>
+                                <template v-if="isEditing(row, col)">
+                                    <textarea v-if="col.multiline" v-model="editValue"
+                                        @keydown="handleEditKeydown($event, row, col)"
+                                        @input="onEditInput($event, col)"
+                                        @blur="saveEdit(row, col)"
+                                        :ref="'edit-' + row.id + '-' + col.field"
+                                        class="cell-edit cell-edit-multi"></textarea>
+                                    <input v-else v-model="editValue"
+                                        @keydown="handleEditKeydown($event, row, col)"
+                                        @input="onEditInput($event, col)"
+                                        @blur="saveEdit(row, col)"
+                                        :ref="'edit-' + row.id + '-' + col.field"
+                                        class="cell-edit">
+                                </template>
                             </td>
                         </tr>
                     </tbody>

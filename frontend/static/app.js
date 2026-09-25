@@ -117,30 +117,30 @@ const statusColors = {
 // ============================================================
 
 const COLUMN_DEFS = [
-    { field: "user", headerName: "ФИО" },
+    { field: "user", headerName: "ФИО", editable: true, multiline: true },
     { field: "building", headerName: "Адрес" },
     { field: "department", headerName: "Отделение" },
     { field: "floor", headerName: "Эт.", center: true },
     { field: "room_code", headerName: "Каб", center: true },
     { field: "room_name", headerName: "Кабинет" },
-    { field: "seat_no", headerName: "№", center: true },
-    { field: "hostname", headerName: "HOSTNAME", link: true, sticky: true },
-    { field: "ip", headerName: "IP", sticky: true },
-    { field: "vacuum", headerName: "VACUUM" },
-    { field: "os", headerName: "OS", center: true },
-    { field: "type", headerName: "ТИП", center: true },
-    { field: "model", headerName: "Модель", center: true },
-    { field: "cpu", headerName: "CPU", center: true },
-    { field: "ram", headerName: "RAM", center: true },
-    { field: "drive", headerName: "DRIVE", center: true },
-    { field: "gpu", headerName: "GPU", center: true },
-    { field: "mac", headerName: "MAC" },
-    { field: "inv_no", headerName: "ИНВ" },
-    { field: "gsit", headerName: "GSIT", center: true },
-    { field: "state", headerName: "Сост.", center: true },
-    { field: "label", headerName: "Метка", center: true },
-    { field: "status", headerName: "Статус", center: true },
-    { field: "note", headerName: "Примечание", note: true, maxWidth: 260 }
+    { field: "seat_no", headerName: "№", center: true, editable: true },
+    { field: "hostname", headerName: "HOSTNAME", link: true, sticky: true, editable: true },
+    { field: "ip", headerName: "IP", sticky: true, editable: true, multiline: true },
+    { field: "vacuum", headerName: "VACUUM", editable: true, multiline: true },
+    { field: "os", headerName: "OS", center: true, editable: true  },
+    { field: "type", headerName: "ТИП", center: true, editable: true },
+    { field: "model", headerName: "Модель", center: true, editable: true },
+    { field: "cpu", headerName: "CPU", center: true, editable: true },
+    { field: "ram", headerName: "RAM", center: true, editable: true },
+    { field: "drive", headerName: "DRIVE", center: true, editable: true, multiline: true },
+    { field: "gpu", headerName: "GPU", center: true, editable: true },
+    { field: "mac", headerName: "MAC", editable: true, editable: true, multiline: true },
+    { field: "inv_no", headerName: "ИНВ", editable: true, editable: true, multiline: true },
+    { field: "gsit", headerName: "GSIT", center: true, editable: true },
+    { field: "state", headerName: "Сост.", center: true, editable: true },
+    { field: "label", headerName: "Метка", center: true, editable: true },
+    { field: "status", headerName: "Статус", center: true, editable: true },
+    { field: "note", headerName: "Примечание", note: true, maxWidth: 200, editable: true, multiline: true }
 ];
 
 // Поля, дубли в которых подсвечиваются красным
@@ -305,6 +305,10 @@ const app = Vue.createApp({
             rows: [],
             noteTooltip: { visible: false, text: "", top: 0, left: 0, width: 0 },
             stickyStuck: false,
+            editMode: false,
+            editingRowId: null,
+            editingField: null,
+            editValue: "",
             autoWidths: {},
             manualWidths: loadManualWidths(),
             sortField: null,
@@ -562,6 +566,9 @@ const app = Vue.createApp({
             if (DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
                 cls["dup-red"] = true;
             }
+            if (this.isEditing(row, col)) {
+                cls["editing"] = true;
+            }
             return cls;
         },
 
@@ -578,6 +585,14 @@ const app = Vue.createApp({
                 style.fontWeight = "700";
             }
             return Object.keys(style).length ? style : null;
+        },
+
+        cellSpanStyle(row, col) {
+            const base = this.cellValueStyle(row, col) || {};
+            if (this.isEditing(row, col)) {
+                return Object.assign({}, base, { visibility: "hidden" });
+            }
+            return base;
         },
 
         stickyLeft(col) {
@@ -597,6 +612,9 @@ const app = Vue.createApp({
             if (!col.note) {
                 return;
             }
+            if (this.isEditing(row, col)) {
+                return;
+            }
             const td = event.currentTarget;
             const span = td.querySelector(".note-text");
             if (!span) {
@@ -607,7 +625,7 @@ const app = Vue.createApp({
                 this.noteTooltip = {
                     visible: true,
                     text: row.note || "",
-                    top: rect.bottom,
+                    top: rect.top,
                     left: rect.left,
                     width: rect.width
                 };
@@ -616,6 +634,159 @@ const app = Vue.createApp({
 
         hideNoteTooltip() {
             this.noteTooltip.visible = false;
+        },
+
+                isEditing(row, col) {
+            return this.editingRowId === row.id && this.editingField === col.field;
+        },
+
+        startEdit(row, col) {
+            if (!this.editMode || !col.editable) {
+                return;
+            }
+            if (this.editingRowId === row.id && this.editingField === col.field) {
+                return;
+            }
+            this.hideNoteTooltip();
+            this.editingRowId = row.id;
+            this.editingField = col.field;
+            this.editValue = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
+            this.$nextTick(() => {
+                const ref = this.$refs["edit-" + row.id + "-" + col.field];
+                const el = Array.isArray(ref) ? ref[0] : ref;
+                if (!el) {
+                    return;
+                }
+                const td = el.closest("td");
+                if (td) {
+                    el.style.width = td.clientWidth + "px";
+                    el.style.height = td.clientHeight + "px";
+                    this.growEditor(el, col);
+                }
+                el.focus({ preventScroll: true });
+                if (el.setSelectionRange) {
+                    const len = el.value.length;
+                    el.setSelectionRange(len, len);
+                }
+            });
+        },
+
+        handleEditKeydown(event, row, col) {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                this.saveEdit(row, col);
+            } else if (event.key === "Escape") {
+                event.preventDefault();
+                this.cancelEdit();
+            }
+        },
+
+        saveEdit(row, col) {
+            if (this.editingRowId !== row.id || this.editingField !== col.field) {
+                return;
+            }
+            const oldValue = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
+            const newValue = this.editValue;
+            this.editingRowId = null;
+            this.editingField = null;
+            if (newValue === oldValue) {
+                return;
+            }
+            this.saveCellValue(row, col, newValue);
+        },
+
+        cancelEdit() {
+            this.editingRowId = null;
+            this.editingField = null;
+        },
+
+                cellSpanStyle(row, col) {
+            const style = this.cellValueStyle(row, col) || {};
+            if (this.isEditing(row, col)) {
+                return Object.assign({}, style, { visibility: "hidden" });
+            }
+            return style;
+        },
+
+        onEditInput(event, col) {
+            this.growEditor(event.target, col);
+        },
+
+        growEditor(el, col) {
+            const td = el.closest("td");
+            const minWidth = td ? td.clientWidth : 0;
+            const minHeight = td ? td.clientHeight : 0;
+            if (!this._measureSpan) {
+                const span = document.createElement("span");
+                span.style.position = "absolute";
+                span.style.visibility = "hidden";
+                span.style.whiteSpace = "pre";
+                document.body.appendChild(span);
+                this._measureSpan = span;
+            }
+            const span = this._measureSpan;
+            const style = window.getComputedStyle(el);
+            span.style.fontFamily = style.fontFamily;
+            span.style.fontSize = style.fontSize;
+            span.style.fontWeight = style.fontWeight;
+            const padH = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+            const borderH = (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0);
+            if (col.multiline) {
+                if (col.note) {
+                    el.style.width = minWidth + "px";
+                    el.style.height = minHeight + "px";
+                    if (el.scrollHeight > el.clientHeight) {
+                        el.style.height = el.scrollHeight + "px";
+                    }
+                } else {
+                    const lines = el.value.split("\n");
+                    let maxW = 0;
+                    for (const line of lines) {
+                        span.textContent = line || " ";
+                        const w = span.getBoundingClientRect().width;
+                        if (w > maxW) maxW = w;
+                    }
+                    const needW = Math.ceil(maxW + padH + borderH + 2);
+                    el.style.width = Math.max(needW, minWidth) + "px";
+                    el.style.height = minHeight + "px";
+                    if (el.scrollHeight > el.clientHeight) {
+                        el.style.height = el.scrollHeight + "px";
+                    }
+                }
+            } else {
+                span.textContent = el.value;
+                const textW = span.getBoundingClientRect().width;
+                const needW = Math.ceil(textW + padH + borderH + 2);
+                el.style.width = Math.max(needW, minWidth) + "px";
+                el.style.height = minHeight + "px";
+            }
+        },
+
+        async saveCellValue(row, col, value) {
+            try {
+                const payload = {};
+                payload[col.field] = value;
+                const response = await apiFetch("/api/computers/" + row.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert("Не удалось сохранить: " + (data.detail || "ошибка"));
+                    return;
+                }
+                const data = await response.json();
+                const updated = data.updated || {};
+                const index = this.rows.findIndex((r) => r.id === row.id);
+                if (index !== -1) {
+                    Object.assign(this.rows[index], updated);
+                    duplicateSets = buildDuplicateSets(this.rows);
+                    this.autoWidths = computeAutoWidths(this.rows);
+                }
+            } catch (e) {
+                alert("Не удалось сохранить: " + e);
+            }
         },
 
         onTableScroll() {
@@ -679,7 +850,9 @@ const app = Vue.createApp({
 
         onCellClick(row, col) {
             if (col.field === "hostname") {
-                this.openCard(row);
+                if (!this.editMode) {
+                    this.openCard(row);
+                }
             }
         },
 

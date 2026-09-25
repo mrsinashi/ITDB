@@ -158,8 +158,9 @@ body {
     cursor: pointer;
 }
 
-.toolbar button:hover {
-    background: #853030;
+.toolbar button.active {
+    background: #a84848;
+    border-color: #8a2828;
 }
 
 /* ---------- Своя таблица ---------- */
@@ -613,7 +614,7 @@ body {
 .note-tooltip {
     position: fixed;
     background: #fff;
-    border: 1px solid #d8d8d8;
+    border: 1px solid #e5e5e5;
     padding: 3px 6px;
     font-size: 12px;
     line-height: 1.35;
@@ -624,4 +625,39 @@ body {
     max-height: 240px;
     overflow-y: auto;
     color: #222;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+/* Редактирование ячейки */
+.data-table td.cell-editing {
+    overflow: visible;
+}
+.data-table td.cell-editing:not(.sticky) {
+    position: relative;
+}
+.data-table td:not(.sticky) {
+    position: relative;
+}
+.data-table td.editing {
+    z-index: 20;
+    overflow: visible;
+    box-shadow: none;
+}
+.cell-edit {
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    border: 1px solid #8a2828;
+    padding: 2px 5px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    background: #fff;
+    z-index: 10;
+    margin: 0;
+    overflow: hidden;
+    resize: none;
+    white-space: pre-line;
 }
