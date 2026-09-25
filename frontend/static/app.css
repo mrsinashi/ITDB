@@ -90,11 +90,11 @@ body {
 
 .toolbar {
     display: flex;
-    gap: 10px;
     align-items: center;
     padding: 5px 10px;
     background: #9c3c3c;
     border-bottom: 1px solid #7d2828;
+    position: relative;
 }
 
 .info-bar {
@@ -109,11 +109,12 @@ body {
     font-weight: 400;
     color: #f3d3d3;
     white-space: nowrap;
-    min-width: 200px;
 }
 
 .toolbar .search-wrap {
-    flex: 1;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     justify-content: center;
 }
@@ -141,6 +142,7 @@ body {
 }
 
 .toolbar .toolbar-right {
+    margin-left: auto;
     display: flex;
     gap: 8px;
     align-items: center;
@@ -159,8 +161,8 @@ body {
 }
 
 .toolbar button.active {
-    background: #a84848;
-    border-color: #8a2828;
+    background: #5b1f1f;
+    border-color: #4c1d1d;
 }
 
 /* ---------- Своя таблица ---------- */
@@ -791,4 +793,107 @@ body {
 }
 .choice-add button:hover {
     background: #e8e8e8;
+}
+/* Чекбоксы выделения */
+.checkbox-col {
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    text-align: center;
+    padding: 2px !important;
+    line-height: 0;
+}
+thead .checkbox-col {
+    position: sticky;
+    left: 0;
+    z-index: 7;
+    background: #f5f5f5;
+}
+.data-table td.checkbox-col {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #fff;
+}
+.checkbox-col input[type="checkbox"] {
+    display: block;
+    margin: 0 auto;
+    cursor: pointer;
+}
+
+/* Меню действий с выбранными строками */
+.selection-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+}
+.selection-menu-btn {
+    width: 10px;
+    height: 20px;
+    padding: 0;
+    font-size: 8px;
+    line-height: 1;
+    border: 1px solid #661e1e;
+    border-radius: 3px;
+    background: #772525;
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.selection-menu-btn:hover {
+    background: #a84848;
+    border-color: #8a2828;
+}
+.selection-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #8a2828;
+    border: 1px solid #661e1e;
+    border-radius: 4px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    min-width: 160px;
+}
+.selection-menu button {
+    padding: 4px 12px;
+    font-size: 12px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #f1d7d7;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+}
+.selection-menu button:hover {
+    background: #a84848;
+    color: #fff;
+}
+
+/* Кнопки в справочниках */
+.choice-reset {
+    cursor: pointer;
+    color: #999;
+    font-size: 13px;
+    padding: 0 2px;
+}
+.choice-reset:hover {
+    color: #333;
+}
+.choice-delete {
+    cursor: pointer;
+    color: #999;
+    font-size: 11px;
+    padding: 0 2px;
+}
+.choice-delete:hover {
+    color: #c00;
 }

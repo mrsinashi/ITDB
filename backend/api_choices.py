@@ -164,3 +164,25 @@ def update_choice(
         )
     finally:
         session.close()
+
+@router.delete("/{choice_id}")
+def delete_choice(
+    choice_id: int,
+    user=Depends(get_current_user),
+):
+    session = SessionLocal()
+    try:
+        choice = session.get(Choice, choice_id)
+        if not choice:
+            raise HTTPException(status_code=404, detail="Значение не найдено.")
+        session.delete(choice)
+        session.commit()
+        return {"ok": True, "id": choice_id}
+    except HTTPException:
+        session.rollback()
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=f"Не удалось удалить: {e}")
+    finally:
+        session.close()

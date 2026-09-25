@@ -25,10 +25,20 @@
         </div>
 
         <section v-if="user" v-show="view === 'table'" class="view">
+
             <div class="toolbar">
-                <span class="row-count">Количество строк: {{ displayedCount === rowCount ? rowCount : displayedCount + " из " + rowCount }}</span>
+                <span class="row-count">Количество строк: {{ displayedCount === rowCount ? rowCount : displayedCount + " из " + rowCount }}<template v-if="selectedRows.length > 0"> / Выбрано: {{ selectedRows.length }}</template></span>
+                <span v-if="selectedRows.length > 0" class="selection-wrap">
+                    <button class="selection-menu-btn" @click="toggleSelectionMenu" title="Действия с выбранными">▼</button>
+                    <div v-if="selectionMenuOpen" class="selection-menu">
+                        <button @click="startMove">Переместить</button>
+                        <button @click="startReplace">Заменить</button>
+                        <button @click="startSwap">Поменять местами</button>
+                        <button @click="clearSelection">Снять выделение</button>
+                    </div>
+                </span>
                 <span class="search-wrap">
-                    <input id="quickFilter" v-model="quickFilter" placeholder="Поиск по всей таблице">
+                    <input id="quickFilter" v-model="quickFilter" placeholder="Поиск по базе">
                 </span>
                 <span class="toolbar-right">
                     <button @click="editMode = !editMode" :class="{ active: editMode }" title="Режим редактирования">✎</button>
@@ -42,10 +52,14 @@
             <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @scroll="onTableScroll" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
                 <table class="data-table" :class="{ 'sticky-stuck': stickyStuck }" ref="table" :style="{ width: totalWidth + 'px' }">
                     <colgroup>
+                        <col v-if="editMode" style="width: 30px;">
                         <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
                     </colgroup>
                     <thead>
                         <tr>
+                            <th v-if="editMode" class="checkbox-col">
+                                <input type="checkbox" :checked="isAllSelected" @change="toggleAllSelection">
+                            </th>
                             <th v-for="col in columns" :key="'th-' + col.field"
                                 :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === lastStickyField }"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
@@ -57,6 +71,9 @@
                     </thead>
                     <tbody>
                         <tr v-for="row in displayRows" :key="row.id">
+                            <td v-if="editMode" class="checkbox-col">
+                                <input type="checkbox" :checked="isRowSelected(row)" @change="toggleRowSelection(row)">
+                            </td>
                             <td v-for="col in columns" :key="col.field"
                                 :class="cellClass(row, col)"
                                 :style="cellTdStyle(row, col)"
@@ -127,15 +144,15 @@
                 <div v-else class="choices-grid">
                     <div v-for="(values, field) in choicesByField" :key="field" class="choice-group">
                         <div class="choice-field-name">{{ choiceFieldLabel(field) }}</div>
-                        <div v-for="item in values" :key="item.id" class="choice-item">
-                            <input type="color" class="choice-color" :value="item.color || '#000000'" @change="setChoiceColor(item, $event)" title="Цвет текста">
-                            <input type="color" class="choice-color" :value="item.bg_color || '#ffffff'" @change="setChoiceBgColor(item, $event)" title="Цвет фона">
-                            <span class="choice-style-btn" :class="{ active: item.bold }" @click="toggleChoiceBold(item)" title="Жирный">Ж</span>
-                            <span class="choice-style-btn" :class="{ active: item.italic }" @click="toggleChoiceItalic(item)" title="Курсив">К</span>
-                            <span class="choice-value" :style="{ color: item.color, backgroundColor: item.bg_color, fontWeight: item.bold ? '700' : null, fontStyle: item.italic ? 'italic' : null }">{{ item.value }}</span>
-                            <span v-if="item.color" class="choice-clear" title="Убрать цвет текста" @click="clearChoiceColor(item)">✕</span>
-                            <span v-if="item.bg_color" class="choice-clear" title="Убрать фон" @click="clearChoiceBgColor(item)">✕</span>
-                        </div>
+                            <div v-for="item in values" :key="item.id" class="choice-item">
+                                <input type="color" class="choice-color" :value="item.color || '#000000'" @change="setChoiceColor(item, $event)" title="Цвет текста">
+                                <input type="color" class="choice-color" :value="item.bg_color || '#ffffff'" @change="setChoiceBgColor(item, $event)" title="Цвет фона">
+                                <span class="choice-style-btn" :class="{ active: item.bold }" @click="toggleChoiceBold(item)" title="Жирный">Ж</span>
+                                <span class="choice-style-btn" :class="{ active: item.italic }" @click="toggleChoiceItalic(item)" title="Курсив">К</span>
+                                <span class="choice-value" :style="{ color: item.color, backgroundColor: item.bg_color, fontWeight: item.bold ? '700' : null, fontStyle: item.italic ? 'italic' : null }">{{ item.value }}</span>
+                                <span v-if="item.color || item.bg_color || item.bold || item.italic" class="choice-reset" title="Сбросить оформление" @click="resetChoiceStyle(item)">↺</span>
+                                <span class="choice-delete" title="Удалить значение" @click="deleteChoice(item)">✕</span>
+                            </div>
                         <div class="choice-add">
                             <input v-model="newChoiceValue[field]" placeholder="Новое значение" @keydown.enter="addChoice(field)">
                             <button @click="addChoice(field)">+</button>

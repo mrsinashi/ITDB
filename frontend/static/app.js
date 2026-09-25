@@ -344,6 +344,8 @@ const app = Vue.createApp({
             // Пользовательские поля
             fieldDefs: [],
             fieldDefsLoading: false,
+            selectedRows: [],
+            selectionMenuOpen: false,
             newFieldDef: { key: "", label: "", field_type: "text" }
         };
     },
@@ -376,10 +378,18 @@ const app = Vue.createApp({
             return base.concat(extra);
         },
 
+        isAllSelected() {
+            if (this.displayRows.length === 0) {
+                return false;
+            }
+            return this.displayRows.every((row) => this.selectedRows.indexOf(row.id) !== -1);
+        },
+
         totalWidth() {
-            return this.columns.reduce(function (sum, col) {
+            const base = this.columns.reduce(function (sum, col) {
                 return sum + col.width;
             }, 0);
+            return (this.editMode ? 30 : 0) + base;
         },
 
         filteredRows() {
@@ -469,6 +479,19 @@ const app = Vue.createApp({
             return map;
         }
         
+    },
+
+    watch: {
+        editMode(newVal) {
+            if (!newVal) {
+                this.selectedRows = [];
+                this.selectionMenuOpen = false;
+                this.removeMenuCloseListeners();
+            }
+            this.$nextTick(() => {
+                this.updateStickyShadow();
+            });
+        }
     },
 
     async mounted() {
@@ -691,7 +714,7 @@ const app = Vue.createApp({
         },
 
         stickyLeft(col) {
-            let left = 0;
+            let left = this.editMode ? 30 : 0;
             for (const c of this.columns) {
                 if (c.field === col.field) {
                     break;
@@ -788,6 +811,95 @@ const app = Vue.createApp({
                 return;
             }
             this.saveCellValue(row, col, newValue);
+        },
+
+        isRowSelected(row) {
+            return this.selectedRows.indexOf(row.id) !== -1;
+        },
+
+        toggleRowSelection(row) {
+            const index = this.selectedRows.indexOf(row.id);
+            if (index === -1) {
+                this.selectedRows.push(row.id);
+            } else {
+                this.selectedRows.splice(index, 1);
+            }
+        },
+
+        toggleAllSelection() {
+            const self = this;
+            if (this.isAllSelected) {
+                const displayIds = this.displayRows.map(function (row) { return row.id; });
+                this.selectedRows = this.selectedRows.filter(function (id) {
+                    return displayIds.indexOf(id) === -1;
+                });
+            } else {
+                const newIds = [];
+                this.displayRows.forEach(function (row) {
+                    if (self.selectedRows.indexOf(row.id) === -1) {
+                        newIds.push(row.id);
+                    }
+                });
+                this.selectedRows = this.selectedRows.concat(newIds);
+            }
+        },
+
+        clearSelection() {
+            this.selectedRows = [];
+            this.selectionMenuOpen = false;
+            this.removeMenuCloseListeners();
+        },
+
+        toggleSelectionMenu() {
+            if (this.selectionMenuOpen) {
+                this.selectionMenuOpen = false;
+                this.removeMenuCloseListeners();
+            } else {
+                this.selectionMenuOpen = true;
+                this.$nextTick(() => {
+                    document.addEventListener("click", this.onDocClickCloseMenu, true);
+                    document.addEventListener("keydown", this.onEscCloseMenu, true);
+                });
+            }
+        },
+
+        onDocClickCloseMenu(event) {
+            const wrap = this.$el.querySelector(".selection-wrap");
+            if (wrap && !wrap.contains(event.target)) {
+                this.selectionMenuOpen = false;
+                this.removeMenuCloseListeners();
+            }
+        },
+
+        onEscCloseMenu(event) {
+            if (event.key === "Escape" && this.selectionMenuOpen) {
+                event.stopPropagation();
+                this.selectionMenuOpen = false;
+                this.removeMenuCloseListeners();
+            }
+        },
+
+        removeMenuCloseListeners() {
+            document.removeEventListener("click", this.onDocClickCloseMenu, true);
+            document.removeEventListener("keydown", this.onEscCloseMenu, true);
+        },
+
+        startMove() {
+            this.selectionMenuOpen = false;
+            this.removeMenuCloseListeners();
+            alert("Перемещение пока не реализовано");
+        },
+
+        startReplace() {
+            this.selectionMenuOpen = false;
+            this.removeMenuCloseListeners();
+            alert("Замена пока не реализована");
+        },
+
+        startSwap() {
+            this.selectionMenuOpen = false;
+            this.removeMenuCloseListeners();
+            alert("Обмен пока не реализован");
         },
 
         cancelEdit() {
@@ -893,7 +1005,7 @@ const app = Vue.createApp({
             if (!wrap) {
                 return;
             }
-            let threshold = 0;
+            let threshold = this.editMode ? 30 : 0;
             for (const col of this.columns) {
                 if (col.sticky) {
                     break;
@@ -1345,6 +1457,47 @@ const app = Vue.createApp({
                 await this.loadTable();
             } catch (e) {
                 alert("Не удалось убрать фон: " + e);
+            }
+        },
+
+        async resetChoiceStyle(item) {
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ color: "", bg_color: "", bold: false, italic: false })
+                });
+                if (!response.ok) {
+                    alert("Не удалось сбросить оформление");
+                    return;
+                }
+                item.color = null;
+                item.bg_color = null;
+                item.bold = false;
+                item.italic = false;
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось сбросить оформление: " + e);
+            }
+        },
+        
+        async deleteChoice(item) {
+            if (!confirm("Удалить значение «" + item.value + "» из справочника?")) {
+                return;
+            }
+            try {
+                const response = await apiFetch("/api/choices/" + item.id, {
+                    method: "DELETE"
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert(data.detail || "Не удалось удалить");
+                    return;
+                }
+                await this.loadChoices();
+                await this.loadTable();
+            } catch (e) {
+                alert("Не удалось удалить: " + e);
             }
         },
 
