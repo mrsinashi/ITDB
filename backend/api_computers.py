@@ -3,8 +3,10 @@ from datetime import datetime, timezone
 import re
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy import func
 
-from auth import get_current_user
+from api_import import split_vacuum_logins
+from auth import require_editor
 
 from db import SessionLocal
 from models import (
@@ -44,6 +46,47 @@ EXTRA_FIELDS = {
     "state": "Сост.",
     "label": "Метка",
 }
+
+# Поля-связи: хранятся не в computers, а в отдельных таблицах
+LINK_FIELDS = {"user", "vacuum"}
+
+# Ключи, которые уже заняты встроенными полями строки таблицы.
+# Пользовательское поле с таким ключом затёрло бы встроенное значение.
+RESERVED_FIELD_KEYS = (
+    SINGLE_FIELDS
+    | MULTILINE_FIELDS
+    | EXTRA_FIELDS.keys()
+    | LINK_FIELDS
+    | {
+        "id",
+        "location_id",
+        "building",
+        "department",
+        "floor",
+        "room_code",
+        "room_name",
+        "seat_no",
+        "seat_sort",
+        "ip",
+        "mac",
+        "glpi_id",
+        "temp_note",
+        "extra",
+        "version",
+        "updated_at",
+    }
+)
+
+# Ключи в computers.extra, под которыми лежат встроенные GSIT / Сост. / Метка.
+# Пользовательское поле с таким ключом (старые поля, созданные до проверки
+# ключа) показывало бы те же значения второй раз.
+EXTRA_STORAGE_KEYS = {value.lower() for value in EXTRA_FIELDS.values()}
+
+
+def is_reserved_field_key(key):
+    """Ключ пользовательского поля совпадает со встроенным (без учёта регистра)."""
+    lowered = (key or "").strip().lower()
+    return lowered in RESERVED_FIELD_KEYS or lowered in EXTRA_STORAGE_KEYS
 
 
 def normalize_single(value):
@@ -142,6 +185,152 @@ def parse_seat_no(value):
         )
 
     return int(number)
+
+
+def normalize_person_name(value):
+    if value is None:
+        return None
+
+    text = " ".join(str(value).split())
+
+    return text if text else None
+
+
+def get_main_person_link(session, computer_id):
+    """Связь ПК с «главным» человеком — тот, кого показывает таблица."""
+    links = (
+        session.query(ComputerPerson)
+        .filter(ComputerPerson.computer_id == computer_id)
+        .all()
+    )
+
+    if not links:
+        return None, links
+
+    links.sort(key=lambda item: (not item.is_main, item.sort, item.id))
+
+    return links[0], links
+
+
+def set_main_person(session, computer, value):
+    """Меняет главного пользователя ПК. Возвращает (old, new) или None."""
+    new_name = normalize_person_name(value)
+
+    main_link, links = get_main_person_link(session, computer.id)
+
+    old_person = session.get(Person, main_link.person_id) if main_link else None
+    old_name = old_person.full_name if old_person else None
+
+    if old_name == new_name:
+        return None
+
+    # Тот же человек, поменялся только регистр букв — правим само ФИО
+    if old_person and new_name and old_name.lower() == new_name.lower():
+        old_person.full_name = new_name
+        return old_name, new_name
+
+    if main_link:
+        session.delete(main_link)
+        session.flush()
+
+    if new_name:
+        person = (
+            session.query(Person)
+            .filter(func.lower(Person.full_name) == new_name.lower())
+            .first()
+        )
+
+        if not person:
+            person = Person(full_name=new_name)
+            session.add(person)
+            session.flush()
+
+        existing = None
+
+        for link in links:
+            if link is not main_link and link.person_id == person.id:
+                existing = link
+                break
+
+        if existing:
+            existing.is_main = True
+            existing.sort = 0
+        else:
+            session.add(
+                ComputerPerson(
+                    computer_id=computer.id,
+                    person_id=person.id,
+                    is_main=True,
+                    sort=0,
+                )
+            )
+
+        new_name = person.full_name
+
+    return old_name, new_name
+
+
+def get_vacuum_logins(session, computer_id):
+    rows = (
+        session.query(VacuumAccount.login)
+        .join(
+            VacuumAccountComputer,
+            VacuumAccountComputer.account_id == VacuumAccount.id,
+        )
+        .filter(VacuumAccountComputer.computer_id == computer_id)
+        .all()
+    )
+
+    return sorted([row[0] for row in rows], key=str.lower)
+
+
+def vacuum_text(logins):
+    return "\n".join(sorted(logins, key=str.lower)) if logins else None
+
+
+def set_vacuum_logins(session, computer, value):
+    """Заменяет набор логинов VACUUM у ПК. Возвращает (old, new) или None."""
+    new_logins = split_vacuum_logins(value)
+
+    links = (
+        session.query(VacuumAccountComputer, VacuumAccount)
+        .join(VacuumAccount, VacuumAccountComputer.account_id == VacuumAccount.id)
+        .filter(VacuumAccountComputer.computer_id == computer.id)
+        .all()
+    )
+
+    old_logins = [account.login for _, account in links]
+
+    if set(old_logins) == set(new_logins):
+        return None
+
+    for link, account in links:
+        if account.login not in new_logins:
+            session.delete(link)
+
+    for login in new_logins:
+        if login in old_logins:
+            continue
+
+        account = (
+            session.query(VacuumAccount)
+            .filter(VacuumAccount.login == login)
+            .first()
+        )
+
+        if not account:
+            account = VacuumAccount(login=login)
+            session.add(account)
+            session.flush()
+
+        session.add(
+            VacuumAccountComputer(
+                account_id=account.id,
+                computer_id=computer.id,
+            )
+        )
+
+    return vacuum_text(old_logins), vacuum_text(new_logins)
 
 
 @router.get("/computers")
@@ -256,6 +445,7 @@ def list_computers():
             .order_by(FieldDef.sort, FieldDef.id)
             .all()
         )
+        field_defs = [fd for fd in field_defs if not is_reserved_field_key(fd.key)]
 
         vacuum_by_computer = defaultdict(list)
 
@@ -269,13 +459,16 @@ def list_computers():
             parts = get_location_parts(computer.location_id)
 
             vacuum_logins = vacuum_by_computer.get(computer.id, [])
-            vacuum_text = "\n".join(sorted(vacuum_logins, key=str.lower)) if vacuum_logins else None
 
             seat_sort = computer.seat_sort
             if seat_sort is not None:
                 seat_sort = float(seat_sort)
 
-            rows.append(
+            # Пользовательские поля идут первыми: при совпадении ключа
+            # встроенное значение ниже их перекроет, а не наоборот.
+            row = {fd.key: extra.get(fd.key) for fd in field_defs}
+
+            row.update(
                 {
                     "id": computer.id,
                     "location_id": computer.location_id,
@@ -289,7 +482,7 @@ def list_computers():
                     "_seat_sort": seat_sort,
                     "ip": computer.ip,
                     "hostname": computer.hostname,
-                    "vacuum": vacuum_text,
+                    "vacuum": vacuum_text(vacuum_logins),
                     "os": computer.os,
                     "type": computer.type,
                     "model": computer.model,
@@ -305,10 +498,12 @@ def list_computers():
                     "label": extra.get("Метка"),
                     "status": computer.status,
                     "note": computer.note,
+                    "version": computer.version,
                     "updated_at": computer.updated_at,
-                    **{fd.key: extra.get(fd.key) for fd in field_defs},
                 }
             )
+
+            rows.append(row)
 
         def sort_key(row):
             location_key = location_sort_keys.get(row["location_id"])
@@ -344,18 +539,45 @@ def list_computers():
 def update_computer(
     computer_id: int,
     payload: dict = Body(...),
-    user=Depends(get_current_user),
+    user=Depends(require_editor),
 ):
     session = SessionLocal()
 
     try:
-        computer = session.get(Computer, computer_id)
+        payload = dict(payload)
+
+        # Версия записи, которую видел пользователь. Если за это время ПК
+        # кто-то изменил — не затираем чужую правку, а просим обновить.
+        expected_version = payload.pop("_version", None)
+
+        computer = (
+            session.query(Computer)
+            .filter(Computer.id == computer_id)
+            .with_for_update()
+            .first()
+        )
 
         if not computer:
             raise HTTPException(
                 status_code=404,
                 detail="Компьютер не найден.",
             )
+
+        if expected_version is not None:
+            try:
+                expected_version = int(expected_version)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="_version должен быть числом.",
+                )
+
+            if expected_version != computer.version:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Этот компьютер уже изменил другой пользователь. "
+                    "Таблица будет обновлена — проверь значение и повтори правку.",
+                )
 
         changes = {}
 
@@ -367,11 +589,15 @@ def update_computer(
             .filter(FieldDef.archived == False)
             .all()
         )
-        user_field_keys = {fd.key for fd in user_field_defs}
+        # Ключи, совпадающие со встроенными полями, как пользовательские не принимаем
+        user_field_keys = {
+            fd.key for fd in user_field_defs if not is_reserved_field_key(fd.key)
+        }
         allowed_fields = (
             SINGLE_FIELDS
             | MULTILINE_FIELDS
             | EXTRA_FIELDS.keys()
+            | LINK_FIELDS
             | {"ip", "mac", "seat_no"}
             | user_field_keys
         )
@@ -383,16 +609,20 @@ def update_computer(
                     detail=f"Неизвестное поле: {field}",
                 )
 
-            if field in user_field_keys:
-                new_value = normalize_single(value)
-                old_value = extra.get(field)
-                if old_value != new_value:
-                    changes[f"extra.{field}"] = {"old": old_value, "new": new_value}
-                if new_value is None:
-                    extra.pop(field, None)
-                else:
-                    extra[field] = new_value
-                extra_changed = True
+            if field == "user":
+                result = set_main_person(session, computer, value)
+
+                if result:
+                    changes["user"] = {"old": result[0], "new": result[1]}
+
+                continue
+
+            if field == "vacuum":
+                result = set_vacuum_logins(session, computer, value)
+
+                if result:
+                    changes["vacuum"] = {"old": result[0], "new": result[1]}
+
                 continue
 
             if field == "seat_no":
@@ -418,8 +648,8 @@ def update_computer(
                 if field == "status" and new_value is None:
                     new_value = "установлен"
 
-            elif field in EXTRA_FIELDS:
-                extra_key = EXTRA_FIELDS[field]
+            elif field in EXTRA_FIELDS or field in user_field_keys:
+                extra_key = EXTRA_FIELDS.get(field, field)
                 new_value = normalize_single(value)
                 old_value = extra.get(extra_key)
 
@@ -473,6 +703,8 @@ def update_computer(
             "mac": computer.mac,
             "drive": computer.drive,
             "note": computer.note,
+            "version": computer.version,
+            "updated_at": computer.updated_at,
         }
 
         for field in SINGLE_FIELDS:
@@ -481,9 +713,21 @@ def update_computer(
         for frontend_key, extra_key in EXTRA_FIELDS.items():
             updated[frontend_key] = extra.get(extra_key)
 
+        for key in user_field_keys:
+            updated[key] = extra.get(key)
+
+        main_link, _ = get_main_person_link(session, computer.id)
+        main_person = session.get(Person, main_link.person_id) if main_link else None
+        updated["user"] = main_person.full_name if main_person else None
+
+        updated["vacuum"] = vacuum_text(get_vacuum_logins(session, computer.id))
+
+        # Снимаем блокировку строки, если правок не было
+        session.rollback()
+
         return {
             "ok": True,
-            "id": computer.id,
+            "id": computer_id,
             "changes": changes,
             "updated": updated,
         }

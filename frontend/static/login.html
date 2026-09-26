@@ -5,29 +5,35 @@
   <title>ITDB — Вход</title>
 
   <link rel="stylesheet" href="/app.css">
+  <script>try { document.documentElement.dataset.theme = localStorage.getItem("itdb.theme") || "red"; } catch (e) {}</script>
 </head>
 
-<body>
+<body class="login-page">
   <div class="login-wrap">
     <form id="loginForm" class="login-box">
-      <h1>ITDB</h1>
+      <div class="login-head">ITDB<span>учёт компьютеров</span></div>
 
-      <div id="error" class="error"></div>
+      <div class="login-fields">
+        <div id="error" class="error"></div>
 
-      <input
-        id="login"
-        placeholder="Логин"
-        autocomplete="username"
-      >
+        <input
+          id="login"
+          class="input"
+          placeholder="Логин"
+          autocomplete="username"
+          autofocus
+        >
 
-      <input
-        id="password"
-        type="password"
-        placeholder="Пароль"
-        autocomplete="current-password"
-      >
+        <input
+          id="password"
+          class="input"
+          type="password"
+          placeholder="Пароль"
+          autocomplete="current-password"
+        >
 
-      <button type="submit">Войти</button>
+        <button type="submit" class="btn btn-primary">Войти</button>
+      </div>
     </form>
   </div>
 

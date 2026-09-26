@@ -2,7 +2,7 @@ import secrets
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -84,3 +84,30 @@ def get_current_user(request: Request):
 
     finally:
         session.close()
+
+
+# Роли:
+#   admin  — всё, включая импорт
+#   editor — правка данных (ПК, дерево, справочники, поля)
+#   reader — только просмотр
+WRITE_ROLES = ("admin", "editor")
+
+
+def require_editor(user=Depends(get_current_user)):
+    if user["role"] not in WRITE_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Недостаточно прав: у тебя доступ только на чтение.",
+        )
+
+    return user
+
+
+def require_admin(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Это действие доступно только администратору.",
+        )
+
+    return user

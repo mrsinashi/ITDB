@@ -1,0 +1,1156 @@
+diff --git a/backend/api_auth.py b/backend/api_auth.py
+index 1170330..b5e4f36 100644
+--- a/backend/api_auth.py
++++ b/backend/api_auth.py
+@@ -112,6 +112,7 @@ def login(
+ 
+ # Допустимые личные настройки интерфейса
+ THEMES = {"red", "green", "blue", "graphite", "teal"}
++ACCENT_PAGES = {"tree", "history", "choices"}
+ 
+ 
+ @router.get("/me")
+@@ -156,7 +157,27 @@ def update_prefs(
+ 
+             prefs["theme"] = theme
+ 
+-        db_user.prefs = prefs
++        # Акцентные границы блоков (Дерево, История, Справочники, карточка)
++        if "accent_borders" in payload:
++            prefs["accent_borders"] = bool(payload.get("accent_borders"))
++
++        # Акцентная шапка — отдельно для каждой страницы
++        if "accent_headers" in payload:
++            value = payload.get("accent_headers")
++
++            if not isinstance(value, dict):
++                raise HTTPException(status_code=400, detail="accent_headers: ожидается объект.")
++
++            headers = dict(prefs.get("accent_headers") or {})
++
++            for page, on in value.items():
++                if page not in ACCENT_PAGES:
++                    raise HTTPException(status_code=400, detail=f"Неизвестная страница: {page}.")
++                headers[page] = bool(on)
++
++            prefs["accent_headers"] = headers
++
++        db_user.prefs = prefs  # новый dict — иначе JSONB не заметит изменения
+         session.commit()
+ 
+         return {"ok": True, "prefs": prefs}
+diff --git a/frontend/static/app.css b/frontend/static/app.css
+index c5595b6..4d48479 100644
+--- a/frontend/static/app.css
++++ b/frontend/static/app.css
+@@ -16,6 +16,8 @@
+     --gray-head: #f0f0f0;           /* шапка таблиц и панель (как у главной таблицы) */
+     --gray-group: #e8e8e8;          /* строка-группа: адрес, день, группа карточки */
+     --gray-line: #d8d8d8;           /* линии шапок и групп */
++    --radius: 3px;                  /* единое скругление: как у кнопок и поиска на панели */
++    --copy-ico: #b98a4e;            /* значок копирования — в тон бежевой подсветки строки */
+ 
+     /* Верхнее меню */
+     --nav-bg: #8a2828;
+@@ -276,6 +278,8 @@ body {
+     height: 17px;
+ }
+ .top-menu .nav-user {
++    box-sizing: border-box;
++    justify-content: center;
+     padding: 0 14px;
+ }
+ .top-menu .nav-icon.open,
+@@ -291,12 +295,15 @@ body {
+     top: 100%;
+     right: 0;
+     z-index: 120;
+-    min-width: 210px;
++    /* ширина кратна 4px: при масштабе 125%/150% край ложится ровно в пиксель */
++    width: 224px;
++    box-sizing: border-box;
+     background: #fff;
+-    border: 1px solid #cfcfcf;
+-    border-top: none;
++    /* Без рамки: при масштабе Windows 125%/150% линия рамки сглаживается
++       внутрь, и меню казалось на пиксель уже кнопки. Край — фоном и тенью. */
++    border: none;
+     border-radius: 0 0 3px 3px;
+-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
++    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2), -1px 1px 0 rgba(0, 0, 0, 0.12);
+     color: var(--text);
+     font-size: 13px;
+ }
+@@ -349,7 +356,6 @@ body {
+ }
+ 
+ .settings-card {
+-    min-width: 180px;
+     padding: 4px;
+ }
+ .settings-card .nc-title {
+@@ -366,7 +372,7 @@ body {
+     width: 100%;
+     padding: 4px 8px;
+     border: none;
+-    border-radius: 2px;
++    border-radius: var(--radius);
+     background: transparent;
+     font-family: inherit;
+     font-size: 12px;
+@@ -381,11 +387,33 @@ body {
+     flex: 0 0 14px;
+     width: 14px;
+     height: 14px;
+-    border-radius: 2px;
++    border-radius: var(--radius);
+ }
+ .theme-opt .theme-name {
+     flex: 1;
+ }
++.settings-card .nc-sep {
++    height: 1px;
++    margin: 4px 4px;
++    background: #e5e5e5;
++}
++.settings-card .nc-check {
++    display: flex;
++    align-items: center;
++    gap: 6px;
++    padding: 4px 8px;
++    border-radius: var(--radius);
++    font-size: 12px;
++    cursor: pointer;
++    white-space: nowrap;
++}
++.settings-card .nc-check:hover {
++    background: var(--menu-hover-bg);
++}
++.settings-card .nc-check input {
++    margin: 0;
++    accent-color: var(--brand);
++}
+ .theme-check {
+     width: 13px;
+     height: 13px;
+@@ -565,7 +593,7 @@ body.ui-light-toolbar .toolbar .tb-error {
+     height: 14px;
+     padding: 0 3px;
+     box-sizing: border-box;
+-    border-radius: 7px;
++    border-radius: 3px;
+     background: var(--edit-accent);
+     color: #fff;
+     font-size: 10px;
+@@ -585,7 +613,7 @@ body.ui-light-toolbar .toolbar .tb-error {
+     font-size: 12px;
+     font-family: inherit;
+     border: 1px solid var(--tb-ctrl-border);
+-    border-radius: 11px;
++    border-radius: 3px;
+     background: var(--tb-ctrl-bg);
+     color: var(--tb-ctrl-text);
+     cursor: pointer;
+@@ -706,7 +734,7 @@ select.input {
+     left: 0;
+     background: var(--menu-bg);
+     border: 1px solid var(--menu-border);
+-    border-radius: 4px;
++    border-radius: 3px;
+     padding: 4px;
+     display: flex;
+     flex-direction: column;
+@@ -1070,10 +1098,10 @@ thead .checkbox-col {
+     top: 0;
+     left: 0;
+     bottom: 0;
+-    width: 400px;
++    width: 440px;
+     background: var(--bg);
+-    border-right: 1px solid var(--border-strong);
+-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12);
++    /* без светлой рамки справа: она резала тёмное меню сверху */
++    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+     display: flex;
+     flex-direction: column;
+     font-size: 13px;
+@@ -1099,17 +1127,12 @@ thead .checkbox-col {
+     color: #fff;
+     overflow-wrap: anywhere;
+ }
+-.card-hostname .copy-val:hover {
+-    background: rgba(255, 255, 255, 0.14);
+-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
+-}
+-.card-hostname .copy-val:active {
+-    background: rgba(255, 255, 255, 0.24);
+-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.24);
++.card-hostname .copy-ico {
++    color: var(--nav-text);
+ }
+ 
+ .card-hostname .card-edit {
+-    margin-left: 6px;
++    margin-left: 3px;
+     font-size: 14px;
+     font-weight: 400;
+     color: var(--nav-text);
+@@ -1208,43 +1231,26 @@ thead .checkbox-col {
+     animation: cell-saved 1.4s ease-out;
+ }
+ 
+-/* Значение, которое копируется по клику: подсветка фоном (без сдвига
+-   вёрстки — отступ нарисован тенью) и значок копирования справа */
++/* Значение, которое копируется по клику: без подсветки, при наведении
++   справа от него появляется значок копирования (в тон подсветки строки) */
+ .copy-val {
+     cursor: pointer;
+-    border-radius: 3px;
+-    transition: background-color 0.1s, box-shadow 0.1s;
+-}
+-.copy-val:hover {
+-    background: rgba(var(--brand-rgb), 0.09);
+-    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.09);
+-}
+-.copy-val:active {
+-    background: rgba(var(--brand-rgb), 0.18);
+-    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.18);
+ }
+ .copy-line {
+     display: block;
+-    position: relative;
+ }
+ .copy-ico {
+-    position: absolute;
+-    right: -4px;
+-    top: 50%;
++    display: inline-block;
+     width: 13px;
+     height: 13px;
+-    margin-top: -6.5px;
+-    color: var(--brand);
++    margin-left: 5px;
++    vertical-align: -2px;
++    color: var(--copy-ico);
+     opacity: 0;
+-    pointer-events: none;
+     transition: opacity 0.1s;
+ }
+-.copy-line:has(.copy-val:hover) .copy-ico {
+-    opacity: 0.7;
+-}
+-.card-sec-body .copy-line {
+-    display: table;
+-    padding-right: 20px;
++.copy-val:hover .copy-ico {
++    opacity: 1;
+ }
+ 
+ /* Правка значения в карточке — редактор поверх ячейки, как в таблице */
+@@ -1313,11 +1319,13 @@ thead .checkbox-col {
+    (computeTreeWidth); справа — место под плашку действий. */
+ .tree-grid {
+     border: 1px solid var(--gray-line);
++    border-radius: var(--radius);
+     margin-right: 190px;
+ }
+ .tg-head {
+     display: flex;
+     height: 24px;
++    border-radius: 2px 2px 0 0;
+     background: var(--grid-head-bg);
+     box-shadow: inset 0 -1px 0 var(--grid-head-line-h);
+     color: var(--grid-head-text);
+@@ -1400,8 +1408,9 @@ thead .checkbox-col {
+     height: 14px;
+     color: var(--text-soft);
+ }
++/* Значок адреса — всегда тёмно-красный, при любой схеме */
+ .node-row.kind-building .node-icon {
+-    color: var(--brand);
++    color: #9b1c1c;
+ }
+ 
+ .node-title {
+@@ -1447,7 +1456,7 @@ thead .checkbox-col {
+     min-width: 22px;
+     padding: 0 4px;
+     box-sizing: border-box;
+-    border-radius: 2px;
++    border-radius: var(--radius);
+     background: #e6e6e6;
+     color: var(--text-strong);
+     font-size: 12px;
+@@ -1455,10 +1464,16 @@ thead .checkbox-col {
+     text-align: center;
+     font-variant-numeric: tabular-nums;
+ }
++/* У адреса — просто число, чуть крупнее, без блочка */
+ .node-row.kind-building .node-count .cnt {
+-    background: #dadada;
++    background: transparent;
++    font-size: 13px;
+     font-weight: 600;
+ }
++/* У кабинетов нет вертикальной линии перед числом */
++.node-row.kind-room .node-count {
++    box-shadow: none;
++}
+ .node-count .cnt.zero,
+ .node-row.kind-building .node-count .cnt.zero {
+     background: transparent;
+@@ -1518,6 +1533,11 @@ thead .checkbox-col {
+     border-bottom: 1px solid var(--grid-line);
+     font-size: 12px;
+ }
++/* «Куда» — отдельной строкой: путь бывает длинным */
++.tree-form .tf-parent {
++    flex: 1 1 100%;
++    min-width: 0;
++}
+ .tree-form .tf-title {
+     color: var(--text-secondary);
+ }
+@@ -1556,8 +1576,18 @@ thead .checkbox-col {
+ /* История — в манере главной таблицы: серая шапка, сетка на всех ячейках.
+    «Время», «Объект», «Пользователь» — по содержимому, «Изменения» — остальное.
+    Записи сгруппированы по дням: строка дня — серая, с датой. */
++/* Отступ вокруг — снаружи прокрутки: над липкой шапкой ничего не проезжает */
+ .history-page {
+-    padding: 10px 12px 20px;
++    flex: 1;
++    min-height: 0;
++    display: flex;
++    flex-direction: column;
++    padding: 10px 12px 12px;
++}
++.history-scroll {
++    flex: 1;
++    min-height: 0;
++    overflow: auto;
+ }
+ .history-table {
+     --h-head: 24px;
+@@ -1565,7 +1595,8 @@ thead .checkbox-col {
+     border-spacing: 0;
+     width: 100%;
+     font-size: 13px;
+-    border-left: 1px solid var(--grid-line);
++    border: 1px solid var(--gray-line);
++    border-radius: var(--radius);
+ }
+ .history-table th {
+     position: sticky;
+@@ -1575,13 +1606,20 @@ thead .checkbox-col {
+     box-sizing: border-box;
+     padding: 0 8px;
+     background: var(--grid-head-bg);
+-    box-shadow: inset -1px 0 0 var(--grid-head-line-v), inset 0 -1px 0 var(--grid-head-line-h), inset 0 1px 0 var(--grid-head-line-v);
++    box-shadow: inset -1px 0 0 var(--grid-head-line-v), inset 0 -1px 0 var(--grid-head-line-h);
+     text-align: left;
+     font-size: 12px;
+     font-weight: 600;
+     color: var(--grid-head-text);
+     white-space: nowrap;
+ }
++.history-table th:first-child {
++    border-top-left-radius: 2px;
++}
++.history-table th:last-child {
++    border-top-right-radius: 2px;
++    box-shadow: inset 0 -1px 0 var(--grid-head-line-h);
++}
+ .history-table td {
+     padding: 3px 8px;
+     vertical-align: top;
+@@ -1590,6 +1628,25 @@ thead .checkbox-col {
+     border-bottom: 1px solid var(--grid-line);
+     line-height: 1.4;
+ }
++.history-table td:last-child {
++    border-right: none;
++}
++.history-table tbody:last-child tr:last-child td {
++    border-bottom: none;
++}
++/* Время и пользователь — по центру, время с запасом от края */
++.history-table th.h-time,
++.history-table th.h-user {
++    text-align: center;
++}
++.history-table td.h-time {
++    padding: 3px 16px;
++    text-align: center;
++}
++.history-table td.h-user {
++    padding: 3px 12px;
++    text-align: center;
++}
+ .history-table tbody tr:not(.h-day):hover td {
+     background: var(--row-hover-bg);
+ }
+@@ -1615,16 +1672,27 @@ thead .checkbox-col {
+     top: var(--h-head);
+     z-index: 2;
+     padding: 3px 8px;
+-    background: #f5f5f5;
++    background: #ebebeb;
+     border-bottom: 1px solid var(--gray-line);
+     font-weight: 600;
+     color: var(--text-strong);
+     font-variant-numeric: tabular-nums;
+ }
++/* Число записей за день — блочком */
+ .h-day-count {
+-    margin-left: 6px;
+-    font-weight: 400;
+-    color: var(--text-secondary);
++    display: inline-block;
++    margin-left: 8px;
++    min-width: 18px;
++    padding: 0 5px;
++    box-sizing: border-box;
++    border-radius: var(--radius);
++    background: #d6d6d6;
++    color: var(--text-strong);
++    font-size: 11px;
++    font-weight: 600;
++    line-height: 16px;
++    text-align: center;
++    vertical-align: 1px;
+ }
+ 
+ .history-table .h-obj-kind {
+@@ -1706,6 +1774,7 @@ thead .checkbox-col {
+ }
+ .st-block {
+     border: 1px solid var(--gray-line);
++    border-radius: var(--radius);
+     background: #fff;
+     font-size: 12px;
+ }
+@@ -1717,6 +1786,7 @@ thead .checkbox-col {
+     padding: 0 8px;
+     background: var(--grid-head-bg);
+     border-bottom: 1px solid var(--grid-head-line-h);
++    border-radius: 2px 2px 0 0;
+     color: var(--grid-head-text);
+ }
+ .st-title {
+@@ -1726,7 +1796,7 @@ thead .checkbox-col {
+ .st-tag {
+     padding: 0 4px;
+     border: 1px solid #cfcfcf;
+-    border-radius: 2px;
++    border-radius: var(--radius);
+     color: var(--text-secondary);
+     font-size: 11px;
+     line-height: 14px;
+@@ -1765,12 +1835,18 @@ thead .checkbox-col {
+     text-overflow: ellipsis;
+     color: var(--text);
+ }
+-.st-val span {
+-    padding: 1px 3px;
+-    margin-left: -3px;
+-}
+-.st-row.unused .st-val {
+-    color: var(--text-muted);
++/* Значение с цветом фона — маленьким цветным блочком */
++.st-val span.boxed {
++    display: inline-block;
++    max-width: 100%;
++    box-sizing: border-box;
++    padding: 0 5px;
++    margin-left: -2px;
++    border-radius: var(--radius);
++    line-height: 17px;
++    overflow: hidden;
++    text-overflow: ellipsis;
++    vertical-align: middle;
+ }
+ .st-n {
+     flex: 0 0 26px;
+@@ -1837,7 +1913,7 @@ thead .checkbox-col {
+     box-sizing: border-box;
+     padding: 0;
+     border: 1px solid #cfcfcf;
+-    border-radius: 2px;
++    border-radius: var(--radius);
+     background: #fff;
+     color: #444;
+     font-family: inherit;
+@@ -1901,6 +1977,7 @@ thead .checkbox-col {
+     max-width: 600px;
+     margin-top: 14px;
+     border: 1px solid var(--gray-line);
++    border-radius: var(--radius);
+     font-size: 12px;
+ }
+ .fd-head {
+@@ -1910,6 +1987,7 @@ thead .checkbox-col {
+     padding: 4px 8px;
+     background: var(--grid-head-bg);
+     border-bottom: 1px solid var(--grid-head-line-h);
++    border-radius: 2px 2px 0 0;
+ }
+ .fd-title {
+     font-weight: 600;
+@@ -1996,6 +2074,57 @@ thead .checkbox-col {
+     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+ }
+ 
++/* ============================================================
++   Акценты (личные настройки)
++   ============================================================ */
++
++/* Акцентная шапка — Дерево, История, Справочники; включается
++   шестерёнкой на панели каждой страницы */
++.tree-grid.accent-head .tg-head,
++.history-table.accent-head th,
++.choices-page.accent-head .st-head,
++.choices-page.accent-head .fd-head {
++    background: var(--brand);
++    color: #fff;
++    --grid-head-line-h: var(--brand-dark);
++    --grid-head-line-v: rgba(255, 255, 255, 0.22);
++    border-bottom-color: var(--brand-dark);
++}
++.tree-grid.accent-head .tg-head .tg-count {
++    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.22);
++}
++.choices-page.accent-head .st-title,
++.choices-page.accent-head .fd-title {
++    color: #fff;
++}
++.choices-page.accent-head .st-head-n,
++.choices-page.accent-head .fd-sub {
++    color: var(--nav-text);
++}
++.choices-page.accent-head .st-tag {
++    border-color: rgba(255, 255, 255, 0.4);
++    color: var(--nav-text);
++}
++
++/* Акцентные границы блоков (как у окон Windows 11): та же толщина,
++   только цвет. Не кнопки, не сетка таблиц, не главная таблица. */
++body.accent-borders .tree-grid,
++body.accent-borders .history-table,
++body.accent-borders .st-block,
++body.accent-borders .fd-panel {
++    border-color: var(--brand);
++}
++/* Карточка: конец таблицы полей и разделители под ней */
++body.accent-borders .card-table {
++    border-bottom: 1px solid var(--brand);
++}
++body.accent-borders .card-section {
++    border-top-color: var(--brand);
++}
++body.accent-borders .card-table + .card-section {
++    border-top-color: transparent;
++}
++
+ /* ============================================================
+    Диалог подтверждения и всплывающие сообщения
+    ============================================================ */
+@@ -2014,7 +2143,7 @@ thead .checkbox-col {
+     width: 380px;
+     max-width: calc(100vw - 32px);
+     background: var(--bg);
+-    border-radius: 6px;
++    border-radius: var(--radius);
+     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+     overflow: hidden;
+ }
+@@ -2049,7 +2178,7 @@ thead .checkbox-col {
+     gap: 10px;
+     max-width: 420px;
+     padding: 8px 12px;
+-    border-radius: 5px;
++    border-radius: var(--radius);
+     background: #2b2b2b;
+     color: #f2f2f2;
+     font-size: 12px;
+@@ -2097,7 +2226,7 @@ body.login-page {
+ .login-box {
+     width: 280px;
+     background: var(--bg);
+-    border-radius: 6px;
++    border-radius: var(--radius);
+     overflow: hidden;
+     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.08);
+ }
+diff --git a/frontend/static/app.js b/frontend/static/app.js
+index 38aaffa..f7939d1 100644
+--- a/frontend/static/app.js
++++ b/frontend/static/app.js
+@@ -185,22 +185,22 @@ const COLUMN_DEFS = [
+     { field: "user", headerName: "ФИО", editable: true, values: false },
+     { field: "building", headerName: "Адрес" },
+     { field: "department", headerName: "Отделение" },
+-    { field: "floor", headerName: "Эт.", center: true },
+-    { field: "room_code", headerName: "Каб", center: true, values: false },
++    { field: "floor", headerName: "Эт.", fullName: "Этаж", center: true },
++    { field: "room_code", headerName: "Каб", fullName: "№ Кабинета", center: true, values: false },
+     { field: "room_name", headerName: "Кабинет" },
+-    { field: "seat_no", headerName: "№", center: true, editable: true, values: false },
++    { field: "seat_no", headerName: "№", fullName: "№ Места", center: true, editable: true, values: false },
+     { field: "hostname", headerName: "HOSTNAME", link: true, sticky: true, bold: true, editable: true, values: false },
+-    { field: "ip", headerName: "IP", sticky: true, editable: true, multiline: true, values: false },
+-    { field: "vacuum", headerName: "VACUUM", editable: true, multiline: true, values: false },
+-    { field: "os", headerName: "OS", center: true, editable: true  },
+-    { field: "type", headerName: "ТИП", center: true, editable: true },
++    { field: "ip", headerName: "IP", fullName: "IP адрес", sticky: true, editable: true, multiline: true, values: "subnet" },
++    { field: "vacuum", headerName: "VACUUM", fullName: "Vacuum", editable: true, multiline: true, values: false },
++    { field: "os", headerName: "OS", fullName: "Операционная система (ОС / OS)", center: true, editable: true  },
++    { field: "type", headerName: "ТИП", fullName: "Тип компьютера", center: true, editable: true },
+     { field: "model", headerName: "Модель", center: true, editable: true },
+-    { field: "cpu", headerName: "CPU", center: true, editable: true },
+-    { field: "ram", headerName: "RAM", center: true, editable: true },
+-    { field: "drive", headerName: "DRIVE", center: true, editable: true, multiline: true },
+-    { field: "gpu", headerName: "GPU", center: true, editable: true },
+-    { field: "mac", headerName: "MAC", editable: true, multiline: true, values: false },
+-    { field: "inv_no", headerName: "ИНВ", editable: true, values: false },
++    { field: "cpu", headerName: "CPU", fullName: "Процессор (ЦП / CPU)", center: true, editable: true },
++    { field: "ram", headerName: "RAM", fullName: "Оперативная память (ОЗУ / RAM)", center: true, editable: true },
++    { field: "drive", headerName: "DRIVE", fullName: "Дисковые накопители (DRIVE)", center: true, editable: true, multiline: true },
++    { field: "gpu", headerName: "GPU", fullName: "Видеокарта (ГП / GPU)", center: true, editable: true },
++    { field: "mac", headerName: "MAC", fullName: "MAC адрес", editable: true, multiline: true, values: false },
++    { field: "inv_no", headerName: "ИНВ", fullName: "Инвентарный номер", editable: true, values: false },
+     { field: "gsit", headerName: "GSIT", center: true, editable: true },
+     { field: "state", headerName: "Сост.", center: true, editable: true },
+     { field: "label", headerName: "Метка", center: true, editable: true },
+@@ -208,13 +208,35 @@ const COLUMN_DEFS = [
+     { field: "note", headerName: "Примечание", note: true, maxWidth: 200, editable: true, multiline: true, values: false }
+ ];
+ 
++// Название столбца вне самой таблицы (меню, карточка, история, справочники)
++function columnTitle(col) {
++    return col.fullName || col.headerName;
++}
++
++// Ключ оформления для строки значения. У IP оформляется подсеть /24:
++// «10.0.5.17» → «10.0.5.0/24», цвет применяется ко всему адресу.
++function ipSubnetKey(text) {
++    const m = /^\s*(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\.(\d{1,3}))?(?:\/\d{1,2})?\s*$/.exec(String(text || ""));
++    if (!m || [m[1], m[2], m[3]].some(function (n) { return Number(n) > 255; })) {
++        return null;
++    }
++    return Number(m[1]) + "." + Number(m[2]) + "." + Number(m[3]) + ".0/24";
++}
++
++function styleKey(field, line) {
++    if (field === "ip") {
++        return ipSubnetKey(line);
++    }
++    return String(line).trim().toLowerCase();
++}
++
+ // Поля, дубли в которых подсвечиваются красным
+ const DUP_FIELDS = ["ip", "mac", "hostname", "inv_no", "vacuum"];
+ 
+ // Подписи полей в истории (ключ поля → как показывать)
+ const FIELD_LABELS = Object.assign(
+     {},
+-    Object.fromEntries(COLUMN_DEFS.map(function (c) { return [c.field, c.headerName]; })),
++    Object.fromEntries(COLUMN_DEFS.map(function (c) { return [c.field, columnTitle(c)]; })),
+     {
+         serial: "Серийный",
+         vnc: "VNC",
+@@ -331,8 +353,7 @@ function computeAutoWidths(rows, fieldDefs, choiceStyleMap, columnStyles) {
+             }
+             const fieldStyles = styleMap[col.field];
+             String(value).split("\n").forEach(function (line) {
+-                const trimmed = line.trim().toLowerCase();
+-                const s = fieldStyles ? fieldStyles[trimmed] : null;
++                const s = fieldStyles ? fieldStyles[styleKey(col.field, line)] : null;
+                 probe.style.fontWeight = (colBold || (s && s.bold)) ? "700" : "400";
+                 const w = measureTextWidth(line);
+                 if (w > max) {
+@@ -403,6 +424,10 @@ const app = Vue.createApp({
+             user: null,
+             view: "table",
+             theme: document.documentElement.dataset.theme || "red",
++            // Акценты (личные настройки): границы блоков цветом схемы и
++            // цветная шапка таблиц — отдельно для каждой страницы
++            accentBorders: false,
++            accentHeaders: { tree: true, history: true, choices: true },
+ 
+             // Таблица
+             tableLoading: true,
+@@ -640,18 +665,18 @@ const app = Vue.createApp({
+                 F("department", "Отделение", c.department, true),
+                 F("floor", "Этаж", c.floor),
+                 F("room", "Кабинет", this.cardRoom, true),
+-                F("seat_no", "Место", c.seat_no)
++                F("seat_no", "№ Места", c.seat_no)
+             ];
+-            const net = [F("ip", "IP", c.ip, true), F("mac", "MAC", c.mac, true)];
+-            const ids = [F("inv_no", "ИНВ", c.inv_no, true), F("serial", "Серийный", c.serial, true)];
++            const net = [F("ip", "IP адрес", c.ip, true), F("mac", "MAC адрес", c.mac, true)];
++            const ids = [F("inv_no", "Инвентарный номер", c.inv_no, true), F("serial", "Серийный", c.serial, true)];
+             const hw = [
+-                F("type", "ТИП", c.type),
++                F("type", "Тип компьютера", c.type),
+                 F("model", "Модель", c.model, true),
+-                F("os", "OS", c.os, true),
+-                F("cpu", "CPU", c.cpu, true),
+-                F("ram", "RAM", c.ram),
+-                F("drive", "DRIVE", c.drive, true),
+-                F("gpu", "GPU", c.gpu, true)
++                F("os", "Операционная система (ОС / OS)", c.os, true),
++                F("cpu", "Процессор (ЦП / CPU)", c.cpu, true),
++                F("ram", "Оперативная память (ОЗУ / RAM)", c.ram),
++                F("drive", "Дисковые накопители (DRIVE)", c.drive, true),
++                F("gpu", "Видеокарта (ГП / GPU)", c.gpu, true)
+             ];
+             const marks = [F("gsit", "GSIT", c.gsit), F("state", "Сост.", c.state), F("label", "Метка", c.label)];
+             const custom = this.tableFieldDefs.map(function (fd) {
+@@ -796,7 +821,7 @@ const app = Vue.createApp({
+         styleBlocks() {
+             const byField = this.choicesByField;
+             const rows = this.rows;
+-            const collect = (field, multiline) => {
++            const collect = (field, multiline, subnet) => {
+                 const map = new Map();
+                 (byField[field] || []).forEach(function (ch) {
+                     const key = ch.value.trim().toLowerCase();
+@@ -814,10 +839,13 @@ const app = Vue.createApp({
+                         if (!line) {
+                             return;
+                         }
+-                        const key = line.toLowerCase();
++                        const key = subnet ? ipSubnetKey(line) : line.toLowerCase();
++                        if (!key) {
++                            return;
++                        }
+                         let entry = map.get(key);
+                         if (!entry) {
+-                            entry = { key: key, value: line, choice: null, count: 0 };
++                            entry = { key: key, value: subnet ? key : line, choice: null, count: 0 };
+                             map.set(key, entry);
+                         }
+                         entry.count += 1;
+@@ -839,10 +867,11 @@ const app = Vue.createApp({
+                 const valuesOn = col.values !== false;
+                 return {
+                     field: col.field,
+-                    label: col.headerName,
++                    label: columnTitle(col),
+                     extra: !!col.extra,
++                    subnet: col.values === "subnet",
+                     valuesOn: valuesOn,
+-                    values: valuesOn ? collect(col.field, !!col.multiline) : []
++                    values: valuesOn ? collect(col.field, !!col.multiline, col.values === "subnet") : []
+                 };
+             });
+             // Справочники полей, которых нет в таблице (например, VNC)
+@@ -864,6 +893,13 @@ const app = Vue.createApp({
+     },
+ 
+     watch: {
++        accentBorders: {
++            handler(on) {
++                document.body.classList.toggle("accent-borders", on);
++            },
++            immediate: true
++        },
++
+         editMode(newVal) {
+             if (!newVal) {
+                 this.selectedRows = [];
+@@ -907,6 +943,8 @@ const app = Vue.createApp({
+         this.authChecked = true;
+         if (this.user) {
+             await this.$nextTick();
++            this.snapNavUser();
++            window.addEventListener("resize", () => this.snapNavUser());
+             await Promise.all([this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
+             await this.loadTable();
+         }
+@@ -923,26 +961,64 @@ const app = Vue.createApp({
+                 // даже если в этом браузере до него работал другой
+                 const prefs = (this.user && this.user.prefs) || {};
+                 this.theme = applyTheme(prefs.theme || "red");
++                this.accentBorders = !!prefs.accent_borders;
++                this.accentHeaders = Object.assign({ tree: true, history: true, choices: true }, prefs.accent_headers || {});
+             } catch (e) {
+                 this.user = null;
+             }
+         },
+ 
+-        async setTheme(key) {
+-            const previous = this.theme;
+-            this.theme = applyTheme(key);
++        // Ширина кнопки пользователя — целое число пикселей экрана.
++        // Иначе при масштабе Windows 125–150% край шестерёнки и её меню
++        // сглаживаются по-разному и меню кажется на 1px уже кнопки.
++        snapNavUser() {
++            const el = this.$refs.navUser;
++            if (!el) {
++                return;
++            }
++            el.style.minWidth = "";
++            const dpr = window.devicePixelRatio || 1;
++            const w = el.getBoundingClientRect().width;
++            el.style.minWidth = (Math.ceil(w * dpr - 0.01) / dpr) + "px";
++        },
++
++        async savePrefs(patch) {
+             try {
+                 const response = await apiFetch("/api/auth/me/prefs", {
+                     method: "PATCH",
+                     headers: { "Content-Type": "application/json" },
+-                    body: JSON.stringify({ theme: key })
++                    body: JSON.stringify(patch)
+                 });
+                 if (!response.ok) {
+                     throw new Error(await this.errorText(response));
+                 }
++                return true;
+             } catch (e) {
+-                this.theme = applyTheme(previous);
+                 this.toastError("Не удалось сохранить настройку: " + (e.message || e));
++                return false;
++            }
++        },
++
++        async setTheme(key) {
++            const previous = this.theme;
++            this.theme = applyTheme(key);
++            if (!(await this.savePrefs({ theme: key }))) {
++                this.theme = applyTheme(previous);
++            }
++        },
++
++        async toggleAccentBorders() {
++            this.accentBorders = !this.accentBorders;
++            if (!(await this.savePrefs({ accent_borders: this.accentBorders }))) {
++                this.accentBorders = !this.accentBorders;
++            }
++        },
++
++        async toggleAccentHeader(page) {
++            const on = !this.accentHeaders[page];
++            this.accentHeaders = Object.assign({}, this.accentHeaders, { [page]: on });
++            if (!(await this.savePrefs({ accent_headers: { [page]: on } }))) {
++                this.accentHeaders = Object.assign({}, this.accentHeaders, { [page]: !on });
+             }
+         },
+ 
+@@ -1114,7 +1190,7 @@ const app = Vue.createApp({
+                 if (value !== null && value !== undefined && value !== "") {
+                     const lines = String(value).split("\n");
+                     for (const line of lines) {
+-                        const s = fieldStyles[line.trim().toLowerCase()];
++                        const s = fieldStyles[styleKey(col.field, line)];
+                         if (s && s.color) {
+                             style.color = s.color;
+                             break;
+@@ -1140,7 +1216,7 @@ const app = Vue.createApp({
+                 if (value !== null && value !== undefined && value !== "") {
+                     const lines = String(value).split("\n");
+                     for (const line of lines) {
+-                        const s = fieldStyles[line.trim().toLowerCase()];
++                        const s = fieldStyles[styleKey(col.field, line)];
+                         if (s) {
+                             if (s.bg_color) style.backgroundColor = s.bg_color;
+                             if (s.bold) style.fontWeight = "700";
+@@ -1342,7 +1418,8 @@ const app = Vue.createApp({
+                 selection: this.$refs.selectionWrap,
+                 columns: this.$refs.columnsWrap,
+                 settings: this.$refs.settingsWrap,
+-                user: this.$refs.userWrap
++                user: this.$refs.userWrap,
++                page: this.$refs.pageSetWrap
+             };
+             const wrap = refs[this.openMenu];
+             if (!wrap || !wrap.contains(event.target)) {
+@@ -1516,6 +1593,10 @@ const app = Vue.createApp({
+ 
+         // ---------- Видимость столбцов ----------
+ 
++        colTitle(col) {
++            return columnTitle(col);
++        },
++
+         isColumnHidden(field) {
+             return this.hiddenColumns.indexOf(field) !== -1;
+         },
+@@ -1900,10 +1981,9 @@ const app = Vue.createApp({
+             const index = {};
+             const walk = (nodes, parts) => {
+                 nodes.forEach((node) => {
+-                    let title = node.name || node.code || "";
+-                    if (node.kind === "room" && node.code && node.name && node.code !== node.name) {
+-                        title = node.code + " " + node.name;
+-                    }
++                    // Как в дереве: «214 Процедурная», «2 этаж»
++                    const t = treeNodeTexts(node);
++                    const title = [t.code, t.name].filter(Boolean).join(" ") || node.name || node.code || "";
+                     const path = parts.concat([title]).join(" → ");
+                     index[node.id] = { node: node, path: path };
+                     if (node.children && node.children.length) {
+@@ -1976,7 +2056,8 @@ const app = Vue.createApp({
+                 department: ["floor", "room"],
+                 floor: ["room"]
+             };
+-            let kinds = ["building"];
++            // Кнопка на панели: любой тип, родитель — из списка
++            let kinds = ["building", "department", "floor", "room"];
+             let path = "";
+             if (node) {
+                 kinds = allowedChildren[node.kind] || [];
+@@ -1989,6 +2070,7 @@ const app = Vue.createApp({
+             }
+             this.treeForm = {
+                 action: "add",
++                top: !node,
+                 parentId: node ? node.id : null,
+                 nodeId: null,
+                 kind: kinds[0],
+@@ -2015,12 +2097,34 @@ const app = Vue.createApp({
+             this.treeFormError = "";
+         },
+ 
++        // Куда можно добавить узел этого типа — для формы на панели
++        treeParentOptions(kind) {
++            const parentKinds = {
++                department: ["building"],
++                floor: ["department"],
++                room: ["department", "floor"]
++            }[kind] || [];
++            return Object.keys(this.treeIndex)
++                .map((id) => this.treeIndex[id])
++                .filter(function (e) { return parentKinds.indexOf(e.node.kind) !== -1; })
++                .map(function (e) { return { id: e.node.id, path: e.path }; })
++                .sort(function (a, b) { return a.path.localeCompare(b.path, "ru", { numeric: true }); });
++        },
++
+         async submitTreeForm() {
+             const form = this.treeForm;
+             if (!form) {
+                 return;
+             }
+             this.treeFormError = "";
++            if (form.top) {
++                if (form.kind === "building") {
++                    form.parentId = null;
++                } else if (!form.parentId) {
++                    this.treeFormError = "Выбери, куда добавить.";
++                    return;
++                }
++            }
+             try {
+                 let response;
+                 if (form.action === "add") {
+@@ -2182,10 +2286,18 @@ const app = Vue.createApp({
+         },
+ 
+         async addChoice(field) {
+-            const value = (this.newChoiceValue[field] || "").trim();
++            let value = (this.newChoiceValue[field] || "").trim();
+             if (!value) {
+                 return;
+             }
++            if (field === "ip") {
++                const subnet = ipSubnetKey(value);
++                if (!subnet) {
++                    this.toastError("Подсеть: первые три числа адреса, например 10.0.5 или 10.0.5.0/24");
++                    return;
++                }
++                value = subnet;
++            }
+             try {
+                 const response = await apiFetch("/api/choices", {
+                     method: "POST",
+@@ -2860,7 +2972,7 @@ app.component("tree-node", {
+             if (!f) {
+                 return false;
+             }
+-            return (f.action === "add" && f.parentId === this.node.id) ||
++            return (f.action === "add" && !f.top && f.parentId === this.node.id) ||
+                 (f.action === "edit" && f.nodeId === this.node.id);
+         }
+     },
+@@ -2985,11 +3097,16 @@ app.component("tree-form", {
+     },
+     template: `
+         <div class="tree-form" v-if="form" :style="{ '--lvl': level }" @keydown.esc.stop="cancel">
+-            <span class="tf-title">{{ form.action === 'add' ? (form.parentId ? 'Новый узел:' : 'Новый адрес:') : 'Правка:' }}</span>
+-            <select v-if="form.kinds.length > 1" class="input" v-model="form.kind">
++            <span class="tf-title">{{ form.action === 'add' ? 'Добавить:' : 'Правка:' }}</span>
++            <select v-if="form.kinds.length > 1" class="input" v-model="form.kind" @change="form.top && (form.parentId = null)">
+                 <option v-for="k in form.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
+             </select>
+-            <input v-if="form.kind !== 'floor'" class="input tf-code" v-model="form.code" @keydown.enter="submit" placeholder="Код">
++            <select v-if="form.top && form.kind !== 'building'" class="input tf-parent" v-model="form.parentId" title="Куда добавить">
++                <option :value="null" disabled>Куда…</option>
++                <option v-for="o in root.treeParentOptions(form.kind)" :key="o.id" :value="o.id">{{ o.path }}</option>
++            </select>
++            <input v-if="form.kind !== 'floor'" class="input tf-code" v-model="form.code" @keydown.enter="submit" placeholder="Код"
++                title="Код — короткое обозначение узла, необязательно. У кабинета это его номер (например, 214): он показывается в таблице в столбце «№ Кабинета» и по нему удобно искать. У адреса или отделения — сокращение для себя (например, «Л12», «ТО»).">
+             <input class="input tf-name" v-model="form.name" @keydown.enter="submit" placeholder="Название">
+             <span class="tf-buttons">
+                 <button class="btn btn-primary" @click="submit">OK</button>
+diff --git a/frontend/static/index.html b/frontend/static/index.html
+index 306d194..1fdbc0e 100644
+--- a/frontend/static/index.html
++++ b/frontend/static/index.html
+@@ -27,10 +27,14 @@
+                             <span class="theme-name">{{ t.label }}</span>
+                             <svg v-if="theme === t.key" class="theme-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>
+                         </button>
++                        <div class="nc-sep"></div>
++                        <label class="nc-check" title="Границы блоков в Дереве, Истории, Справочниках и линии карточки — цветом схемы">
++                            <input type="checkbox" :checked="accentBorders" @change="toggleAccentBorders"> Акцентные границы блоков
++                        </label>
+                     </div>
+                 </span>
+                 <span class="dropdown-wrap nav-pop" ref="userWrap">
+-                    <a href="#" class="nav-user" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')">
++                    <a href="#" class="nav-user" ref="navUser" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')">
+                         {{ user.login }}
+                     </a>
+                     <div v-if="openMenu === 'user'" class="nav-card user-card">
+@@ -98,7 +102,7 @@
+                             <div class="dd-scroll">
+                                 <label v-for="col in allColumns" :key="'vis-' + col.field">
+                                     <input type="checkbox" :checked="!isColumnHidden(col.field)" @change="toggleColumn(col.field)">
+-                                    {{ col.headerName }}
++                                    {{ colTitle(col) }}
+                                 </label>
+                             </div>
+                             <div class="dd-sep"></div>
+@@ -192,16 +196,23 @@
+                     <button class="btn" @click="collapseAllTree">Свернуть всё</button>
+                     <template v-if="canEdit">
+                         <span class="tb-divider"></span>
+-                        <button class="btn" @click="openAddForm(null)">+ Адрес</button>
++                        <button class="btn" @click="openAddForm(null)" title="Добавить адрес, отделение, этаж или кабинет">+ Добавить</button>
+                     </template>
++                    <span class="tb-divider"></span>
++                    <span class="dropdown-wrap" ref="pageSetWrap">
++                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
++                        <div v-if="openMenu === 'page'" class="dropdown right attached">
++                            <label><input type="checkbox" :checked="accentHeaders.tree" @change="toggleAccentHeader('tree')"> Акцентная шапка</label>
++                        </div>
++                    </span>
+                 </div>
+             </div>
+             <div class="tree">
+                 <!-- Дерево — таблица «Расположение | ПК» в манере главной таблицы.
+                      Ширина — по самому широкому узлу с учётом сдвига, даже свёрнутому. -->
+-                <div class="tree-grid" :style="{ width: treeWidth + 'px' }">
++                <div class="tree-grid" :class="{ 'accent-head': accentHeaders.tree }" :style="{ width: treeWidth + 'px' }">
+                     <div class="tg-head"><span class="tg-name">Расположение</span><span class="tg-count">ПК</span></div>
+-                    <tree-form v-if="treeForm && treeForm.action === 'add' && !treeForm.parentId" :level="0"></tree-form>
++                    <tree-form v-if="treeForm && treeForm.top" :level="0"></tree-form>
+                     <div v-if="!treeLoading && !treeError && treeRoots.length === 0" class="tree-empty">Расположения не найдены.</div>
+                     <div v-else-if="treeQuery.trim() && treeMatch.size === 0" class="tree-empty">Ничего не найдено.</div>
+                     <tree-node v-for="root in treeRoots" :key="root.id" :node="root" :level="0"></tree-node>
+@@ -215,8 +226,16 @@
+         <section v-if="user && view === 'choices'" class="view">
+             <div class="toolbar">
+                 <div class="tb-left">Оформление столбцов и значений таблицы</div>
++                <div class="tb-right">
++                    <span class="dropdown-wrap" ref="pageSetWrap">
++                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
++                        <div v-if="openMenu === 'page'" class="dropdown right attached">
++                            <label><input type="checkbox" :checked="accentHeaders.choices" @change="toggleAccentHeader('choices')"> Акцентная шапка</label>
++                        </div>
++                    </span>
++                </div>
+             </div>
+-            <div class="page choices-page">
++            <div class="page choices-page" :class="{ 'accent-head': accentHeaders.choices }">
+                 <!-- Блок на каждый столбец таблицы, в том же порядке: первая строка —
+                      оформление столбца целиком, ниже — значения (из справочника и из данных). -->
+                 <div class="st-grid">
+@@ -228,7 +247,7 @@
+                             <span v-if="b.valuesOn" class="st-head-n" title="Значений">{{ b.values.length }}</span>
+                         </div>
+                         <div v-if="!b.orphan" class="st-row st-colrow">
+-                            <span class="st-val"><span :style="effectiveStyle(b.field, null)">Весь столбец</span></span>
++                            <span class="st-val"><span :class="{ boxed: !!effectiveStyle(b.field, null).backgroundColor }" :style="effectiveStyle(b.field, null)">Весь столбец</span></span>
+                             <span class="st-n"></span>
+                             <style-controls :value="columnStyles[b.field]" :disabled="!canEdit" @change="setColumnStyle(b.field, $event)"></style-controls>
+                             <span class="st-act"><span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)">↺</span></span>
+@@ -236,7 +255,7 @@
+                         <template v-if="b.valuesOn">
+                             <div class="st-values">
+                                 <div v-for="v in b.values" :key="v.key" class="st-row" :class="{ unused: v.count === 0 }">
+-                                    <span class="st-val" :title="v.value"><span :style="effectiveStyle(b.field, v.choice)">{{ v.value }}</span></span>
++                                    <span class="st-val" :title="v.value"><span :class="{ boxed: !!effectiveStyle(b.field, v.choice).backgroundColor }" :style="effectiveStyle(b.field, v.choice)">{{ v.value }}</span></span>
+                                     <span class="st-n" :title="'ПК с этим значением: ' + v.count">{{ v.count }}</span>
+                                     <style-controls :value="v.choice" :disabled="!canEdit" @change="setValueStyle(b.field, v, $event)"></style-controls>
+                                     <span class="st-act">
+@@ -307,20 +326,29 @@
+                 </span>
+                 <div class="tb-right">
+                     <button class="btn" @click="loadHistory">Обновить</button>
++                    <span class="tb-divider"></span>
++                    <span class="dropdown-wrap" ref="pageSetWrap">
++                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
++                        <div v-if="openMenu === 'page'" class="dropdown right attached">
++                            <label><input type="checkbox" :checked="accentHeaders.history" @change="toggleAccentHeader('history')"> Акцентная шапка</label>
++                        </div>
++                    </span>
+                 </div>
+             </div>
+-            <div class="page history-page">
++            <!-- Отступ сверху — вне прокрутки: над шапкой ничего не проезжает -->
++            <div class="history-page">
++                <div class="history-scroll">
+                 <div v-if="!historyLoading && !historyError && historyItems.length === 0" class="empty-note">История пока пуста.</div>
+                 <div v-else-if="historyQuery.trim() && filteredHistory.length === 0" class="empty-note">Ничего не найдено.</div>
+                 <!-- Записи по дням: дата — строкой-разделителем (прилипает под шапкой),
+                      в строке только время. Все цифры те же: дд.мм.гггг и чч:мм:сс. -->
+-                <table v-if="filteredHistory.length" class="history-table">
++                <table v-if="filteredHistory.length" class="history-table" :class="{ 'accent-head': accentHeaders.history }">
+                     <thead>
+                         <tr><th class="h-time">Время</th><th class="h-obj">Объект</th><th class="h-user">Пользователь</th><th>Изменения</th></tr>
+                     </thead>
+                     <tbody v-for="day in historyDays" :key="day.key">
+                         <tr class="h-day">
+-                            <td colspan="4">{{ day.date }}<span class="h-day-count">({{ day.items.length }})</span></td>
++                            <td colspan="4">{{ day.date }}<span class="h-day-count" title="Записей за день">{{ day.items.length }}</span></td>
+                         </tr>
+                         <tr v-for="item in day.items" :key="item.id">
+                             <td class="h-time">{{ formatClock(item.at) }}</td>
+@@ -340,6 +368,7 @@
+                         </tr>
+                     </tbody>
+                 </table>
++                </div>
+             </div>
+         </section>
+ 
+@@ -348,7 +377,7 @@
+             <div class="card">
+                 <div class="card-head">
+                     <span v-if="!editingHostname" class="card-hostname">
+-                        <span :class="{ 'copy-val': card.hostname }" :title="card.hostname ? 'Скопировать' : null" @click="card.hostname && copyText(card.hostname)">{{ card.hostname || "Без имени" }}</span>
++                        <span :class="{ 'copy-val': card.hostname }" :title="card.hostname ? 'Скопировать' : null" @click="card.hostname && copyText(card.hostname)">{{ card.hostname || "Без имени" }}<svg v-if="card.hostname" class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
+                         <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startEditHostname">✎</span>
+                     </span>
+                     <span v-else class="card-hostname-edit">
+@@ -366,7 +395,7 @@
+                                 <td class="ct-label">{{ r.label }}</td>
+                                 <td class="ct-value" :class="{ editing: cardEditKey === r.key }">
+                                     <template v-if="r.copy">
+-                                        <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)">{{ line }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
++                                        <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)">{{ line }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
+                                     </template>
+                                     <template v-else>{{ r.value }}</template>
+                                     <template v-if="cardEditKey === r.key">
+@@ -391,7 +420,7 @@
+                     <div class="card-section">VACUUM</div>
+                     <div class="card-sec-body">
+                         <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">—</div>
+-                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(login)">{{ login }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
++                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
+                     </div>
+                     <div class="card-section toggle-sec" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
+                         <span class="sec-caret">{{ cardHistoryOpen ? "▼" : "▶" }}</span>История<span v-if="!cardHistoryOpen && cardHistory.length" class="muted"> ({{ cardHistory.length }})</span>

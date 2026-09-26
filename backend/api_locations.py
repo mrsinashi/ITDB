@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
 
-from auth import get_current_user
+from auth import require_editor
 from db import SessionLocal
 from models import Computer, History, Location
 
@@ -174,7 +174,7 @@ def locations_tree():
 @router.post("/locations")
 def create_location(
     payload: dict = Body(...),
-    user=Depends(get_current_user),
+    user=Depends(require_editor),
 ):
     kind = payload.get("kind")
     parent_id = payload.get("parent_id")
@@ -207,7 +207,7 @@ def create_location(
         elif kind != "building":
             raise HTTPException(
                 status_code=400,
-                detail="Без родителя можно создать только здание.",
+                detail="Без родителя можно создать только адрес.",
             )
 
         validate_name_code(kind, name, code)
@@ -255,7 +255,7 @@ def create_location(
 def update_location(
     location_id: int,
     payload: dict = Body(...),
-    user=Depends(get_current_user),
+    user=Depends(require_editor),
 ):
     session = SessionLocal()
 
@@ -338,7 +338,7 @@ def update_location(
 @router.post("/locations/{location_id}/archive")
 def archive_location(
     location_id: int,
-    user=Depends(get_current_user),
+    user=Depends(require_editor),
 ):
     session = SessionLocal()
 

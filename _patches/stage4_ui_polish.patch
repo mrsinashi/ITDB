@@ -1,0 +1,850 @@
+diff --git a/backend/api_locations.py b/backend/api_locations.py
+index 9e52a55..88c08cc 100644
+--- a/backend/api_locations.py
++++ b/backend/api_locations.py
+@@ -207,7 +207,7 @@ def create_location(
+         elif kind != "building":
+             raise HTTPException(
+                 status_code=400,
+-                detail="Без родителя можно создать только здание.",
++                detail="Без родителя можно создать только адрес.",
+             )
+ 
+         validate_name_code(kind, name, code)
+diff --git a/frontend/static/app.css b/frontend/static/app.css
+index c3d282a..786e955 100644
+--- a/frontend/static/app.css
++++ b/frontend/static/app.css
+@@ -81,23 +81,26 @@
+ }
+ 
+ /* Вариант «светлая панель» (UI_OPTIONS.lightToolbar в app.js) */
++/* Панель того же серого, что и шапка таблицы: панель и заголовки
++   читаются как одна зона управления под красным меню. */
+ body.ui-light-toolbar {
+-    --tb-bg: #fafafa;
+-    --tb-border: #dedede;
+-    --tb-text: #666;
++    --tb-bg: #f0f0f0;
++    --tb-border: #d8d8d8;
++    --tb-text: #555;
+     --tb-ctrl-bg: #fff;
+-    --tb-ctrl-border: #d2d2d2;
++    --tb-ctrl-border: #cfcfcf;
+     --tb-ctrl-text: #333;
+     --tb-ctrl-hover-bg: #f0f0f0;
+     --tb-ctrl-on-bg: #8a2828;
+     --tb-ctrl-on-border: #7a2222;
+     --tb-ctrl-on-text: #fff;
+     --tb-input-bg: #fff;
+-    --tb-input-border: #d2d2d2;
++    --tb-input-border: #cfcfcf;
+     --tb-input-focus: #b98080;
+     --tb-input-text: #222;
+     --tb-placeholder: #aaa;
+-    --tb-divider: #e0e0e0;
++    --tb-divider: #d6d6d6;
++    --edit-accent: #b54848;
+ 
+     --menu-bg: #fff;
+     --menu-border: #d6d6d6;
+@@ -287,7 +290,8 @@ body {
+ }
+ 
+ .toolbar .tb-count {
+-    min-width: 150px;
++    min-width: 130px;
++    font-size: 12px;
+     font-variant-numeric: tabular-nums;
+ }
+ 
+@@ -540,6 +544,30 @@ select.input {
+     min-width: 160px;
+     color: var(--menu-text);
+ }
++/* Меню «угол в угол» с кнопкой: верхний левый к нижнему левому */
++.dropdown.attached {
++    top: 100%;
++    border-top-left-radius: 0;
++}
++.dropdown.right.attached {
++    border-top-left-radius: 4px;
++    border-top-right-radius: 0;
++}
++.btn.menu-open {
++    background: var(--tb-ctrl-hover-bg);
++}
++.toolbar .dropdown-wrap .btn.menu-open {
++    border-bottom-left-radius: 0;
++}
++.toolbar .tb-right .dropdown-wrap .btn.menu-open {
++    border-bottom-left-radius: 3px;
++    border-bottom-right-radius: 0;
++}
++.btn .caret {
++    margin-left: 5px;
++    font-size: 8px;
++    opacity: 0.75;
++}
+ .dropdown.right {
+     left: auto;
+     right: 0;
+@@ -786,14 +814,19 @@ body.ui-dark-hostname .data-table td.link:hover span {
+     white-space: pre-line;
+ }
+ 
+-/* Чекбоксы выделения */
+-.checkbox-col {
+-    width: 30px;
+-    min-width: 30px;
+-    max-width: 30px;
++/* Чекбоксы выделения. Ширина столбца — CSS-переменная --cb-w,
++   app.js плавно меняет её 0 ↔ 30px при входе/выходе из режима правки. */
++.data-table {
++    --cb-w: 0px;
++}
++.data-table col.cb-col {
++    width: var(--cb-w);
++}
++.data-table .checkbox-col {
++    padding: 0 !important;
+     text-align: center;
+-    padding: 2px !important;
+     line-height: 0;
++    overflow: hidden;
+ }
+ thead .checkbox-col {
+     position: sticky;
+@@ -807,6 +840,11 @@ thead .checkbox-col {
+     z-index: 3;
+     background: var(--bg);
+ }
++/* Режим правки выключен и столбец свернулся — ни чекбоксов, ни линий */
++.data-table.cb-hidden .checkbox-col {
++    visibility: hidden;
++    box-shadow: none;
++}
+ /* Тень, пока под чекбоксами едут обычные столбцы (снимается, когда приклеились HOSTNAME/IP) */
+ .data-table.checkbox-stuck .checkbox-col {
+     box-shadow: var(--grid-shadow), var(--sticky-shadow);
+@@ -946,26 +984,73 @@ thead .checkbox-col {
+ }
+ /* Заголовок группы полей (UI_OPTIONS.cardGroups) */
+ .card-table tr.ct-group td {
+-    padding: 9px 10px 3px;
+-    background: var(--bg);
+-    color: var(--text-soft);
+-    font-size: 11px;
++    padding: 5px 10px;
++    background: #e9e6e6;
++    border-top: 1px solid #d9d3d3;
++    border-bottom: 1px solid #d9d3d3;
++    color: #111;
++    font-size: 12px;
+     font-weight: 600;
+-    text-transform: uppercase;
+-    letter-spacing: 0.04em;
++    letter-spacing: 0.01em;
++}
++.card-table tr.ct-editable {
++    cursor: default;
++}
++.card-table tr.ct-saved td.ct-value {
++    animation: cell-saved 1.4s ease-out;
+ }
+ 
+-/* Значение, которое копируется по клику */
+-.copyable {
+-    cursor: copy;
+-    border-radius: 2px;
++/* Значение, которое копируется по клику: подсветка фоном (без сдвига
++   вёрстки — отступ нарисован тенью) и значок копирования справа */
++.copy-val {
++    cursor: pointer;
++    border-radius: 3px;
++    transition: background-color 0.1s, box-shadow 0.1s;
++}
++.copy-val:hover {
++    background: rgba(138, 40, 40, 0.09);
++    box-shadow: 0 0 0 3px rgba(138, 40, 40, 0.09);
+ }
+-.copyable:hover {
+-    text-decoration: underline dotted;
+-    text-underline-offset: 3px;
++.copy-val:active {
++    background: rgba(138, 40, 40, 0.18);
++    box-shadow: 0 0 0 3px rgba(138, 40, 40, 0.18);
+ }
+ .copy-line {
+     display: block;
++    position: relative;
++}
++.copy-ico {
++    position: absolute;
++    right: -4px;
++    top: 50%;
++    width: 13px;
++    height: 13px;
++    margin-top: -6.5px;
++    color: var(--brand);
++    opacity: 0;
++    pointer-events: none;
++    transition: opacity 0.1s;
++}
++.copy-line:has(.copy-val:hover) .copy-ico {
++    opacity: 0.7;
++}
++.card-sec-body .copy-line {
++    display: table;
++    padding-right: 20px;
++}
++
++/* Правка значения в карточке — редактор поверх ячейки, как в таблице */
++.card-table td.ct-value {
++    position: relative;
++}
++.card-table td.ct-value.editing {
++    overflow: visible;
++}
++.card-edit-input {
++    font-size: 13px;
++    padding: 3px 9px;
++    z-index: 5;
++    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+ }
+ 
+ .card-section {
+@@ -1011,20 +1096,21 @@ thead .checkbox-col {
+ .tree {
+     flex: 1;
+     overflow: auto;
+-    padding: 10px 14px 24px;
++    padding: 12px 16px 28px;
++    font-size: 14px;
+ }
+ 
+ .tree-inner {
+-    max-width: 820px;
++    max-width: 760px;
+ }
+ 
+ .node-row {
+     display: flex;
+     align-items: center;
+-    gap: 6px;
+-    height: 26px;
+-    padding: 0 6px;
+-    border-radius: 4px;
++    gap: 8px;
++    height: 32px;
++    padding: 0 8px;
++    border-radius: 5px;
+     cursor: default;
+ }
+ .node-row:hover {
+@@ -1047,9 +1133,9 @@ thead .checkbox-col {
+ }
+ 
+ .node-icon {
+-    flex: 0 0 16px;
+-    width: 16px;
+-    height: 16px;
++    flex: 0 0 18px;
++    width: 18px;
++    height: 18px;
+     color: var(--text-soft);
+ }
+ .node-row.kind-building .node-icon {
+@@ -1067,32 +1153,30 @@ thead .checkbox-col {
+ }
+ .node-code {
+     display: inline-block;
+-    min-width: 30px;
+-    margin-right: 6px;
++    min-width: 34px;
++    margin-right: 8px;
+     color: var(--text-strong);
+     font-weight: 600;
+     font-variant-numeric: tabular-nums;
+ }
+-.node-kind {
+-    color: var(--text-muted);
+-    font-size: 11px;
+-}
+ .node-title mark {
+     background: #fbe3a8;
+     color: inherit;
+     border-radius: 2px;
+ }
+ 
++/* Число ПК — сразу после названия */
+ .node-count {
+-    margin-left: auto;
+-    min-width: 22px;
+-    padding: 0 6px;
+-    height: 17px;
+-    line-height: 17px;
+-    border-radius: 9px;
+-    background: #eeeeee;
++    flex: 0 0 auto;
++    min-width: 24px;
++    padding: 0 7px;
++    height: 19px;
++    line-height: 19px;
++    box-sizing: border-box;
++    border-radius: 10px;
++    background: #ececec;
+     color: var(--text-secondary);
+-    font-size: 11px;
++    font-size: 12px;
+     text-align: center;
+     font-variant-numeric: tabular-nums;
+ }
+@@ -1103,24 +1187,34 @@ thead .checkbox-col {
+ 
+ .node-actions {
+     display: flex;
+-    gap: 1px;
++    gap: 2px;
++    margin-left: 6px;
+     visibility: hidden;
+ }
+ .node-row:hover .node-actions {
+     visibility: visible;
+ }
++.node-actions .icon-btn {
++    min-width: 24px;
++    height: 24px;
++    font-size: 13px;
++}
++.node-actions .icon-btn svg {
++    width: 16px;
++    height: 16px;
++}
+ 
+ .children {
+-    margin-left: 13px;
+-    padding-left: 10px;
+-    border-left: 1px solid #e6e6e6;
++    margin-left: 15px;
++    padding-left: 12px;
++    border-left: 1px solid #e3e3e3;
+ }
+ 
+ .tree-form {
+     display: flex;
+     align-items: center;
+     gap: 6px;
+-    margin: 3px 0 6px 26px;
++    margin: 3px 0 8px 30px;
+     padding: 6px 8px;
+     border: 1px solid var(--border);
+     border-radius: 4px;
+diff --git a/frontend/static/app.js b/frontend/static/app.js
+index 2307e64..835fc26 100644
+--- a/frontend/static/app.js
++++ b/frontend/static/app.js
+@@ -139,7 +139,7 @@ function hasDuplicateValue(value, field) {
+ }
+ 
+ const kindLabels = {
+-    building: "Здание",
++    building: "Адрес",
+     department: "Отделение",
+     floor: "Этаж",
+     room: "Кабинет"
+@@ -202,7 +202,12 @@ const LOCATION_FIELD_LABELS = {
+ };
+ 
+ const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
+-const CARD_HISTORY_KEY = "itdb.cardHistoryOpen.v1";
++const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
++const CHECKBOX_COL_WIDTH = 30;   // ширина столбца чекбоксов в режиме правки
++const CHECKBOX_ANIM_MS = 200;    // время выезда/заезда столбца чекбоксов
++
++// Поля карточки, которые можно править двойным кликом (ключ строки карточки → поле)
++const CARD_EDIT_EXTRA = { serial: { field: "serial", headerName: "Серийный", editable: true } };
+ 
+ // ============================================================
+ // Замер ширины текста и автоматический размер столбцов
+@@ -371,6 +376,8 @@ const app = Vue.createApp({
+             quickFilter: "",
+             rows: [],
+             hiddenColumns: loadJson(HIDDEN_COLUMNS_KEY, []),
++            searchHidden: loadJson(SEARCH_HIDDEN_KEY, false),
++            checkboxVisible: false,
+             locationFilter: null,
+             savedFlash: {},
+             openMenu: null,
+@@ -412,7 +419,9 @@ const app = Vue.createApp({
+             cardPeople: [],
+             cardVacuum: [],
+             cardHistory: [],
+-            cardHistoryOpen: loadJson(CARD_HISTORY_KEY, true),
++            cardHistoryOpen: false,
++            cardEditKey: null,
++            cardEditValue: "",
+             // Диалог и сообщения
+             dialog: null,
+             toasts: [],
+@@ -503,7 +512,7 @@ const app = Vue.createApp({
+             const base = this.columns.reduce(function (sum, col) {
+                 return sum + col.width;
+             }, 0);
+-            return (this.editMode ? 30 : 0) + base;
++            return base;
+         },
+ 
+         filteredRows() {
+@@ -518,7 +527,7 @@ const app = Vue.createApp({
+             if (!query) {
+                 return rows;
+             }
+-            const fields = this.columns.map(function (col) {
++            const fields = (this.searchHidden ? this.allColumns : this.columns).map(function (col) {
+                 return col.field;
+             });
+             return rows.filter(function (row) {
+@@ -576,22 +585,22 @@ const app = Vue.createApp({
+             }
+             const status = [F("status", "Статус", c.status)];
+             const place = [
+-                F("building", "Адрес", c.building),
+-                F("department", "Отделение", c.department),
++                F("building", "Адрес", c.building, true),
++                F("department", "Отделение", c.department, true),
+                 F("floor", "Этаж", c.floor),
+-                F("room", "Кабинет", this.cardRoom),
++                F("room", "Кабинет", this.cardRoom, true),
+                 F("seat_no", "Место", c.seat_no)
+             ];
+             const net = [F("ip", "IP", c.ip, true), F("mac", "MAC", c.mac, true)];
+             const ids = [F("inv_no", "ИНВ", c.inv_no, true), F("serial", "Серийный", c.serial, true)];
+             const hw = [
+                 F("type", "ТИП", c.type),
+-                F("model", "Модель", c.model),
+-                F("os", "OS", c.os),
+-                F("cpu", "CPU", c.cpu),
++                F("model", "Модель", c.model, true),
++                F("os", "OS", c.os, true),
++                F("cpu", "CPU", c.cpu, true),
+                 F("ram", "RAM", c.ram),
+-                F("drive", "DRIVE", c.drive),
+-                F("gpu", "GPU", c.gpu)
++                F("drive", "DRIVE", c.drive, true),
++                F("gpu", "GPU", c.gpu, true)
+             ];
+             const marks = [F("gsit", "GSIT", c.gsit), F("state", "Сост.", c.state), F("label", "Метка", c.label)];
+             const custom = this.tableFieldDefs.map(function (fd) {
+@@ -726,11 +735,16 @@ const app = Vue.createApp({
+                     this.closeMenus();
+                 }
+             }
++            this.animateCheckboxCol(newVal);
+             this.$nextTick(() => {
+                 this.updateStickyShadow();
+             });
+         },
+ 
++        searchHidden(value) {
++            saveJson(SEARCH_HIDDEN_KEY, value);
++        },
++
+         // Сняли все галочки — меню действий больше не нужно
+         "selectedRows.length"(count) {
+             if (count === 0 && this.openMenu === "selection") {
+@@ -748,6 +762,7 @@ const app = Vue.createApp({
+ 
+     async mounted() {
+         window.itdbTable = this;
++        this._cbWidth = 0;
+         this.hoverRowEl = null;
+         this.lastMouseX = undefined;
+         this.lastMouseY = undefined;
+@@ -847,6 +862,7 @@ const app = Vue.createApp({
+                 return;
+             }
+             const startTotal = this.totalWidth;
++            const cbWidth = this._cbWidth || 0;
+ 
+             function onMouseMove(e) {
+                 const delta = e.clientX - startX;
+@@ -856,7 +872,7 @@ const app = Vue.createApp({
+                 }
+                 const appliedDelta = newWidth - startWidth;
+                 colEl.style.width = newWidth + "px";
+-                tableEl.style.width = (startTotal + appliedDelta) + "px";
++                tableEl.style.width = (startTotal + appliedDelta + cbWidth) + "px";
+             }
+ 
+             const self = this;
+@@ -969,7 +985,7 @@ const app = Vue.createApp({
+                 style.fontWeight = "700";
+             }
+             if (col.sticky) {
+-                style.left = this.stickyLeft(col) + "px";
++                style.left = "calc(var(--cb-w) + " + this.stickyLeft(col) + "px)";
+             }
+             return Object.keys(style).length ? style : null;
+         },
+@@ -983,7 +999,7 @@ const app = Vue.createApp({
+         },
+ 
+         stickyLeft(col) {
+-            let left = this.editMode ? 30 : 0;
++            let left = 0; // столбец чекбоксов добавляется через CSS-переменную --cb-w
+             for (const c of this.columns) {
+                 if (c.field === col.field) {
+                     break;
+@@ -1173,6 +1189,143 @@ const app = Vue.createApp({
+             this.toast("Обмен пока не реализован");
+         },
+ 
++        // ---------- Выезд столбца чекбоксов ----------
++        // Анимируется одна CSS-переменная --cb-w на таблице (ширина столбца,
++        // сдвиг липких HOSTNAME/IP, ширина таблицы) — без перерисовки Vue.
++        // Повторное нажатие посреди анимации продолжает с текущей ширины.
++        animateCheckboxCol(show) {
++            const table = this.$refs.table;
++            const target = show ? CHECKBOX_COL_WIDTH : 0;
++            if (this._cbRaf) {
++                cancelAnimationFrame(this._cbRaf);
++                this._cbRaf = null;
++            }
++            if (show) {
++                this.checkboxVisible = true;
++            }
++            const from = this._cbWidth || 0;
++            const apply = (w) => {
++                this._cbWidth = w;
++                if (table) {
++                    table.style.setProperty("--cb-w", w + "px");
++                }
++            };
++            const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
++            if (!table || from === target || reduce) {
++                apply(target);
++                this.checkboxVisible = show;
++                return;
++            }
++            const duration = CHECKBOX_ANIM_MS * Math.abs(target - from) / CHECKBOX_COL_WIDTH;
++            const start = performance.now();
++            const step = (now) => {
++                const t = Math.min(1, (now - start) / duration);
++                const eased = 1 - Math.pow(1 - t, 3);
++                apply(Math.round((from + (target - from) * eased) * 10) / 10);
++                this.updateStickyShadow();
++                if (t < 1) {
++                    this._cbRaf = requestAnimationFrame(step);
++                } else {
++                    this._cbRaf = null;
++                    apply(target);
++                    this.checkboxVisible = show;
++                    this.updateStickyShadow();
++                }
++            };
++            this._cbRaf = requestAnimationFrame(step);
++        },
++
++        // ---------- Правка в карточке (двойной клик по строке) ----------
++
++        cardEditCol(r) {
++            if (!r || r.group) {
++                return null;
++            }
++            if (CARD_EDIT_EXTRA[r.key]) {
++                return CARD_EDIT_EXTRA[r.key];
++            }
++            const field = r.key.indexOf("x-") === 0 ? r.key.slice(2) : r.key;
++            const col = this.allColumns.find(function (c) { return c.field === field; });
++            return col && col.editable ? col : null;
++        },
++
++        isCardEditable(r) {
++            return this.canEdit && !!this.cardEditCol(r);
++        },
++
++        onCardRowDblclick(event, r) {
++            // Двойной клик по самому значению — это два копирования, не правка
++            if (event.target.closest(".copy-val")) {
++                return;
++            }
++            if (!this.isCardEditable(r) || this.cardEditKey === r.key) {
++                return;
++            }
++            const sel = window.getSelection && window.getSelection();
++            if (sel) {
++                sel.removeAllRanges();
++            }
++            this.cardEditKey = r.key;
++            const value = this.card[this.cardEditCol(r).field];
++            this.cardEditValue = value === null || value === undefined ? "" : String(value);
++            this.$nextTick(() => {
++                const el = this.$refs.cardEditor;
++                const input = Array.isArray(el) ? el[0] : el;
++                if (!input) {
++                    return;
++                }
++                this.growCardEditor(input);
++                input.focus({ preventScroll: true });
++                const len = input.value.length;
++                input.setSelectionRange(len, len);
++            });
++        },
++
++        growCardEditor(el) {
++            const td = el.closest("td");
++            if (!td) {
++                return;
++            }
++            el.style.width = td.clientWidth + "px";
++            el.style.height = td.clientHeight + "px";
++            if (el.scrollHeight > el.clientHeight) {
++                el.style.height = el.scrollHeight + 2 + "px";
++            }
++        },
++
++        onCardEditKeydown(event, r) {
++            if (event.key === "Enter" && !event.shiftKey) {
++                event.preventDefault();
++                this.saveCardEdit(r);
++            } else if (event.key === "Escape") {
++                event.preventDefault();
++                event.stopPropagation(); // Esc отменяет правку, а не закрывает карточку
++                this.cardEditKey = null;
++            }
++        },
++
++        saveCardEdit(r) {
++            if (this.cardEditKey !== r.key || !this.card) {
++                return;
++            }
++            const col = this.cardEditCol(r);
++            this.cardEditKey = null;
++            if (!col) {
++                return;
++            }
++            const row = this.rows.find((item) => item.id === this.card.id) || this.card;
++            const old = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
++            if (this.cardEditValue === old) {
++                return;
++            }
++            this.saveCellValue(row, col, this.cardEditValue);
++        },
++
++        isCardFlash(r) {
++            const col = this.cardEditCol(r);
++            return !!(this.card && col && this.savedFlash[this.card.id + ":" + col.field]);
++        },
++
+         // ---------- Видимость столбцов ----------
+ 
+         isColumnHidden(field) {
+@@ -1378,6 +1531,8 @@ const app = Vue.createApp({
+ 
+         async openCard(row) {
+             this.card = row;
++            this.cardHistoryOpen = false;
++            this.cardEditKey = null;
+             this.cardHostname = row.hostname || "";
+             this.editingHostname = false;
+             this.cardLoading = true;
+@@ -1414,7 +1569,6 @@ const app = Vue.createApp({
+ 
+         toggleCardHistory() {
+             this.cardHistoryOpen = !this.cardHistoryOpen;
+-            saveJson(CARD_HISTORY_KEY, this.cardHistoryOpen);
+         },
+ 
+         splitLines(value) {
+@@ -1566,10 +1720,11 @@ const app = Vue.createApp({
+             return kindLabels[kind] || kind;
+         },
+ 
+-        // Раскрыт ли узел: явный выбор пользователя, иначе — два верхних уровня
++        // Раскрыт ли узел: по умолчанию всё свёрнуто; что раскрыл пользователь —
++        // остаётся раскрытым до перезагрузки страницы
+         isTreeOpen(node, level) {
+             const state = this.treeOpenState[node.id];
+-            return state !== undefined ? state : level < 2;
++            return state === true;
+         },
+ 
+         setTreeOpen(id, open) {
+@@ -2202,7 +2357,7 @@ const app = Vue.createApp({
+ });
+ 
+ const KIND_ICONS = {
+-    building: '<path d="M3 14V3.5L9 2v12M9 6h4v8M1.5 14h13M5 5h2M5 7.5h2M5 10h2M11 8.5h0.5M11 11h0.5"/>',
++    building: '<path d="M8 14.5s4.5-4.2 4.5-8a4.5 4.5 0 0 0-9 0c0 3.8 4.5 8 4.5 8z"/><circle cx="8" cy="6.5" r="1.6"/>',
+     department: '<path d="M2 4.5h4l1.2 1.5H14v7.5H2z"/>',
+     floor: '<path d="M8 2 14 5 8 8 2 5zM2 8l6 3 6-3M2 11l6 3 6-3"/>',
+     room: '<path d="M4 14V2.5h8V14M2.5 14h11M9.5 8.5h0.01"/>'
+@@ -2323,6 +2478,7 @@ app.component("tree-node", {
+                 <span class="node-title" :title="kindLabel">
+                     <span v-if="codeText" class="node-code"><template v-for="(p, i) in codeParts" :key="'c' + i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></span><template v-for="(p, i) in nameParts" :key="'n' + i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template>
+                 </span>
++                <span class="node-count" :class="{ zero: !node.total_count }" title="Компьютеров внутри">{{ node.total_count }}</span>
+                 <span class="node-actions" @click.stop>
+                     <span class="icon-btn" title="Показать эти ПК в таблице" @click="call('showLocationInTable')">
+                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.5h12M6 6.5V13"/></svg>
+@@ -2335,7 +2491,6 @@ app.component("tree-node", {
+                         <span class="icon-btn danger" title="Архивировать" @click="call('archiveLocation')">✕</span>
+                     </template>
+                 </span>
+-                <span class="node-count" :class="{ zero: !node.total_count }" title="Компьютеров внутри">{{ node.total_count }}</span>
+             </div>
+             <tree-form v-if="formHere"></tree-form>
+             <div class="children" v-if="isOpen && hasChildren">
+@@ -2378,7 +2533,7 @@ app.component("tree-form", {
+     },
+     template: `
+         <div class="tree-form" v-if="form" @keydown.esc.stop="cancel">
+-            <span class="tf-title">{{ form.action === 'add' ? (form.parentId ? 'Новый узел:' : 'Новое здание:') : 'Правка:' }}</span>
++            <span class="tf-title">{{ form.action === 'add' ? (form.parentId ? 'Новый узел:' : 'Новый адрес:') : 'Правка:' }}</span>
+             <select v-if="form.kinds.length > 1" class="input" v-model="form.kind">
+                 <option v-for="k in form.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
+             </select>
+@@ -2425,7 +2580,9 @@ window.addEventListener("keydown", function (event) {
+         return;
+     }
+     if (event.key === "Escape" && vm.card) {
+-        if (vm.editingHostname) {
++        if (vm.cardEditKey) {
++            vm.cardEditKey = null;
++        } else if (vm.editingHostname) {
+             vm.cancelEditHostname();
+         } else {
+             vm.closeCard();
+diff --git a/frontend/static/index.html b/frontend/static/index.html
+index 97bf3cb..365d821 100644
+--- a/frontend/static/index.html
++++ b/frontend/static/index.html
+@@ -35,10 +35,10 @@
+                         <span class="chip-text">{{ locationFilter.path }}</span><span class="chip-x">✕</span>
+                     </button>
+                     <span v-if="selectedRows.length > 0" class="dropdown-wrap" ref="selectionWrap">
+-                        <button class="chip" @click="toggleMenu('selection')" title="Действия с выбранными">
+-                            Выбрано: {{ selectedRows.length }} <span class="caret">▼</span>
++                        <button class="btn" :class="{ 'menu-open': openMenu === 'selection' }" @click="toggleMenu('selection')" title="Действия с выбранными">
++                            Выбрано: {{ selectedRows.length }}<span class="caret">▼</span>
+                         </button>
+-                        <div v-if="openMenu === 'selection'" class="dropdown">
++                        <div v-if="openMenu === 'selection'" class="dropdown attached">
+                             <button @click="startMove">Переместить</button>
+                             <button @click="startReplace">Заменить</button>
+                             <button @click="startSwap">Поменять местами</button>
+@@ -58,10 +58,10 @@
+                     <button v-if="sortField" class="btn" @click="resetSort">Сброс сортировки</button>
+                     <button v-if="hasManualWidths" class="btn" @click="resetWidths" title="Вернуть автоматическую ширину столбцов">Выровнять</button>
+                     <span class="dropdown-wrap" ref="columnsWrap">
+-                        <button class="btn" :class="{ 'has-badge': hiddenColumnCount > 0 }" @click="toggleMenu('columns')" title="Показать или скрыть столбцы">
++                        <button class="btn" :class="{ 'has-badge': hiddenColumnCount > 0, 'menu-open': openMenu === 'columns' }" @click="toggleMenu('columns')" title="Показать или скрыть столбцы">
+                             Столбцы<span v-if="hiddenColumnCount > 0" class="btn-badge">{{ hiddenColumnCount }}</span>
+                         </button>
+-                        <div v-if="openMenu === 'columns'" class="dropdown right columns-menu">
++                        <div v-if="openMenu === 'columns'" class="dropdown right attached columns-menu">
+                             <div class="dd-scroll">
+                                 <label v-for="col in allColumns" :key="'vis-' + col.field">
+                                     <input type="checkbox" :checked="!isColumnHidden(col.field)" @change="toggleColumn(col.field)">
+@@ -69,8 +69,11 @@
+                                 </label>
+                             </div>
+                             <div class="dd-sep"></div>
++                            <label title="Если выключено, поиск идёт только по тем столбцам, что видны в таблице">
++                                <input type="checkbox" v-model="searchHidden">
++                                Искать и в скрытых столбцах
++                            </label>
+                             <button @click="showAllColumns" :disabled="hiddenColumnCount === 0">Показать все</button>
+-                            <div class="dd-note">Поиск идёт только по видимым столбцам</div>
+                         </div>
+                     </span>
+                     <button v-if="canEdit" class="btn" :class="{ active: editMode }" @click="editMode = !editMode"
+@@ -84,19 +87,19 @@
+             </div>
+ 
+             <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
+-                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'checkbox-stuck': checkboxStuck }" ref="table" :style="{ width: totalWidth + 'px' }">
++                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'checkbox-stuck': checkboxStuck, 'cb-hidden': !checkboxVisible }" ref="table" :style="{ width: 'calc(' + totalWidth + 'px + var(--cb-w))' }">
+                     <colgroup>
+-                        <col v-if="editMode" style="width: 30px;">
++                        <col class="cb-col">
+                         <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
+                     </colgroup>
+                     <thead>
+                         <tr>
+-                            <th v-if="editMode" class="checkbox-col">
+-                                <input type="checkbox" :checked="isAllSelected" @change="toggleAllSelection">
++                            <th class="checkbox-col">
++                                <input type="checkbox" :checked="isAllSelected" @change="toggleAllSelection" :tabindex="editMode ? 0 : -1">
+                             </th>
+                             <th v-for="col in columns" :key="'th-' + col.field"
+                                 :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === lastStickyField }"
+-                                :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
++                                :style="col.sticky ? { left: 'calc(var(--cb-w) + ' + stickyLeft(col) + 'px)' } : null"
+                                 @click="sortBy(col)">
+                                 <span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
+                                 <span class="resize-handle" @mousedown.stop.prevent="startResize($event, col)" @click.stop></span>
+@@ -105,8 +108,8 @@
+                     </thead>
+                     <tbody>
+                         <tr v-for="row in displayRows" :key="row.id">
+-                            <td v-if="editMode" class="checkbox-col">
+-                                <input type="checkbox" :checked="isRowSelected(row)" @change="toggleRowSelection(row)">
++                            <td class="checkbox-col">
++                                <input v-if="checkboxVisible" type="checkbox" :checked="isRowSelected(row)" @change="toggleRowSelection(row)">
+                             </td>
+                             <td v-for="col in columns" :key="col.field"
+                                 :class="cellClass(row, col)"
+@@ -156,7 +159,7 @@
+                     <button class="btn" @click="collapseAllTree">Свернуть всё</button>
+                     <template v-if="canEdit">
+                         <span class="tb-divider"></span>
+-                        <button class="btn" @click="openAddForm(null)">+ Здание</button>
++                        <button class="btn" @click="openAddForm(null)">+ Адрес</button>
+                     </template>
+                 </div>
+             </div>
+@@ -266,7 +269,7 @@
+             <div class="card">
+                 <div class="card-head">
+                     <span v-if="!editingHostname" class="card-hostname">
+-                        <span :class="{ copyable: card.hostname }" :title="card.hostname ? 'Скопировать' : null" @click="card.hostname && copyText(card.hostname)">{{ card.hostname || "Без имени" }}</span>
++                        <span :class="{ 'copy-val': card.hostname }" :title="card.hostname ? 'Скопировать' : null" @click="card.hostname && copyText(card.hostname)">{{ card.hostname || "Без имени" }}</span>
+                         <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startEditHostname">✎</span>
+                     </span>
+                     <span v-else class="card-hostname-edit">
+@@ -278,13 +281,21 @@
+                     <table class="card-table">
+                         <template v-for="r in cardRows" :key="r.key">
+                             <tr v-if="r.group" class="ct-group"><td colspan="2">{{ r.group }}</td></tr>
+-                            <tr v-else>
++                            <tr v-else :class="{ 'ct-editable': isCardEditable(r), 'ct-saved': isCardFlash(r) }"
++                                @dblclick="onCardRowDblclick($event, r)"
++                                :title="isCardEditable(r) && cardEditKey !== r.key ? 'Двойной клик по пустому месту — изменить' : null">
+                                 <td class="ct-label">{{ r.label }}</td>
+-                                <td class="ct-value">
++                                <td class="ct-value" :class="{ editing: cardEditKey === r.key }">
+                                     <template v-if="r.copy">
+-                                        <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copyable copy-line" title="Скопировать" @click="copyText(line)">{{ line }}</span>
++                                        <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)">{{ line }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
+                                     </template>
+                                     <template v-else>{{ r.value }}</template>
++                                    <template v-if="cardEditKey === r.key">
++                                        <textarea v-if="cardEditCol(r).multiline" ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
++                                            @keydown="onCardEditKeydown($event, r)" @input="growCardEditor($event.target)" @blur="saveCardEdit(r)"></textarea>
++                                        <input v-else ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
++                                            @keydown="onCardEditKeydown($event, r)" @blur="saveCardEdit(r)">
++                                    </template>
+                                 </td>
+                             </tr>
+                         </template>
+@@ -301,7 +312,7 @@
+                     <div class="card-section">VACUUM</div>
+                     <div class="card-sec-body">
+                         <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">—</div>
+-                        <div v-for="login in cardVacuum" :key="login"><span class="copyable" title="Скопировать" @click="copyText(login)">{{ login }}</span></div>
++                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(login)">{{ login }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
+                     </div>
+                     <div class="card-section toggle-sec" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
+                         <span class="sec-caret">{{ cardHistoryOpen ? "▼" : "▶" }}</span>История<span v-if="!cardHistoryOpen && cardHistory.length" class="muted"> ({{ cardHistory.length }})</span>

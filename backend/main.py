@@ -1,9 +1,8 @@
-import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from api_auth import router as auth_router
 from api_computers import router as computers_router
@@ -12,9 +11,11 @@ from api_history import router as history_router
 from api_import import router as import_router
 from api_locations import router as locations_router
 from auth import get_current_user
+from db import engine
 from import_apply import router as import_apply_router
 from api_choices import router as choices_router
 from api_field_defs import router as field_defs_router
+from api_column_styles import router as column_styles_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
 
@@ -60,15 +61,14 @@ app.include_router(
     dependencies=[Depends(get_current_user)],
 )
 
+app.include_router(
+    column_styles_router,
+    dependencies=[Depends(get_current_user)],
+)
+
 @app.get("/api/health")
 def health():
-    url = os.environ.get("DATABASE_URL")
-
-    if not url:
-        return {"db": "no DATABASE_URL"}
-
     try:
-        engine = create_engine(url)
         with engine.connect() as conn:
             conn.execute(text("select 1"))
         return {"db": "ok"}

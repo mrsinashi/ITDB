@@ -1,3 +1,183 @@
+/* ============================================================
+   Палитра. Все цвета интерфейса — здесь.
+   Чтобы поменять цвет, правь переменную, а не правила ниже.
+   ============================================================ */
+
+:root {
+    /* Цветовая схема (по умолчанию — красная). Остальные схемы ниже,
+       html[data-theme="..."], переопределяют только этот блок. */
+    --brand: #A73636;
+    --brand-dark: #7a2222;
+    --brand-rgb: 138, 40, 40;       /* для полупрозрачных подсветок */
+    --brand-accent: #A73636;        /* линия режима правки, значки */
+    --brand-focus: #b98080;         /* рамка поля в фокусе */
+
+    /* Серые плоскости: шапки, группы, подписи — одна шкала для всех разделов */
+    --gray-head: #f0f0f0;           /* шапка таблиц и панель (как у главной таблицы) */
+    --gray-group: #e9e9e9;          /* строка-группа: адрес в дереве, день в истории, группа карточки — везде одна */
+    --gray-line: #d8d8d8;           /* линии шапок и групп, рамки блоков */
+    --group-line: #c8c8c8;          /* линии над и под строкой-группой (адрес в дереве) */
+    --row-hover-chip: #efd3ae;      /* блочок с числом в строке под курсором — в тон бежевой подсветки */
+    --radius: 3px;                  /* единое скругление: как у кнопок и поиска на панели */
+    --copy-ico: #b98a4e;            /* значок копирования — в тон бежевой подсветки строки */
+
+    /* Верхнее меню */
+    --nav-bg: #8a2828;
+    --nav-hover-bg: #993636;
+    --nav-active-bg: #a84848;
+    --nav-text: #f1d7d7;
+    --nav-text-strong: #fff;
+    --nav-load-bar: var(--nav-text);
+
+    /* Панель под меню (поиск, кнопки) */
+    --tb-bg: #9c3c3c;
+    --tb-border: #7d2828;
+    --tb-text: #f3d3d3;
+    --tb-ctrl-bg: #772525;
+    --tb-ctrl-border: #661e1e;
+    --tb-ctrl-text: #fff;
+    --tb-ctrl-hover-bg: #6b2121;
+    --tb-ctrl-on-bg: #f3d3d3;
+    --tb-ctrl-on-border: #f3d3d3;
+    --tb-ctrl-on-text: #7a2222;
+    --tb-input-bg: #772525;
+    --tb-input-border: #702727;
+    --tb-input-focus: #622626;
+    --tb-input-text: #fff;
+    --tb-placeholder: #d9a8a8;
+    --tb-divider: rgba(255, 255, 255, 0.18);
+
+    /* Выпадающие меню из панели */
+    --menu-bg: #8a2828;
+    --menu-border: #661e1e;
+    --menu-text: #f1d7d7;
+    --menu-hover-bg: #a84848;
+    --menu-hover-text: #fff;
+    --menu-muted: #d9a8a8;
+
+    /* Режим правки: полоска под панелью */
+    --edit-accent: #f0b35c;
+
+    /* Таблица */
+    --grid-head-bg: #f0f0f0;
+    --grid-head-sorted-bg: #e6e6e6;
+    --grid-head-text: #333;
+    --grid-head-line-v: #d8d8d8;
+    --grid-head-line-h: #cfcfcf;
+    --grid-line: #e5e5e5;
+    --row-hover-bg: #f9e6ce;
+    --row-hover-line: #e8d9be;
+    --dup-bg: #ffd6d6;
+    --saved-bg: #d5efd5;
+    --sticky-shadow: 3px 0 4px rgba(0, 0, 0, 0.12);
+    --host-color: #0645ad;
+
+    /* Общие */
+    --text: #222;
+    --text-strong: #111;
+    --text-secondary: #555;
+    --text-soft: #777;
+    --text-muted: #999;
+    --bg: #fff;
+    --surface-alt: #f5f5f5;
+    --surface-head: #f7f7f7;
+    --border: #ddd;
+    --border-strong: #ccc;
+    --btn-bg: #f5f5f5;
+    --btn-hover-bg: #e8e8e8;
+    --btn-text: #333;
+    --input-focus: var(--brand-focus);
+    --focus-ring: rgba(var(--brand-rgb), 0.14);
+    --danger: #a00;
+    --danger-strong: #c00;
+    --success: #2e7d32;
+}
+
+/* Цветовые схемы — тёмные спокойные оттенки. Выбор: шестерёнка в меню. */
+html[data-theme="green"] {
+    --brand: #417B54;
+    --brand-dark: #244b31;
+    --brand-rgb: 46, 94, 62;
+    --brand-accent: #417B54;
+    --brand-focus: #7fa98c;
+    --nav-bg: #2e5e3e;
+    --nav-hover-bg: #3a6c4a;
+    --nav-active-bg: #4a7d5a;
+    --nav-text: #d5e8da;
+}
+html[data-theme="blue"] {
+    --brand: #345485;
+    --brand-dark: #1b3154;
+    --brand-rgb: 35, 61, 102;
+    --brand-accent: #345485;
+    --brand-focus: #7890b8;
+    --nav-bg: #233d66;
+    --nav-hover-bg: #2e4b77;
+    --nav-active-bg: #3d5a87;
+    --nav-text: #d3ddee;
+}
+html[data-theme="graphite"] {
+    --brand: #4A5057;
+    --brand-dark: #272b30;
+    --brand-rgb: 49, 54, 60;
+    --brand-accent: #4A5057;
+    --brand-focus: #8f98a2;
+    --nav-bg: #31363c;
+    --nav-hover-bg: #3d434a;
+    --nav-active-bg: #4c535b;
+    --nav-text: #dcdfe3;
+}
+html[data-theme="teal"] {
+    --brand: #317A83;
+    --brand-dark: #184b51;
+    --brand-rgb: 31, 92, 99;
+    --brand-accent: #3f8a92;
+    --brand-focus: #317A83;
+    --nav-bg: #1f5c63;
+    --nav-hover-bg: #2a6a72;
+    --nav-active-bg: #3a7b83;
+    --nav-text: #d3eaec;
+}
+
+/* Вариант «светлая панель» (UI_OPTIONS.lightToolbar в app.js) */
+/* Панель того же серого, что и шапка таблицы: панель и заголовки
+   читаются как одна зона управления под красным меню. */
+body.ui-light-toolbar {
+    --tb-bg: #f0f0f0;
+    --tb-border: #d8d8d8;
+    --tb-text: #555;
+    --tb-ctrl-bg: #fff;
+    --tb-ctrl-border: #cfcfcf;
+    --tb-ctrl-text: #333;
+    --tb-ctrl-hover-bg: #f0f0f0;
+    --tb-ctrl-on-bg: var(--brand);
+    --tb-ctrl-on-border: var(--brand-dark);
+    --tb-ctrl-on-text: #fff;
+    --tb-input-bg: #fff;
+    --tb-input-border: #cfcfcf;
+    --tb-input-focus: var(--brand-focus);
+    --tb-input-text: #222;
+    --tb-placeholder: #aaa;
+    --tb-divider: #d6d6d6;
+    --edit-accent: var(--brand-accent);
+
+    --menu-bg: #fff;
+    --menu-border: #d6d6d6;
+    --menu-text: #333;
+    --menu-hover-bg: #ececec;
+    --menu-hover-text: #111;
+    --menu-muted: #999;
+}
+
+/* Вариант «тёмный HOSTNAME» (UI_OPTIONS.darkHostname в app.js) */
+body.ui-dark-hostname {
+    --host-color: #222;
+}
+
+/* ============================================================
+   Основа
+   ============================================================ */
+
 [v-cloak] {
     display: none;
 }
@@ -8,8 +188,8 @@ body {
     margin: 0;
     font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
-    color: #222;
-    background: #fff;
+    color: var(--text);
+    background: var(--bg);
 }
 
 body {
@@ -24,14 +204,32 @@ body {
     min-height: 0;
 }
 
-/* ---------- Верхнее меню ---------- */
+.view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.muted {
+    color: var(--text-muted);
+}
+
+.nowrap {
+    white-space: nowrap;
+}
+
+/* ============================================================
+   Верхнее меню
+   ============================================================ */
 
 .top-menu {
+    position: relative;
     display: flex;
     align-items: stretch;
     height: 38px;
     padding: 0;
-    background: #8a2828;
+    background: var(--nav-bg);
     flex: 0 0 auto;
 }
 
@@ -39,7 +237,7 @@ body {
     display: flex;
     align-items: center;
     padding: 0 14px;
-    color: #fff;
+    color: var(--nav-text-strong);
     font-weight: 700;
     font-size: 14px;
 }
@@ -47,20 +245,20 @@ body {
 .top-menu a {
     display: flex;
     align-items: center;
-    color: #f1d7d7;
+    color: var(--nav-text);
     text-decoration: none;
     padding: 0 14px;
     font-size: 13px;
 }
 
 .top-menu a:hover {
-    background: #993636;
-    color: #fff;
+    background: var(--nav-hover-bg);
+    color: var(--nav-text-strong);
 }
 
 .top-menu a.active {
-    background: #a84848;
-    color: #fff;
+    background: var(--nav-active-bg);
+    color: var(--nav-text-strong);
     font-weight: 600;
 }
 
@@ -70,108 +268,569 @@ body {
     align-items: stretch;
 }
 
-.top-menu .user {
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
-    color: #f1d7d7;
+/* Шестерёнка и пользователь справа в меню */
+.top-menu .nav-pop {
+    align-items: stretch;
 }
-
-.top-menu .menu-right a {
+.top-menu .nav-icon {
+    padding: 0 11px;
+}
+.top-menu .nav-icon svg {
+    width: 17px;
+    height: 17px;
+}
+.top-menu .nav-user {
+    box-sizing: border-box;
+    justify-content: center;
     padding: 0 14px;
 }
+.top-menu .nav-icon.open,
+.top-menu .nav-user.open {
+    background: var(--nav-active-bg);
+    color: var(--nav-text-strong);
+}
 
-.view {
-    flex: 1;
+/* Всплывающие карточки из меню: пользователь, настройки.
+   Та же манера, что у выпадающих меню панели: тонкая рамка, малый радиус. */
+.nav-card {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 120;
+    /* ширина кратна 4px: при масштабе 125%/150% край ложится ровно в пиксель */
+    width: 224px;
+    box-sizing: border-box;
+    background: #fff;
+    /* Без рамки: при масштабе Windows 125%/150% линия рамки сглаживается
+       внутрь, и меню казалось на пиксель уже кнопки. Край — фоном и тенью. */
+    border: none;
+    border-radius: 0 0 3px 3px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2), -1px 1px 0 rgba(0, 0, 0, 0.12);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.user-card .uc-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 12px;
+    background: var(--gray-head);
+    border-bottom: 1px solid var(--gray-line);
+}
+.uc-avatar {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    border-radius: 3px;
+    background: var(--brand);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+.uc-text {
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-width: 0;
+    line-height: 1.3;
+}
+.uc-login {
+    font-weight: 600;
+    color: var(--text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.uc-role {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.user-card .uc-foot {
+    display: flex;
+    justify-content: flex-end;
+    padding: 7px 8px;
+}
+.user-card .btn .ico {
+    width: 13px;
+    height: 13px;
 }
 
-.toolbar {
-    display: flex;
-    align-items: center;
-    padding: 5px 10px;
-    background: #9c3c3c;
-    border-bottom: 1px solid #7d2828;
-    position: relative;
+.settings-card {
+    padding: 4px;
 }
-
-.info-bar {
+.settings-card .nc-title {
+    padding: 3px 8px 5px;
+    margin-bottom: 3px;
+    border-bottom: 1px solid #e5e5e5;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.theme-opt {
     display: flex;
-    gap: 10px;
     align-items: center;
+    gap: 8px;
+    width: 100%;
     padding: 4px 8px;
-    border-bottom: 1px solid #ddd;
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+}
+.theme-opt:hover {
+    background: var(--menu-hover-bg);
+}
+.theme-sw {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius);
+}
+.theme-opt .theme-name {
+    flex: 1;
+}
+.settings-card .nc-sep {
+    height: 1px;
+    margin: 4px 4px;
+    background: #e5e5e5;
+}
+.settings-card .nc-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.settings-card .nc-check:hover {
+    background: var(--menu-hover-bg);
+}
+.settings-card .nc-check input {
+    margin: 0;
+    accent-color: var(--brand);
+}
+.theme-check {
+    width: 13px;
+    height: 13px;
+    color: var(--text-strong);
 }
 
-.toolbar .row-count {
-    font-weight: 400;
-    color: #f3d3d3;
+/* Полоска загрузки по нижнему краю меню (общая для всех разделов).
+   Быстро доходит до ~80%, дальше ползёт медленно; по окончании
+   добегает до конца и гаснет — поэтому всегда видна целиком. */
+.load-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 0;
+    background: var(--nav-load-bar);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5;
+}
+.load-bar.running {
+    opacity: 1;
+    width: 85%;
+    transition: width 6s cubic-bezier(0.08, 0.75, 0.2, 1);
+}
+.load-bar.done {
+    opacity: 0;
+    width: 100%;
+    transition: width 0.25s ease-out, opacity 0.3s 0.25s;
+}
+
+/* ============================================================
+   Панель под меню — одинаковая во всех разделах
+   ============================================================ */
+
+/* Три колонки: слева счётчик, по центру поиск, справа кнопки.
+   Поиск стоит по центру, пока хватает места; если кнопок справа
+   становится много, он сужается/сдвигается, но не наезжает на них. */
+.toolbar {
+    display: grid;
+    grid-template-columns: 1fr minmax(180px, 420px) 1fr;
+    align-items: center;
+    column-gap: 12px;
+    min-height: 25px;
+    padding: 5px 10px;
+    background: var(--tb-bg);
+    border-bottom: 1px solid var(--tb-border);
+    color: var(--tb-text);
+    position: relative;
+    flex: 0 0 auto;
     white-space: nowrap;
 }
 
-.toolbar .search-wrap {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+/* Режим правки: цветная линия по низу панели (без сдвига вёрстки) */
+.toolbar.editing-on {
+    box-shadow: inset 0 -2px 0 var(--edit-accent);
+}
+
+.toolbar .tb-left {
+    grid-column: 1;
+    justify-self: start;
     display: flex;
-    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
 }
 
-.toolbar input {
-    width: 420px;
-    height: 17px;
-    max-width: 100%;
-    padding: 3px 8px;
-    font-size: 13px;
-    background: #772525;
-    color: #fff;
-    border: 1px solid #702727;
-    border-radius: 3px;
-}
-
-.toolbar input::placeholder {
-    color: #d9a8a8;
-}
-
-.toolbar input:focus {
-    outline: none;
-    border-color: #622626;
-    box-shadow: 0px 0px 1px #8e4444;
-}
-
-.toolbar .toolbar-right {
-    margin-left: auto;
+.toolbar .tb-right {
+    grid-column: 3;
+    justify-self: end;
     display: flex;
     gap: 8px;
     align-items: center;
-    white-space: nowrap;
-    color: #f3d3d3;
 }
 
-.toolbar button {
+.toolbar .tb-count {
+    min-width: 130px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.toolbar .tb-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--tb-divider);
+}
+
+.toolbar .tb-error {
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #ffd0d0;
+}
+body.ui-light-toolbar .toolbar .tb-error {
+    color: var(--danger);
+}
+
+/* Поиск по центру панели */
+.toolbar .tb-search {
+    grid-column: 2;
+    position: relative;
+    display: flex;
+}
+
+.toolbar .tb-search input {
+    width: 100%;
+    box-sizing: border-box;
+    height: 25px;
+    padding: 3px 24px 3px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--tb-input-bg);
+    color: var(--tb-input-text);
+    border: 1px solid var(--tb-input-border);
+    border-radius: 3px;
+}
+.toolbar .tb-search input::placeholder {
+    color: var(--tb-placeholder);
+}
+.toolbar .tb-search input:focus {
+    outline: none;
+    border-color: var(--tb-input-focus);
+    box-shadow: 0 0 1px var(--tb-input-focus);
+}
+.toolbar .tb-search .clear {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    color: var(--tb-placeholder);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+.toolbar .tb-search .clear:hover {
+    color: var(--tb-input-text);
+}
+
+/* Кнопки на панели */
+.toolbar .btn {
+    background: var(--tb-ctrl-bg);
+    border-color: var(--tb-ctrl-border);
+    color: var(--tb-ctrl-text);
+}
+.toolbar .btn:hover {
+    background: var(--tb-ctrl-hover-bg);
+}
+.toolbar .btn.active {
+    background: var(--tb-ctrl-on-bg);
+    border-color: var(--tb-ctrl-on-border);
+    color: var(--tb-ctrl-on-text);
+}
+.toolbar .btn .ico {
+    width: 13px;
+    height: 13px;
+    vertical-align: -2px;
+}
+.toolbar .btn.icon-only {
+    padding: 3px 6px;
+}
+
+/* Число скрытых столбцов — значок в углу кнопки, ширина кнопки не меняется */
+.toolbar .btn.has-badge {
+    position: relative;
+}
+.btn-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    border-radius: 3px;
+    background: var(--edit-accent);
+    color: #fff;
+    font-size: 10px;
+    line-height: 14px;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Метка на панели: «Выбрано: 3 ▾», фильтр по расположению */
+.toolbar .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 21px;
+    box-sizing: border-box;
+    padding: 0 8px;
+    font-size: 12px;
+    font-family: inherit;
+    border: 1px solid var(--tb-ctrl-border);
+    border-radius: 3px;
+    background: var(--tb-ctrl-bg);
+    color: var(--tb-ctrl-text);
+    cursor: pointer;
+    max-width: 320px;
+}
+.toolbar .chip:hover {
+    background: var(--tb-ctrl-hover-bg);
+}
+.toolbar .chip .chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.toolbar .chip .chip-x {
+    opacity: 0.7;
+}
+.toolbar .chip .chip-x:hover {
+    opacity: 1;
+}
+.toolbar .chip .caret {
+    font-size: 8px;
+    opacity: 0.8;
+}
+
+/* ============================================================
+   Общие элементы: кнопки, поля
+   ============================================================ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     padding: 3px 10px;
     font-size: 12px;
-    border: 1px solid #661e1e;
+    font-family: inherit;
+    line-height: 15px;
+    border: 1px solid var(--border-strong);
     border-radius: 3px;
-    background: #772525;
-    color: #fff;
+    background: var(--btn-bg);
+    color: var(--btn-text);
     cursor: pointer;
+    white-space: nowrap;
+}
+.btn:hover {
+    background: var(--btn-hover-bg);
+}
+.btn-primary {
+    background: var(--brand);
+    border-color: var(--brand-dark);
+    color: #fff;
+}
+.btn-primary:hover {
+    background: var(--brand-dark);
+}
+.btn-danger {
+    background: var(--danger-strong);
+    border-color: var(--danger);
+    color: #fff;
+}
+.btn-danger:hover {
+    background: var(--danger);
 }
 
-.toolbar button.active {
-    background: #5b1f1f;
-    border-color: #4c1d1d;
+.input {
+    padding: 3px 7px;
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 15px;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    background: #fff;
+    color: var(--text);
+}
+.input:focus {
+    outline: none;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+select.input {
+    padding: 2px 4px;
 }
 
-/* ---------- Своя таблица ---------- */
+/* Маленькие кнопки-значки (дерево, справочники) */
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    border-radius: 3px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    user-select: none;
+}
+.icon-btn:hover {
+    background: #e6e6e6;
+    color: var(--text-strong);
+}
+.icon-btn.danger:hover {
+    color: var(--danger-strong);
+}
+.icon-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Выпадающее меню из панели */
+.dropdown-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: 3px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    min-width: 160px;
+    color: var(--menu-text);
+}
+/* Меню «угол в угол» с кнопкой: верхний левый к нижнему левому */
+.dropdown.attached {
+    top: 100%;
+    border-top-left-radius: 0;
+}
+.dropdown.right.attached {
+    border-top-left-radius: 4px;
+    border-top-right-radius: 0;
+}
+.btn.menu-open {
+    background: var(--tb-ctrl-hover-bg);
+}
+.toolbar .dropdown-wrap .btn.menu-open {
+    border-bottom-left-radius: 0;
+}
+.toolbar .tb-right .dropdown-wrap .btn.menu-open {
+    border-bottom-left-radius: 3px;
+    border-bottom-right-radius: 0;
+}
+.btn .caret {
+    margin-left: 5px;
+    font-size: 8px;
+    opacity: 0.75;
+}
+.dropdown.right {
+    left: auto;
+    right: 0;
+}
+.dropdown button,
+.dropdown label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--menu-text);
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+}
+.dropdown button:disabled {
+    opacity: 0.45;
+    cursor: default;
+    background: transparent;
+}
+.dropdown button:not(:disabled):hover,
+.dropdown label:hover {
+    background: var(--menu-hover-bg);
+    color: var(--menu-hover-text);
+}
+.dropdown label input {
+    margin: 0;
+    accent-color: var(--brand);
+}
+.dropdown .dd-sep {
+    height: 1px;
+    margin: 3px 4px;
+    background: var(--menu-border);
+}
+.dropdown .dd-scroll {
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.dropdown .dd-note {
+    padding: 2px 12px;
+    font-size: 11px;
+    color: var(--menu-muted);
+}
+
+/* ============================================================
+   Таблица
+   ============================================================ */
 
 .table-wrap {
     flex: 1;
     overflow: auto;
     min-height: 0;
-    background: #fff;
+    background: var(--bg);
 }
 
 .data-table {
@@ -186,16 +845,16 @@ body {
     position: sticky;
     top: 0;
     z-index: 4;
-    background: #f0f0f0;
+    background: var(--grid-head-bg);
     padding: 4px 6px;
     text-align: center;
     font-weight: 600;
-    color: #333;
+    color: var(--grid-head-text);
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
     overflow: hidden;
-    --grid-shadow: inset -1px 0 0 #d8d8d8, inset 0 -1px 0 #cfcfcf;
+    --grid-shadow: inset -1px 0 0 var(--grid-head-line-v), inset 0 -1px 0 var(--grid-head-line-h);
     box-shadow: var(--grid-shadow);
 }
 
@@ -204,13 +863,13 @@ body {
 }
 
 .data-table th.sorted {
-    background: #e6e6e6;
+    background: var(--grid-head-sorted-bg);
 }
 
 .sort-arrow {
     margin-left: 3px;
     font-size: 9px;
-    color: #8a2828;
+    color: var(--brand);
 }
 
 .resize-handle {
@@ -227,8 +886,8 @@ body {
     vertical-align: middle;
     white-space: pre-line;
     overflow-wrap: break-word;
-    color: #222;
-    --grid-shadow: inset -1px 0 0 #e5e5e5, inset 0 -1px 0 #e5e5e5;
+    color: var(--text);
+    --grid-shadow: inset -1px 0 0 var(--grid-line), inset 0 -1px 0 var(--grid-line);
     box-shadow: var(--grid-shadow);
 }
 
@@ -241,22 +900,36 @@ body {
 }
 
 .data-table td.link span {
-    color: #0645ad;
+    color: var(--host-color);
+}
+/* Подчёркивание — только в режиме просмотра: там клик открывает карточку.
+   В режиме правки HOSTNAME — обычная ячейка (двойной клик — правка). */
+body.ui-dark-hostname .data-table:not(.edit-mode) td.link:hover span {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.data-table.edit-mode td.link {
+    cursor: default;
+}
+
+/* Значение сохраняется — уже новое, но приглушено */
+.data-table td span.pending {
+    opacity: 0.55;
 }
 
 .data-table tbody tr.row-hover td {
-    background: #f9e6ce;
-    --grid-shadow: inset -1px 0 0 #e8d9be, inset 0 0 0 #e8d9be;
+    background: var(--row-hover-bg);
+    --grid-shadow: inset -1px 0 0 var(--row-hover-line), inset 0 0 0 var(--row-hover-line);
 }
 .data-table tbody tr:hover td.dup-red {
-    --grid-shadow: inset -1px 0 0 #e5e5e5, inset 0 -1px 0 #e5e5e5;
+    --grid-shadow: inset -1px 0 0 var(--grid-line), inset 0 -1px 0 var(--grid-line);
 }
 
 .dup-red {
     position: relative;
-    background-color: #ffd6d6 !important;
-    border-right-color: #ffd6d6 !important;
-    border-bottom-color: #ffd6d6 !important;
+    background-color: var(--dup-bg) !important;
+    border-right-color: var(--dup-bg) !important;
+    border-bottom-color: var(--dup-bg) !important;
 }
 .dup-red::before {
     content: "";
@@ -265,182 +938,152 @@ body {
     left: -1px;
     right: 0;
     bottom: 0;
-    border-top: 1px solid #ffd6d6;
-    border-left: 1px solid #ffd6d6;
+    border-top: 1px solid var(--dup-bg);
+    border-left: 1px solid var(--dup-bg);
     pointer-events: none;
 }
 
-/* ---------- Дерево ---------- */
-
-.page {
-    flex: 1;
-    overflow: auto;
-    padding: 8px;
+/* Ячейка только что сохранена: короткая зелёная вспышка.
+   Зелёный — это слой поверх фона ячейки (inset-тень рисуется над фоном,
+   но под текстом), и гаснет он в прозрачность. Поэтому вспышка уходит
+   в тот фон, что у ячейки на самом деле: бежевый при наведении, цвет
+   значения из справочника, красный дубля — без захода в белый и без
+   рывка в конце. Анимируется зарегистрированное свойство --flash. */
+@property --flash {
+    syntax: "<color>";
+    inherits: false;
+    initial-value: transparent;
+}
+@keyframes cell-saved {
+    0%, 35% { --flash: var(--saved-bg); }
+    100% { --flash: transparent; }
+}
+.data-table td.cell-saved {
+    box-shadow: var(--grid-shadow), inset 0 0 0 100vmax var(--flash);
+    animation: cell-saved 1.4s ease-out;
+}
+.data-table.sticky-stuck td.sticky-edge.cell-saved {
+    box-shadow: var(--grid-shadow), var(--sticky-shadow), inset 0 0 0 100vmax var(--flash);
 }
 
-.tree {
-    flex: 1;
-    overflow: auto;
-    padding: 8px;
+/* Липкие столбцы IP и HOSTNAME */
+.data-table th.sticky {
+    z-index: 6;
+}
+.data-table td.sticky {
+    position: sticky;
+    z-index: 3;
+    background: var(--bg);
+}
+.data-table tbody tr.row-hover td.sticky {
+    background: var(--row-hover-bg);
+}
+.data-table.sticky-stuck td.sticky-edge,
+.data-table.sticky-stuck th.sticky-edge {
+    box-shadow: var(--grid-shadow), var(--sticky-shadow);
 }
 
-.node-row {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    padding: 1px 4px;
-    border-radius: 3px;
-    cursor: default;
-}
-
-.node-row:hover {
-    background: #f2f2f2;
-}
-
-.toggle {
-    width: 14px;
-    display: inline-block;
-    text-align: center;
-    color: #555;
-    cursor: pointer;
-}
-
-.kind {
-    color: #777;
-    font-size: 11px;
-    min-width: 78px;
-}
-
-.name {
-    flex: 1;
-}
-
-.count {
-    color: #555;
-    font-size: 12px;
-}
-
-.children {
-    margin-left: 18px;
-}
-
-.tree-add {
-    margin-left: auto;
-}
-
-.node-actions {
-    display: none;
-    margin-left: 8px;
-    gap: 2px;
-}
-
-.node-row:hover .node-actions {
-    display: inline-flex;
-}
-
-.node-actions .act {
-    cursor: pointer;
-    color: #555;
-    padding: 0 3px;
-    border-radius: 3px;
-    font-size: 12px;
-}
-
-.node-actions .act:hover {
-    background: #e0e0e0;
-    color: #111;
-}
-
-/* ---------- История ---------- */
-
-.history-table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 12px;
-}
-
-.history-table th,
-.history-table td {
-    border: 1px solid #ddd;
-    padding: 3px 5px;
-    vertical-align: top;
-}
-
-.history-table th {
-    background: #f7f7f7;
-    text-align: left;
-}
-
-.nowrap {
+/* Примечание: обрезка и подсказка */
+.note-text {
+    display: block;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-
-.change {
-    margin: 1px 0;
-}
-
-.field {
-    color: #555;
-    margin-right: 4px;
-}
-
-.old {
-    color: #777;
-    white-space: pre-wrap;
-}
-
-.arrow {
-    color: #777;
-    margin: 0 4px;
-}
-
-.new {
-    color: #111;
-    white-space: pre-wrap;
-}
-
-/* ---------- Вход ---------- */
-
-.login-wrap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.login-box {
-    width: 260px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.login-box h1 {
-    margin: 0;
-    font-size: 16px;
-    text-align: center;
-}
-
-.login-box input {
-    padding: 4px 6px;
-    font-size: 13px;
-}
-
-.login-box button {
-    padding: 4px 8px;
-    font-size: 13px;
-}
-
-.error {
-    color: #a00;
-    min-height: 14px;
+.note-tooltip {
+    position: fixed;
+    background: var(--bg);
+    border: 1px solid var(--grid-line);
+    padding: 3px 6px;
     font-size: 12px;
+    line-height: 1.35;
+    white-space: pre-line;
+    overflow-wrap: break-word;
+    z-index: 100;
+    max-height: 240px;
+    overflow-y: auto;
+    color: var(--text);
+    box-sizing: border-box;
+    pointer-events: none;
 }
 
-/* ---------- Карточка компьютера ---------- */
+/* Редактирование ячейки */
+.data-table td.cell-editing {
+    overflow: visible;
+}
+.data-table td.cell-editing:not(.sticky) {
+    position: relative;
+}
+.data-table td:not(.sticky):not(.checkbox-col) {
+    position: relative;
+}
+.data-table td.editing {
+    z-index: 20;
+    overflow: visible;
+    box-shadow: none;
+}
+.cell-edit {
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--brand);
+    padding: 2px 5px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    background: var(--bg);
+    z-index: 10;
+    margin: 0;
+    overflow: hidden;
+    resize: none;
+    white-space: pre-line;
+}
+
+/* Чекбоксы выделения. Ширина столбца — CSS-переменная --cb-w,
+   app.js плавно меняет её 0 ↔ 30px при входе/выходе из режима правки. */
+.data-table {
+    --cb-w: 0px;
+}
+.data-table col.cb-col {
+    width: var(--cb-w);
+}
+.data-table .checkbox-col {
+    padding: 0 !important;
+    text-align: center;
+    line-height: 0;
+    overflow: hidden;
+}
+thead .checkbox-col {
+    position: sticky;
+    left: 0;
+    z-index: 6; /* как у липких th: HOSTNAME идёт позже в DOM и перекрывает тень чекбоксов */
+    background: var(--grid-head-bg);
+}
+.data-table td.checkbox-col {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--bg);
+}
+/* Режим правки выключен и столбец свернулся — ни чекбоксов, ни линий */
+.data-table.cb-hidden .checkbox-col {
+    visibility: hidden;
+    box-shadow: none;
+}
+/* Тень, пока под чекбоксами едут обычные столбцы (снимается, когда приклеились HOSTNAME/IP) */
+.data-table.checkbox-stuck .checkbox-col {
+    box-shadow: var(--grid-shadow), var(--sticky-shadow);
+}
+.checkbox-col input[type="checkbox"] {
+    display: block;
+    margin: 0 auto;
+    cursor: pointer;
+}
+
+/* ============================================================
+   Карточка компьютера
+   ============================================================ */
 
 .card-overlay {
     position: fixed;
@@ -457,10 +1100,10 @@ body {
     top: 0;
     left: 0;
     bottom: 0;
-    width: 400px;
-    background: #fff;
-    border-right: 1px solid #ccc;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12);
+    width: 440px;
+    background: var(--bg);
+    /* без светлой рамки справа: она резала тёмное меню сверху */
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
     display: flex;
     flex-direction: column;
     font-size: 13px;
@@ -471,31 +1114,37 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 46px;
+    height: 42px;
     padding: 0 40px;
-    border-bottom: 1px solid #ddd;
-    background: #f7f7f7;
+    background: var(--nav-bg);
     text-align: center;
     flex: 0 0 auto;
 }
 
+/* Шапка карточки — цвет меню: самая тёмная плоскость карточки,
+   серые группы ниже читаются как её подразделы. */
 .card-hostname {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 700;
-    color: #8a2828;
+    color: #fff;
     overflow-wrap: anywhere;
+}
+.card-hostname .copy-ico {
+    color: var(--nav-text);
 }
 
 .card-hostname .card-edit {
-    margin-left: 6px;
+    margin-left: 3px;
     font-size: 14px;
     font-weight: 400;
-    color: #999;
+    color: var(--nav-text);
+    opacity: 0.8;
     cursor: pointer;
 }
 
 .card-hostname .card-edit:hover {
-    color: #8a2828;
+    color: #fff;
+    opacity: 1;
 }
 
 .card-hostname-edit {
@@ -511,9 +1160,10 @@ body {
     padding: 0 8px;
     font-size: 15px;
     font-weight: 700;
-    color: #8a2828;
+    font-family: inherit;
+    color: var(--text-strong);
     text-align: center;
-    border: 1px solid #cf9f9f;
+    border: 1px solid var(--brand-focus);
     border-radius: 3px;
 }
 
@@ -524,12 +1174,12 @@ body {
     transform: translateY(-50%);
     cursor: pointer;
     padding: 0 4px;
-    color: #555;
-    font-size: 16px;
+    color: var(--nav-text);
+    font-size: 18px;
 }
 
 .card-close:hover {
-    color: #000;
+    color: #fff;
 }
 
 .card-body {
@@ -544,14 +1194,14 @@ body {
 }
 .card-table td {
     padding: 4px 10px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border);
     vertical-align: top;
 }
 .card-table .ct-label {
     width: 100px;
-    color: #111;
-    background: #f5f5f5;
-    border-right: 1px solid #ddd;
+    color: var(--text-strong);
+    background: var(--surface-alt);
+    border-right: 1px solid var(--border);
     white-space: nowrap;
 }
 .card-table .ct-value {
@@ -561,16 +1211,103 @@ body {
 .card-table tr:last-child td {
     border-bottom: none;
 }
-.card-table tr:hover td {
-    background-color: #f9e6ce;
+.card-table tr:not(.ct-group):hover td {
+    background-color: var(--row-hover-bg);
+}
+/* Заголовок группы полей (UI_OPTIONS.cardGroups): ровно серый, темнее
+   ячеек-подписей (#f5f5f5), светлее шапки карточки. */
+.card-table tr.ct-group td {
+    padding: 4px 10px;
+    background: var(--gray-group);
+    border-top: 1px solid var(--gray-line);
+    border-bottom: 1px solid var(--gray-line);
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 600;
+}
+.card-table tr.ct-editable {
+    cursor: default;
+}
+.card-table tr.ct-saved td.ct-value {
+    box-shadow: inset 0 0 0 100vmax var(--flash);
+    animation: cell-saved 1.4s ease-out;
+}
+
+/* Значение, которое копируется по клику: без подсветки, при наведении
+   справа от него появляется значок копирования (в тон подсветки строки) */
+.copy-val {
+    cursor: pointer;
+}
+.copy-line {
+    display: block;
+}
+.copy-ico {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    margin-left: 5px;
+    vertical-align: -2px;
+    color: var(--copy-ico);
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+.copy-val:hover .copy-ico {
+    opacity: 1;
+}
+
+/* Правка значения в карточке — редактор поверх ячейки, как в таблице */
+.card-table td.ct-value {
+    position: relative;
+}
+.card-table td.ct-value.editing {
+    overflow: visible;
+}
+.card-edit-input {
+    font-size: 13px;
+    padding: 3px 9px;
+    z-index: 5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .card-section {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 10px 4px;
     font-weight: 600;
     color: #444;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--border);
     margin-top: 0;
+}
+.card-section.toggle-sec {
+    cursor: pointer;
+    user-select: none;
+    padding-bottom: 7px;
+}
+.card-section.toggle-sec:hover {
+    background: var(--row-hover-bg);
+}
+/* Число изменений — серым блочком, стрелка «развернуть» — справа */
+.sec-count {
+    min-width: 18px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border-radius: var(--radius);
+    background: #dedede;
+    color: var(--text-strong);
+    font-size: 11px;
+    line-height: 16px;
+    text-align: center;
+}
+.sec-chevron {
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+    color: var(--text-secondary);
+    transition: transform 0.12s;
+}
+.card-section.open .sec-chevron {
+    transform: rotate(180deg);
 }
 
 .card-sec-body {
@@ -578,322 +1315,1097 @@ body {
 }
 
 .card-history {
-    padding: 3px 0;
+    border-top: 1px solid #eee;
+    padding: 4px 0;
 }
-
+.card-history:first-child {
+    border-top: none;
+}
 .card-history-head {
-    color: #777;
-}
-
-.muted {
-    color: #999;
-}
-
-/* Липкие столбцы IP и HOSTNAME */
-.data-table th.sticky {
-    z-index: 6;
-}
-.data-table td.sticky {
-    position: sticky;
-    z-index: 3;
-    background: #fff;
-}
-.data-table tbody tr.row-hover td.sticky {
-    background: #f9e6ce;
-}
-.data-table.sticky-stuck td.sticky-edge,
-.data-table.sticky-stuck th.sticky-edge {
-    box-shadow: var(--grid-shadow), 3px 0 4px rgba(0, 0, 0, 0.12);
-}
-
-/* Примечание: обрезка и подсказка */
-.note-text {
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.note-tooltip {
-    position: fixed;
-    background: #fff;
-    border: 1px solid #e5e5e5;
-    padding: 3px 6px;
+    color: var(--text-secondary);
     font-size: 12px;
-    line-height: 1.35;
-    white-space: pre-line;
-    overflow-wrap: break-word;
-    z-index: 100;
-    max-height: 240px;
-    overflow-y: auto;
-    color: #222;
-    box-sizing: border-box;
-    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+}
+/* Что изменилось — жирным */
+.card-history .changes .field {
+    font-weight: 600;
 }
 
-/* Редактирование ячейки */
-.data-table td.cell-editing {
-    overflow: visible;
-}
-.data-table td.cell-editing:not(.sticky) {
-    position: relative;
-}
-.data-table td:not(.sticky) {
-    position: relative;
-}
-.data-table td.editing {
-    z-index: 20;
-    overflow: visible;
-    box-shadow: none;
-}
-.cell-edit {
-    position: absolute;
-    top: 0;
-    left: 0;
-    box-sizing: border-box;
-    border: 1px solid #8a2828;
-    padding: 2px 5px;
-    font-size: 12px;
-    font-family: inherit;
-    outline: none;
-    background: #fff;
-    z-index: 10;
-    margin: 0;
-    overflow: hidden;
-    resize: none;
-    white-space: pre-line;
-}
+/* ============================================================
+   Дерево
+   ============================================================ */
 
-/* ---------- Справочники ---------- */
-.choices-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-}
-.choice-group {
-    min-width: 180px;
-    max-width: 280px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+.page {
+    flex: 1;
+    overflow: auto;
     padding: 8px;
 }
-.choice-field-name {
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 6px;
-    font-size: 13px;
-}
-.choice-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 0;
-}
-.choice-color {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    cursor: pointer;
-    background: none;
-}
-.choice-value {
-    flex: 1;
-    font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.choice-clear {
-    cursor: pointer;
-    color: #999;
-    font-size: 11px;
-    padding: 0 2px;
-}
-.choice-clear:hover {
-    color: #333;
-}
-.choice-style-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    font-size: 11px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    cursor: pointer;
-    color: #666;
-    user-select: none;
-}
-.choice-style-btn:hover {
-    background: #eee;
-}
-.choice-style-btn.active {
-    background: #8a2828;
-    color: #fff;
-    border-color: #8a2828;
-}
-.field-defs-section {
-    margin-top: 20px;
-    border-top: 1px solid #ddd;
-    padding-top: 12px;
-}
-.field-def-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 0;
-    font-size: 12px;
-}
-.field-def-label {
-    font-weight: 500;
-}
-.field-def-add {
-    display: flex;
-    gap: 4px;
-    margin-top: 8px;
-}
-.field-def-add input {
-    padding: 2px 5px;
-    font-size: 12px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-}
-.field-def-add button {
-    padding: 2px 8px;
-    font-size: 12px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    background: #f5f5f5;
-    cursor: pointer;
-}
-.field-def-add button:hover {
-    background: #e8e8e8;
-}
-.choice-add {
-    display: flex;
-    gap: 4px;
-    margin-top: 6px;
-}
-.choice-add input {
-    flex: 1;
-    padding: 2px 5px;
-    font-size: 12px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-}
-.choice-add button {
-    padding: 2px 8px;
-    font-size: 12px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    background: #f5f5f5;
-    cursor: pointer;
-}
-.choice-add button:hover {
-    background: #e8e8e8;
-}
-/* Чекбоксы выделения */
-.checkbox-col {
-    width: 30px;
-    min-width: 30px;
-    max-width: 30px;
-    text-align: center;
-    padding: 2px !important;
-    line-height: 0;
-}
-thead .checkbox-col {
-    position: sticky;
-    left: 0;
-    z-index: 7;
-    background: #f5f5f5;
-}
-.data-table td.checkbox-col {
-    position: sticky;
-    left: 0;
-    z-index: 3;
-    background: #fff;
-}
-.checkbox-col input[type="checkbox"] {
-    display: block;
-    margin: 0 auto;
-    cursor: pointer;
-}
 
-/* Меню действий с выбранными строками */
-.selection-wrap {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    margin-left: 6px;
-}
-.selection-menu-btn {
-    width: 10px;
-    height: 20px;
-    padding: 0;
-    font-size: 8px;
-    line-height: 1;
-    border: 1px solid #661e1e;
-    border-radius: 3px;
-    background: #772525;
-    color: #fff;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.selection-menu-btn:hover {
-    background: #a84848;
-    border-color: #8a2828;
-}
-.selection-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    background: #8a2828;
-    border: 1px solid #661e1e;
-    border-radius: 4px;
-    padding: 4px;
+.tree {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    z-index: 100;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-    min-width: 160px;
-}
-.selection-menu button {
-    padding: 4px 12px;
-    font-size: 12px;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: #f1d7d7;
-    cursor: pointer;
-    text-align: left;
-    white-space: nowrap;
-}
-.selection-menu button:hover {
-    background: #a84848;
-    color: #fff;
+    overflow: hidden;
+    padding: 10px 12px 12px;
+    font-size: 13px;
 }
 
-/* Кнопки в справочниках */
-.choice-reset {
+/* ------------------------------------------------------------
+   Рамка блока (Дерево, История, Справочники, польз. поля).
+   Блок обрезан по скруглению, а рамка рисуется ПОВЕРХ содержимого
+   псевдоэлементом: фон шапки уходит под линию до внешнего края, поэтому
+   между дугой рамки и шапкой нет светлого просвета, и рамку не
+   перекрывают ни строки, ни полоса прокрутки. Цвет — --frame.
+   ------------------------------------------------------------ */
+.tree-grid,
+.history-frame,
+.st-block,
+.fd-panel {
+    --frame: var(--gray-line);
+    --frame-head: var(--frame);     /* цвет рамки на высоте шапки */
+    --head-h: 24px;                 /* высота шапки блока вместе с её нижней линией */
+    position: relative;
+    z-index: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.st-block,
+.fd-panel {
+    --head-h: 25px;
+}
+/* Акцентная шапка: боковые и верхняя линии рамки на высоте шапки — цвета
+   шапки, иначе серая рамка вокруг цветной шапки делает её «на пиксель уже»
+   и портит углы. */
+.tree-grid.accent-head,
+.history-frame.accent-head,
+.choices-page.accent-head .st-block,
+.choices-page.accent-head .fd-panel {
+    --frame-head: var(--brand);
+}
+/* Кольцо рамки: фон-градиент (шапка / остальное), вырезанный маской по
+   внутреннему краю — так у рамки два цвета и сохраняются скругления */
+.tree-grid::after,
+.history-frame::after,
+.st-block::after,
+.fd-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: linear-gradient(to bottom, var(--frame-head) 0 var(--head-h), var(--frame) var(--head-h)) border-box;
+    -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) padding-box exclude, linear-gradient(#000 0 0);
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Дерево — таблица «Расположение | ПК» в манере главной таблицы:
+   те же серые шапки и линии сетки, строки плотные. Ширина из app.js
+   (computeTreeWidth); справа — место под плашку действий. */
+.tree-wrap {
+    position: relative;
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-right: 190px;
+}
+.tree-grid {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+/* Прокрутка — внутри рамки, как в Истории */
+.tree-scroll {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.tg-head {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: flex;
+    height: 24px;
+    background: var(--grid-head-bg);
+    box-shadow: inset 0 -1px 0 var(--grid-head-line-h);
+    color: var(--grid-head-text);
+    font-size: 12px;
+    font-weight: 600;
+}
+.tg-head .tg-name {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+}
+.tg-head .tg-count {
+    flex: 0 0 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 1px 0 0 var(--grid-head-line-v);
+}
+
+/* Строка узла. Числа — те же, что в TREE (app.js):
+   поле слева 6 + сдвиг 18 на уровень, стрелка 12, промежутки 5, значок 14. */
+.node-row {
+    --lvl: 0;
+    position: relative;
+    display: flex;
+    height: 24px;
+    border-bottom: 1px solid var(--grid-line);
+    cursor: default;
+}
+.node-row.has-children {
     cursor: pointer;
-    color: #999;
+}
+.node-row:hover {
+    background: var(--row-hover-bg);
+}
+.node-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 10px 0 calc(6px + var(--lvl) * 18px);
+}
+
+/* Адрес — строка-группа: серая, линии сверху и снизу темнее обычных,
+   без вертикальной линии перед числом */
+/* Текущий адрес закрепляется под шапкой, пока видны его строки */
+.node-row.kind-building {
+    position: sticky;
+    top: 24px;
+    z-index: 3;
+    background: var(--gray-group);
+    border-top: 1px solid var(--group-line);
+    border-bottom-color: var(--group-line);
+    margin-top: -1px;
+}
+.node-row.kind-building .node-count {
+    box-shadow: none;
+}
+.node-row.kind-building:hover {
+    background: var(--row-hover-bg);
+}
+.tg-head + .node .node-row.kind-building,
+.tg-head + .tree-form + .node .node-row.kind-building {
+    border-top: none;
+    margin-top: 0;
+}
+
+.node-toggle {
+    flex: 0 0 12px;
+    width: 12px;
+    height: 12px;
+    color: var(--text-secondary);
+    transition: transform 0.1s;
+}
+.node-toggle svg {
+    display: block;
+    width: 12px;
+    height: 12px;
+}
+.node-toggle.open {
+    transform: rotate(90deg);
+}
+
+.node-icon {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--text-soft);
+}
+/* Значок адреса — всегда тёмно-красный, при любой схеме */
+.node-row.kind-building .node-icon {
+    color: #9b1c1c;
+}
+
+.node-title {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--text);
+}
+.node-row.kind-building .node-title {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.node-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Номер кабинета — колонкой */
+.node-code {
+    flex: 0 0 auto;
+    min-width: 30px;
+    margin-right: 6px;
+    color: var(--text-strong);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.node-title mark {
+    background: #fbe3a8;
+    color: inherit;
+}
+
+/* Столбец «ПК» */
+.node-count {
+    flex: 0 0 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 1px 0 0 var(--grid-line);
+}
+.node-count .cnt {
+    min-width: 22px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: var(--radius);
+    background: #e6e6e6;
+    color: var(--text-strong);
+    font-size: 12px;
+    line-height: 17px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+/* У адреса — просто число, чуть крупнее, без блочка */
+.node-row.kind-building .node-count .cnt {
+    background: transparent;
     font-size: 13px;
-    padding: 0 2px;
+    font-weight: 600;
 }
-.choice-reset:hover {
-    color: #333;
+/* У кабинетов нет вертикальной линии перед числом */
+.node-row.kind-room .node-count {
+    box-shadow: none;
 }
-.choice-delete {
-    cursor: pointer;
-    color: #999;
+.node-count .cnt.zero,
+.node-row.kind-building .node-count .cnt.zero {
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* Действия — плашка справа от таблицы, у строки под курсором
+   (одна на всё дерево, см. setTreeHover). padding-left — «мостик»,
+   чтобы мышь доходила до кнопок. */
+.tree-actions {
+    position: absolute;
+    left: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 6px;
+    z-index: 5;
+}
+.tree-actions .na-box {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 1px;
+    background: #fff;
+    border: 1px solid #cfcfcf;
+    border-radius: var(--radius);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.tree-actions .na-sep {
+    width: 1px;
+    height: 14px;
+    margin: 0 2px;
+    background: #e0e0e0;
+}
+.tree-actions .icon-btn {
+    min-width: 22px;
+    height: 20px;
+    font-size: 12px;
+}
+.tree-actions .icon-btn svg {
+    width: 14px;
+    height: 14px;
+}
+.node-row.is-hover {
+    background: var(--row-hover-bg);
+}
+/* Под курсором вертикальный разделитель и блочок числа — в тон подсветки,
+   как в главной таблице */
+.node-row:hover .node-count,
+.node-row.is-hover .node-count {
+    box-shadow: inset 1px 0 0 var(--row-hover-line);
+}
+.node-row.kind-room:hover .node-count,
+.node-row.kind-room.is-hover .node-count,
+.node-row.kind-building:hover .node-count,
+.node-row.kind-building.is-hover .node-count {
+    box-shadow: none;
+}
+.node-row:hover .node-count .cnt:not(.zero),
+.node-row.is-hover .node-count .cnt:not(.zero) {
+    background: var(--row-hover-chip);
+}
+.node-row.kind-building:hover .node-count .cnt,
+.node-row.kind-building.is-hover .node-count .cnt {
+    background: transparent;
+}
+
+/* Форма добавления/правки — строкой под узлом, со сдвигом его детей */
+.tree-form {
+    --lvl: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px 4px calc(6px + var(--lvl) * 18px + 17px);
+    background: #f7f7f7;
+    border-bottom: 1px solid var(--grid-line);
+    font-size: 12px;
+}
+/* «Куда» — отдельной строкой: путь бывает длинным */
+.tree-form .tf-parent {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+.tree-form .tf-title {
+    color: var(--text-secondary);
+}
+.tree-form .input {
+    padding: 2px 6px;
+}
+.tree-form .tf-code {
+    width: 60px;
+}
+.tree-form .tf-name {
+    flex: 1 1 140px;
+    min-width: 120px;
+}
+.tree-form .btn {
+    padding: 2px 9px;
+}
+.tree-form .tf-buttons {
+    display: flex;
+    gap: 5px;
+}
+.tree-form .tf-error {
+    flex-basis: 100%;
+    color: var(--danger);
+}
+
+.tree-empty {
+    color: var(--text-muted);
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--grid-line);
+}
+
+/* ============================================================
+   История
+   ============================================================ */
+
+/* История — в манере главной таблицы: серая шапка, сетка на всех ячейках.
+   «Время», «Объект», «Пользователь» — по содержимому, «Изменения» — остальное.
+   Записи сгруппированы по дням: строка дня — серая, с датой. */
+/* Отступ вокруг — снаружи прокрутки: над липкой шапкой ничего не проезжает */
+.history-page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px 12px;
+}
+/* Рамка со скруглением — у обёртки области прокрутки: шапка стоит на
+   месте, рамка и все четыре скругления видны всегда (углы полосы
+   прокрутки обрезаются по дуге и не закрывают рамку). */
+.history-frame {
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.history-frame.empty::after {
+    display: none;
+}
+.history-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+.history-table {
+    --h-head: 24px;
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    font-size: 13px;
+}
+.history-table th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: var(--h-head);
+    box-sizing: border-box;
+    padding: 0 8px;
+    background: var(--grid-head-bg);
+    box-shadow: inset -1px 0 0 var(--grid-head-line-v), inset 0 -1px 0 var(--grid-head-line-h);
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--grid-head-text);
+    white-space: nowrap;
+}
+.history-table th:last-child {
+    box-shadow: inset 0 -1px 0 var(--grid-head-line-h);
+}
+.history-table td {
+    padding: 3px 8px;
+    vertical-align: top;
+    color: var(--text);
+    border-right: 1px solid var(--grid-line);
+    border-bottom: 1px solid var(--grid-line);
+    line-height: 1.4;
+}
+.history-table td:last-child {
+    border-right: none;
+}
+.history-table tbody:last-child tr:last-child td {
+    border-bottom: none;
+}
+/* Время и пользователь — по центру, время с запасом от края */
+.history-table th.h-time,
+.history-table th.h-user {
+    text-align: center;
+}
+.history-table td.h-time {
+    padding: 3px 16px;
+    text-align: center;
+}
+.history-table td.h-user {
+    padding: 3px 12px;
+    text-align: center;
+}
+.history-table tbody tr:not(.h-day):hover td {
+    background: var(--row-hover-bg);
+    border-right-color: var(--row-hover-line);
+}
+.history-table tbody tr:not(.h-day):hover td:last-child {
+    border-right-color: transparent;
+}
+.history-table .h-time,
+.history-table .h-user {
+    width: 1%;
+    white-space: nowrap;
+}
+.history-table td.h-time {
+    font-variant-numeric: tabular-nums;
+}
+.history-table .h-obj {
+    width: 1%;
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Строка дня: прилипает под шапкой */
+.history-table tr.h-day td {
+    position: sticky;
+    top: var(--h-head);
+    z-index: 2;
+    padding: 3px 8px;
+    background: var(--gray-group);
+    border-bottom: 1px solid var(--gray-line);
+    font-weight: 600;
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+}
+/* Число записей за день — блочком */
+.h-day-count {
+    display: inline-block;
+    margin-left: 8px;
+    min-width: 18px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border-radius: var(--radius);
+    background: #d6d6d6;
+    color: var(--text-strong);
     font-size: 11px;
-    padding: 0 2px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+    vertical-align: 1px;
 }
-.choice-delete:hover {
-    color: #c00;
+
+.history-table .h-obj-kind {
+    color: var(--text-secondary);
+    margin-right: 5px;
+}
+/* Имя объекта — жирным (вид объекта, «Расположение», — обычным) */
+.history-table .h-link,
+.history-table .h-other {
+    font-weight: 600;
+}
+.history-table .h-obj-kind {
+    font-weight: 400;
+}
+.history-table .h-link {
+    cursor: pointer;
+}
+.history-table .h-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* Изменения: подпись поля колонкой, значения рядом */
+.changes {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 10px;
+}
+.changes .field {
+    margin: 0;
+    color: var(--text);
+}
+.changes .field::after {
+    content: ":";
+}
+.ch-val {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.change {
+    margin: 1px 0;
+}
+
+.field {
+    color: var(--text-secondary);
+    margin-right: 4px;
+}
+
+.old {
+    color: var(--text-soft);
+    white-space: pre-wrap;
+    text-decoration: line-through;
+    text-decoration-color: rgba(0, 0, 0, 0.25);
+}
+
+.arrow {
+    color: var(--text-soft);
+    margin: 0 4px;
+}
+
+.new {
+    color: var(--text-strong);
+    white-space: pre-wrap;
+}
+
+.empty-note {
+    color: var(--text-muted);
+    padding: 4px 2px;
+}
+
+/* ============================================================
+   Справочники
+   ============================================================ */
+
+.choices-page {
+    padding: 10px 12px 30px;
+}
+
+/* Блоки столбцов — в порядке таблицы, слева направо и сверху вниз.
+   Манера главной таблицы: серая шапка, линии сетки, плотные строки. */
+.st-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    align-items: start;
+    gap: 10px;
+}
+.st-block {
+    background: #fff;
+    font-size: 12px;
+}
+.st-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 8px;
+    background: var(--grid-head-bg);
+    border-bottom: 1px solid var(--grid-head-line-h);
+    color: var(--grid-head-text);
+}
+.st-title {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.st-tag {
+    padding: 0 4px;
+    border: 1px solid #cfcfcf;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 14px;
+}
+.st-head-n {
+    margin-left: auto;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Строка: значение | число ПК | кнопки оформления | сброс/удаление */
+.st-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 25px;
+    padding: 0 6px 0 8px;
+    border-bottom: 1px solid var(--grid-line);
+}
+.st-row:hover {
+    background: var(--row-hover-bg);
+}
+/* Первая строка — весь столбец: отделена линией потемнее */
+.st-colrow {
+    background: #f7f7f7;
+    border-bottom-color: var(--gray-line);
+}
+.st-colrow .st-val span {
+    color: var(--text-secondary);
+}
+.st-val {
+    flex: 1;
+    min-width: 0;
+    /* запас слева под блочок: обрезка по его краю, а не по тексту */
+    padding-left: 5px;
+    margin-left: -5px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text);
+}
+/* Значение с цветом фона — маленьким цветным блочком */
+.st-val span.boxed {
+    display: inline-block;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0 5px;
+    margin-left: -5px;
+    border-radius: var(--radius);
+    line-height: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+.st-n {
+    flex: 0 0 26px;
+    text-align: right;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+.st-act {
+    flex: 0 0 14px;
+    text-align: center;
+}
+.st-reset,
+.st-del {
+    cursor: pointer;
+    color: var(--text-muted);
+}
+.st-reset:hover {
+    color: var(--text-strong);
+}
+.st-del:hover {
+    color: var(--danger-strong);
+}
+.st-values {
+    max-height: 400px;
+    overflow-y: auto;
+}
+.st-values .st-row:last-child {
+    border-bottom: none;
+}
+.st-empty {
+    padding: 4px 8px;
+    color: var(--text-muted);
+}
+.st-add {
+    display: flex;
+    gap: 4px;
+    padding: 4px 6px;
+    border-top: 1px solid var(--grid-line);
+    background: #fafafa;
+}
+.st-add .input {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 6px;
+}
+.st-add .btn {
+    padding: 2px 9px;
+}
+
+/* Кнопки оформления: A — цвет текста, квадрат — фон, Ж, К */
+.sc {
+    display: inline-flex;
+    gap: 2px;
+    flex: 0 0 auto;
+}
+.sc-btn {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    box-sizing: border-box;
+    padding: 0;
+    border: 1px solid #cfcfcf;
+    border-radius: var(--radius);
+    background: #fff;
+    color: #444;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+}
+.sc-btn:hover {
+    border-color: #aaa;
+}
+.sc-btn.on {
+    background: var(--brand);
+    border-color: var(--brand-dark);
+    color: #fff;
+}
+.sc.disabled .sc-btn {
+    cursor: default;
+    opacity: 0.6;
+}
+.sc-btn input[type="color"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+}
+.sc-letter {
+    font-weight: 700;
+    font-size: 11px;
+    line-height: 11px;
+}
+.sc-bar {
+    width: 12px;
+    height: 3px;
+    margin-top: 1px;
+}
+.sc-swatch {
+    width: 12px;
+    height: 12px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+/* Цвет не задан — пунктир, а не чёрный/белый квадрат */
+.sc-color:not(.set) .sc-bar {
+    background: repeating-linear-gradient(90deg, #bbb 0 2px, transparent 2px 4px);
+}
+.sc-color:not(.set) .sc-letter {
+    color: #999;
+}
+.sc-color:not(.set) .sc-swatch {
+    background: #fff;
+    box-shadow: none;
+    border: 1px dashed #bbb;
+    box-sizing: border-box;
+}
+
+/* Пользовательские поля */
+.fd-panel {
+    max-width: 600px;
+    margin-top: 14px;
+    font-size: 12px;
+}
+.fd-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 25px;
+    box-sizing: border-box;
+    padding: 0 8px;
+    background: var(--grid-head-bg);
+    border-bottom: 1px solid var(--grid-head-line-h);
+}
+.fd-title {
+    font-weight: 600;
+    color: var(--text-strong);    white-space: nowrap;
+}
+.fd-sub {
+    color: var(--text-secondary);
+}
+.fd-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.fd-table th {
+    padding: 3px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--grid-line);
+}
+.fd-table td {
+    padding: 2px 8px;
+    height: 20px;
+    border-bottom: 1px solid var(--grid-line);
+}
+.fd-table th + th,
+.fd-table td + td {
+    border-left: 1px solid var(--grid-line);
+}
+.fd-table tr:hover td {
+    background: var(--row-hover-bg);
+}
+.fd-rename {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 1px 5px;
+}
+.fd-key {
+    color: var(--text-secondary);
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 11.5px;
+}
+.fd-actions {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+}
+.fd-actions .icon-btn {
+    height: 18px;
+}
+.fd-actions .icon-btn.off {
+    opacity: 0.3;
+    pointer-events: none;
+}
+.fd-table tr.reserved .fd-label {
+    color: var(--text-muted);
+}
+.field-def-warn {
+    margin-left: 8px;
+    color: var(--danger);
+    font-size: 11px;
+}
+.fd-empty {
+    padding: 5px 8px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--grid-line);
+}
+.fd-add {
+    display: flex;
+    gap: 4px;
+    padding: 4px 6px;
+    background: #fafafa;
+}
+.fd-add .input {
+    padding: 2px 6px;
+}
+.fd-add .btn {
+    padding: 2px 9px;
+}
+.fd-add-label {
+    flex: 1;
+}
+.fd-add-key {
+    width: 140px;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+/* ============================================================
+   Акценты (личные настройки)
+   ============================================================ */
+
+/* Акцентная шапка — Дерево, История, Справочники; включается
+   шестерёнкой на панели каждой страницы */
+.tree-grid.accent-head .tg-head,
+.history-table.accent-head th,
+.choices-page.accent-head .st-head,
+.choices-page.accent-head .fd-head {
+    background: var(--brand);
+    color: #fff;
+    --grid-head-line-h: var(--brand-dark);
+    --grid-head-line-v: rgba(255, 255, 255, 0.22);
+    border-bottom-color: var(--brand-dark);
+}
+.tree-grid.accent-head .tg-head .tg-count {
+    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.22);
+}
+.choices-page.accent-head .st-title,
+.choices-page.accent-head .fd-title {
+    color: #fff;
+}
+.choices-page.accent-head .st-head-n,
+.choices-page.accent-head .fd-sub {
+    color: var(--nav-text);
+}
+.choices-page.accent-head .st-tag {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: var(--nav-text);
+}
+
+/* Акцентные границы блоков (как у окон Windows 11): та же толщина,
+   только цвет — --brand-accent. Не кнопки, не сетка таблиц, не главная
+   таблица и не карточка ПК. */
+body.accent-borders .tree-grid,
+body.accent-borders .history-frame,
+body.accent-borders .st-block,
+body.accent-borders .fd-panel {
+    --frame: var(--brand-accent);
+}
+
+/* ============================================================
+   Диалог подтверждения и всплывающие сообщения
+   ============================================================ */
+
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.22);
+    z-index: 200;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 18vh;
+}
+.dialog {
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+.dialog-body {
+    padding: 16px 18px 14px;
+    line-height: 1.45;
+    white-space: pre-line;
+}
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--surface-head);
+    border-top: 1px solid #eee;
+}
+
+.toasts {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    pointer-events: none;
+}
+.toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 420px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    background: #2b2b2b;
+    color: #f2f2f2;
+    font-size: 12px;
+    line-height: 1.4;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+    pointer-events: auto;
+    white-space: pre-line;
+    animation: toast-in 0.18s ease-out;
+}
+.toast.error {
+    background: #8a2020;
+    color: #fff;
+}
+.toast.success::before {
+    content: "✓";
+    color: #8fd18f;
+    font-weight: 700;
+}
+.toast .toast-x {
+    margin-left: 4px;
+    opacity: 0.7;
+    cursor: pointer;
+}
+.toast .toast-x:hover {
+    opacity: 1;
+}
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   Вход
+   ============================================================ */
+
+body.login-page {
+    background: #f4f4f4;
+}
+.login-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.login-box {
+    width: 280px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.login-head {
+    padding: 14px 20px;
+    background: var(--nav-bg);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.02em;
+}
+.login-head span {
+    margin-left: 6px;
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--nav-text);
+}
+.login-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px 20px 20px;
+}
+.login-fields .input {
+    padding: 6px 9px;
+    font-size: 13px;
+}
+.login-fields .btn {
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+.error {
+    color: var(--danger);
+    min-height: 14px;
+    font-size: 12px;
+}
+.login-fields .error:empty {
+    display: none;
 }

@@ -1,0 +1,1798 @@
+diff --git a/frontend/static/app.css b/frontend/static/app.css
+index 267fefa..c5595b6 100644
+--- a/frontend/static/app.css
++++ b/frontend/static/app.css
+@@ -10,11 +10,13 @@
+     --brand-dark: #7a2222;
+     --brand-rgb: 138, 40, 40;       /* для полупрозрачных подсветок */
+     --brand-accent: #b54848;        /* линия режима правки, значки */
+-    --brand-tint: #f5eeee;          /* светлый фон: заголовки групп, шапки блоков */
+-    --brand-tint-line: #e6d8d8;
+-    --brand-soft: #f6e4e4;          /* наведение в меню */
+     --brand-focus: #b98080;         /* рамка поля в фокусе */
+ 
++    /* Серые плоскости: шапки, группы, подписи — одна шкала для всех разделов */
++    --gray-head: #f0f0f0;           /* шапка таблиц и панель (как у главной таблицы) */
++    --gray-group: #e8e8e8;          /* строка-группа: адрес, день, группа карточки */
++    --gray-line: #d8d8d8;           /* линии шапок и групп */
++
+     /* Верхнее меню */
+     --nav-bg: #8a2828;
+     --nav-hover-bg: #993636;
+@@ -93,9 +95,6 @@ html[data-theme="green"] {
+     --brand-dark: #244b31;
+     --brand-rgb: 46, 94, 62;
+     --brand-accent: #4b8a5f;
+-    --brand-tint: #edf3ef;
+-    --brand-tint-line: #d3e2d8;
+-    --brand-soft: #e2eee5;
+     --brand-focus: #7fa98c;
+     --nav-bg: #2e5e3e;
+     --nav-hover-bg: #3a6c4a;
+@@ -103,41 +102,32 @@ html[data-theme="green"] {
+     --nav-text: #d5e8da;
+ }
+ html[data-theme="blue"] {
+-    --brand: #2a4a7a;
+-    --brand-dark: #213c65;
+-    --brand-rgb: 42, 74, 122;
+-    --brand-accent: #4a70a8;
+-    --brand-tint: #eef2f8;
+-    --brand-tint-line: #d5dfed;
+-    --brand-soft: #e2e9f4;
+-    --brand-focus: #7f9cc4;
+-    --nav-bg: #2a4a7a;
+-    --nav-hover-bg: #365888;
+-    --nav-active-bg: #466898;
+-    --nav-text: #d6e1f2;
++    --brand: #233d66;
++    --brand-dark: #1b3154;
++    --brand-rgb: 35, 61, 102;
++    --brand-accent: #3f6399;
++    --brand-focus: #7890b8;
++    --nav-bg: #233d66;
++    --nav-hover-bg: #2e4b77;
++    --nav-active-bg: #3d5a87;
++    --nav-text: #d3ddee;
+ }
+ html[data-theme="graphite"] {
+-    --brand: #3b4148;
+-    --brand-dark: #30353b;
+-    --brand-rgb: 59, 65, 72;
+-    --brand-accent: #6b7580;
+-    --brand-tint: #f0f1f3;
+-    --brand-tint-line: #dcdfe3;
+-    --brand-soft: #e8eaed;
+-    --brand-focus: #9aa2ab;
+-    --nav-bg: #3b4148;
+-    --nav-hover-bg: #484f57;
+-    --nav-active-bg: #58606a;
+-    --nav-text: #dfe3e7;
++    --brand: #31363c;
++    --brand-dark: #272b30;
++    --brand-rgb: 49, 54, 60;
++    --brand-accent: #5e6873;
++    --brand-focus: #8f98a2;
++    --nav-bg: #31363c;
++    --nav-hover-bg: #3d434a;
++    --nav-active-bg: #4c535b;
++    --nav-text: #dcdfe3;
+ }
+ html[data-theme="teal"] {
+     --brand: #1f5c63;
+     --brand-dark: #184b51;
+     --brand-rgb: 31, 92, 99;
+     --brand-accent: #3f8a92;
+-    --brand-tint: #ecf4f5;
+-    --brand-tint-line: #cfe2e4;
+-    --brand-soft: #e0eef0;
+     --brand-focus: #7eb0b5;
+     --nav-bg: #1f5c63;
+     --nav-hover-bg: #2a6a72;
+@@ -170,7 +160,7 @@ body.ui-light-toolbar {
+     --menu-bg: #fff;
+     --menu-border: #d6d6d6;
+     --menu-text: #333;
+-    --menu-hover-bg: var(--brand-soft);
++    --menu-hover-bg: #ececec;
+     --menu-hover-text: #111;
+     --menu-muted: #999;
+ }
+@@ -286,12 +276,7 @@ body {
+     height: 17px;
+ }
+ .top-menu .nav-user {
+-    gap: 6px;
+-    padding: 0 14px 0 10px;
+-}
+-.top-menu .nav-user .caret {
+-    font-size: 7px;
+-    opacity: 0.7;
++    padding: 0 14px;
+ }
+ .top-menu .nav-icon.open,
+ .top-menu .nav-user.open {
+@@ -299,69 +284,64 @@ body {
+     color: var(--nav-text-strong);
+ }
+ 
+-/* Всплывающие карточки из меню: пользователь, настройки */
++/* Всплывающие карточки из меню: пользователь, настройки.
++   Та же манера, что у выпадающих меню панели: тонкая рамка, малый радиус. */
+ .nav-card {
+     position: absolute;
+-    top: calc(100% + 6px);
+-    right: 6px;
++    top: 100%;
++    right: 0;
+     z-index: 120;
+-    min-width: 220px;
++    min-width: 210px;
+     background: #fff;
+-    border: 1px solid #d9d9d9;
+-    border-radius: 8px;
+-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08);
++    border: 1px solid #cfcfcf;
++    border-top: none;
++    border-radius: 0 0 3px 3px;
++    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+     color: var(--text);
+     font-size: 13px;
+-    overflow: hidden;
+-    animation: pop-in 0.12s ease-out;
+-}
+-@keyframes pop-in {
+-    from { opacity: 0; transform: translateY(-4px); }
+-    to { opacity: 1; transform: none; }
+ }
+ 
+ .user-card .uc-head {
+     display: flex;
+     align-items: center;
+-    gap: 11px;
+-    padding: 14px 16px 12px;
+-    background: var(--brand-tint);
+-    border-bottom: 1px solid var(--brand-tint-line);
++    gap: 9px;
++    padding: 9px 12px;
++    background: var(--gray-head);
++    border-bottom: 1px solid var(--gray-line);
+ }
+ .uc-avatar {
+-    flex: 0 0 36px;
+-    width: 36px;
+-    height: 36px;
+-    border-radius: 50%;
++    flex: 0 0 28px;
++    width: 28px;
++    height: 28px;
++    border-radius: 3px;
+     background: var(--brand);
+     color: #fff;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+-    font-size: 16px;
++    font-size: 14px;
+     font-weight: 600;
+ }
+ .uc-text {
+     display: flex;
+     flex-direction: column;
+-    gap: 2px;
+     min-width: 0;
++    line-height: 1.3;
+ }
+ .uc-login {
+     font-weight: 600;
+-    font-size: 14px;
+     color: var(--text-strong);
+     overflow: hidden;
+     text-overflow: ellipsis;
+ }
+ .uc-role {
+     font-size: 12px;
+-    color: var(--text-soft);
++    color: var(--text-secondary);
+ }
+ .user-card .uc-foot {
+     display: flex;
+     justify-content: flex-end;
+-    padding: 10px 12px;
++    padding: 7px 8px;
+ }
+ .user-card .btn .ico {
+     width: 13px;
+@@ -369,52 +349,47 @@ body {
+ }
+ 
+ .settings-card {
+-    min-width: 200px;
+-    padding: 6px;
++    min-width: 180px;
++    padding: 4px;
+ }
+ .settings-card .nc-title {
+-    padding: 6px 8px 6px;
+-    font-size: 11px;
+-    font-weight: 600;
+-    color: var(--text-soft);
+-    text-transform: uppercase;
+-    letter-spacing: 0.05em;
++    padding: 3px 8px 5px;
++    margin-bottom: 3px;
++    border-bottom: 1px solid #e5e5e5;
++    font-size: 12px;
++    color: var(--text-secondary);
+ }
+ .theme-opt {
+     display: flex;
+     align-items: center;
+-    gap: 10px;
++    gap: 8px;
+     width: 100%;
+-    padding: 6px 8px;
++    padding: 4px 8px;
+     border: none;
+-    border-radius: 5px;
++    border-radius: 2px;
+     background: transparent;
+     font-family: inherit;
+-    font-size: 13px;
++    font-size: 12px;
+     color: var(--text);
+     cursor: pointer;
+     text-align: left;
+ }
+ .theme-opt:hover {
+-    background: #f2f2f2;
++    background: var(--menu-hover-bg);
+ }
+ .theme-sw {
+-    flex: 0 0 18px;
+-    width: 18px;
+-    height: 18px;
+-    border-radius: 50%;
+-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+-}
+-.theme-opt.on .theme-sw {
+-    box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px currentColor;
++    flex: 0 0 14px;
++    width: 14px;
++    height: 14px;
++    border-radius: 2px;
+ }
+ .theme-opt .theme-name {
+     flex: 1;
+ }
+ .theme-check {
+-    width: 14px;
+-    height: 14px;
+-    color: var(--brand);
++    width: 13px;
++    height: 13px;
++    color: var(--text-strong);
+ }
+ 
+ /* Полоска загрузки по нижнему краю меню (общая для всех разделов).
+@@ -1109,31 +1084,42 @@ thead .checkbox-col {
+     display: flex;
+     align-items: center;
+     justify-content: center;
+-    height: 46px;
++    height: 42px;
+     padding: 0 40px;
+-    border-bottom: 1px solid var(--brand-tint-line);
+-    background: var(--brand-tint);
++    background: var(--nav-bg);
+     text-align: center;
+     flex: 0 0 auto;
+ }
+ 
++/* Шапка карточки — цвет меню: самая тёмная плоскость карточки,
++   серые группы ниже читаются как её подразделы. */
+ .card-hostname {
+-    font-size: 17px;
++    font-size: 16px;
+     font-weight: 700;
+-    color: var(--brand);
++    color: #fff;
+     overflow-wrap: anywhere;
+ }
++.card-hostname .copy-val:hover {
++    background: rgba(255, 255, 255, 0.14);
++    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
++}
++.card-hostname .copy-val:active {
++    background: rgba(255, 255, 255, 0.24);
++    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.24);
++}
+ 
+ .card-hostname .card-edit {
+     margin-left: 6px;
+     font-size: 14px;
+     font-weight: 400;
+-    color: var(--text-muted);
++    color: var(--nav-text);
++    opacity: 0.8;
+     cursor: pointer;
+ }
+ 
+ .card-hostname .card-edit:hover {
+-    color: var(--brand);
++    color: #fff;
++    opacity: 1;
+ }
+ 
+ .card-hostname-edit {
+@@ -1150,7 +1136,7 @@ thead .checkbox-col {
+     font-size: 15px;
+     font-weight: 700;
+     font-family: inherit;
+-    color: var(--brand);
++    color: var(--text-strong);
+     text-align: center;
+     border: 1px solid var(--brand-focus);
+     border-radius: 3px;
+@@ -1163,12 +1149,12 @@ thead .checkbox-col {
+     transform: translateY(-50%);
+     cursor: pointer;
+     padding: 0 4px;
+-    color: var(--text-secondary);
+-    font-size: 16px;
++    color: var(--nav-text);
++    font-size: 18px;
+ }
+ 
+ .card-close:hover {
+-    color: #000;
++    color: #fff;
+ }
+ 
+ .card-body {
+@@ -1203,17 +1189,16 @@ thead .checkbox-col {
+ .card-table tr:not(.ct-group):hover td {
+     background-color: var(--row-hover-bg);
+ }
+-/* Заголовок группы полей (UI_OPTIONS.cardGroups) — тот же светлый
+-   оттенок цвета схемы, что и шапка карточки; меняется вместе со схемой. */
++/* Заголовок группы полей (UI_OPTIONS.cardGroups): ровно серый, темнее
++   ячеек-подписей (#f5f5f5), светлее шапки карточки. */
+ .card-table tr.ct-group td {
+-    padding: 6px 10px 5px;
+-    background: var(--brand-tint);
+-    border-top: 1px solid var(--brand-tint-line);
+-    border-bottom: 1px solid var(--brand-tint-line);
+-    color: var(--brand);
++    padding: 4px 10px;
++    background: var(--gray-group);
++    border-top: 1px solid var(--gray-line);
++    border-bottom: 1px solid var(--gray-line);
++    color: var(--text-strong);
+     font-size: 12px;
+     font-weight: 600;
+-    letter-spacing: 0.02em;
+ }
+ .card-table tr.ct-editable {
+     cursor: default;
+@@ -1319,122 +1304,104 @@ thead .checkbox-col {
+ .tree {
+     flex: 1;
+     overflow: auto;
+-    padding: 14px 16px 40px;
+-    background: #f6f6f6;
+-    font-size: 14px;
++    padding: 10px 12px 30px;
++    font-size: 13px;
+ }
+ 
+-/* Колонка дерева: ширина из app.js (computeTreeWidth) — по самому
+-   широкому узлу с учётом сдвига. Справа остаётся место под действия. */
+-.tree-col {
+-    min-width: 0;
+-    padding-right: 190px;
+-    box-sizing: content-box;
++/* Дерево — таблица «Расположение | ПК» в манере главной таблицы:
++   те же серые шапки и линии сетки, строки плотные. Ширина из app.js
++   (computeTreeWidth); справа — место под плашку действий. */
++.tree-grid {
++    border: 1px solid var(--gray-line);
++    margin-right: 190px;
+ }
+-
+-/* Адрес — отдельный блок-карточка */
+-.tree-block {
+-    background: #fff;
+-    border: 1px solid #e0e0e0;
+-    border-radius: 8px;
+-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+-    margin-bottom: 10px;
++.tg-head {
++    display: flex;
++    height: 24px;
++    background: var(--grid-head-bg);
++    box-shadow: inset 0 -1px 0 var(--grid-head-line-h);
++    color: var(--grid-head-text);
++    font-size: 12px;
++    font-weight: 600;
++}
++.tg-head .tg-name {
++    flex: 1;
++    display: flex;
++    align-items: center;
++    padding-left: 8px;
++}
++.tg-head .tg-count {
++    flex: 0 0 46px;
++    display: flex;
++    align-items: center;
++    justify-content: center;
++    box-shadow: inset 1px 0 0 var(--grid-head-line-v);
+ }
+ 
+ /* Строка узла. Числа — те же, что в TREE (app.js):
+-   поле слева 10 + сдвиг 20 на уровень, стрелка 14, промежутки 8,
+-   значок 16, число справа колонкой. */
++   поле слева 6 + сдвиг 18 на уровень, стрелка 12, промежутки 5, значок 14. */
+ .node-row {
+     --lvl: 0;
+     position: relative;
+     display: flex;
+-    align-items: center;
+-    gap: 8px;
+-    height: 30px;
+-    padding: 0 10px 0 calc(10px + var(--lvl) * 20px);
++    height: 24px;
++    border-bottom: 1px solid var(--grid-line);
+     cursor: default;
+-    box-shadow: inset 0 1px 0 #f0f0f0;
+-    /* направляющие уровней — по центру стрелок предков */
+-    background-image: repeating-linear-gradient(90deg, #e4e4e4 0 1px, transparent 1px 20px);
+-    background-repeat: no-repeat;
+-    background-position: 16.5px 0;
+-    background-size: calc(var(--lvl) * 20px) 100%;
+-}
+-.node-row:hover {
+-    background-color: var(--row-hover-bg);
+ }
+ .node-row.has-children {
+     cursor: pointer;
+ }
+-
+-/* Адрес — шапка блока */
+-.node-row.kind-building {
+-    height: 42px;
+-    box-shadow: none;
+-    background-color: var(--brand-tint);
+-    border-radius: 7px;
+-    font-size: 15px;
+-}
+-.node-row.kind-building.is-open {
+-    border-radius: 7px 7px 0 0;
+-    box-shadow: inset 0 -1px 0 var(--brand-tint-line);
++.node-row:hover {
++    background: var(--row-hover-bg);
+ }
+-.node-row.kind-building:hover {
+-    background-color: var(--brand-soft);
++.node-main {
++    flex: 1;
++    min-width: 0;
++    display: flex;
++    align-items: center;
++    gap: 5px;
++    padding: 0 10px 0 calc(6px + var(--lvl) * 18px);
+ }
+ 
+-/* Отделение */
+-.node-row.kind-department {
+-    height: 34px;
+-    font-weight: 600;
+-    color: var(--text-strong);
++/* Адрес — строка-группа: серая, с линией сверху */
++.node-row.kind-building {
++    background: #f5f5f5;
++    border-top: 1px solid var(--gray-line);
++    margin-top: -1px;
+ }
+-
+-/* Этаж — подзаголовок внутри отделения */
+-.node-row.kind-floor {
+-    height: 26px;
+-    background-color: #fafafa;
+-    color: var(--text-soft);
+-    font-size: 11.5px;
+-    font-weight: 600;
+-    text-transform: uppercase;
+-    letter-spacing: 0.04em;
++.node-row.kind-building:hover {
++    background: var(--row-hover-bg);
+ }
+-.node-row.kind-floor:hover {
+-    background-color: var(--row-hover-bg);
++.tg-head + .node .node-row.kind-building,
++.tg-head + .tree-form + .node .node-row.kind-building {
++    border-top: none;
++    margin-top: 0;
+ }
+ 
+ .node-toggle {
+-    flex: 0 0 14px;
+-    width: 14px;
+-    height: 14px;
+-    color: var(--text-muted);
+-    transition: transform 0.12s;
++    flex: 0 0 12px;
++    width: 12px;
++    height: 12px;
++    color: var(--text-secondary);
++    transition: transform 0.1s;
+ }
+ .node-toggle svg {
+     display: block;
+-    width: 14px;
+-    height: 14px;
++    width: 12px;
++    height: 12px;
+ }
+ .node-toggle.open {
+     transform: rotate(90deg);
+ }
+-.node-row.kind-building .node-toggle {
+-    color: var(--brand);
+-}
+ 
+ .node-icon {
+-    flex: 0 0 16px;
+-    width: 16px;
+-    height: 16px;
+-    color: var(--text-muted);
++    flex: 0 0 14px;
++    width: 14px;
++    height: 14px;
++    color: var(--text-soft);
+ }
+ .node-row.kind-building .node-icon {
+     color: var(--brand);
+-    stroke-width: 1.5;
+-}
+-.node-row.kind-department .node-icon {
+-    color: var(--text-secondary);
+ }
+ 
+ .node-title {
+@@ -1444,6 +1411,7 @@ thead .checkbox-col {
+     align-items: baseline;
+     overflow: hidden;
+     white-space: nowrap;
++    color: var(--text);
+ }
+ .node-row.kind-building .node-title {
+     font-weight: 600;
+@@ -1456,8 +1424,8 @@ thead .checkbox-col {
+ /* Номер кабинета — колонкой */
+ .node-code {
+     flex: 0 0 auto;
+-    min-width: 36px;
+-    margin-right: 8px;
++    min-width: 30px;
++    margin-right: 6px;
+     color: var(--text-strong);
+     font-weight: 600;
+     font-variant-numeric: tabular-nums;
+@@ -1465,56 +1433,49 @@ thead .checkbox-col {
+ .node-title mark {
+     background: #fbe3a8;
+     color: inherit;
+-    border-radius: 2px;
+ }
+ 
+-/* Число ПК — справа колонкой, у всех уровней на одной линии */
++/* Столбец «ПК» */
+ .node-count {
+-    flex: 0 0 auto;
+-    margin-left: 8px;
+-    min-width: 26px;
+-    height: 20px;
+-    padding: 0 8px;
++    flex: 0 0 46px;
++    display: flex;
++    align-items: center;
++    justify-content: center;
++    box-shadow: inset 1px 0 0 var(--grid-line);
++}
++.node-count .cnt {
++    min-width: 22px;
++    padding: 0 4px;
+     box-sizing: border-box;
+-    border-radius: 10px;
+-    background: #efefef;
+-    color: var(--text-secondary);
++    border-radius: 2px;
++    background: #e6e6e6;
++    color: var(--text-strong);
+     font-size: 12px;
+-    font-weight: 600;
+-    line-height: 20px;
++    line-height: 17px;
+     text-align: center;
+     font-variant-numeric: tabular-nums;
+-    letter-spacing: 0;
+-    text-transform: none;
+-}
+-.node-row.kind-building .node-count {
+-    background: var(--brand);
+-    color: #fff;
+ }
+-.node-row.kind-floor .node-count {
+-    background: transparent;
++.node-row.kind-building .node-count .cnt {
++    background: #dadada;
++    font-weight: 600;
+ }
+-.node-count.zero,
+-.node-row.kind-building .node-count.zero {
++.node-count .cnt.zero,
++.node-row.kind-building .node-count .cnt.zero {
+     background: transparent;
+-    color: #bbb;
++    color: var(--text-muted);
+     font-weight: 400;
+ }
+ 
+-/* Действия — плашка справа от блока, при наведении на строку.
++/* Действия — плашка справа от таблицы, при наведении на строку.
+    padding-left — «мостик», чтобы мышь доходила до кнопок. */
+ .node-actions {
+     position: absolute;
+     left: 100%;
+     top: 50%;
+     transform: translateY(-50%);
+-    padding-left: 8px;
++    padding-left: 6px;
+     display: none;
+     z-index: 5;
+-    font-size: 13px;
+-    font-weight: 400;
+-    text-transform: none;
+-    letter-spacing: 0;
+ }
+ .node-row:hover .node-actions {
+     display: block;
+@@ -1523,86 +1484,88 @@ thead .checkbox-col {
+     display: flex;
+     align-items: center;
+     gap: 1px;
+-    padding: 2px;
++    padding: 1px;
+     background: #fff;
+-    border: 1px solid #dcdcdc;
+-    border-radius: 6px;
+-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
++    border: 1px solid #cfcfcf;
++    border-radius: 3px;
++    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+ }
+ .node-actions .na-sep {
+     width: 1px;
+-    height: 16px;
++    height: 14px;
+     margin: 0 2px;
+-    background: #e3e3e3;
++    background: #e0e0e0;
+ }
+ .node-actions .icon-btn {
+-    min-width: 24px;
+-    height: 24px;
+-    font-size: 13px;
++    min-width: 22px;
++    height: 20px;
++    font-size: 12px;
+ }
+ .node-actions .icon-btn svg {
+-    width: 15px;
+-    height: 15px;
++    width: 14px;
++    height: 14px;
+ }
+ 
+-/* Форма добавления/правки — под узлом, со сдвигом его детей */
++/* Форма добавления/правки — строкой под узлом, со сдвигом его детей */
+ .tree-form {
+     --lvl: 0;
+     display: flex;
+     flex-wrap: wrap;
+     align-items: center;
+-    gap: 6px;
+-    padding: 8px 10px 8px calc(10px + var(--lvl) * 20px + 22px);
+-    background: #fcfaf5;
+-    box-shadow: inset 0 1px 0 #f0f0f0;
+-    font-size: 13px;
+-}
+-.tree-block-form .tree-form {
+-    padding-left: 12px;
+-    border-radius: 7px;
+-    box-shadow: none;
++    gap: 5px;
++    padding: 4px 8px 4px calc(6px + var(--lvl) * 18px + 17px);
++    background: #f7f7f7;
++    border-bottom: 1px solid var(--grid-line);
++    font-size: 12px;
+ }
+ .tree-form .tf-title {
+     color: var(--text-secondary);
+-    font-size: 12px;
++}
++.tree-form .input {
++    padding: 2px 6px;
+ }
+ .tree-form .tf-code {
+-    width: 64px;
++    width: 60px;
+ }
+ .tree-form .tf-name {
+     flex: 1 1 140px;
+     min-width: 120px;
+ }
++.tree-form .btn {
++    padding: 2px 9px;
++}
+ .tree-form .tf-buttons {
+     display: flex;
+-    gap: 6px;
++    gap: 5px;
+ }
+ .tree-form .tf-error {
+     flex-basis: 100%;
+     color: var(--danger);
+-    font-size: 12px;
+ }
+ 
+ .tree-empty {
+     color: var(--text-muted);
+-    padding: 6px;
++    padding: 5px 8px;
++    border-bottom: 1px solid var(--grid-line);
+ }
+ 
+ /* ============================================================
+    История
+    ============================================================ */
+ 
+-/* Колонки «Время», «Объект», «Пользователь» — по содержимому,
+-   «Изменения» — всё остальное. Шапка и дата дня прилипают. */
++/* История — в манере главной таблицы: серая шапка, сетка на всех ячейках.
++   «Время», «Объект», «Пользователь» — по содержимому, «Изменения» — остальное.
++   Записи сгруппированы по дням: строка дня — серая, с датой. */
+ .history-page {
+-    padding: 0 12px 16px;
++    padding: 10px 12px 20px;
+ }
+ .history-table {
+-    --h-head: 32px;
++    --h-head: 24px;
+     border-collapse: separate;
+     border-spacing: 0;
+     width: 100%;
+     font-size: 13px;
++    border-left: 1px solid var(--grid-line);
+ }
+ .history-table th {
+     position: sticky;
+@@ -1610,9 +1573,9 @@ thead .checkbox-col {
+     z-index: 3;
+     height: var(--h-head);
+     box-sizing: border-box;
+-    padding: 0 12px;
++    padding: 0 8px;
+     background: var(--grid-head-bg);
+-    box-shadow: inset 0 -1px 0 var(--grid-head-line-h);
++    box-shadow: inset -1px 0 0 var(--grid-head-line-v), inset 0 -1px 0 var(--grid-head-line-h), inset 0 1px 0 var(--grid-head-line-v);
+     text-align: left;
+     font-size: 12px;
+     font-weight: 600;
+@@ -1620,19 +1583,24 @@ thead .checkbox-col {
+     white-space: nowrap;
+ }
+ .history-table td {
+-    padding: 6px 12px;
++    padding: 3px 8px;
+     vertical-align: top;
+-    border-bottom: 1px solid #ededed;
+-    line-height: 1.45;
++    color: var(--text);
++    border-right: 1px solid var(--grid-line);
++    border-bottom: 1px solid var(--grid-line);
++    line-height: 1.4;
+ }
+ .history-table tbody tr:not(.h-day):hover td {
+-    background: #fafafa;
++    background: var(--row-hover-bg);
+ }
+ .history-table .h-time,
+ .history-table .h-user {
+     width: 1%;
+     white-space: nowrap;
+ }
++.history-table td.h-time {
++    font-variant-numeric: tabular-nums;
++}
+ .history-table .h-obj {
+     width: 1%;
+     white-space: nowrap;
+@@ -1641,75 +1609,48 @@ thead .checkbox-col {
+     text-overflow: ellipsis;
+ }
+ 
+-/* Разделитель дня */
++/* Строка дня: прилипает под шапкой */
+ .history-table tr.h-day td {
+     position: sticky;
+     top: var(--h-head);
+     z-index: 2;
+-    padding: 12px 12px 5px;
+-    background: #fff;
+-    border-bottom: 1px solid var(--brand-tint-line);
+-}
+-.history-table tbody:first-of-type tr.h-day td {
+-    padding-top: 8px;
+-}
+-.h-day-date {
+-    font-weight: 700;
+-    font-size: 13px;
+-    color: var(--brand);
+-    font-variant-numeric: tabular-nums;
+-    letter-spacing: 0.02em;
+-}
+-.h-day-count {
+-    margin-left: 8px;
+-    padding: 0 6px;
+-    border-radius: 8px;
+-    background: #efefef;
+-    color: var(--text-soft);
+-    font-size: 11px;
++    padding: 3px 8px;
++    background: #f5f5f5;
++    border-bottom: 1px solid var(--gray-line);
+     font-weight: 600;
+-    font-variant-numeric: tabular-nums;
+-}
+-
+-/* Время: «чч:мм» основным, «:сс» приглушённо */
+-.history-table td.h-time {
+-    font-variant-numeric: tabular-nums;
+-}
+-.t-hm {
+     color: var(--text-strong);
+-    font-weight: 600;
++    font-variant-numeric: tabular-nums;
+ }
+-.t-s {
+-    color: var(--text-muted);
++.h-day-count {
++    margin-left: 6px;
++    font-weight: 400;
++    color: var(--text-secondary);
+ }
+ 
+ .history-table .h-obj-kind {
+-    color: var(--text-muted);
++    color: var(--text-secondary);
+     margin-right: 5px;
+ }
+ .history-table .h-link {
+-    color: var(--brand);
+     cursor: pointer;
+-    font-weight: 600;
+ }
+ .history-table .h-link:hover {
+     text-decoration: underline;
+     text-underline-offset: 2px;
+ }
+-.history-table .h-user {
+-    color: var(--text-secondary);
+-}
+ 
+ /* Изменения: подпись поля колонкой, значения рядом */
+ .changes {
+     display: grid;
+     grid-template-columns: max-content 1fr;
+-    column-gap: 12px;
+-    row-gap: 2px;
++    column-gap: 10px;
+ }
+ .changes .field {
+     margin: 0;
+-    color: var(--text-soft);
++    color: var(--text);
++}
++.changes .field::after {
++    content: ":";
+ }
+ .ch-val {
+     min-width: 0;
+@@ -1752,163 +1693,138 @@ thead .checkbox-col {
+    ============================================================ */
+ 
+ .choices-page {
+-    padding: 14px 16px 40px;
+-    background: #f6f6f6;
++    padding: 10px 12px 30px;
+ }
+ 
+-/* Список столбцов: название | оформление столбца | значения */
+-.st-list {
+-    max-width: 1280px;
+-    background: #fff;
+-    border: 1px solid #e0e0e0;
+-    border-radius: 8px;
+-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+-    overflow: hidden;
+-}
+-.st-list-head,
+-.st-band {
++/* Блоки столбцов — в порядке таблицы, слева направо и сверху вниз.
++   Манера главной таблицы: серая шапка, линии сетки, плотные строки. */
++.st-grid {
+     display: grid;
+-    grid-template-columns: 170px 150px 1fr;
+-    column-gap: 16px;
+-    padding: 0 14px;
+-}
+-.st-list-head {
+-    padding-top: 8px;
+-    padding-bottom: 7px;
+-    background: var(--brand-tint);
+-    border-bottom: 1px solid var(--brand-tint-line);
+-    color: var(--brand);
+-    font-size: 12px;
+-    font-weight: 600;
+-}
+-.st-list-hint {
+-    color: var(--text-soft);
+-    font-weight: 400;
+-}
+-.st-band {
++    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+     align-items: start;
+-    padding-top: 8px;
+-    padding-bottom: 8px;
+-    border-bottom: 1px solid #efefef;
+-}
+-.st-band:last-child {
+-    border-bottom: none;
++    gap: 10px;
+ }
+-.st-band:hover {
+-    background: #fcfcfc;
++.st-block {
++    border: 1px solid var(--gray-line);
++    background: #fff;
++    font-size: 12px;
+ }
+-.st-name {
++.st-head {
+     display: flex;
+     align-items: center;
+     gap: 6px;
+-    min-height: 26px;
++    height: 24px;
++    padding: 0 8px;
++    background: var(--grid-head-bg);
++    border-bottom: 1px solid var(--grid-head-line-h);
++    color: var(--grid-head-text);
+ }
+ .st-title {
+     font-weight: 600;
+     color: var(--text-strong);
+ }
+ .st-tag {
+-    padding: 0 5px;
+-    border-radius: 3px;
+-    background: var(--brand-tint);
+-    color: var(--brand);
+-    font-size: 10.5px;
+-    line-height: 16px;
++    padding: 0 4px;
++    border: 1px solid #cfcfcf;
++    border-radius: 2px;
++    color: var(--text-secondary);
++    font-size: 11px;
++    line-height: 14px;
+ }
+-.st-colstyle {
++.st-head-n {
++    margin-left: auto;
++    color: var(--text-secondary);
++    font-variant-numeric: tabular-nums;
++}
++
++/* Строка: значение | число ПК | кнопки оформления | сброс/удаление */
++.st-row {
+     display: flex;
+     align-items: center;
+     gap: 6px;
+-    min-height: 26px;
++    height: 25px;
++    padding: 0 6px 0 8px;
++    border-bottom: 1px solid var(--grid-line);
+ }
+-.st-reset {
+-    cursor: pointer;
+-    color: var(--text-muted);
+-    font-size: 14px;
+-    padding: 0 2px;
++.st-row:hover {
++    background: var(--row-hover-bg);
+ }
+-.st-reset:hover {
+-    color: var(--text-strong);
++/* Первая строка — весь столбец: отделена линией потемнее */
++.st-colrow {
++    background: #f7f7f7;
++    border-bottom-color: var(--gray-line);
+ }
+-.st-values {
+-    display: flex;
+-    flex-wrap: wrap;
+-    align-items: center;
+-    gap: 5px;
+-    min-height: 26px;
++.st-colrow .st-val span {
++    color: var(--text-secondary);
++}
++.st-val {
++    flex: 1;
++    min-width: 0;
++    overflow: hidden;
++    white-space: nowrap;
++    text-overflow: ellipsis;
++    color: var(--text);
++}
++.st-val span {
++    padding: 1px 3px;
++    margin-left: -3px;
+ }
+-.st-none {
++.st-row.unused .st-val {
+     color: var(--text-muted);
+-    font-size: 12px;
+ }
+-
+-/* Значение — «фишка» в том виде, как оно выглядит в таблице */
+-.st-chip {
+-    display: inline-flex;
+-    align-items: stretch;
+-    height: 24px;
+-    box-sizing: border-box;
+-    border: 1px solid #dedede;
+-    border-radius: 4px;
+-    background: #fff;
+-    font-size: 12px;
++.st-n {
++    flex: 0 0 26px;
++    text-align: right;
++    color: var(--text-secondary);
++    font-variant-numeric: tabular-nums;
++}
++.st-act {
++    flex: 0 0 14px;
++    text-align: center;
++}
++.st-reset,
++.st-del {
+     cursor: pointer;
+-    overflow: hidden;
+-    transition: border-color 0.1s, box-shadow 0.1s;
++    color: var(--text-muted);
+ }
+-.st-chip:hover,
+-.st-chip.open {
+-    border-color: var(--brand-focus);
+-    box-shadow: 0 0 0 2px var(--focus-ring);
++.st-reset:hover {
++    color: var(--text-strong);
+ }
+-.st-chip.ro {
+-    cursor: default;
++.st-del:hover {
++    color: var(--danger-strong);
+ }
+-.st-chip.ro:hover {
+-    border-color: #dedede;
+-    box-shadow: none;
++.st-values {
++    max-height: 400px;
++    overflow-y: auto;
+ }
+-.st-chip-val {
+-    display: flex;
+-    align-items: center;
+-    padding: 0 7px;
+-    white-space: nowrap;
+-    max-width: 260px;
+-    overflow: hidden;
+-    text-overflow: ellipsis;
+-    color: var(--text);
++.st-values .st-row:last-child {
++    border-bottom: none;
+ }
+-.st-chip-n {
+-    display: flex;
+-    align-items: center;
+-    padding: 0 6px;
+-    border-left: 1px solid #ececec;
+-    background: #fafafa;
++.st-empty {
++    padding: 4px 8px;
+     color: var(--text-muted);
+-    font-size: 11px;
+-    font-variant-numeric: tabular-nums;
+ }
+-.st-chip.unused .st-chip-val {
+-    opacity: 0.55;
++.st-add {
++    display: flex;
++    gap: 4px;
++    padding: 4px 6px;
++    border-top: 1px solid var(--grid-line);
++    background: #fafafa;
+ }
+-.st-chip-add {
+-    width: 24px;
+-    justify-content: center;
+-    align-items: center;
+-    border-style: dashed;
+-    color: var(--text-soft);
+-    font-size: 14px;
++.st-add .input {
++    flex: 1;
++    min-width: 0;
++    padding: 2px 6px;
+ }
+-.st-add-input {
+-    width: 150px;
+-    height: 24px;
+-    box-sizing: border-box;
++.st-add .btn {
++    padding: 2px 9px;
+ }
+ 
+-/* Кнопки оформления */
++/* Кнопки оформления: A — цвет текста, квадрат — фон, Ж, К */
+ .sc {
+     display: inline-flex;
+-    gap: 3px;
++    gap: 2px;
++    flex: 0 0 auto;
+ }
+ .sc-btn {
+     position: relative;
+@@ -1916,22 +1832,21 @@ thead .checkbox-col {
+     flex-direction: column;
+     align-items: center;
+     justify-content: center;
+-    width: 26px;
+-    height: 26px;
++    width: 20px;
++    height: 20px;
+     box-sizing: border-box;
+     padding: 0;
+-    border: 1px solid #d6d6d6;
+-    border-radius: 4px;
++    border: 1px solid #cfcfcf;
++    border-radius: 2px;
+     background: #fff;
+-    color: #555;
++    color: #444;
+     font-family: inherit;
+-    font-size: 12px;
++    font-size: 11px;
+     cursor: pointer;
+     user-select: none;
+ }
+ .sc-btn:hover {
+-    border-color: #bdbdbd;
+-    background: #f7f7f7;
++    border-color: #aaa;
+ }
+ .sc-btn.on {
+     background: var(--brand);
+@@ -1954,139 +1869,84 @@ thead .checkbox-col {
+ }
+ .sc-letter {
+     font-weight: 700;
+-    font-size: 12px;
+-    line-height: 13px;
++    font-size: 11px;
++    line-height: 11px;
+ }
+ .sc-bar {
+-    width: 14px;
++    width: 12px;
+     height: 3px;
+     margin-top: 1px;
+-    border-radius: 1px;
+ }
+ .sc-swatch {
+-    width: 13px;
+-    height: 13px;
+-    border-radius: 3px;
+-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
++    width: 12px;
++    height: 12px;
++    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+ }
+ /* Цвет не задан — пунктир, а не чёрный/белый квадрат */
+ .sc-color:not(.set) .sc-bar {
+-    background: repeating-linear-gradient(90deg, #c4c4c4 0 2px, transparent 2px 4px);
++    background: repeating-linear-gradient(90deg, #bbb 0 2px, transparent 2px 4px);
+ }
+ .sc-color:not(.set) .sc-letter {
+-    color: #9a9a9a;
++    color: #999;
+ }
+ .sc-color:not(.set) .sc-swatch {
+     background: #fff;
+     box-shadow: none;
+-    border: 1px dashed #c4c4c4;
++    border: 1px dashed #bbb;
+     box-sizing: border-box;
+ }
+ 
+-/* Всплывающее окно оформления значения */
+-.style-pop {
+-    position: fixed;
+-    z-index: 110;
+-    width: 260px;
+-    background: #fff;
+-    border: 1px solid #d9d9d9;
+-    border-radius: 8px;
+-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08);
+-    animation: pop-in 0.12s ease-out;
+-    overflow: hidden;
+-}
+-.sp-head {
+-    display: flex;
+-    align-items: center;
+-    gap: 8px;
+-    padding: 9px 12px;
+-    background: var(--brand-tint);
+-    border-bottom: 1px solid var(--brand-tint-line);
+-}
+-.sp-value {
+-    flex: 1;
+-    min-width: 0;
+-    padding: 1px 6px;
+-    margin-left: -6px;
+-    border-radius: 3px;
+-    font-size: 13px;
+-    white-space: nowrap;
+-    overflow: hidden;
+-    text-overflow: ellipsis;
+-}
+-.sp-n {
+-    color: var(--text-soft);
+-    font-size: 11px;
+-    white-space: nowrap;
+-}
+-.sp-body {
+-    display: flex;
+-    align-items: center;
+-    gap: 8px;
+-    padding: 10px 12px;
+-}
+-.sp-actions {
+-    margin-left: auto;
+-    display: flex;
+-    gap: 4px;
+-}
+-
+ /* Пользовательские поля */
+ .fd-panel {
+-    max-width: 640px;
+-    margin-top: 16px;
+-    background: #fff;
+-    border: 1px solid #e0e0e0;
+-    border-radius: 8px;
+-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+-    overflow: hidden;
++    max-width: 600px;
++    margin-top: 14px;
++    border: 1px solid var(--gray-line);
++    font-size: 12px;
+ }
+ .fd-head {
+     display: flex;
+-    flex-direction: column;
+-    gap: 2px;
+-    padding: 10px 14px 9px;
+-    background: var(--brand-tint);
+-    border-bottom: 1px solid var(--brand-tint-line);
++    align-items: baseline;
++    gap: 10px;
++    padding: 4px 8px;
++    background: var(--grid-head-bg);
++    border-bottom: 1px solid var(--grid-head-line-h);
+ }
+ .fd-title {
+     font-weight: 600;
+-    color: var(--brand);
++    color: var(--text-strong);    white-space: nowrap;
+ }
+ .fd-sub {
+-    font-size: 12px;
+-    color: var(--text-soft);
++    color: var(--text-secondary);
+ }
+ .fd-table {
+     width: 100%;
+     border-collapse: collapse;
+ }
+ .fd-table th {
+-    padding: 6px 14px 4px;
++    padding: 3px 8px;
+     text-align: left;
+-    font-size: 11px;
+     font-weight: 600;
+-    color: var(--text-muted);
++    color: var(--text-secondary);
++    border-bottom: 1px solid var(--grid-line);
+ }
+ .fd-table td {
+-    padding: 5px 14px;
+-    border-top: 1px solid #efefef;
+-    height: 26px;
++    padding: 2px 8px;
++    height: 20px;
++    border-bottom: 1px solid var(--grid-line);
+ }
+-.fd-table tr:hover td {
+-    background: #fcfcfc;
++.fd-table th + th,
++.fd-table td + td {
++    border-left: 1px solid var(--grid-line);
+ }
+-.fd-label {
+-    font-weight: 500;
++.fd-table tr:hover td {
++    background: var(--row-hover-bg);
+ }
+ .fd-rename {
+     width: 100%;
+     box-sizing: border-box;
++    padding: 1px 5px;
+ }
+ .fd-key {
+-    padding: 1px 6px;
+-    border-radius: 3px;
+-    background: #f2f2f2;
+     color: var(--text-secondary);
+     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+     font-size: 11.5px;
+@@ -2096,6 +1956,9 @@ thead .checkbox-col {
+     white-space: nowrap;
+     text-align: right;
+ }
++.fd-actions .icon-btn {
++    height: 18px;
++}
+ .fd-actions .icon-btn.off {
+     opacity: 0.3;
+     pointer-events: none;
+@@ -2107,24 +1970,29 @@ thead .checkbox-col {
+     margin-left: 8px;
+     color: var(--danger);
+     font-size: 11px;
+-    font-weight: 400;
+ }
+ .fd-empty {
+-    padding: 12px 14px;
++    padding: 5px 8px;
+     color: var(--text-muted);
++    border-bottom: 1px solid var(--grid-line);
+ }
+ .fd-add {
+     display: flex;
+-    gap: 6px;
+-    padding: 10px 14px;
+-    border-top: 1px solid #efefef;
++    gap: 4px;
++    padding: 4px 6px;
+     background: #fafafa;
+ }
++.fd-add .input {
++    padding: 2px 6px;
++}
++.fd-add .btn {
++    padding: 2px 9px;
++}
+ .fd-add-label {
+     flex: 1;
+ }
+ .fd-add-key {
+-    width: 150px;
++    width: 140px;
+     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+ }
+ 
+diff --git a/frontend/static/app.js b/frontend/static/app.js
+index 2198741..38aaffa 100644
+--- a/frontend/static/app.js
++++ b/frontend/static/app.js
+@@ -143,8 +143,8 @@ function hasDuplicateValue(value, field) {
+ const THEMES = [
+     { key: "red", label: "Красная", color: "#8a2828" },
+     { key: "green", label: "Зелёная", color: "#2e5e3e" },
+-    { key: "blue", label: "Синяя", color: "#2a4a7a" },
+-    { key: "graphite", label: "Тёмно-серая", color: "#3b4148" },
++    { key: "blue", label: "Синяя", color: "#233d66" },
++    { key: "graphite", label: "Тёмно-серая", color: "#31363c" },
+     { key: "teal", label: "Бирюзовая", color: "#1f5c63" }
+ ];
+ const THEME_KEY = "itdb.theme";
+@@ -467,8 +467,6 @@ const app = Vue.createApp({
+             choicesItems: [],
+             newChoiceValue: {},
+             columnStyles: {},
+-            stylePop: null,
+-            addingValue: null,
+             fieldDefEdit: null,
+             // Пользовательские поля
+             fieldDefs: [],
+@@ -862,17 +860,6 @@ const app = Vue.createApp({
+                 }
+             });
+             return blocks;
+-        },
+-
+-        // Значение, открытое во всплывающем окне оформления
+-        stylePopEntry() {
+-            const p = this.stylePop;
+-            if (!p) {
+-                return null;
+-            }
+-            const block = this.styleBlocks.find(function (b) { return b.field === p.field; });
+-            const entry = block ? block.values.find(function (v) { return v.key === p.key; }) : null;
+-            return entry ? { block: block, entry: entry } : null;
+         }
+     },
+ 
+@@ -1929,11 +1916,6 @@ const app = Vue.createApp({
+             this.treeWidth = computeTreeWidth(this.treeRoots);
+         },
+ 
+-        isTreeRootVisible(node) {
+-            const m = this.treeMatch;
+-            return !m.query || m.self.has(node.id) || m.anc.has(node.id);
+-        },
+-
+         kindLabel(kind) {
+             return kindLabels[kind] || kind;
+         },
+@@ -2216,7 +2198,6 @@ const app = Vue.createApp({
+                     return;
+                 }
+                 this.newChoiceValue[field] = "";
+-                this.addingValue = null;
+                 await this.loadChoices();
+             } catch (e) {
+                 this.toastError("Не удалось добавить: " + e);
+@@ -2340,50 +2321,6 @@ const app = Vue.createApp({
+             this.setValueStyle(field, entry, { color: "", bg_color: "", bold: false, italic: false });
+         },
+ 
+-        openStylePop(event, block, entry) {
+-            if (!this.canEdit) {
+-                return;
+-            }
+-            if (this.stylePop && this.stylePop.field === block.field && this.stylePop.key === entry.key) {
+-                this.closeStylePop();
+-                return;
+-            }
+-            const rect = event.currentTarget.getBoundingClientRect();
+-            const left = Math.min(rect.left, window.innerWidth - 270);
+-            this.stylePop = { field: block.field, key: entry.key, top: rect.bottom + 6, left: Math.max(8, left) };
+-            this.$nextTick(() => {
+-                // Не влезает снизу — показать над значением
+-                const pop = document.querySelector(".style-pop");
+-                if (pop && this.stylePop && rect.bottom + 6 + pop.offsetHeight > window.innerHeight - 8) {
+-                    this.stylePop.top = Math.max(8, rect.top - 6 - pop.offsetHeight);
+-                }
+-                document.addEventListener("mousedown", this.onStylePopOutside, true);
+-            });
+-        },
+-
+-        closeStylePop() {
+-            this.stylePop = null;
+-            document.removeEventListener("mousedown", this.onStylePopOutside, true);
+-        },
+-
+-        onStylePopOutside(event) {
+-            if (event.target.closest(".style-pop") || event.target.closest(".st-chip")) {
+-                return;
+-            }
+-            this.closeStylePop();
+-        },
+-
+-        startAddValue(field) {
+-            this.addingValue = field;
+-            this.newChoiceValue[field] = "";
+-            this.$nextTick(() => {
+-                const el = document.querySelector(".st-add-input");
+-                if (el) {
+-                    el.focus();
+-                }
+-            });
+-        },
+-
+         async deleteChoice(item) {
+             if (!(await this.confirmDialog("Удалить значение «" + item.value + "» из справочника?", { okText: "Удалить", danger: true }))) {
+                 return;
+@@ -2397,7 +2334,6 @@ const app = Vue.createApp({
+                     this.toastError(data.detail || "Не удалось удалить");
+                     return;
+                 }
+-                this.closeStylePop();
+                 await this.loadChoices();
+                 this.recalcWidths();
+             } catch (e) {
+@@ -2582,13 +2518,13 @@ const app = Vue.createApp({
+             return pad2(d.getDate()) + "." + pad2(d.getMonth() + 1) + "." + d.getFullYear();
+         },
+ 
+-        // Время для таблицы истории: «чч:мм» и отдельно «:сс» (приглушённо)
+-        timeParts(value) {
++        // Время для таблицы истории: «чч:мм:сс» (дата — в строке дня)
++        formatClock(value) {
+             const d = new Date(value);
+             if (!value || isNaN(d.getTime())) {
+-                return { hm: String(value || ""), s: "" };
++                return String(value || "");
+             }
+-            return { hm: pad2(d.getHours()) + ":" + pad2(d.getMinutes()), s: ":" + pad2(d.getSeconds()) };
++            return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+         },
+ 
+         entityLabel(entity) {
+@@ -2773,26 +2709,24 @@ const KIND_ICONS = {
+ // по ним считается ширина колонки дерева.
+ // ------------------------------------------------------------
+ const TREE = {
+-    padL: 10,        // отступ строки слева
+-    indent: 20,      // сдвиг на уровень
+-    toggle: 14,      // стрелка
+-    gap: 8,          // промежуток между стрелкой, значком и названием
+-    icon: 16,        // значок
+-    countGap: 16,    // минимум между названием и числом
+-    countPad: 16,    // поля «пилюли» с числом (8 + 8)
+-    countMin: 26,
+-    codeMin: 36,     // номер кабинета — колонкой
+-    codeGap: 8,
++    padL: 6,         // отступ строки слева
++    indent: 18,      // сдвиг на уровень
++    toggle: 12,      // стрелка
++    gap: 5,          // промежуток между стрелкой, значком и названием
++    icon: 14,        // значок
++    codeMin: 30,     // номер кабинета — колонкой
++    codeGap: 6,
+     padR: 10,
+-    border: 2,       // рамка блока
+-    min: 360
++    countCol: 46,    // столбец «ПК»
++    border: 2,       // рамка таблицы
++    min: 300
+ };
+ // Шрифт по типу узла: [размер, жирность, заглавные]
+ const TREE_FONTS = {
+-    building: [15, 600, false],
+-    department: [14, 600, false],
+-    floor: [11.5, 600, true],
+-    room: [14, 400, false]
++    building: [13, 600, false],
++    department: [13, 400, false],
++    floor: [13, 400, false],
++    room: [13, 400, false]
+ };
+ 
+ // Подпись узла: номер кабинета отдельно, у этажа — «2 этаж»
+@@ -2831,11 +2765,10 @@ function computeTreeWidth(roots) {
+             const t = treeNodeTexts(node);
+             let title = textWidth(t.name, f[0], f[1], f[2]);
+             if (t.code) {
+-                title += Math.max(TREE.codeMin, textWidth(t.code, 14, 600, false)) + (t.name ? TREE.codeGap : 0);
++                title += Math.max(TREE.codeMin, textWidth(t.code, 13, 600, false)) + (t.name ? TREE.codeGap : 0);
+             }
+-            const count = Math.max(TREE.countMin, textWidth(String(node.total_count || 0), 12, 600, false) + TREE.countPad);
+             const w = TREE.padL + level * TREE.indent + TREE.toggle + TREE.gap + TREE.icon + TREE.gap +
+-                title + TREE.countGap + count + TREE.padR + TREE.border;
++                title + TREE.padR + TREE.countCol + TREE.border;
+             if (w > max) {
+                 max = w;
+             }
+@@ -2945,14 +2878,16 @@ app.component("tree-node", {
+         <div class="node" v-if="visible">
+             <div class="node-row" :class="['kind-' + node.kind, { 'has-children': hasChildren, 'is-open': hasChildren && isOpen }]"
+                 :style="{ '--lvl': level }" @click="toggle">
+-                <span class="node-toggle" :class="{ open: isOpen }">
+-                    <svg v-if="hasChildren" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+-                </span>
+-                <svg class="node-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" v-html="icon"></svg>
+-                <span class="node-title" :title="kindLabel">
+-                    <span v-if="texts.code" class="node-code"><template v-for="(p, i) in codeParts" :key="'c' + i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></span><span v-if="texts.name" class="node-name"><template v-for="(p, i) in nameParts" :key="'n' + i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></span>
++                <span class="node-main">
++                    <span class="node-toggle" :class="{ open: isOpen }">
++                        <svg v-if="hasChildren" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
++                    </span>
++                    <svg class="node-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" v-html="icon"></svg>
++                    <span class="node-title" :title="kindLabel">
++                        <span v-if="texts.code" class="node-code"><template v-for="(p, i) in codeParts" :key="'c' + i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></span><span v-if="texts.name" class="node-name"><template v-for="(p, i) in nameParts" :key="'n' + i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></span>
++                    </span>
+                 </span>
+-                <span class="node-count" :class="{ zero: !node.total_count }" title="Компьютеров внутри">{{ node.total_count || 0 }}</span>
++                <span class="node-count" title="Компьютеров внутри"><span class="cnt" :class="{ zero: !node.total_count }">{{ node.total_count || 0 }}</span></span>
+                 <span class="node-actions" @click.stop>
+                     <span class="na-box">
+                         <span class="icon-btn" title="Показать эти ПК в таблице" @click="call('showLocationInTable')">
+@@ -3098,10 +3033,6 @@ window.addEventListener("keydown", function (event) {
+         }
+         return;
+     }
+-    if (event.key === "Escape" && vm.stylePop) {
+-        vm.closeStylePop();
+-        return;
+-    }
+     if (event.key === "Escape" && vm.card) {
+         if (vm.cardEditKey) {
+             vm.cardEditKey = null;
+diff --git a/frontend/static/index.html b/frontend/static/index.html
+index 20863aa..306d194 100644
+--- a/frontend/static/index.html
++++ b/frontend/static/index.html
+@@ -31,7 +31,7 @@
+                 </span>
+                 <span class="dropdown-wrap nav-pop" ref="userWrap">
+                     <a href="#" class="nav-user" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')">
+-                        {{ user.login }}<span class="caret">▼</span>
++                        {{ user.login }}
+                     </a>
+                     <div v-if="openMenu === 'user'" class="nav-card user-card">
+                         <div class="uc-head">
+@@ -197,19 +197,14 @@
+                 </div>
+             </div>
+             <div class="tree">
+-                <!-- Ширина колонки — по самому широкому узлу дерева (с учётом
+-                     отступа), даже свёрнутому: при раскрытии ничего не прыгает -->
+-                <div class="tree-col" :style="{ width: treeWidth + 'px' }">
+-                    <div v-if="treeForm && treeForm.action === 'add' && !treeForm.parentId" class="tree-block tree-block-form">
+-                        <tree-form :level="0"></tree-form>
+-                    </div>
++                <!-- Дерево — таблица «Расположение | ПК» в манере главной таблицы.
++                     Ширина — по самому широкому узлу с учётом сдвига, даже свёрнутому. -->
++                <div class="tree-grid" :style="{ width: treeWidth + 'px' }">
++                    <div class="tg-head"><span class="tg-name">Расположение</span><span class="tg-count">ПК</span></div>
++                    <tree-form v-if="treeForm && treeForm.action === 'add' && !treeForm.parentId" :level="0"></tree-form>
+                     <div v-if="!treeLoading && !treeError && treeRoots.length === 0" class="tree-empty">Расположения не найдены.</div>
+                     <div v-else-if="treeQuery.trim() && treeMatch.size === 0" class="tree-empty">Ничего не найдено.</div>
+-                    <template v-for="root in treeRoots" :key="root.id">
+-                        <div v-if="isTreeRootVisible(root)" class="tree-block">
+-                            <tree-node :node="root" :level="0"></tree-node>
+-                        </div>
+-                    </template>
++                    <tree-node v-for="root in treeRoots" :key="root.id" :node="root" :level="0"></tree-node>
+                 </div>
+             </div>
+         </section>
+@@ -221,45 +216,49 @@
+             <div class="toolbar">
+                 <div class="tb-left">Оформление столбцов и значений таблицы</div>
+             </div>
+-            <div class="page choices-page" @scroll="closeStylePop">
+-                <div class="st-list">
+-                    <div class="st-list-head">
+-                        <span>Столбец</span><span>Весь столбец</span><span>Значения <span class="st-list-hint" v-if="canEdit">— нажми на значение, чтобы изменить его вид</span></span>
+-                    </div>
+-                    <div v-for="b in styleBlocks" :key="b.field" class="st-band" :class="{ 'st-unique': !b.valuesOn }">
+-                        <div class="st-name">
++            <div class="page choices-page">
++                <!-- Блок на каждый столбец таблицы, в том же порядке: первая строка —
++                     оформление столбца целиком, ниже — значения (из справочника и из данных). -->
++                <div class="st-grid">
++                    <div v-for="b in styleBlocks" :key="b.field" class="st-block">
++                        <div class="st-head">
+                             <span class="st-title">{{ b.label }}</span>
+                             <span v-if="b.extra" class="st-tag" title="Пользовательское поле">польз.</span>
+                             <span v-if="b.orphan" class="st-tag" title="Справочник поля, которого нет в таблице">вне таблицы</span>
++                            <span v-if="b.valuesOn" class="st-head-n" title="Значений">{{ b.values.length }}</span>
+                         </div>
+-                        <div class="st-colstyle">
+-                            <template v-if="!b.orphan">
+-                                <style-controls :value="columnStyles[b.field]" :disabled="!canEdit" @change="setColumnStyle(b.field, $event)"></style-controls>
+-                                <span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)">↺</span>
+-                            </template>
+-                        </div>
+-                        <div class="st-values">
+-                            <template v-if="b.valuesOn">
+-                                <span v-for="v in b.values" :key="v.key" class="st-chip"
+-                                    :class="{ unused: v.count === 0, open: stylePop && stylePop.field === b.field && stylePop.key === v.key, ro: !canEdit }"
+-                                    :title="'ПК с этим значением: ' + v.count"
+-                                    @click="openStylePop($event, b, v)">
+-                                    <span class="st-chip-val" :style="effectiveStyle(b.field, v.choice)">{{ v.value }}</span><span class="st-chip-n">{{ v.count }}</span>
+-                                </span>
+-                                <input v-if="addingValue === b.field" class="input st-add-input" v-model="newChoiceValue[b.field]" placeholder="Новое значение"
+-                                    @keydown.enter="addChoice(b.field)" @keydown.esc="addingValue = null" @blur="addingValue = null">
+-                                <span v-else-if="canEdit" class="st-chip st-chip-add" title="Добавить значение в справочник" @click="startAddValue(b.field)">+</span>
+-                                <span v-if="!b.values.length && addingValue !== b.field" class="st-none">значений пока нет</span>
+-                            </template>
+-                            <span v-else class="st-none">значения уникальны — оформляется только столбец целиком</span>
++                        <div v-if="!b.orphan" class="st-row st-colrow">
++                            <span class="st-val"><span :style="effectiveStyle(b.field, null)">Весь столбец</span></span>
++                            <span class="st-n"></span>
++                            <style-controls :value="columnStyles[b.field]" :disabled="!canEdit" @change="setColumnStyle(b.field, $event)"></style-controls>
++                            <span class="st-act"><span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)">↺</span></span>
+                         </div>
++                        <template v-if="b.valuesOn">
++                            <div class="st-values">
++                                <div v-for="v in b.values" :key="v.key" class="st-row" :class="{ unused: v.count === 0 }">
++                                    <span class="st-val" :title="v.value"><span :style="effectiveStyle(b.field, v.choice)">{{ v.value }}</span></span>
++                                    <span class="st-n" :title="'ПК с этим значением: ' + v.count">{{ v.count }}</span>
++                                    <style-controls :value="v.choice" :disabled="!canEdit" @change="setValueStyle(b.field, v, $event)"></style-controls>
++                                    <span class="st-act">
++                                        <span v-if="canEdit && hasStyle(v.choice)" class="st-reset" title="Сбросить оформление" @click="resetValueStyle(b.field, v)">↺</span>
++                                        <span v-else-if="canEdit && v.choice && v.count === 0" class="st-del" title="Удалить из справочника (в таблице не встречается)" @click="deleteChoice(v.choice)">✕</span>
++                                    </span>
++                                </div>
++                                <div v-if="!b.values.length" class="st-empty">Значений пока нет</div>
++                            </div>
++                            <div v-if="canEdit" class="st-add">
++                                <input class="input" v-model="newChoiceValue[b.field]" placeholder="Новое значение" @keydown.enter="addChoice(b.field)">
++                                <button class="btn" title="Добавить в справочник" @click="addChoice(b.field)">+</button>
++                            </div>
++                        </template>
++                        <div v-else class="st-empty" title="Значения почти всегда разные, поэтому оформляется только столбец целиком">Значения уникальны</div>
+                     </div>
+                 </div>
+ 
+                 <div class="fd-panel">
+                     <div class="fd-head">
+                         <span class="fd-title">Пользовательские поля</span>
+-                        <span class="fd-sub">Дополнительные столбцы таблицы — стоят перед «Статусом» в этом порядке</span>
++                        <span class="fd-sub">столбцы перед «Статусом», в этом порядке</span>
+                     </div>
+                     <table v-if="fieldDefs.length" class="fd-table">
+                         <thead>
+@@ -292,20 +291,6 @@
+                 </div>
+             </div>
+ 
+-            <!-- Оформление одного значения -->
+-            <div v-if="stylePop && stylePopEntry" class="style-pop" :style="{ top: stylePop.top + 'px', left: stylePop.left + 'px' }">
+-                <div class="sp-head">
+-                    <span class="sp-value" :style="effectiveStyle(stylePop.field, stylePopEntry.entry.choice)">{{ stylePopEntry.entry.value }}</span>
+-                    <span class="sp-n">ПК: {{ stylePopEntry.entry.count }}</span>
+-                </div>
+-                <div class="sp-body">
+-                    <style-controls :value="stylePopEntry.entry.choice" @change="setValueStyle(stylePop.field, stylePopEntry.entry, $event)"></style-controls>
+-                    <span class="sp-actions">
+-                        <button v-if="hasStyle(stylePopEntry.entry.choice)" class="btn" @click="resetValueStyle(stylePop.field, stylePopEntry.entry)">Сбросить</button>
+-                        <button v-if="stylePopEntry.entry.choice && stylePopEntry.entry.count === 0" class="btn" title="Удалить значение из справочника" @click="deleteChoice(stylePopEntry.entry.choice)">Удалить</button>
+-                    </span>
+-                </div>
+-            </div>
+         </section>
+ 
+         <!-- ================= История ================= -->
+@@ -335,10 +320,10 @@
+                     </thead>
+                     <tbody v-for="day in historyDays" :key="day.key">
+                         <tr class="h-day">
+-                            <td colspan="4"><span class="h-day-date">{{ day.date }}</span><span class="h-day-count">{{ day.items.length }}</span></td>
++                            <td colspan="4">{{ day.date }}<span class="h-day-count">({{ day.items.length }})</span></td>
+                         </tr>
+                         <tr v-for="item in day.items" :key="item.id">
+-                            <td class="h-time"><span class="t-hm">{{ timeParts(item.at).hm }}</span><span class="t-s">{{ timeParts(item.at).s }}</span></td>
++                            <td class="h-time">{{ formatClock(item.at) }}</td>
+                             <td class="h-obj">
+                                 <span v-if="item.entity === 'computers'" class="h-link" @click="openCardById(item.entity_id)" title="Открыть карточку">{{ item.title || ('ПК #' + item.entity_id) }}</span>
+                                 <span v-else class="h-other" :title="entityLabel(item.entity) + ' ' + (item.title || ('#' + item.entity_id))"><span class="h-obj-kind">{{ entityLabel(item.entity) }}</span>{{ item.title || ('#' + item.entity_id) }}</span>

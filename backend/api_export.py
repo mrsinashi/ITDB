@@ -6,7 +6,9 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
-from api_computers import list_computers
+from api_computers import is_reserved_field_key, list_computers
+from db import SessionLocal
+from models import FieldDef
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -38,10 +40,39 @@ COLUMNS = [
 ]
 
 
+def get_export_columns():
+    """Встроенные столбцы + пользовательские поля (перед «Статус», как в таблице)."""
+    session = SessionLocal()
+
+    try:
+        field_defs = (
+            session.query(FieldDef)
+            .filter(FieldDef.archived == False)
+            .order_by(FieldDef.sort, FieldDef.id)
+            .all()
+        )
+
+        extra_columns = [
+            {"field": fd.key, "header": fd.label, "width": 14, "wrap": True}
+            for fd in field_defs
+            if not is_reserved_field_key(fd.key)
+        ]
+    finally:
+        session.close()
+
+    status_index = next(
+        (i for i, column in enumerate(COLUMNS) if column["field"] == "status"),
+        len(COLUMNS),
+    )
+
+    return COLUMNS[:status_index] + extra_columns + COLUMNS[status_index:]
+
+
 @router.get("/computers.xlsx")
 def export_computers():
     data = list_computers()
     rows = data.get("rows", [])
+    columns = get_export_columns()
 
     wb = Workbook()
     ws = wb.active
@@ -50,13 +81,13 @@ def export_computers():
     header_font = Font(bold=True)
     wrap_alignment = Alignment(wrap_text=True, vertical="top")
 
-    for col_index, column in enumerate(COLUMNS, start=1):
+    for col_index, column in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=col_index, value=column["header"])
         cell.font = header_font
         ws.column_dimensions[cell.column_letter].width = column["width"]
 
     for row_index, row in enumerate(rows, start=2):
-        for col_index, column in enumerate(COLUMNS, start=1):
+        for col_index, column in enumerate(columns, start=1):
             value = row.get(column["field"])
             cell = ws.cell(row=row_index, column=col_index, value=value)
 

@@ -1,10 +1,10 @@
 from io import BytesIO
-import re
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from openpyxl import load_workbook
 from sqlalchemy import func
 
+from auth import require_admin
 from db import SessionLocal
 from models import (
     Choice,
@@ -21,6 +21,7 @@ from api_import import (
     HEADER_MAPPING,
     IMPORTANT_FIELDS,
     cell_to_text,
+    clean_multiline,
     clean_text,
     detect_header,
     normalize_header,
@@ -28,6 +29,7 @@ from api_import import (
     parse_int,
     parse_ips,
     parse_macs,
+    split_vacuum_logins,
 )
 
 router = APIRouter(prefix="/api/import", tags=["import"])
@@ -222,6 +224,7 @@ def seed_base_statuses(session):
 async def apply_import(
     file: UploadFile = File(...),
     confirm: bool = Form(False),
+    user=Depends(require_admin),
 ):
     name = (file.filename or "").lower()
 
@@ -413,7 +416,7 @@ async def apply_import(
                     message,
                 )
 
-            note = clean_text(rec.get("note"))
+            note = clean_multiline(rec.get("note"))
 
             printer = clean_text(rec.get("printer_skip"))
 
@@ -515,53 +518,45 @@ async def apply_import(
                     )
                     session.flush()
 
-            vacuum_raw = clean_text(rec.get("vacuum"))
+            for login in split_vacuum_logins(rec.get("vacuum")):
+                account = get_or_create_vacuum_account(session, login)
 
-            if vacuum_raw:
-                for login in re.split(r"[\n\r,;]+", vacuum_raw):
-                    login = login.strip().lower()
+                computer_link = (
+                    session.query(VacuumAccountComputer)
+                    .filter(
+                        VacuumAccountComputer.account_id == account.id,
+                        VacuumAccountComputer.computer_id == computer.id,
+                    )
+                    .first()
+                )
 
-                    if not login:
-                        continue
+                if not computer_link:
+                    session.add(
+                        VacuumAccountComputer(
+                            account_id=account.id,
+                            computer_id=computer.id,
+                        )
+                    )
+                    session.flush()
 
-                    account = get_or_create_vacuum_account(session, login)
-
-                    computer_link = (
-                        session.query(VacuumAccountComputer)
+                if person:
+                    person_link = (
+                        session.query(VacuumAccountPerson)
                         .filter(
-                            VacuumAccountComputer.account_id == account.id,
-                            VacuumAccountComputer.computer_id == computer.id,
+                            VacuumAccountPerson.account_id == account.id,
+                            VacuumAccountPerson.person_id == person.id,
                         )
                         .first()
                     )
 
-                    if not computer_link:
+                    if not person_link:
                         session.add(
-                            VacuumAccountComputer(
+                            VacuumAccountPerson(
                                 account_id=account.id,
-                                computer_id=computer.id,
+                                person_id=person.id,
                             )
                         )
                         session.flush()
-
-                    if person:
-                        person_link = (
-                            session.query(VacuumAccountPerson)
-                            .filter(
-                                VacuumAccountPerson.account_id == account.id,
-                                VacuumAccountPerson.person_id == person.id,
-                            )
-                            .first()
-                        )
-
-                        if not person_link:
-                            session.add(
-                                VacuumAccountPerson(
-                                    account_id=account.id,
-                                    person_id=person.id,
-                                )
-                            )
-                            session.flush()
 
         session.commit()
 

@@ -149,6 +149,45 @@ def clean_text(value):
     return " ".join(text.split())
 
 
+def clean_multiline(value):
+    """Как clean_text, но сохраняет переносы строк (для примечаний)."""
+    text = cell_to_text(value)
+
+    if text is None:
+        return None
+
+    lines = []
+
+    for line in text.splitlines():
+        line = " ".join(line.split())
+
+        if line:
+            lines.append(line)
+
+    return "\n".join(lines) if lines else None
+
+
+def split_vacuum_logins(value):
+    """Логины VACUUM из ячейки: через перенос строки, пробел, запятую или ';'.
+
+    Возвращает список в нижнем регистре без повторов (порядок сохраняется).
+    """
+    text = cell_to_text(value)
+
+    if text is None:
+        return []
+
+    logins = []
+
+    for login in re.split(r"[\s,;]+", text):
+        login = login.strip().lower()
+
+        if login and login not in logins:
+            logins.append(login)
+
+    return logins
+
+
 def looks_like_hostname(value):
     if not value:
         return False
@@ -522,14 +561,9 @@ async def analyze(file: UploadFile = File(...)):
         if hostname:
             dup_hostname[hostname.lower()].append(row_label)
 
-        vacuum_raw = clean_text(rec.get("vacuum"))
-        if vacuum_raw:
-            for login in re.split(r"[\n\r,;]+", vacuum_raw):
-                login = login.strip().lower()
-
-                if login:
-                    vacuum_logins.add(login)
-                    dup_vacuum[login].append(row_label)
+        for login in split_vacuum_logins(rec.get("vacuum")):
+            vacuum_logins.add(login)
+            dup_vacuum[login].append(row_label)
 
         for source_key, target_key in (
             ("os", "os"),

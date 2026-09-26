@@ -164,6 +164,8 @@ class User(Base):
     password_hash = Column(Text, nullable=False)
     role = Column(Text, nullable=False, server_default="reader")
     archived = Column(Boolean, nullable=False, server_default="false")
+    # Личные настройки интерфейса: {"theme": "blue"}
+    prefs = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -187,3 +189,14 @@ class FieldDef(Base):
     field_type = Column(Text, nullable=False, server_default="text")
     sort = Column(Integer, nullable=False, server_default="0")
     archived = Column(Boolean, nullable=False, server_default="false")
+
+
+class ColumnStyle(Base):
+    """Оформление столбца таблицы целиком (значения могут его переопределить)."""
+    __tablename__ = "column_styles"
+
+    field = Column(Text, primary_key=True)
+    color = Column(Text, nullable=True)
+    bg_color = Column(Text, nullable=True)
+    bold = Column(Boolean, nullable=False, server_default="false")
+    italic = Column(Boolean, nullable=False, server_default="false")

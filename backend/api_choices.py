@@ -1,22 +1,8 @@
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
-from auth import get_current_user
+from auth import require_editor
 from db import SessionLocal
 from models import Choice
-
-LABEL_DEFAULTS = [
-    "Адм", "Мед", "Мед П", "Мед С", "Мед ПС",
-    "Апп", "Каф", "Прочие", "Эко", "ИТ", "Стат", "Хоз"
-]
-
-def seed_label_choices(session):
-    exists = session.query(Choice).filter(Choice.field == "label").first()
-    if exists:
-        return
-    max_sort = session.query(func.max(Choice.sort)).filter(Choice.field == "label").scalar() or 0
-    for i, value in enumerate(LABEL_DEFAULTS):
-        session.add(Choice(field="label", value=value, sort=max_sort + i + 1))
-    session.flush()
 
 router = APIRouter(prefix="/api/choices", tags=["choices"])
 
@@ -25,8 +11,6 @@ router = APIRouter(prefix="/api/choices", tags=["choices"])
 def list_choices():
     session = SessionLocal()
     try:
-        seed_label_choices(session)
-        session.commit()
         choices = (
             session.query(Choice)
             .order_by(Choice.field, Choice.sort, Choice.id)
@@ -54,7 +38,7 @@ def list_choices():
 @router.post("")
 def create_choice(
     payload: dict = Body(...),
-    user=Depends(get_current_user),
+    user=Depends(require_editor),
 ):
     field = (payload.get("field") or "").strip()
     value = (payload.get("value") or "").strip()
@@ -101,7 +85,7 @@ def create_choice(
 def update_choice(
     choice_id: int,
     payload: dict = Body(...),
-    user=Depends(get_current_user),
+    user=Depends(require_editor),
 ):
     session = SessionLocal()
     try:
@@ -168,7 +152,7 @@ def update_choice(
 @router.delete("/{choice_id}")
 def delete_choice(
     choice_id: int,
-    user=Depends(get_current_user),
+    user=Depends(require_editor),
 ):
     session = SessionLocal()
     try:
