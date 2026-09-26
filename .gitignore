@@ -2,5 +2,5 @@
 __pycache__/
 *.pyc
 .env
-CONTEXT.txt
-mkcontext.sh
+_patches/
+_BACKUP/

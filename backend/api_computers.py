@@ -746,45 +746,6 @@ def update_computer(
     finally:
         session.close()
 
-@router.get("/computers/{computer_id}/history")
-def computer_history(computer_id: int):
-    session = SessionLocal()
-
-    try:
-        computer = session.get(Computer, computer_id)
-
-        if not computer:
-            raise HTTPException(
-                status_code=404,
-                detail="Компьютер не найден.",
-            )
-
-        items = (
-            session.query(History)
-            .filter(
-                History.entity == "computers",
-                History.entity_id == computer_id,
-            )
-            .order_by(History.at.desc())
-            .limit(20)
-            .all()
-        )
-
-        return {
-            "items": [
-                {
-                    "id": item.id,
-                    "at": item.at,
-                    "user_name": item.user_name,
-                    "changes": item.changes or {},
-                }
-                for item in items
-            ]
-        }
-
-    finally:
-        session.close()
-
 @router.get("/computers/{computer_id}")
 def get_computer(computer_id: int):
     session = SessionLocal()
