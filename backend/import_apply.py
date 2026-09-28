@@ -5,7 +5,7 @@ from openpyxl import load_workbook
 from sqlalchemy import func
 
 from auth import require_admin
-from db import SessionLocal
+from db import get_db
 from models import (
     Choice,
     Computer,
@@ -225,6 +225,7 @@ async def apply_import(
     file: UploadFile = File(...),
     confirm: bool = Form(False),
     user=Depends(require_admin),
+    session=Depends(get_db),
 ):
     name = (file.filename or "").lower()
 
@@ -253,330 +254,313 @@ async def apply_import(
             "sheet": sheet_title,
         }
 
-    session = SessionLocal()
+    existing_computers = session.query(func.count(Computer.id)).scalar()
 
-    try:
-        existing_computers = session.query(func.count(Computer.id)).scalar()
+    if existing_computers:
+        raise HTTPException(
+            status_code=409,
+            detail="В базе уже есть компьютеры. Повторный импорт пока не поддерживается.",
+        )
 
-        if existing_computers:
-            raise HTTPException(
-                status_code=409,
-                detail="В базе уже есть компьютеры. Повторный импорт пока не поддерживается.",
+    seed_base_statuses(session)
+
+    stats = {
+        "rows": 0,
+        "computers": 0,
+        "anomalies": 0,
+    }
+
+    anomalies = []
+
+    def add_anomaly(row_label, field, value, message):
+        stats["anomalies"] += 1
+
+        if len(anomalies) < 100:
+            anomalies.append(
+                {
+                    "row": row_label,
+                    "field": field,
+                    "value": value,
+                    "message": message,
+                }
             )
 
-        seed_base_statuses(session)
+    for data_index, row in enumerate(rows[header_index + 1 :]):
+        if all(v is None for v in row):
+            continue
 
-        stats = {
-            "rows": 0,
-            "computers": 0,
-            "anomalies": 0,
-        }
+        rec = {}
 
-        anomalies = []
+        for index, key in col_map.items():
+            rec[key] = row[index] if index < len(row) else None
 
-        def add_anomaly(row_label, field, value, message):
-            stats["anomalies"] += 1
+        if all(cell_to_text(rec.get(field)) is None for field in IMPORTANT_FIELDS):
+            continue
 
-            if len(anomalies) < 100:
-                anomalies.append(
-                    {
-                        "row": row_label,
-                        "field": field,
-                        "value": value,
-                        "message": message,
-                    }
+        stats["rows"] += 1
+
+        excel_row = header_index + data_index + 2
+        row_num_text = cell_to_text(rec.get("row_num"))
+
+        if row_num_text:
+            row_label = f"строка {excel_row}, #{row_num_text}"
+        else:
+            row_label = f"строка {excel_row}"
+
+        location_id = None
+
+        address = clean_text(rec.get("address"))
+        department = clean_text(rec.get("department"))
+
+        floor_raw = clean_text(rec.get("floor"))
+        floor = None
+
+        if floor_raw:
+            floor_int, floor_ok = parse_int(floor_raw)
+
+            if floor_ok and floor_int is not None:
+                floor = str(floor_int)
+            else:
+                floor = floor_raw
+
+        room_code = clean_text(rec.get("room_code"))
+        room_name = clean_text(rec.get("room_name"))
+
+        if not address:
+            add_anomaly(row_label, "Адрес", address, "Пустой адрес")
+
+        if address:
+            building = get_or_create_location(session, None, "building", address, None)
+            location_id = building.id
+
+            if department:
+                department_location = get_or_create_location(
+                    session,
+                    building.id,
+                    "department",
+                    department,
+                    None,
                 )
 
-        for data_index, row in enumerate(rows[header_index + 1 :]):
-            if all(v is None for v in row):
-                continue
+                location_id = department_location.id
+                parent_for_room = department_location.id
 
-            rec = {}
-
-            for index, key in col_map.items():
-                rec[key] = row[index] if index < len(row) else None
-
-            if all(cell_to_text(rec.get(field)) is None for field in IMPORTANT_FIELDS):
-                continue
-
-            stats["rows"] += 1
-
-            excel_row = header_index + data_index + 2
-            row_num_text = cell_to_text(rec.get("row_num"))
-
-            if row_num_text:
-                row_label = f"строка {excel_row}, #{row_num_text}"
-            else:
-                row_label = f"строка {excel_row}"
-
-            location_id = None
-
-            address = clean_text(rec.get("address"))
-            department = clean_text(rec.get("department"))
-
-            floor_raw = clean_text(rec.get("floor"))
-            floor = None
-
-            if floor_raw:
-                floor_int, floor_ok = parse_int(floor_raw)
-
-                if floor_ok and floor_int is not None:
-                    floor = str(floor_int)
-                else:
-                    floor = floor_raw
-
-            room_code = clean_text(rec.get("room_code"))
-            room_name = clean_text(rec.get("room_name"))
-
-            if not address:
-                add_anomaly(row_label, "Адрес", address, "Пустой адрес")
-
-            if address:
-                building = get_or_create_location(session, None, "building", address, None)
-                location_id = building.id
-
-                if department:
-                    department_location = get_or_create_location(
+                if floor:
+                    floor_location = get_or_create_location(
                         session,
-                        building.id,
-                        "department",
-                        department,
+                        department_location.id,
+                        "floor",
+                        floor,
                         None,
                     )
 
-                    location_id = department_location.id
-                    parent_for_room = department_location.id
+                    location_id = floor_location.id
+                    parent_for_room = floor_location.id
 
-                    if floor:
-                        floor_location = get_or_create_location(
-                            session,
-                            department_location.id,
-                            "floor",
-                            floor,
-                            None,
-                        )
+                if room_code or room_name:
+                    room_location = get_or_create_location(
+                        session,
+                        parent_for_room,
+                        "room",
+                        room_name,
+                        room_code,
+                    )
 
-                        location_id = floor_location.id
-                        parent_for_room = floor_location.id
-
-                    if room_code or room_name:
-                        room_location = get_or_create_location(
-                            session,
-                            parent_for_room,
-                            "room",
-                            room_name,
-                            room_code,
-                        )
-
-                        location_id = room_location.id
-                else:
-                    add_anomaly(row_label, "Отделение", department, "Пустое отделение")
-
-            person = None
-            person_name = clean_text(rec.get("person"))
-
-            if person_name:
-                person = get_or_create_person(session, person_name)
-
-            seat_no, seat_ok = parse_int(rec.get("seat_no"))
-
-            if not seat_ok:
-                add_anomaly(
-                    row_label,
-                    "№",
-                    cell_to_text(rec.get("seat_no")),
-                    "Номер места не является целым числом",
-                )
-                seat_no = None
-
-            row_num_int, row_num_ok = parse_int(rec.get("row_num"))
-
-            if row_num_ok and row_num_int is not None:
-                seat_sort = float(row_num_int)
+                    location_id = room_location.id
             else:
-                seat_sort = float(excel_row)
+                add_anomaly(row_label, "Отделение", department, "Пустое отделение")
 
-            ips, ip_issues = parse_ips(rec.get("ip"))
+        person = None
+        person_name = clean_text(rec.get("person"))
 
-            for bad_ip, message in ip_issues:
-                add_anomaly(row_label, "IP", bad_ip, message)
+        if person_name:
+            person = get_or_create_person(session, person_name)
 
-            macs, mac_issues = parse_macs(rec.get("mac"))
+        seat_no, seat_ok = parse_int(rec.get("seat_no"))
 
-            for bad_mac, message in mac_issues:
-                add_anomaly(row_label, "MAC", bad_mac, message)
+        if not seat_ok:
+            add_anomaly(
+                row_label,
+                "№",
+                cell_to_text(rec.get("seat_no")),
+                "Номер места не является целым числом",
+            )
+            seat_no = None
 
-            drive_values, drive_issues = parse_drive_text(rec.get("drive"))
+        row_num_int, row_num_ok = parse_int(rec.get("row_num"))
 
-            for message in drive_issues:
-                add_anomaly(
-                    row_label,
-                    "DRIVE",
-                    clean_text(rec.get("drive")),
-                    message,
-                )
+        if row_num_ok and row_num_int is not None:
+            seat_sort = float(row_num_int)
+        else:
+            seat_sort = float(excel_row)
 
-            note = clean_multiline(rec.get("note"))
+        ips, ip_issues = parse_ips(rec.get("ip"))
 
-            printer = clean_text(rec.get("printer_skip"))
+        for bad_ip, message in ip_issues:
+            add_anomaly(row_label, "IP", bad_ip, message)
 
-            if printer:
-                add_anomaly(
-                    row_label,
-                    "Принтер",
-                    printer,
-                    "Значение из столбца Принтер пока не импортируется как принтер",
-                )
+        macs, mac_issues = parse_macs(rec.get("mac"))
 
-                if note:
-                    note = f"{note}\nПринтер: {printer}"
-                else:
-                    note = f"Принтер: {printer}"
+        for bad_mac, message in mac_issues:
+            add_anomaly(row_label, "MAC", bad_mac, message)
 
-            extra = {}
+        drive_values, drive_issues = parse_drive_text(rec.get("drive"))
 
-            for extra_key, source_key in (
-                ("GSIT", "gsit"),
-                ("Сост.", "state"),
-                ("Метка", "label"),
-            ):
-                value = clean_text(rec.get(source_key))
-
-                if value:
-                    extra[extra_key] = value
-
-            computer = Computer(
-                status="установлен",
-                location_id=location_id,
-                seat_no=seat_no,
-                seat_sort=seat_sort,
-                temp_note=None,
-                hostname=clean_text(rec.get("hostname")),
-                ip="\n".join(ips) if ips else None,
-                mac="\n".join(macs) if macs else None,
-                inv_no=clean_text(rec.get("inv_no")),
-                serial=None,
-                type=clean_text(rec.get("type")),
-                model=clean_text(rec.get("model")),
-                os=clean_text(rec.get("os")),
-                cpu=clean_text(rec.get("cpu")),
-                ram=clean_text(rec.get("ram")),
-                drive="\n".join(drive_values) if drive_values else None,
-                gpu=clean_text(rec.get("gpu")),
-                vnc=None,
-                glpi_id=None,
-                extra=extra,
-                note=note,
-                version=1,
+        for message in drive_issues:
+            add_anomaly(
+                row_label,
+                "DRIVE",
+                clean_text(rec.get("drive")),
+                message,
             )
 
-            session.add(computer)
-            session.flush()
+        note = clean_multiline(rec.get("note"))
 
-            stats["computers"] += 1
+        printer = clean_text(rec.get("printer_skip"))
 
-            for field, value in (
-                ("os", computer.os),
-                ("type", computer.type),
-                ("model", computer.model),
-                ("cpu", computer.cpu),
-                ("gpu", computer.gpu),
-            ):
-                ensure_choice(session, field, value)
+        if printer:
+            add_anomaly(
+                row_label,
+                "Принтер",
+                printer,
+                "Значение из столбца Принтер пока не импортируется как принтер",
+            )
 
-            for drive_value in drive_values:
-                ensure_choice(session, "drive", drive_value)
+            if note:
+                note = f"{note}\nПринтер: {printer}"
+            else:
+                note = f"Принтер: {printer}"
 
-            extra_field_map = {
-                "GSIT": "gsit",
-                "Сост.": "state",
-                "Метка": "label",
-            }
-            
-            for extra_key, extra_value in extra.items():
-                field_name = extra_field_map.get(extra_key, extra_key)
-                ensure_choice(session, field_name, extra_value)
+        extra = {}
 
-            if person:
-                link = (
-                    session.query(ComputerPerson)
-                    .filter(
-                        ComputerPerson.computer_id == computer.id,
-                        ComputerPerson.person_id == person.id,
-                    )
-                    .first()
-                )
+        for extra_key, source_key in (
+            ("GSIT", "gsit"),
+            ("Сост.", "state"),
+            ("Метка", "label"),
+        ):
+            value = clean_text(rec.get(source_key))
 
-                if not link:
-                    session.add(
-                        ComputerPerson(
-                            computer_id=computer.id,
-                            person_id=person.id,
-                            is_main=True,
-                            sort=0,
-                        )
-                    )
-                    session.flush()
+            if value:
+                extra[extra_key] = value
 
-            for login in split_vacuum_logins(rec.get("vacuum")):
-                account = get_or_create_vacuum_account(session, login)
-
-                computer_link = (
-                    session.query(VacuumAccountComputer)
-                    .filter(
-                        VacuumAccountComputer.account_id == account.id,
-                        VacuumAccountComputer.computer_id == computer.id,
-                    )
-                    .first()
-                )
-
-                if not computer_link:
-                    session.add(
-                        VacuumAccountComputer(
-                            account_id=account.id,
-                            computer_id=computer.id,
-                        )
-                    )
-                    session.flush()
-
-                if person:
-                    person_link = (
-                        session.query(VacuumAccountPerson)
-                        .filter(
-                            VacuumAccountPerson.account_id == account.id,
-                            VacuumAccountPerson.person_id == person.id,
-                        )
-                        .first()
-                    )
-
-                    if not person_link:
-                        session.add(
-                            VacuumAccountPerson(
-                                account_id=account.id,
-                                person_id=person.id,
-                            )
-                        )
-                        session.flush()
-
-        session.commit()
-
-        return {
-            "ok": True,
-            "sheet": sheet_title,
-            "stats": stats,
-            "anomalies": anomalies,
-        }
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Импорт не выполнен: {e}",
+        computer = Computer(
+            status="установлен",
+            location_id=location_id,
+            seat_no=seat_no,
+            seat_sort=seat_sort,
+            temp_note=None,
+            hostname=clean_text(rec.get("hostname")),
+            ip="\n".join(ips) if ips else None,
+            mac="\n".join(macs) if macs else None,
+            inv_no=clean_text(rec.get("inv_no")),
+            serial=None,
+            type=clean_text(rec.get("type")),
+            model=clean_text(rec.get("model")),
+            os=clean_text(rec.get("os")),
+            cpu=clean_text(rec.get("cpu")),
+            ram=clean_text(rec.get("ram")),
+            drive="\n".join(drive_values) if drive_values else None,
+            gpu=clean_text(rec.get("gpu")),
+            vnc=None,
+            glpi_id=None,
+            extra=extra,
+            note=note,
+            version=1,
         )
 
-    finally:
-        session.close()
+        session.add(computer)
+        session.flush()
+
+        stats["computers"] += 1
+
+        for field, value in (
+            ("os", computer.os),
+            ("type", computer.type),
+            ("model", computer.model),
+            ("cpu", computer.cpu),
+            ("gpu", computer.gpu),
+        ):
+            ensure_choice(session, field, value)
+
+        for drive_value in drive_values:
+            ensure_choice(session, "drive", drive_value)
+
+        extra_field_map = {
+            "GSIT": "gsit",
+            "Сост.": "state",
+            "Метка": "label",
+        }
+
+        for extra_key, extra_value in extra.items():
+            field_name = extra_field_map.get(extra_key, extra_key)
+            ensure_choice(session, field_name, extra_value)
+
+        if person:
+            link = (
+                session.query(ComputerPerson)
+                .filter(
+                    ComputerPerson.computer_id == computer.id,
+                    ComputerPerson.person_id == person.id,
+                )
+                .first()
+            )
+
+            if not link:
+                session.add(
+                    ComputerPerson(
+                        computer_id=computer.id,
+                        person_id=person.id,
+                        is_main=True,
+                        sort=0,
+                    )
+                )
+                session.flush()
+
+        for login in split_vacuum_logins(rec.get("vacuum")):
+            account = get_or_create_vacuum_account(session, login)
+
+            computer_link = (
+                session.query(VacuumAccountComputer)
+                .filter(
+                    VacuumAccountComputer.account_id == account.id,
+                    VacuumAccountComputer.computer_id == computer.id,
+                )
+                .first()
+            )
+
+            if not computer_link:
+                session.add(
+                    VacuumAccountComputer(
+                        account_id=account.id,
+                        computer_id=computer.id,
+                    )
+                )
+                session.flush()
+
+            if person:
+                person_link = (
+                    session.query(VacuumAccountPerson)
+                    .filter(
+                        VacuumAccountPerson.account_id == account.id,
+                        VacuumAccountPerson.person_id == person.id,
+                    )
+                    .first()
+                )
+
+                if not person_link:
+                    session.add(
+                        VacuumAccountPerson(
+                            account_id=account.id,
+                            person_id=person.id,
+                        )
+                    )
+                    session.flush()
+
+    session.commit()
+
+    return {
+        "ok": True,
+        "sheet": sheet_title,
+        "stats": stats,
+        "anomalies": anomalies,
+    }

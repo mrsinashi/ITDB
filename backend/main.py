@@ -1,6 +1,8 @@
+import logging
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -19,6 +21,30 @@ from api_field_defs import router as field_defs_router
 from api_column_styles import router as column_styles_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
+
+logger = logging.getLogger("uvicorn.error")
+
+
+@app.middleware("http")
+async def unexpected_error(request: Request, call_next):
+    """Непредвиденная ошибка (сбой базы, ошибка в коде): изменения запроса уже
+    откатил get_db, пользователь видит короткий текст, полный след — в журнале
+    uvicorn. Ожидаемые ошибки эндпоинты отдают сами через HTTPException.
+    Не @app.exception_handler(Exception): он пробрасывает ошибку дальше, и
+    uvicorn рвёт соединение — следующий запрос браузера может не дойти."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        logger.exception("Ошибка при %s %s", request.method, request.url.path)
+
+        lines = str(exc).strip().splitlines()
+        message = lines[0] if lines else exc.__class__.__name__
+
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Ошибка на сервере: {message}"},
+        )
+
 
 app.include_router(auth_router)
 

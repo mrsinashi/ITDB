@@ -16,7 +16,7 @@ from api_computers import (
     user_field_keys_of,
 )
 from auth import require_editor
-from db import SessionLocal
+from db import get_db
 from models import Computer
 
 router = APIRouter(prefix="/api", tags=["computer actions"])
@@ -64,27 +64,6 @@ def lock_computers(session, ids):
     return [by_id[computer_id] for computer_id in ids]
 
 
-def run(action, error_text):
-    """Общая обёртка: сессия, откат при ошибке, понятный текст."""
-    session = SessionLocal()
-
-    try:
-        result = action(session)
-        session.commit()
-        return result
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(status_code=400, detail=f"{error_text}: {e}")
-
-    finally:
-        session.close()
-
-
 def set_location(batch, computer, location_id, locations_by_id):
     if computer.location_id != location_id:
         batch.record(
@@ -102,142 +81,146 @@ def set_seat(batch, computer, seat_no):
 
 
 @router.post("/computers/move")
-def move_computers(payload: dict = Body(...), user=Depends(require_editor)):
+def move_computers(
+    payload: dict = Body(...),
+    user=Depends(require_editor),
+    session=Depends(get_db),
+):
     """{ids, location_id, seat_no, with_people}. ПК встают в узел по порядку ids
     с номерами seat_no, seat_no+1, … (без номера — в конец узла). Занятые
     номера сдвигаются. with_people=false — пользователи и VACUUM снимаются."""
+    ids = parse_ids(payload.get("ids"))
+    location = get_active_location(session, payload.get("location_id"))
+    start = parse_seat_no(payload.get("seat_no"))
+    with_people = payload.get("with_people", True) is not False
 
-    def action(session):
-        ids = parse_ids(payload.get("ids"))
-        location = get_active_location(session, payload.get("location_id"))
-        start = parse_seat_no(payload.get("seat_no"))
-        with_people = payload.get("with_people", True) is not False
+    computers = lock_computers(session, ids)
+    locations_by_id = load_locations(session)
+    batch = ChangeBatch(user["login"])
 
-        computers = lock_computers(session, ids)
-        locations_by_id = load_locations(session)
-        batch = ChangeBatch(user["login"])
+    for index, computer in enumerate(computers):
+        seat_no = start + index if start is not None else None
 
-        for index, computer in enumerate(computers):
-            seat_no = start + index if start is not None else None
+        set_location(batch, computer, location.id, locations_by_id)
+        set_seat(batch, computer, seat_no)
+        shift_seats(session, batch, location.id, seat_no, set(ids))
+        session.flush()
 
-            set_location(batch, computer, location.id, locations_by_id)
-            set_seat(batch, computer, seat_no)
-            shift_seats(session, batch, location.id, seat_no, set(ids))
-            session.flush()
+        computer.seat_sort = seat_sort_in_location(
+            session, location.id, seat_no, exclude_id=computer.id
+        )
+        session.flush()
 
-            computer.seat_sort = seat_sort_in_location(
-                session, location.id, seat_no, exclude_id=computer.id
-            )
-            session.flush()
+        if not with_people:
+            replace_people(session, batch, None, computer)
 
-            if not with_people:
-                replace_people(session, batch, None, computer)
-
-        batch.finish(session)
-        return {"ok": True, "ids": ids, "changed": batch.changed_ids()}
-
-    return run(action, "Не удалось переместить")
+    batch.finish(session)
+    session.commit()
+    return {"ok": True, "ids": ids, "changed": batch.changed_ids()}
 
 
 @router.post("/computers/swap")
-def swap_computers(payload: dict = Body(...), user=Depends(require_editor)):
+def swap_computers(
+    payload: dict = Body(...),
+    user=Depends(require_editor),
+    session=Depends(get_db),
+):
     """{ids: [a, b]} — два ПК меняются местами (узел, № места, порядок строки).
     Всё остальное (пользователь, VACUUM, имя, IP…) остаётся при своём ПК."""
+    ids = parse_ids(payload.get("ids"), 2)
+    first, second = lock_computers(session, ids)
+    locations_by_id = load_locations(session)
+    batch = ChangeBatch(user["login"])
 
-    def action(session):
-        ids = parse_ids(payload.get("ids"), 2)
-        first, second = lock_computers(session, ids)
-        locations_by_id = load_locations(session)
-        batch = ChangeBatch(user["login"])
+    place_first = (first.location_id, first.seat_no, first.seat_sort)
+    place_second = (second.location_id, second.seat_no, second.seat_sort)
 
-        place_first = (first.location_id, first.seat_no, first.seat_sort)
-        place_second = (second.location_id, second.seat_no, second.seat_sort)
+    for computer, (location_id, seat_no, seat_sort) in (
+        (first, place_second),
+        (second, place_first),
+    ):
+        set_location(batch, computer, location_id, locations_by_id)
+        set_seat(batch, computer, seat_no)
+        computer.seat_sort = seat_sort
 
-        for computer, (location_id, seat_no, seat_sort) in (
-            (first, place_second),
-            (second, place_first),
-        ):
-            set_location(batch, computer, location_id, locations_by_id)
-            set_seat(batch, computer, seat_no)
-            computer.seat_sort = seat_sort
-
-        batch.finish(session)
-        return {"ok": True, "ids": ids, "changed": batch.changed_ids()}
-
-    return run(action, "Не удалось поменять местами")
+    batch.finish(session)
+    session.commit()
+    return {"ok": True, "ids": ids, "changed": batch.changed_ids()}
 
 
 @router.post("/computers/replace")
-def replace_computer(payload: dict = Body(...), user=Depends(require_editor)):
+def replace_computer(
+    payload: dict = Body(...),
+    user=Depends(require_editor),
+    session=Depends(get_db),
+):
     """{old_id, new_id, location_id, with_people}. Новый ПК встаёт на место
     старого (узел, № места, порядок строки) со статусом «установлен»; старый
     уходит в узел location_id (например, склад) без номера места, статус
     «склад». with_people (по умолчанию да) — пользователи и VACUUM старого
     переходят к новому."""
+    ids = parse_ids([payload.get("old_id"), payload.get("new_id")], 2)
+    old, new = lock_computers(session, ids)
+    target = get_active_location(session, payload.get("location_id"))
+    with_people = payload.get("with_people", True) is not False
 
-    def action(session):
-        ids = parse_ids([payload.get("old_id"), payload.get("new_id")], 2)
-        old, new = lock_computers(session, ids)
-        target = get_active_location(session, payload.get("location_id"))
-        with_people = payload.get("with_people", True) is not False
+    locations_by_id = load_locations(session)
+    batch = ChangeBatch(user["login"])
 
-        locations_by_id = load_locations(session)
-        batch = ChangeBatch(user["login"])
+    place = (old.location_id, old.seat_no, old.seat_sort)
 
-        place = (old.location_id, old.seat_no, old.seat_sort)
+    set_location(batch, old, target.id, locations_by_id)
+    set_seat(batch, old, None)
+    session.flush()
+    old.seat_sort = seat_sort_in_location(session, target.id, None, exclude_id=old.id)
 
-        set_location(batch, old, target.id, locations_by_id)
-        set_seat(batch, old, None)
-        session.flush()
-        old.seat_sort = seat_sort_in_location(session, target.id, None, exclude_id=old.id)
+    set_location(batch, new, place[0], locations_by_id)
+    set_seat(batch, new, place[1])
+    new.seat_sort = place[2]
 
-        set_location(batch, new, place[0], locations_by_id)
-        set_seat(batch, new, place[1])
-        new.seat_sort = place[2]
+    batch.record(old, "status", old.status, "склад")
+    old.status = "склад"
+    batch.record(new, "status", new.status, "установлен")
+    new.status = "установлен"
 
-        batch.record(old, "status", old.status, "склад")
-        old.status = "склад"
-        batch.record(new, "status", new.status, "установлен")
-        new.status = "установлен"
+    if with_people:
+        replace_people(session, batch, old, new)
 
-        if with_people:
-            replace_people(session, batch, old, new)
+    batch.record(old, "replaced_by", None, new.hostname or f"ПК #{new.id}")
+    batch.record(new, "replaced", None, old.hostname or f"ПК #{old.id}")
 
-        batch.record(old, "replaced_by", None, new.hostname or f"ПК #{new.id}")
-        batch.record(new, "replaced", None, old.hostname or f"ПК #{old.id}")
-
-        batch.finish(session)
-        return {"ok": True, "ids": ids, "changed": batch.changed_ids()}
-
-    return run(action, "Не удалось заменить")
+    batch.finish(session)
+    session.commit()
+    return {"ok": True, "ids": ids, "changed": batch.changed_ids()}
 
 
 @router.post("/computers/bulk-update")
-def bulk_update(payload: dict = Body(...), user=Depends(require_editor)):
+def bulk_update(
+    payload: dict = Body(...),
+    user=Depends(require_editor),
+    session=Depends(get_db),
+):
     """{ids, field, value} — одно поле у всех выбранных ПК (пустое — очистить)."""
+    ids = parse_ids(payload.get("ids"))
+    field = payload.get("field")
 
-    def action(session):
-        ids = parse_ids(payload.get("ids"))
-        field = payload.get("field")
+    if not isinstance(field, str) or not field or field in BULK_EXCLUDED:
+        raise HTTPException(status_code=400, detail="Это поле нельзя менять сразу у нескольких ПК.")
 
-        if not isinstance(field, str) or not field or field in BULK_EXCLUDED:
-            raise HTTPException(status_code=400, detail="Это поле нельзя менять сразу у нескольких ПК.")
+    computers = lock_computers(session, ids)
+    user_field_keys = user_field_keys_of(session)
+    batch = ChangeBatch(user["login"])
+    changed = []
 
-        computers = lock_computers(session, ids)
-        user_field_keys = user_field_keys_of(session)
-        batch = ChangeBatch(user["login"])
-        changed = []
+    for computer in computers:
+        changes = apply_fields(
+            session, computer, {field: payload.get("value")}, user_field_keys, batch
+        )
 
-        for computer in computers:
-            changes = apply_fields(
-                session, computer, {field: payload.get("value")}, user_field_keys, batch
-            )
+        if changes:
+            save_changes(session, computer, changes, user["login"])
+            changed.append(computer.id)
 
-            if changes:
-                save_changes(session, computer, changes, user["login"])
-                changed.append(computer.id)
-
-        batch.finish(session)
-        return {"ok": True, "ids": ids, "changed": changed}
-
-    return run(action, "Не удалось изменить")
+    batch.finish(session)
+    session.commit()
+    return {"ok": True, "ids": ids, "changed": changed}

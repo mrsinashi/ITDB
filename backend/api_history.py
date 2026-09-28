@@ -1,88 +1,82 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import desc
 
-from db import SessionLocal
+from db import get_db
 from models import Computer, History, Location
 
 router = APIRouter(prefix="/api", tags=["history"])
 
 
 @router.get("/history")
-def history(limit: int = 200):
+def history(limit: int = 200, session=Depends(get_db)):
     if limit < 1:
         limit = 1
 
     if limit > 500:
         limit = 500
 
-    session = SessionLocal()
+    items = (
+        session.query(History)
+        .order_by(desc(History.at), desc(History.id))
+        .limit(limit)
+        .all()
+    )
 
-    try:
-        items = (
-            session.query(History)
-            .order_by(desc(History.at), desc(History.id))
-            .limit(limit)
+    computer_ids = set()
+    location_ids = set()
+
+    for item in items:
+        if item.entity == "computers":
+            computer_ids.add(item.entity_id)
+        elif item.entity == "locations":
+            location_ids.add(item.entity_id)
+
+    hostname_by_id = {}
+
+    if computer_ids:
+        computers = (
+            session.query(Computer)
+            .filter(Computer.id.in_(computer_ids))
             .all()
         )
 
-        computer_ids = set()
-        location_ids = set()
+        for computer in computers:
+            hostname_by_id[computer.id] = computer.hostname
 
-        for item in items:
-            if item.entity == "computers":
-                computer_ids.add(item.entity_id)
-            elif item.entity == "locations":
-                location_ids.add(item.entity_id)
+    location_name_by_id = {}
 
-        hostname_by_id = {}
+    if location_ids:
+        locations = (
+            session.query(Location)
+            .filter(Location.id.in_(location_ids))
+            .all()
+        )
 
-        if computer_ids:
-            computers = (
-                session.query(Computer)
-                .filter(Computer.id.in_(computer_ids))
-                .all()
-            )
+        for location in locations:
+            location_name_by_id[location.id] = location.name
 
-            for computer in computers:
-                hostname_by_id[computer.id] = computer.hostname
+    result = []
 
-        location_name_by_id = {}
+    for item in items:
+        title = None
 
-        if location_ids:
-            locations = (
-                session.query(Location)
-                .filter(Location.id.in_(location_ids))
-                .all()
-            )
+        if item.entity == "computers":
+            title = hostname_by_id.get(item.entity_id)
+        elif item.entity == "locations":
+            title = location_name_by_id.get(item.entity_id)
 
-            for location in locations:
-                location_name_by_id[location.id] = location.name
+        result.append(
+            {
+                "id": item.id,
+                "entity": item.entity,
+                "entity_id": item.entity_id,
+                "user_name": item.user_name,
+                "at": item.at,
+                "title": title,
+                "changes": item.changes,
+            }
+        )
 
-        result = []
-
-        for item in items:
-            title = None
-
-            if item.entity == "computers":
-                title = hostname_by_id.get(item.entity_id)
-            elif item.entity == "locations":
-                title = location_name_by_id.get(item.entity_id)
-
-            result.append(
-                {
-                    "id": item.id,
-                    "entity": item.entity,
-                    "entity_id": item.entity_id,
-                    "user_name": item.user_name,
-                    "at": item.at,
-                    "title": title,
-                    "changes": item.changes,
-                }
-            )
-
-        return {
-            "items": result,
-        }
-
-    finally:
-        session.close()
+    return {
+        "items": result,
+    }

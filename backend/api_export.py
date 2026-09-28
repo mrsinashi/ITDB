@@ -1,13 +1,13 @@
 from datetime import date
 from io import BytesIO
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
-from api_computers import is_reserved_field_key, list_computers
-from db import SessionLocal
+from api_computers import computer_rows, is_reserved_field_key
+from db import get_db
 from models import FieldDef
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -40,25 +40,20 @@ COLUMNS = [
 ]
 
 
-def get_export_columns():
+def get_export_columns(session):
     """Встроенные столбцы + пользовательские поля (перед «Статус», как в таблице)."""
-    session = SessionLocal()
+    field_defs = (
+        session.query(FieldDef)
+        .filter(FieldDef.archived == False)
+        .order_by(FieldDef.sort, FieldDef.id)
+        .all()
+    )
 
-    try:
-        field_defs = (
-            session.query(FieldDef)
-            .filter(FieldDef.archived == False)
-            .order_by(FieldDef.sort, FieldDef.id)
-            .all()
-        )
-
-        extra_columns = [
-            {"field": fd.key, "header": fd.label, "width": 14, "wrap": True}
-            for fd in field_defs
-            if not is_reserved_field_key(fd.key)
-        ]
-    finally:
-        session.close()
+    extra_columns = [
+        {"field": fd.key, "header": fd.label, "width": 14, "wrap": True}
+        for fd in field_defs
+        if not is_reserved_field_key(fd.key)
+    ]
 
     status_index = next(
         (i for i, column in enumerate(COLUMNS) if column["field"] == "status"),
@@ -89,17 +84,17 @@ def fill_sheet(ws, rows, columns):
 
 
 @router.get("/computers.xlsx")
-def export_computers(archive: bool = False):
+def export_computers(archive: bool = False, session=Depends(get_db)):
     """Рабочие ПК; archive=true — ещё лист «Архив» с ПК из архива."""
-    columns = get_export_columns()
+    columns = get_export_columns(session)
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Компьютеры"
-    fill_sheet(ws, list_computers(archived="no")["rows"], columns)
+    fill_sheet(ws, computer_rows(session, "no")["rows"], columns)
 
     if archive:
-        fill_sheet(wb.create_sheet("Архив"), list_computers(archived="yes")["rows"], columns)
+        fill_sheet(wb.create_sheet("Архив"), computer_rows(session, "yes")["rows"], columns)
 
     buffer = BytesIO()
     wb.save(buffer)

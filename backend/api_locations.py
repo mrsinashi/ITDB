@@ -2,7 +2,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
 
 from auth import require_editor
-from db import SessionLocal
+from db import get_db
 from models import Computer, History, Location
 
 router = APIRouter(prefix="/api", tags=["locations"])
@@ -79,103 +79,98 @@ def next_sort(session, parent_id):
 
 
 @router.get("/locations/tree")
-def locations_tree():
-    session = SessionLocal()
+def locations_tree(session=Depends(get_db)):
+    locations = (
+        session.query(Location)
+        .filter(Location.archived == False)
+        .all()
+    )
 
-    try:
-        locations = (
-            session.query(Location)
-            .filter(Location.archived == False)
-            .all()
-        )
+    computer_counts = (
+        session.query(Computer.location_id, func.count(Computer.id))
+        .filter(Computer.archived == False)
+        .group_by(Computer.location_id)
+        .all()
+    )
 
-        computer_counts = (
-            session.query(Computer.location_id, func.count(Computer.id))
-            .filter(Computer.archived == False)
-            .group_by(Computer.location_id)
-            .all()
-        )
+    direct_counts = {}
 
-        direct_counts = {}
+    for location_id, count in computer_counts:
+        if location_id is not None:
+            direct_counts[location_id] = count
 
-        for location_id, count in computer_counts:
-            if location_id is not None:
-                direct_counts[location_id] = count
+    unlocated = (
+        session.query(func.count(Computer.id))
+        .filter(Computer.location_id.is_(None), Computer.archived == False)
+        .scalar()
+    ) or 0
 
-        unlocated = (
-            session.query(func.count(Computer.id))
-            .filter(Computer.location_id.is_(None), Computer.archived == False)
-            .scalar()
-        ) or 0
+    nodes = {}
 
-        nodes = {}
+    for location in locations:
+        nodes[location.id] = {
+            "id": location.id,
+            "parent_id": location.parent_id,
+            "kind": location.kind,
+            "name": location.name,
+            "code": location.code,
+            "sort": location.sort or 0,
+            "direct_count": direct_counts.get(location.id, 0),
+            "total_count": 0,
+            "children": [],
+        }
 
-        for location in locations:
-            nodes[location.id] = {
-                "id": location.id,
-                "parent_id": location.parent_id,
-                "kind": location.kind,
-                "name": location.name,
-                "code": location.code,
-                "sort": location.sort or 0,
-                "direct_count": direct_counts.get(location.id, 0),
-                "total_count": 0,
-                "children": [],
-            }
+    for node in nodes.values():
+        parent_id = node["parent_id"]
 
-        for node in nodes.values():
-            parent_id = node["parent_id"]
+        if parent_id and parent_id in nodes:
+            nodes[parent_id]["children"].append(node)
 
-            if parent_id and parent_id in nodes:
-                nodes[parent_id]["children"].append(node)
+    roots = [node for node in nodes.values() if node["parent_id"] is None or node["parent_id"] not in nodes]
 
-        roots = [node for node in nodes.values() if node["parent_id"] is None or node["parent_id"] not in nodes]
-
-        def sort_nodes(node):
-            node["children"].sort(
-                key=lambda item: (
-                    item["sort"],
-                    (item["name"] or "").lower(),
-                )
-            )
-
-            for child in node["children"]:
-                sort_nodes(child)
-
-        def calculate_totals(node):
-            total = node["direct_count"]
-
-            for child in node["children"]:
-                total += calculate_totals(child)
-
-            node["total_count"] = total
-
-            return total
-
-        roots.sort(
+    def sort_nodes(node):
+        node["children"].sort(
             key=lambda item: (
                 item["sort"],
                 (item["name"] or "").lower(),
             )
         )
 
-        for root in roots:
-            sort_nodes(root)
-            calculate_totals(root)
+        for child in node["children"]:
+            sort_nodes(child)
 
-        return {
-            "roots": roots,
-            "unlocated": unlocated,
-        }
+    def calculate_totals(node):
+        total = node["direct_count"]
 
-    finally:
-        session.close()
+        for child in node["children"]:
+            total += calculate_totals(child)
+
+        node["total_count"] = total
+
+        return total
+
+    roots.sort(
+        key=lambda item: (
+            item["sort"],
+            (item["name"] or "").lower(),
+        )
+    )
+
+    for root in roots:
+        sort_nodes(root)
+        calculate_totals(root)
+
+    return {
+        "roots": roots,
+        "unlocated": unlocated,
+    }
 
 
 @router.post("/locations")
 def create_location(
     payload: dict = Body(...),
     user=Depends(require_editor),
+    session=Depends(get_db),
 ):
     kind = payload.get("kind")
     parent_id = payload.get("parent_id")
@@ -188,68 +183,51 @@ def create_location(
             detail="Неизвестный тип узла.",
         )
 
-    session = SessionLocal()
+    if parent_id is not None:
+        parent = session.get(Location, parent_id)
 
-    try:
-        if parent_id is not None:
-            parent = session.get(Location, parent_id)
-
-            if not parent or parent.archived:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Родительский узел не найден.",
-                )
-
-            if kind not in ALLOWED_CHILDREN.get(parent.kind, ()):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Сюда нельзя добавить такой тип узла.",
-                )
-        elif kind != "building":
+        if not parent or parent.archived:
             raise HTTPException(
                 status_code=400,
-                detail="Без родителя можно создать только адрес.",
+                detail="Родительский узел не найден.",
             )
 
-        validate_name_code(kind, name, code)
-        check_duplicate(session, kind, parent_id, name, code)
-
-        location = Location(
-            parent_id=parent_id,
-            kind=kind,
-            name=name or code,
-            code=code,
-            sort=next_sort(session, parent_id),
-        )
-        session.add(location)
-        session.flush()
-
-        session.add(
-            History(
-                entity="locations",
-                entity_id=location.id,
-                user_name=user["login"],
-                changes={"created": {"old": None, "new": location.name}},
+        if kind not in ALLOWED_CHILDREN.get(parent.kind, ()):
+            raise HTTPException(
+                status_code=400,
+                detail="Сюда нельзя добавить такой тип узла.",
             )
-        )
-
-        session.commit()
-
-        return {"ok": True, "id": location.id}
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
+    elif kind != "building":
         raise HTTPException(
             status_code=400,
-            detail=f"Не удалось создать узел: {e}",
+            detail="Без родителя можно создать только адрес.",
         )
 
-    finally:
-        session.close()
+    validate_name_code(kind, name, code)
+    check_duplicate(session, kind, parent_id, name, code)
+
+    location = Location(
+        parent_id=parent_id,
+        kind=kind,
+        name=name or code,
+        code=code,
+        sort=next_sort(session, parent_id),
+    )
+    session.add(location)
+    session.flush()
+
+    session.add(
+        History(
+            entity="locations",
+            entity_id=location.id,
+            user_name=user["login"],
+            changes={"created": {"old": None, "new": location.name}},
+        )
+    )
+
+    session.commit()
+
+    return {"ok": True, "id": location.id}
 
 
 @router.patch("/locations/{location_id}")
@@ -257,154 +235,122 @@ def update_location(
     location_id: int,
     payload: dict = Body(...),
     user=Depends(require_editor),
+    session=Depends(get_db),
 ):
-    session = SessionLocal()
+    location = session.get(Location, location_id)
 
-    try:
-        location = session.get(Location, location_id)
-
-        if not location or location.archived:
-            raise HTTPException(
-                status_code=404,
-                detail="Узел не найден.",
-            )
-
-        changes = {}
-
-        if "name" in payload or "code" in payload:
-            new_name = clean(payload.get("name", location.name))
-            new_code = clean(payload.get("code", location.code))
-
-            validate_name_code(location.kind, new_name, new_code)
-            check_duplicate(
-                session,
-                location.kind,
-                location.parent_id,
-                new_name,
-                new_code,
-                exclude_id=location.id,
-            )
-
-            effective_name = new_name or new_code
-
-            if effective_name != location.name:
-                changes["name"] = {"old": location.name, "new": effective_name}
-
-            if new_code != location.code:
-                changes["code"] = {"old": location.code, "new": new_code}
-
-            location.name = effective_name
-            location.code = new_code
-
-        if "sort" in payload:
-            try:
-                new_sort = int(payload.get("sort"))
-            except (TypeError, ValueError):
-                raise HTTPException(
-                    status_code=400,
-                    detail="sort должен быть числом.",
-                )
-
-            location.sort = new_sort
-
-        if changes:
-            session.add(
-                History(
-                    entity="locations",
-                    entity_id=location.id,
-                    user_name=user["login"],
-                    changes=changes,
-                )
-            )
-
-        session.commit()
-
-        return {"ok": True, "id": location.id}
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
+    if not location or location.archived:
         raise HTTPException(
-            status_code=400,
-            detail=f"Не удалось сохранить узел: {e}",
+            status_code=404,
+            detail="Узел не найден.",
         )
 
-    finally:
-        session.close()
+    changes = {}
+
+    if "name" in payload or "code" in payload:
+        new_name = clean(payload.get("name", location.name))
+        new_code = clean(payload.get("code", location.code))
+
+        validate_name_code(location.kind, new_name, new_code)
+        check_duplicate(
+            session,
+            location.kind,
+            location.parent_id,
+            new_name,
+            new_code,
+            exclude_id=location.id,
+        )
+
+        effective_name = new_name or new_code
+
+        if effective_name != location.name:
+            changes["name"] = {"old": location.name, "new": effective_name}
+
+        if new_code != location.code:
+            changes["code"] = {"old": location.code, "new": new_code}
+
+        location.name = effective_name
+        location.code = new_code
+
+    if "sort" in payload:
+        try:
+            new_sort = int(payload.get("sort"))
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="sort должен быть числом.",
+            )
+
+        location.sort = new_sort
+
+    if changes:
+        session.add(
+            History(
+                entity="locations",
+                entity_id=location.id,
+                user_name=user["login"],
+                changes=changes,
+            )
+        )
+
+    session.commit()
+
+    return {"ok": True, "id": location.id}
 
 
 @router.post("/locations/{location_id}/archive")
 def archive_location(
     location_id: int,
     user=Depends(require_editor),
+    session=Depends(get_db),
 ):
-    session = SessionLocal()
+    location = session.get(Location, location_id)
 
-    try:
-        location = session.get(Location, location_id)
-
-        if not location or location.archived:
-            raise HTTPException(
-                status_code=404,
-                detail="Узел не найден.",
-            )
-
-        children = (
-            session.query(func.count(Location.id))
-            .filter(
-                Location.parent_id == location.id,
-                Location.archived == False,
-            )
-            .scalar()
+    if not location or location.archived:
+        raise HTTPException(
+            status_code=404,
+            detail="Узел не найден.",
         )
 
-        if children:
-            raise HTTPException(
-                status_code=400,
-                detail="Сначала архивируй дочерние узлы.",
-            )
-
-        computers = (
-            session.query(func.count(Computer.id))
-            .filter(Computer.location_id == location.id, Computer.archived == False)
-            .scalar()
+    children = (
+        session.query(func.count(Location.id))
+        .filter(
+            Location.parent_id == location.id,
+            Location.archived == False,
         )
+        .scalar()
+    )
 
-        # ПК из архива узел не держат: у них остаётся прежнее расположение
-        if computers:
-            raise HTTPException(
-                status_code=400,
-                detail="В узле есть компьютеры. Сначала перемести их.",
-            )
-
-        location.archived = True
-
-        session.add(
-            History(
-                entity="locations",
-                entity_id=location.id,
-                user_name=user["login"],
-                changes={"archived": {"old": False, "new": True}},
-            )
-        )
-
-        session.commit()
-
-        return {"ok": True, "id": location.id}
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
+    if children:
         raise HTTPException(
             status_code=400,
-            detail=f"Не удалось архивировать: {e}",
+            detail="Сначала архивируй дочерние узлы.",
         )
 
-    finally:
-        session.close()
+    computers = (
+        session.query(func.count(Computer.id))
+        .filter(Computer.location_id == location.id, Computer.archived == False)
+        .scalar()
+    )
+
+    # ПК из архива узел не держат: у них остаётся прежнее расположение
+    if computers:
+        raise HTTPException(
+            status_code=400,
+            detail="В узле есть компьютеры. Сначала перемести их.",
+        )
+
+    location.archived = True
+
+    session.add(
+        History(
+            entity="locations",
+            entity_id=location.id,
+            user_name=user["login"],
+            changes={"archived": {"old": False, "new": True}},
+        )
+    )
+
+    session.commit()
+
+    return {"ok": True, "id": location.id}

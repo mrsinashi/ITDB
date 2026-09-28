@@ -9,7 +9,7 @@ from sqlalchemy import func
 from api_import import split_vacuum_logins
 from auth import require_editor
 
-from db import SessionLocal
+from db import get_db
 from models import (
     Computer,
     ComputerPerson,
@@ -599,7 +599,7 @@ ARCHIVED_FILTERS = ("no", "yes", "all")
 
 
 @router.get("/computers")
-def list_computers(archived: str = "no"):
+def list_computers(archived: str = "no", session=Depends(get_db)):
     """Строки таблицы. archived: no — рабочие ПК (по умолчанию),
     yes — только архив, all — все (у строки есть признак archived)."""
     if archived not in ARCHIVED_FILTERS:
@@ -608,326 +608,293 @@ def list_computers(archived: str = "no"):
             detail="archived: no, yes или all.",
         )
 
-    session = SessionLocal()
+    return computer_rows(session, archived)
 
-    try:
-        query = session.query(Computer)
 
-        if archived == "no":
-            query = query.filter(Computer.archived == False)
-        elif archived == "yes":
-            query = query.filter(Computer.archived == True)
+def computer_rows(session, archived="no"):
+    """Строки таблицы (для списка и выгрузки): {"total", "rows"}."""
+    query = session.query(Computer)
 
-        computers = query.all()
-        locations = session.query(Location).all()
+    if archived == "no":
+        query = query.filter(Computer.archived == False)
+    elif archived == "yes":
+        query = query.filter(Computer.archived == True)
 
-        locations_by_id = {location.id: location for location in locations}
+    computers = query.all()
+    locations = session.query(Location).all()
 
-        location_sort_keys = {}
+    locations_by_id = {location.id: location for location in locations}
 
-        for location in locations:
-            sort_parts = []
-            current = location
-            depth = 0
+    location_sort_keys = {}
 
-            while current and depth < 20:
-                sort_parts.append(current.sort or 0)
-                current = locations_by_id.get(current.parent_id)
-                depth += 1
+    for location in locations:
+        sort_parts = []
+        current = location
+        depth = 0
 
-            location_sort_keys[location.id] = tuple(reversed(sort_parts))
+        while current and depth < 20:
+            sort_parts.append(current.sort or 0)
+            current = locations_by_id.get(current.parent_id)
+            depth += 1
 
-        location_parts_cache = {}
+        location_sort_keys[location.id] = tuple(reversed(sort_parts))
 
-        def get_location_parts(location_id):
-            if location_id not in location_parts_cache:
-                location_parts_cache[location_id] = location_parts(location_id, locations_by_id)
+    location_parts_cache = {}
 
-            return location_parts_cache[location_id]
+    def get_location_parts(location_id):
+        if location_id not in location_parts_cache:
+            location_parts_cache[location_id] = location_parts(location_id, locations_by_id)
 
-        people = session.query(Person).all()
-        people_by_id = {person.id: person for person in people}
+        return location_parts_cache[location_id]
 
-        computer_people = session.query(ComputerPerson).all()
-        people_links_by_computer = defaultdict(list)
+    people = session.query(Person).all()
+    people_by_id = {person.id: person for person in people}
 
-        for link in computer_people:
-            people_links_by_computer[link.computer_id].append(link)
+    computer_people = session.query(ComputerPerson).all()
+    people_links_by_computer = defaultdict(list)
 
-        main_user_by_computer = {}
+    for link in computer_people:
+        people_links_by_computer[link.computer_id].append(link)
 
-        for computer_id, links in people_links_by_computer.items():
-            links.sort(key=lambda item: (not item.is_main, item.sort, item.id))
+    main_user_by_computer = {}
 
-            person = people_by_id.get(links[0].person_id)
+    for computer_id, links in people_links_by_computer.items():
+        links.sort(key=lambda item: (not item.is_main, item.sort, item.id))
 
-            if person:
-                main_user_by_computer[computer_id] = person.full_name
+        person = people_by_id.get(links[0].person_id)
 
-        vacuum_rows = (
-            session.query(VacuumAccountComputer.computer_id, VacuumAccount.login)
-            .join(
-                VacuumAccount,
-                VacuumAccountComputer.account_id == VacuumAccount.id,
-            )
-            .all()
+        if person:
+            main_user_by_computer[computer_id] = person.full_name
+
+    vacuum_rows = (
+        session.query(VacuumAccountComputer.computer_id, VacuumAccount.login)
+        .join(
+            VacuumAccount,
+            VacuumAccountComputer.account_id == VacuumAccount.id,
+        )
+        .all()
+    )
+
+    field_defs = (
+        session.query(FieldDef)
+        .filter(FieldDef.archived == False)
+        .order_by(FieldDef.sort, FieldDef.id)
+        .all()
+    )
+    field_defs = [fd for fd in field_defs if not is_reserved_field_key(fd.key)]
+
+    vacuum_by_computer = defaultdict(list)
+
+    for computer_id, login in vacuum_rows:
+        vacuum_by_computer[computer_id].append(login)
+
+    rows = []
+
+    for computer in computers:
+        extra = computer.extra or {}
+        parts = get_location_parts(computer.location_id)
+
+        vacuum_logins = vacuum_by_computer.get(computer.id, [])
+
+        seat_sort = computer.seat_sort
+        if seat_sort is not None:
+            seat_sort = float(seat_sort)
+
+        # Пользовательские поля идут первыми: при совпадении ключа
+        # встроенное значение ниже их перекроет, а не наоборот.
+        row = {fd.key: extra.get(fd.key) for fd in field_defs}
+
+        row.update(
+            {
+                "id": computer.id,
+                "location_id": computer.location_id,
+                "user": main_user_by_computer.get(computer.id),
+                "building": parts["building"],
+                "department": parts["department"],
+                "floor": parts["floor"],
+                "room_code": parts["room_code"],
+                "room_name": parts["room_name"],
+                "seat_no": computer.seat_no,
+                "_seat_sort": seat_sort,
+                "ip": computer.ip,
+                "hostname": computer.hostname,
+                "vacuum": vacuum_text(vacuum_logins),
+                "os": computer.os,
+                "type": computer.type,
+                "model": computer.model,
+                "cpu": computer.cpu,
+                "ram": computer.ram,
+                "drive": computer.drive,
+                "gpu": computer.gpu,
+                "mac": computer.mac,
+                "inv_no": computer.inv_no,
+                "serial": computer.serial,
+                "gsit": extra.get("GSIT"),
+                "state": extra.get("Сост."),
+                "label": extra.get("Метка"),
+                "status": computer.status,
+                "note": computer.note,
+                "archived": computer.archived,
+                "version": computer.version,
+                "updated_at": computer.updated_at,
+            }
         )
 
-        field_defs = (
-            session.query(FieldDef)
-            .filter(FieldDef.archived == False)
-            .order_by(FieldDef.sort, FieldDef.id)
-            .all()
+        rows.append(row)
+
+    def sort_key(row):
+        location_key = location_sort_keys.get(row["location_id"])
+
+        if location_key is None:
+            location_key = (999999,)
+
+        seat_sort = row["_seat_sort"]
+
+        return (
+            location_key,
+            seat_sort is None,
+            seat_sort if seat_sort is not None else 0,
+            (row["hostname"] or "").lower(),
+            row["id"],
         )
-        field_defs = [fd for fd in field_defs if not is_reserved_field_key(fd.key)]
 
-        vacuum_by_computer = defaultdict(list)
+    rows.sort(key=sort_key)
 
-        for computer_id, login in vacuum_rows:
-            vacuum_by_computer[computer_id].append(login)
+    for row in rows:
+        row.pop("_seat_sort", None)
 
-        rows = []
-
-        for computer in computers:
-            extra = computer.extra or {}
-            parts = get_location_parts(computer.location_id)
-
-            vacuum_logins = vacuum_by_computer.get(computer.id, [])
-
-            seat_sort = computer.seat_sort
-            if seat_sort is not None:
-                seat_sort = float(seat_sort)
-
-            # Пользовательские поля идут первыми: при совпадении ключа
-            # встроенное значение ниже их перекроет, а не наоборот.
-            row = {fd.key: extra.get(fd.key) for fd in field_defs}
-
-            row.update(
-                {
-                    "id": computer.id,
-                    "location_id": computer.location_id,
-                    "user": main_user_by_computer.get(computer.id),
-                    "building": parts["building"],
-                    "department": parts["department"],
-                    "floor": parts["floor"],
-                    "room_code": parts["room_code"],
-                    "room_name": parts["room_name"],
-                    "seat_no": computer.seat_no,
-                    "_seat_sort": seat_sort,
-                    "ip": computer.ip,
-                    "hostname": computer.hostname,
-                    "vacuum": vacuum_text(vacuum_logins),
-                    "os": computer.os,
-                    "type": computer.type,
-                    "model": computer.model,
-                    "cpu": computer.cpu,
-                    "ram": computer.ram,
-                    "drive": computer.drive,
-                    "gpu": computer.gpu,
-                    "mac": computer.mac,
-                    "inv_no": computer.inv_no,
-                    "serial": computer.serial,
-                    "gsit": extra.get("GSIT"),
-                    "state": extra.get("Сост."),
-                    "label": extra.get("Метка"),
-                    "status": computer.status,
-                    "note": computer.note,
-                    "archived": computer.archived,
-                    "version": computer.version,
-                    "updated_at": computer.updated_at,
-                }
-            )
-
-            rows.append(row)
-
-        def sort_key(row):
-            location_key = location_sort_keys.get(row["location_id"])
-
-            if location_key is None:
-                location_key = (999999,)
-
-            seat_sort = row["_seat_sort"]
-
-            return (
-                location_key,
-                seat_sort is None,
-                seat_sort if seat_sort is not None else 0,
-                (row["hostname"] or "").lower(),
-                row["id"],
-            )
-
-        rows.sort(key=sort_key)
-
-        for row in rows:
-            row.pop("_seat_sort", None)
-
-        return {
-            "total": len(rows),
-            "rows": rows,
-        }
-
-    finally:
-        session.close()
+    return {
+        "total": len(rows),
+        "rows": rows,
+    }
 
 
 @router.post("/computers")
 def create_computer(
     payload: dict = Body(...),
     user=Depends(require_editor),
+    session=Depends(get_db),
 ):
     """Новый ПК: расположение обязательно, № места, HOSTNAME, IP — по желанию.
     Остальное заполняется потом в таблице или карточке."""
-    session = SessionLocal()
+    location = get_active_location(session, payload.get("location_id"))
 
-    try:
-        location = get_active_location(session, payload.get("location_id"))
+    seat_no = parse_seat_no(payload.get("seat_no"))
+    hostname = normalize_single(payload.get("hostname"))
+    ip = normalize_ip(payload.get("ip"))
 
-        seat_no = parse_seat_no(payload.get("seat_no"))
-        hostname = normalize_single(payload.get("hostname"))
-        ip = normalize_ip(payload.get("ip"))
+    # Место занято — ПК на нём и дальше подряд сдвигаются на +1
+    batch = ChangeBatch(user["login"])
+    shift_seats(session, batch, location.id, seat_no)
+    batch.finish(session)
 
-        # Место занято — ПК на нём и дальше подряд сдвигаются на +1
-        batch = ChangeBatch(user["login"])
-        shift_seats(session, batch, location.id, seat_no)
-        batch.finish(session)
+    computer = Computer(
+        status="установлен",
+        location_id=location.id,
+        seat_no=seat_no,
+        seat_sort=seat_sort_in_location(session, location.id, seat_no),
+        hostname=hostname,
+        ip=ip,
+        extra={},
+    )
+    session.add(computer)
+    session.flush()
 
-        computer = Computer(
-            status="установлен",
-            location_id=location.id,
-            seat_no=seat_no,
-            seat_sort=seat_sort_in_location(session, location.id, seat_no),
-            hostname=hostname,
-            ip=ip,
-            extra={},
-        )
-        session.add(computer)
-        session.flush()
+    locations_by_id = load_locations(session)
 
-        locations_by_id = load_locations(session)
-
-        changes = {
-            "created": {
-                "old": None,
-                "new": location_path(location.id, locations_by_id),
-            }
+    changes = {
+        "created": {
+            "old": None,
+            "new": location_path(location.id, locations_by_id),
         }
+    }
 
-        for field, value in (("seat_no", seat_no), ("hostname", hostname), ("ip", ip)):
-            if value is not None:
-                changes[field] = {"old": None, "new": value}
+    for field, value in (("seat_no", seat_no), ("hostname", hostname), ("ip", ip)):
+        if value is not None:
+            changes[field] = {"old": None, "new": value}
 
-        session.add(
-            History(
-                entity="computers",
-                entity_id=computer.id,
-                user_name=user["login"],
-                changes=changes,
-            )
+    session.add(
+        History(
+            entity="computers",
+            entity_id=computer.id,
+            user_name=user["login"],
+            changes=changes,
         )
+    )
 
-        session.commit()
+    session.commit()
 
-        return {"ok": True, "id": computer.id, "shifted": batch.changed_ids()}
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Не удалось добавить компьютер: {e}",
-        )
-
-    finally:
-        session.close()
+    return {"ok": True, "id": computer.id, "shifted": batch.changed_ids()}
 
 
 @router.post("/computers/archive")
 def archive_computers(
     payload: dict = Body(...),
     user=Depends(require_editor),
+    session=Depends(get_db),
 ):
     """В архив или обратно: {"ids": [...], "archived": true/false}.
     ПК уже в нужном состоянии пропускаются. История — запись на каждый ПК."""
-    session = SessionLocal()
+    ids = payload.get("ids")
+    archived = payload.get("archived")
 
-    try:
-        ids = payload.get("ids")
-        archived = payload.get("archived")
-
-        if not isinstance(ids, list) or not ids:
-            raise HTTPException(
-                status_code=400,
-                detail="Не выбраны компьютеры.",
-            )
-
-        if not isinstance(archived, bool):
-            raise HTTPException(
-                status_code=400,
-                detail="archived должен быть true или false.",
-            )
-
-        try:
-            ids = {int(value) for value in ids}
-        except (TypeError, ValueError):
-            raise HTTPException(
-                status_code=400,
-                detail="ids должны быть числами.",
-            )
-
-        computers = (
-            session.query(Computer)
-            .filter(Computer.id.in_(ids))
-            .with_for_update()
-            .all()
-        )
-
-        if len(computers) != len(ids):
-            raise HTTPException(
-                status_code=404,
-                detail="Часть компьютеров не найдена. Обнови таблицу.",
-            )
-
-        now = datetime.now(timezone.utc)
-        changed = []
-
-        for computer in computers:
-            if computer.archived == archived:
-                continue
-
-            session.add(
-                History(
-                    entity="computers",
-                    entity_id=computer.id,
-                    user_name=user["login"],
-                    changes={"archived": {"old": computer.archived, "new": archived}},
-                )
-            )
-
-            computer.archived = archived
-            computer.version = (computer.version or 1) + 1
-            computer.updated_at = now
-            changed.append(computer.id)
-
-        session.commit()
-
-        return {"ok": True, "changed": sorted(changed)}
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
+    if not isinstance(ids, list) or not ids:
         raise HTTPException(
             status_code=400,
-            detail=f"Не удалось изменить архив: {e}",
+            detail="Не выбраны компьютеры.",
         )
 
-    finally:
-        session.close()
+    if not isinstance(archived, bool):
+        raise HTTPException(
+            status_code=400,
+            detail="archived должен быть true или false.",
+        )
+
+    try:
+        ids = {int(value) for value in ids}
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="ids должны быть числами.",
+        )
+
+    computers = (
+        session.query(Computer)
+        .filter(Computer.id.in_(ids))
+        .with_for_update()
+        .all()
+    )
+
+    if len(computers) != len(ids):
+        raise HTTPException(
+            status_code=404,
+            detail="Часть компьютеров не найдена. Обнови таблицу.",
+        )
+
+    now = datetime.now(timezone.utc)
+    changed = []
+
+    for computer in computers:
+        if computer.archived == archived:
+            continue
+
+        session.add(
+            History(
+                entity="computers",
+                entity_id=computer.id,
+                user_name=user["login"],
+                changes={"archived": {"old": computer.archived, "new": archived}},
+            )
+        )
+
+        computer.archived = archived
+        computer.version = (computer.version or 1) + 1
+        computer.updated_at = now
+        changed.append(computer.id)
+
+    session.commit()
+
+    return {"ok": True, "changed": sorted(changed)}
 
 
 def user_field_keys_of(session):
@@ -1095,181 +1062,159 @@ def update_computer(
     computer_id: int,
     payload: dict = Body(...),
     user=Depends(require_editor),
+    session=Depends(get_db),
 ):
-    session = SessionLocal()
+    payload = dict(payload)
 
-    try:
-        payload = dict(payload)
+    # Версия записи, которую видел пользователь. Если за это время ПК
+    # кто-то изменил — не затираем чужую правку, а просим обновить.
+    expected_version = payload.pop("_version", None)
 
-        # Версия записи, которую видел пользователь. Если за это время ПК
-        # кто-то изменил — не затираем чужую правку, а просим обновить.
-        expected_version = payload.pop("_version", None)
+    computer = (
+        session.query(Computer)
+        .filter(Computer.id == computer_id)
+        .with_for_update()
+        .first()
+    )
 
-        computer = (
-            session.query(Computer)
-            .filter(Computer.id == computer_id)
-            .with_for_update()
-            .first()
+    if not computer:
+        raise HTTPException(
+            status_code=404,
+            detail="Компьютер не найден.",
         )
 
-        if not computer:
+    if expected_version is not None:
+        try:
+            expected_version = int(expected_version)
+        except (TypeError, ValueError):
             raise HTTPException(
-                status_code=404,
-                detail="Компьютер не найден.",
+                status_code=400,
+                detail="_version должен быть числом.",
             )
 
-        if expected_version is not None:
-            try:
-                expected_version = int(expected_version)
-            except (TypeError, ValueError):
-                raise HTTPException(
-                    status_code=400,
-                    detail="_version должен быть числом.",
-                )
+        if expected_version != computer.version:
+            raise HTTPException(
+                status_code=409,
+                detail="Этот компьютер уже изменил другой пользователь. "
+                "Таблица будет обновлена — проверь значение и повтори правку.",
+            )
 
-            if expected_version != computer.version:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Этот компьютер уже изменил другой пользователь. "
-                    "Таблица будет обновлена — проверь значение и повтори правку.",
-                )
+    user_field_keys = user_field_keys_of(session)
+    batch = ChangeBatch(user["login"])
 
-        user_field_keys = user_field_keys_of(session)
-        batch = ChangeBatch(user["login"])
+    changes = apply_fields(session, computer, payload, user_field_keys, batch)
 
-        changes = apply_fields(session, computer, payload, user_field_keys, batch)
+    if changes:
+        save_changes(session, computer, changes, user["login"])
+        batch.finish(session)
+        session.commit()
 
-        if changes:
-            save_changes(session, computer, changes, user["login"])
-            batch.finish(session)
-            session.commit()
+    extra = computer.extra or {}
 
-        extra = computer.extra or {}
+    updated = {
+        "seat_no": computer.seat_no,
+        "ip": computer.ip,
+        "mac": computer.mac,
+        "drive": computer.drive,
+        "note": computer.note,
+        "version": computer.version,
+        "updated_at": computer.updated_at,
+    }
 
-        updated = {
-            "seat_no": computer.seat_no,
-            "ip": computer.ip,
-            "mac": computer.mac,
-            "drive": computer.drive,
-            "note": computer.note,
-            "version": computer.version,
-            "updated_at": computer.updated_at,
-        }
+    for field in SINGLE_FIELDS:
+        updated[field] = getattr(computer, field)
 
-        for field in SINGLE_FIELDS:
-            updated[field] = getattr(computer, field)
+    for frontend_key, extra_key in EXTRA_FIELDS.items():
+        updated[frontend_key] = extra.get(extra_key)
 
-        for frontend_key, extra_key in EXTRA_FIELDS.items():
-            updated[frontend_key] = extra.get(extra_key)
+    for key in user_field_keys:
+        updated[key] = extra.get(key)
 
-        for key in user_field_keys:
-            updated[key] = extra.get(key)
+    updated["user"] = main_person_name(session, computer)
+    updated["vacuum"] = vacuum_text(get_vacuum_logins(session, computer.id))
 
-        updated["user"] = main_person_name(session, computer)
-        updated["vacuum"] = vacuum_text(get_vacuum_logins(session, computer.id))
+    updated["location_id"] = computer.location_id
+    updated.update(location_parts(computer.location_id, load_locations(session)))
 
-        updated["location_id"] = computer.location_id
-        updated.update(location_parts(computer.location_id, load_locations(session)))
+    # Снимаем блокировку строки, если правок не было
+    session.rollback()
 
-        # Снимаем блокировку строки, если правок не было
-        session.rollback()
-
-        return {
-            "ok": True,
-            "id": computer_id,
-            "changes": changes,
-            "updated": updated,
-            # Соседи, которым сдвинули № места: таблицу надо перечитать
-            "shifted": batch.changed_ids(),
-        }
-
-    except HTTPException:
-        session.rollback()
-        raise
-
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Не удалось сохранить изменения: {e}",
-        )
-
-    finally:
-        session.close()
+    return {
+        "ok": True,
+        "id": computer_id,
+        "changes": changes,
+        "updated": updated,
+        # Соседи, которым сдвинули № места: таблицу надо перечитать
+        "shifted": batch.changed_ids(),
+    }
 
 @router.get("/computers/{computer_id}")
-def get_computer(computer_id: int):
-    session = SessionLocal()
+def get_computer(computer_id: int, session=Depends(get_db)):
+    computer = session.get(Computer, computer_id)
 
-    try:
-        computer = session.get(Computer, computer_id)
-
-        if not computer:
-            raise HTTPException(
-                status_code=404,
-                detail="Компьютер не найден.",
-            )
-
-        links = (
-            session.query(ComputerPerson, Person)
-            .join(Person, ComputerPerson.person_id == Person.id)
-            .filter(ComputerPerson.computer_id == computer_id)
-            .all()
+    if not computer:
+        raise HTTPException(
+            status_code=404,
+            detail="Компьютер не найден.",
         )
 
-        people = [
-            {
-                "person_id": person.id,
-                "full_name": person.full_name,
-                "position": person.position,
-                "is_main": link.is_main,
-                "sort": link.sort or 0,
-            }
-            for link, person in links
-        ]
+    links = (
+        session.query(ComputerPerson, Person)
+        .join(Person, ComputerPerson.person_id == Person.id)
+        .filter(ComputerPerson.computer_id == computer_id)
+        .all()
+    )
 
-        people.sort(
-            key=lambda item: (not item["is_main"], item["sort"], item["person_id"])
-        )
-
-        vacuum_rows = (
-            session.query(VacuumAccount.login)
-            .join(
-                VacuumAccountComputer,
-                VacuumAccountComputer.account_id == VacuumAccount.id,
-            )
-            .filter(VacuumAccountComputer.computer_id == computer_id)
-            .all()
-        )
-
-        vacuum = sorted([row[0] for row in vacuum_rows], key=str.lower)
-
-        items = (
-            session.query(History)
-            .filter(
-                History.entity == "computers",
-                History.entity_id == computer_id,
-            )
-            .order_by(History.at.desc(), History.id.desc())
-            .limit(20)
-            .all()
-        )
-
-        history = [
-            {
-                "id": item.id,
-                "at": item.at,
-                "user_name": item.user_name,
-                "changes": item.changes or {},
-            }
-            for item in items
-        ]
-
-        return {
-            "people": people,
-            "vacuum": vacuum,
-            "history": history,
+    people = [
+        {
+            "person_id": person.id,
+            "full_name": person.full_name,
+            "position": person.position,
+            "is_main": link.is_main,
+            "sort": link.sort or 0,
         }
+        for link, person in links
+    ]
 
-    finally:
-        session.close()
+    people.sort(
+        key=lambda item: (not item["is_main"], item["sort"], item["person_id"])
+    )
+
+    vacuum_rows = (
+        session.query(VacuumAccount.login)
+        .join(
+            VacuumAccountComputer,
+            VacuumAccountComputer.account_id == VacuumAccount.id,
+        )
+        .filter(VacuumAccountComputer.computer_id == computer_id)
+        .all()
+    )
+
+    vacuum = sorted([row[0] for row in vacuum_rows], key=str.lower)
+
+    items = (
+        session.query(History)
+        .filter(
+            History.entity == "computers",
+            History.entity_id == computer_id,
+        )
+        .order_by(History.at.desc(), History.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    history = [
+        {
+            "id": item.id,
+            "at": item.at,
+            "user_name": item.user_name,
+            "changes": item.changes or {},
+        }
+        for item in items
+    ]
+
+    return {
+        "people": people,
+        "vacuum": vacuum,
+        "history": history,
+    }
