@@ -11,7 +11,7 @@
 |---|---|
 | Сервер | Debian, Python 3.13 (подходит 3.11+), PostgreSQL 17 |
 | Backend | FastAPI + SQLAlchemy, миграции Alembic — папка `backend/` |
-| Frontend | Vue 3 без сборки — папка `frontend/static/` (сервер отдаёт её сам) |
+| Frontend | Vue 3 без сборки — папка `frontend/static/` (сервер отдаёт её сам): разметка `index.html`, стили `app.css`, код — модули в `js/` (карта — в начале `js/main.js`) |
 | Миграции | `alembic/versions/` |
 
 Правила оформления — в `DESIGN.md` рядом с проектом (в git не входит).
