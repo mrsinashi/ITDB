@@ -8,7 +8,8 @@
 //   tree-utils.js      — значки и ширина колонки дерева
 //   shortcuts.js       — сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
 //   mixins/            — методы и вычисляемые значения по разделам:
-//                        auth, table, table-actions, card, tree, history, choices, common
+//                        auth, table, table-actions, card, tree, history, choices, common,
+//                        suggest (подсказки при вводе)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -27,6 +28,7 @@ import card from "./mixins/card.js";
 import tree from "./mixins/tree.js";
 import history from "./mixins/history.js";
 import choices from "./mixins/choices.js";
+import suggest from "./mixins/suggest.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -34,7 +36,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -60,6 +62,8 @@ const app = Vue.createApp({
             showArchive: false,
             archiveSaving: false,
             rows: [],
+            // Подсказки при вводе: открытый список под полем правки (mixins/suggest.js)
+            suggest: null,
             // Карточка: показаны и пустые поля (кнопка в шапке, не запоминается)
             cardShowEmpty: false,
             // Описание встроенных столбцов с сервера (GET /api/columns)

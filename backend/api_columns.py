@@ -47,12 +47,16 @@ class Column(BaseModel):
     dup: bool = False               # дубли подсвечиваются красным
     bulk: bool = True               # можно менять сразу у нескольких ПК
     export_width: int = 12          # ширина в выгрузке Excel
+    suggest: bool = False           # подсказки при вводе (значения справочника и столбца)
 
 
 def col(key, short, title=None, kind="text", **flags):
     title = title or short
     # В карточке — без расшифровки в скобках: «Процессор (ЦП / CPU)» → «Процессор»
     card = flags.pop("card", None) or re.sub(r"\s*\(.*\)$", "", title)
+    # Подсказки при вводе — у столбцов с повторяющимися значениями в одну строку
+    # (статус, ТИП, OS, модель, CPU…); у уникальных (имя, ИНВ) и дат — нет
+    flags.setdefault("suggest", flags.get("values", "yes") == "yes" and kind in ("text", "extra"))
     return Column(key=key, short=short, title=title, card=card, kind=kind, **flags)
 
 

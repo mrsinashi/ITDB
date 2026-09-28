@@ -30,6 +30,7 @@ export default {
                     field: fd.key,
                     headerName: fd.label,
                     editable: true,
+                    suggest: true,
                     width: manual !== undefined ? manual : (auto || 100),
                     extra: true
                 };
@@ -620,10 +621,19 @@ export default {
                     const len = el.value.length;
                     el.setSelectionRange(len, len);
                 }
+                if (!col.multiline) {
+                    this.openSuggest(el, col, (value) => {
+                        this.editValue = value;
+                        this.saveEdit(row, col);
+                    });
+                }
             });
         },
 
         handleEditKeydown(event, row, col) {
+            if (this.suggestKeydown(event)) {
+                return;
+            }
             if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 this.saveEdit(row, col);
@@ -641,6 +651,7 @@ export default {
             const newValue = this.editValue;
             this.editingRowId = null;
             this.editingField = null;
+            this.closeSuggest();
             if (newValue === oldValue) {
                 return;
             }
@@ -737,6 +748,7 @@ export default {
         },
 
         cancelEdit() {
+            this.closeSuggest();
             this.editingRowId = null;
             this.editingField = null;
         },

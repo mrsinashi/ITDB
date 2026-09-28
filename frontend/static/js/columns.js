@@ -95,6 +95,8 @@ export function toColumnDef(c) {
         dup: c.dup,
         bulk: c.bulk,
         cardCopy: c.card_copy,
+        // Подсказки при вводе: значения справочника и столбца
+        suggest: c.suggest,
         // В карточке всегда, даже пустое
         cardAlways: c.card_always,
         // Дата «ДД.ММ.ГГГГ»: сортировка по дате, просроченная — красным жирным

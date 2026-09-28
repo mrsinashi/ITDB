@@ -77,50 +77,8 @@ export default {
         // «Справочники»: блок на каждый столбец таблицы, в том же порядке.
         // Значения — из справочника и из самих данных, с числом ПК.
         styleBlocks() {
+            const collect = (field, multiline, subnet) => this.collectValues(field, multiline, subnet);
             const byField = this.choicesByField;
-            const rows = this.activeRows;
-            const collect = (field, multiline, subnet) => {
-                const map = new Map();
-                (byField[field] || []).forEach(function (ch) {
-                    const key = ch.value.trim().toLowerCase();
-                    if (!map.has(key)) {
-                        map.set(key, { key: key, value: ch.value, choice: ch, count: 0 });
-                    }
-                });
-                rows.forEach(function (row) {
-                    const raw = row[field];
-                    if (raw === null || raw === undefined || raw === "") {
-                        return;
-                    }
-                    const lines = multiline ? splitMulti(raw) : [String(raw).trim()];
-                    lines.forEach(function (line) {
-                        if (!line) {
-                            return;
-                        }
-                        const key = subnet ? ipSubnetKey(line) : line.toLowerCase();
-                        if (!key) {
-                            return;
-                        }
-                        let entry = map.get(key);
-                        if (!entry) {
-                            entry = { key: key, value: subnet ? key : line, choice: null, count: 0 };
-                            map.set(key, entry);
-                        }
-                        entry.count += 1;
-                    });
-                });
-                const list = Array.from(map.values());
-                // Сначала значения справочника в его порядке, потом остальные по алфавиту
-                list.sort(function (a, b) {
-                    if (a.choice && b.choice) {
-                        return (a.choice.sort - b.choice.sort) || (a.choice.id - b.choice.id);
-                    }
-                    if (a.choice) return -1;
-                    if (b.choice) return 1;
-                    return a.value.localeCompare(b.value, "ru", { numeric: true, sensitivity: "base" });
-                });
-                return list;
-            };
             const blocks = this.allColumns.map((col) => {
                 const valuesOn = col.values !== false;
                 return {
@@ -158,6 +116,54 @@ export default {
     },
 
     methods: {
+        // Значения столбца с числом ПК (рабочих): сначала из справочника в его
+        // порядке, потом остальные из данных по алфавиту. Для «Справочников» и
+        // подсказок при вводе. [{ key, value, choice, count }]
+        collectValues(field, multiline, subnet) {
+            const byField = this.choicesByField;
+            const rows = this.activeRows;
+            const map = new Map();
+            (byField[field] || []).forEach(function (ch) {
+                const key = ch.value.trim().toLowerCase();
+                if (!map.has(key)) {
+                    map.set(key, { key: key, value: ch.value, choice: ch, count: 0 });
+                }
+            });
+            rows.forEach(function (row) {
+                const raw = row[field];
+                if (raw === null || raw === undefined || raw === "") {
+                    return;
+                }
+                const lines = multiline ? splitMulti(raw) : [String(raw).trim()];
+                lines.forEach(function (line) {
+                    if (!line) {
+                        return;
+                    }
+                    const key = subnet ? ipSubnetKey(line) : line.toLowerCase();
+                    if (!key) {
+                        return;
+                    }
+                    let entry = map.get(key);
+                    if (!entry) {
+                        entry = { key: key, value: subnet ? key : line, choice: null, count: 0 };
+                        map.set(key, entry);
+                    }
+                    entry.count += 1;
+                });
+            });
+            const list = Array.from(map.values());
+            // Сначала значения справочника в его порядке, потом остальные по алфавиту
+            list.sort(function (a, b) {
+                if (a.choice && b.choice) {
+                    return (a.choice.sort - b.choice.sort) || (a.choice.id - b.choice.id);
+                }
+                if (a.choice) return -1;
+                if (b.choice) return 1;
+                return a.value.localeCompare(b.value, "ru", { numeric: true, sensitivity: "base" });
+            });
+            return list;
+        },
+
         // ---------- Справочники ----------
         async loadChoices() {
             this.choicesLoading = true;

@@ -184,10 +184,12 @@
                     <label class="ab-check" title="Новый ПК встаёт на место старого со статусом «установлен», старый уходит без № места со статусом «склад»"><input type="checkbox" v-model="actionBar.with_people">пользователи и VACUUM — новому</label>
                 </template>
                 <template v-else>
-                    <select class="input ab-field" v-model="actionBar.field">
+                    <select class="input ab-field" v-model="actionBar.field" @change="closeSuggest()">
                         <option v-for="col in bulkColumns" :key="col.field" :value="col.field">{{ colTitle(col) }}</option>
                     </select>
-                    <input ref="ab-value" class="input ab-value" v-model="actionBar.value" placeholder="Новое значение (пусто — очистить)" spellcheck="false">
+                    <input ref="ab-value" class="input ab-value" v-model="actionBar.value" placeholder="Новое значение (пусто — очистить)" spellcheck="false"
+                        @focus="openBulkSuggest($event.target)" @click="!suggest && openBulkSuggest($event.target)" @input="onBulkSuggestInput($event.target)"
+                        @keydown="suggestKeydown($event)" @blur="closeSuggest()">
                 </template>
                 <button class="btn btn-primary icon-only" :disabled="actionBar.saving" @click="submitAction" title="Выполнить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeAction" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
@@ -232,7 +234,7 @@
                                         class="cell-edit cell-edit-multi"></textarea>
                                     <input v-else v-model="editValue"
                                         @keydown="handleEditKeydown($event, row, col)"
-                                        @input="onEditInput($event, col)"
+                                        @input="onEditInput($event, col); onSuggestInput($event.target.value)"
                                         @blur="saveEdit(row, col)"
                                         :ref="'edit-' + row.id + '-' + col.field"
                                         class="cell-edit">
@@ -491,6 +493,19 @@
             </div>
         </section>
 
+        <!-- ================= Подсказки при вводе (ячейка, карточка, «Изменить поле…») ================= -->
+        <teleport to="body">
+            <div v-if="suggest && suggest.pos && suggestShown.length" ref="suggestList" class="loc-list sug-list" :class="{ up: suggest.pos.up }"
+                :style="suggestListStyle" @mousedown.prevent>
+                <div v-for="(o, i) in suggestShown" :key="o.key" class="ll-item"
+                    :class="{ active: i === suggest.active, current: o.key === suggest.current }"
+                    @mousemove="suggest.active = i" @click="pickSuggest(o)">
+                    <span class="sug-value" :class="{ 'val-chip': !!(suggestItemStyle(o) || {}).backgroundColor }" :style="suggestItemStyle(o)">{{ o.value }}</span>
+                    <span class="sug-count" :title="o.count ? 'ПК с этим значением' : 'Есть в справочнике, у ПК пока нет'">{{ o.count }}</span>
+                </div>
+            </div>
+        </teleport>
+
         <!-- ================= Карточка ПК ================= -->
         <div v-if="card" class="card-overlay" @click.self="onCardOverlayClick">
             <div class="card">
@@ -526,7 +541,7 @@
                                         <textarea v-else-if="cardEditCol(r).multiline" ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onCardEditKeydown($event, r)" @input="growCardEditor($event.target)" @blur="saveCardEdit(r)"></textarea>
                                         <input v-else ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
-                                            @keydown="onCardEditKeydown($event, r)" @blur="saveCardEdit(r)">
+                                            @keydown="onCardEditKeydown($event, r)" @input="onSuggestInput($event.target.value)" @blur="saveCardEdit(r)">
                                     </template>
                                 </td>
                             </tr>

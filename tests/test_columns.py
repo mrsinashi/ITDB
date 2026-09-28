@@ -151,3 +151,11 @@ def test_card_history_is_complete(editor, room):
 
     # 25 правок + «Создан»: карточка получает всю историю ПК, не 20 последних
     assert len(ok(editor.get(f"/api/computers/{computer_id}"))["history"]) == 26
+
+
+def test_suggest_flag(reader):
+    columns = ok(reader.get("/api/columns"))["columns"]
+    suggest = {column["key"] for column in columns if column["suggest"]}
+
+    # Подсказки — у столбцов с повторяющимися значениями в одну строку
+    assert {"status", "type", "os", "model", "cpu", "ram", "gpu", "vnc", "gsit", "state", "label"} == suggest

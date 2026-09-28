@@ -138,6 +138,13 @@ export default {
                 input.focus({ preventScroll: true });
                 const len = input.value.length;
                 input.setSelectionRange(len, len);
+                const col = this.cardEditCol(r);
+                if (col && !col.multiline) {
+                    this.openSuggest(input, col, (value) => {
+                        this.cardEditValue = value;
+                        this.saveCardEdit(r);
+                    });
+                }
             });
         },
 
@@ -157,12 +164,16 @@ export default {
         },
 
         onCardEditKeydown(event, r) {
+            if (this.suggestKeydown(event)) {
+                return;
+            }
             if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 this.saveCardEdit(r);
             } else if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation(); // Esc отменяет правку, а не закрывает карточку
+                this.closeSuggest();
                 this.cardEditKey = null;
             }
         },
@@ -173,6 +184,7 @@ export default {
             }
             const col = this.cardEditCol(r);
             this.cardEditKey = null;
+            this.closeSuggest();
             if (!col) {
                 return;
             }

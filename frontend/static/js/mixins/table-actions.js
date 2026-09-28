@@ -496,6 +496,26 @@ export default {
 
         // Enter в строке действия — выполнить (открытый список выбора
         // расположения забирает Enter себе и дальше его не пускает)
+        // «Изменить поле…»: подсказки значений выбранного столбца. Выбор
+        // из списка только вписывает значение — выполнить Enter / ✓
+        openBulkSuggest(el) {
+            const bar = this.actionBar;
+            if (!bar || bar.kind !== "bulk") {
+                return;
+            }
+            const col = this.bulkColumns.find(function (c) { return c.field === bar.field; });
+            this.openSuggest(el, col, (value) => {
+                bar.value = value;
+            });
+        },
+
+        onBulkSuggestInput(el) {
+            if (!this.suggest) {
+                this.openBulkSuggest(el);
+            }
+            this.onSuggestInput(el.value);
+        },
+
         onActionEnter(event) {
             if (event.target.tagName === "SELECT" || event.target.tagName === "BUTTON") {
                 return;

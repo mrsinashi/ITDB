@@ -958,6 +958,29 @@ select.input {
     padding: 3px 9px;
     color: var(--menu-muted);
 }
+/* Подсказки при вводе: значение (в оформлении из Справочников) и число ПК справа */
+.sug-list .ll-item {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+.sug-list .sug-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sug-list .sug-value.val-chip {
+    padding: 0 5px;
+    margin-left: -5px;
+    border-radius: var(--radius);
+}
+.sug-list .sug-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--menu-muted);
+}
+.sug-list .ll-item.active .sug-count {
+    color: inherit;
+}
 
 /* ============================================================
    Таблица
