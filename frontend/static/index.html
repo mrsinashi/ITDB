@@ -78,9 +78,11 @@
                         <div v-if="openMenu === 'selection'" class="dropdown attached">
                             <template v-if="canEdit">
                                 <template v-if="!showArchive">
-                                    <button @click="startMove">Переместить</button>
-                                    <button @click="startReplace">Заменить</button>
-                                    <button @click="startSwap">Поменять местами</button>
+                                    <button @click="openAction('move')" title="В другой узел дерева, с № места">Переместить…</button>
+                                    <button @click="openAction('replace')" :disabled="selectedRows.length !== 1" :title="selectedRows.length !== 1 ? 'Выбери один ПК — тот, который меняем' : 'Другой ПК встаёт на его место, этот уходит, например, на склад'">Заменить…</button>
+                                    <button @click="startSwap" :disabled="selectedRows.length !== 2" :title="selectedRows.length !== 2 ? 'Выбери два ПК' : 'Меняются расположение и № места'">Поменять местами</button>
+                                    <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить поле…</button>
+                                    <div class="dd-sep"></div>
                                     <button @click="setArchived(selectedRows.slice(), true)">В архив</button>
                                 </template>
                                 <button v-else @click="setArchived(selectedRows.slice(), false)">Вернуть из архива</button>
@@ -160,6 +162,35 @@
                 <button class="btn btn-primary icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewComputer" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newComputerError" class="ab-error">{{ newComputerError }}</span>
+            </div>
+
+            <!-- Действие с выбранными строками: строка под панелью, как «Новый компьютер» -->
+            <div v-if="actionBar" class="add-bar action-bar" @keydown.enter="onActionEnter">
+                <span class="ab-title">{{ actionTitle() }}</span>
+                <template v-if="actionBar.kind === 'move'">
+                    <location-picker ref="ab-location" class="ab-loc" input-class="input" :value="actionBar.location_id" :options="locationOptions"
+                        placeholder="Куда: начни вводить адрес, отделение или кабинет" @pick="onActionLocation"></location-picker>
+                    <input ref="ab-seat" class="input ab-seat" v-model="actionBar.seat_no" placeholder="№ места"
+                        :title="actionBar.ids.length > 1 ? 'С какого № места: следующие ПК получат номера по порядку. Занятые номера сдвинутся. Пусто — без номера, в конец узла' : '№ места. Если занят — следующие сдвинутся. Пусто — без номера, в конец узла'">
+                    <label class="ab-check" title="Выключено — у перемещённых ПК пользователь и VACUUM снимаются (например, при переносе на склад)"><input type="checkbox" v-model="actionBar.with_people">с пользователями и VACUUM</label>
+                </template>
+                <template v-else-if="actionBar.kind === 'replace'">
+                    <location-picker ref="ab-new" class="ab-loc ab-pc" input-class="input" :value="actionBar.new_id" :options="computerOptions" empty-text="Нет других ПК"
+                        placeholder="Новый ПК: имя, ИНВ или расположение" @pick="onReplaceNew"></location-picker>
+                    <span class="ab-title">старый — в:</span>
+                    <location-picker ref="ab-location" class="ab-loc ab-loc-short" input-class="input" :value="actionBar.location_id" :options="locationOptions"
+                        placeholder="Куда убрать старый (например, склад)" @pick="onActionLocation"></location-picker>
+                    <label class="ab-check" title="Новый ПК встаёт на место старого со статусом «установлен», старый уходит без № места со статусом «склад»"><input type="checkbox" v-model="actionBar.with_people">пользователи и VACUUM — новому</label>
+                </template>
+                <template v-else>
+                    <select class="input ab-field" v-model="actionBar.field">
+                        <option v-for="col in bulkColumns" :key="col.field" :value="col.field">{{ colTitle(col) }}</option>
+                    </select>
+                    <input ref="ab-value" class="input ab-value" v-model="actionBar.value" placeholder="Новое значение (пусто — очистить)" spellcheck="false">
+                </template>
+                <button class="btn btn-primary icon-only" :disabled="actionBar.saving" @click="submitAction" title="Выполнить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn icon-only" @click="closeAction" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <span v-if="actionBar.error" class="ab-error">{{ actionBar.error }}</span>
             </div>
 
             <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">

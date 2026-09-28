@@ -319,6 +319,136 @@ def seat_sort_in_location(session, location_id, seat_no, exclude_id=None):
     return neighbours[index].seat_sort + 1
 
 
+class ChangeBatch:
+    """Изменения нескольких ПК за одно действие: на каждый ПК — одна запись
+    истории (поле: было → стало), версия +1. Повторная правка того же поля
+    сливается: «было» — первое, «стало» — последнее."""
+
+    def __init__(self, user_name):
+        self.user_name = user_name
+        self.changes = defaultdict(dict)
+        self.computers = {}
+
+    def record(self, computer, field, old, new):
+        changes = self.changes[computer.id]
+        self.computers[computer.id] = computer
+
+        if field in changes:
+            changes[field]["new"] = new
+
+            if changes[field]["old"] == new:
+                del changes[field]
+
+        elif old != new:
+            changes[field] = {"old": old, "new": new}
+
+    def finish(self, session):
+        now = datetime.now(timezone.utc)
+
+        for computer_id, changes in self.changes.items():
+            if not changes:
+                continue
+
+            computer = self.computers[computer_id]
+            computer.version = (computer.version or 1) + 1
+            computer.updated_at = now
+
+            session.add(
+                History(
+                    entity="computers",
+                    entity_id=computer_id,
+                    user_name=self.user_name,
+                    changes=changes,
+                )
+            )
+
+    def changed_ids(self):
+        return sorted(key for key, changes in self.changes.items() if changes)
+
+
+def shift_seats(session, batch, location_id, seat_no, exclude_ids=()):
+    """Номер места seat_no в узле занят — ПК с этим и следующими подряд
+    номерами сдвигаются на +1 (3, 4, 5 → 4, 5, 6; после пропуска — не трогаются).
+    ПК из архива места не занимают."""
+    if location_id is None or seat_no is None:
+        return
+
+    query = session.query(Computer).filter(
+        Computer.location_id == location_id,
+        Computer.archived == False,
+        Computer.seat_no.isnot(None),
+    )
+
+    if exclude_ids:
+        query = query.filter(Computer.id.notin_(list(exclude_ids)))
+
+    by_seat = defaultdict(list)
+
+    for computer in query.with_for_update().all():
+        by_seat[computer.seat_no].append(computer)
+
+    number = seat_no
+    shifted = []
+
+    while number in by_seat:
+        shifted.extend(by_seat[number])
+        number += 1
+
+    for computer in shifted:
+        batch.record(computer, "seat_no", computer.seat_no, computer.seat_no + 1)
+        computer.seat_no += 1
+
+    session.flush()
+
+
+def replace_people(session, batch, source, target):
+    """Пользователи и VACUUM ПК source переходят к ПК target (у target прежние
+    связи снимаются). source=None — у target просто всё снимается."""
+    old_main, target_links = get_main_person_link(session, target.id)
+    old_person = session.get(Person, old_main.person_id) if old_main else None
+    old_logins = get_vacuum_logins(session, target.id)
+
+    for link in target_links:
+        session.delete(link)
+
+    session.query(VacuumAccountComputer).filter(
+        VacuumAccountComputer.computer_id == target.id
+    ).delete(synchronize_session=False)
+    session.flush()
+
+    if source is not None:
+        session.query(ComputerPerson).filter(
+            ComputerPerson.computer_id == source.id
+        ).update({"computer_id": target.id}, synchronize_session=False)
+        session.query(VacuumAccountComputer).filter(
+            VacuumAccountComputer.computer_id == source.id
+        ).update({"computer_id": target.id}, synchronize_session=False)
+        session.flush()
+
+        batch.record(source, "user", main_person_name(session, target), None)
+        batch.record(source, "vacuum", vacuum_text(get_vacuum_logins(session, target.id)), None)
+
+    batch.record(
+        target,
+        "user",
+        old_person.full_name if old_person else None,
+        main_person_name(session, target),
+    )
+    batch.record(
+        target,
+        "vacuum",
+        vacuum_text(old_logins),
+        vacuum_text(get_vacuum_logins(session, target.id)),
+    )
+
+
+def main_person_name(session, computer_id_or_computer):
+    computer_id = getattr(computer_id_or_computer, "id", computer_id_or_computer)
+    link, _ = get_main_person_link(session, computer_id)
+    person = session.get(Person, link.person_id) if link else None
+    return person.full_name if person else None
+
+
 def normalize_person_name(value):
     if value is None:
         return None
@@ -656,6 +786,11 @@ def create_computer(
         hostname = normalize_single(payload.get("hostname"))
         ip = normalize_ip(payload.get("ip"))
 
+        # Место занято — ПК на нём и дальше подряд сдвигаются на +1
+        batch = ChangeBatch(user["login"])
+        shift_seats(session, batch, location.id, seat_no)
+        batch.finish(session)
+
         computer = Computer(
             status="установлен",
             location_id=location.id,
@@ -692,7 +827,7 @@ def create_computer(
 
         session.commit()
 
-        return {"ok": True, "id": computer.id}
+        return {"ok": True, "id": computer.id, "shifted": batch.changed_ids()}
 
     except HTTPException:
         session.rollback()
@@ -795,6 +930,166 @@ def archive_computers(
         session.close()
 
 
+def user_field_keys_of(session):
+    """Ключи пользовательских полей (кроме совпадающих со встроенными)."""
+    defs = session.query(FieldDef).filter(FieldDef.archived == False).all()
+    return {fd.key for fd in defs if not is_reserved_field_key(fd.key)}
+
+
+def apply_fields(session, computer, payload, user_field_keys, batch):
+    """Правка полей одного ПК (как в PATCH). Возвращает изменения этого ПК;
+    сдвинутые соседи по номеру места попадают в batch."""
+    changes = {}
+
+    extra = dict(computer.extra or {})
+    extra_changed = False
+
+    allowed_fields = (
+        SINGLE_FIELDS
+        | MULTILINE_FIELDS
+        | EXTRA_FIELDS.keys()
+        | LINK_FIELDS
+        | {"ip", "mac", "seat_no", "location_id"}
+        | user_field_keys
+    )
+
+    locations_by_id = None
+    placement_changed = False
+    seat_given = False
+
+    for field, value in payload.items():
+        if field not in allowed_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Неизвестное поле: {field}",
+            )
+
+        if field == "user":
+            result = set_main_person(session, computer, value)
+
+            if result:
+                changes["user"] = {"old": result[0], "new": result[1]}
+
+            continue
+
+        if field == "location_id":
+            location = get_active_location(session, value)
+
+            if location.id != computer.location_id:
+                locations_by_id = locations_by_id or load_locations(session)
+
+                changes["location_id"] = {
+                    "old": location_path(computer.location_id, locations_by_id),
+                    "new": location_path(location.id, locations_by_id),
+                }
+
+                computer.location_id = location.id
+                placement_changed = True
+
+            continue
+
+        if field == "vacuum":
+            result = set_vacuum_logins(session, computer, value)
+
+            if result:
+                changes["vacuum"] = {"old": result[0], "new": result[1]}
+
+            continue
+
+        if field == "seat_no":
+            new_value = parse_seat_no(value)
+            old_value = computer.seat_no
+
+            if old_value != new_value:
+                seat_given = True
+                placement_changed = True
+
+        elif field == "ip":
+            new_value = normalize_ip(value)
+            old_value = computer.ip
+
+        elif field == "mac":
+            new_value = normalize_mac(value)
+            old_value = computer.mac
+
+        elif field in MULTILINE_FIELDS:
+            new_value = normalize_multiline(value)
+            old_value = getattr(computer, field)
+
+        elif field in SINGLE_FIELDS:
+            new_value = normalize_single(value)
+            old_value = getattr(computer, field)
+
+            if field == "status" and new_value is None:
+                new_value = "установлен"
+
+        elif field in EXTRA_FIELDS or field in user_field_keys:
+            extra_key = EXTRA_FIELDS.get(field, field)
+            new_value = normalize_single(value)
+            old_value = extra.get(extra_key)
+
+            if old_value != new_value:
+                changes[f"extra.{extra_key}"] = {
+                    "old": old_value,
+                    "new": new_value,
+                }
+
+                if new_value is None:
+                    extra.pop(extra_key, None)
+                else:
+                    extra[extra_key] = new_value
+
+                extra_changed = True
+
+            continue
+
+        else:
+            continue
+
+        if old_value != new_value:
+            changes[field] = {
+                "old": old_value,
+                "new": new_value,
+            }
+
+            setattr(computer, field, new_value)
+
+    if extra_changed:
+        computer.extra = extra
+
+    # Новый номер места занят — соседи сдвигаются; строка встаёт в узле по номеру
+    if seat_given:
+        shift_seats(session, batch, computer.location_id, computer.seat_no, {computer.id})
+
+    if placement_changed:
+        session.flush()
+        computer.seat_sort = seat_sort_in_location(
+            session,
+            computer.location_id,
+            computer.seat_no,
+            exclude_id=computer.id,
+        )
+
+    return changes
+
+
+def save_changes(session, computer, changes, user_name):
+    if not changes:
+        return
+
+    computer.version = (computer.version or 1) + 1
+    computer.updated_at = datetime.now(timezone.utc)
+
+    session.add(
+        History(
+            entity="computers",
+            entity_id=computer.id,
+            user_name=user_name,
+            changes=changes,
+        )
+    )
+
+
 @router.patch("/computers/{computer_id}")
 def update_computer(
     computer_id: int,
@@ -839,147 +1134,17 @@ def update_computer(
                     "Таблица будет обновлена — проверь значение и повтори правку.",
                 )
 
-        changes = {}
+        user_field_keys = user_field_keys_of(session)
+        batch = ChangeBatch(user["login"])
 
-        extra = dict(computer.extra or {})
-        extra_changed = False
-
-        user_field_defs = (
-            session.query(FieldDef)
-            .filter(FieldDef.archived == False)
-            .all()
-        )
-        # Ключи, совпадающие со встроенными полями, как пользовательские не принимаем
-        user_field_keys = {
-            fd.key for fd in user_field_defs if not is_reserved_field_key(fd.key)
-        }
-        allowed_fields = (
-            SINGLE_FIELDS
-            | MULTILINE_FIELDS
-            | EXTRA_FIELDS.keys()
-            | LINK_FIELDS
-            | {"ip", "mac", "seat_no", "location_id"}
-            | user_field_keys
-        )
-
-        locations_by_id = None
-
-        for field, value in payload.items():
-            if field not in allowed_fields:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Неизвестное поле: {field}",
-                )
-
-            if field == "user":
-                result = set_main_person(session, computer, value)
-
-                if result:
-                    changes["user"] = {"old": result[0], "new": result[1]}
-
-                continue
-
-            if field == "location_id":
-                location = get_active_location(session, value)
-
-                if location.id != computer.location_id:
-                    locations_by_id = locations_by_id or load_locations(session)
-
-                    changes["location_id"] = {
-                        "old": location_path(computer.location_id, locations_by_id),
-                        "new": location_path(location.id, locations_by_id),
-                    }
-
-                    computer.location_id = location.id
-                    # В новом узле строка встаёт по номеру места
-                    computer.seat_sort = seat_sort_in_location(
-                        session,
-                        location.id,
-                        computer.seat_no,
-                        exclude_id=computer.id,
-                    )
-
-                continue
-
-            if field == "vacuum":
-                result = set_vacuum_logins(session, computer, value)
-
-                if result:
-                    changes["vacuum"] = {"old": result[0], "new": result[1]}
-
-                continue
-
-            if field == "seat_no":
-                new_value = parse_seat_no(value)
-                old_value = computer.seat_no
-
-            elif field == "ip":
-                new_value = normalize_ip(value)
-                old_value = computer.ip
-
-            elif field == "mac":
-                new_value = normalize_mac(value)
-                old_value = computer.mac
-
-            elif field in MULTILINE_FIELDS:
-                new_value = normalize_multiline(value)
-                old_value = getattr(computer, field)
-
-            elif field in SINGLE_FIELDS:
-                new_value = normalize_single(value)
-                old_value = getattr(computer, field)
-
-                if field == "status" and new_value is None:
-                    new_value = "установлен"
-
-            elif field in EXTRA_FIELDS or field in user_field_keys:
-                extra_key = EXTRA_FIELDS.get(field, field)
-                new_value = normalize_single(value)
-                old_value = extra.get(extra_key)
-
-                if old_value != new_value:
-                    changes[f"extra.{extra_key}"] = {
-                        "old": old_value,
-                        "new": new_value,
-                    }
-
-                    if new_value is None:
-                        extra.pop(extra_key, None)
-                    else:
-                        extra[extra_key] = new_value
-
-                    extra_changed = True
-
-                continue
-
-            else:
-                continue
-
-            if old_value != new_value:
-                changes[field] = {
-                    "old": old_value,
-                    "new": new_value,
-                }
-
-                setattr(computer, field, new_value)
+        changes = apply_fields(session, computer, payload, user_field_keys, batch)
 
         if changes:
-            if extra_changed:
-                computer.extra = extra
-
-            computer.version = (computer.version or 1) + 1
-            computer.updated_at = datetime.now(timezone.utc)
-
-            session.add(
-                History(
-                    entity="computers",
-                    entity_id=computer.id,
-                    user_name=user["login"],
-                    changes=changes,
-                )
-            )
-
+            save_changes(session, computer, changes, user["login"])
+            batch.finish(session)
             session.commit()
+
+        extra = computer.extra or {}
 
         updated = {
             "seat_no": computer.seat_no,
@@ -1000,16 +1165,11 @@ def update_computer(
         for key in user_field_keys:
             updated[key] = extra.get(key)
 
-        main_link, _ = get_main_person_link(session, computer.id)
-        main_person = session.get(Person, main_link.person_id) if main_link else None
-        updated["user"] = main_person.full_name if main_person else None
-
+        updated["user"] = main_person_name(session, computer)
         updated["vacuum"] = vacuum_text(get_vacuum_logins(session, computer.id))
 
         updated["location_id"] = computer.location_id
-        updated.update(
-            location_parts(computer.location_id, locations_by_id or load_locations(session))
-        )
+        updated.update(location_parts(computer.location_id, load_locations(session)))
 
         # Снимаем блокировку строки, если правок не было
         session.rollback()
@@ -1019,6 +1179,8 @@ def update_computer(
             "id": computer_id,
             "changes": changes,
             "updated": updated,
+            # Соседи, которым сдвинули № места: таблицу надо перечитать
+            "shifted": batch.changed_ids(),
         }
 
     except HTTPException:

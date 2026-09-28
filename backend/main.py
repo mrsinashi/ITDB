@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from api_auth import router as auth_router
 from api_computers import router as computers_router
+from api_computer_actions import router as computer_actions_router
 from api_export import router as export_router
 from api_history import router as history_router
 from api_import import router as import_router
@@ -23,6 +24,11 @@ app.include_router(auth_router)
 
 app.include_router(
     computers_router,
+    dependencies=[Depends(get_current_user)],
+)
+
+app.include_router(
+    computer_actions_router,
     dependencies=[Depends(get_current_user)],
 )
 

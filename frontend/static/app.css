@@ -892,6 +892,27 @@ select.input {
 .add-bar .ab-error {
     color: var(--danger);
 }
+.add-bar .ab-loc-short .input {
+    width: 300px;
+}
+.add-bar .ab-field {
+    width: 260px;
+    padding: 2px 4px;
+}
+.add-bar .ab-value {
+    width: 260px;
+}
+.add-bar .ab-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 4px;
+    cursor: pointer;
+    user-select: none;
+}
+.add-bar .ab-check input {
+    margin: 0;
+}
 
 .loc-pick {
     display: inline-block;
