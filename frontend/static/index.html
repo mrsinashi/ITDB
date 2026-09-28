@@ -139,6 +139,7 @@
                             <button @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
                         </div>
                     </span>
+                    <span v-if="canEdit" class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="exportWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'export' }" @click="toggleMenu('export')" title="Выгрузить">
                             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span class="caret">▼</span>
@@ -459,7 +460,7 @@
                     </thead>
                     <tbody v-for="day in historyDays" :key="day.key">
                         <tr class="h-day">
-                            <td colspan="4">{{ day.date }}<span class="h-day-count" title="Записей за день">{{ day.items.length }}</span></td>
+                            <td colspan="4">{{ day.date }}<span class="h-day-count" title="Записей за день">{{ historyDayCount(day) }}</span></td>
                         </tr>
                         <tr v-for="item in day.items" :key="item.id">
                             <td class="h-time">{{ formatClock(item.at) }}</td>
@@ -479,6 +480,12 @@
                         </tr>
                     </tbody>
                 </table>
+                <!-- Сначала загружены последние 200 записей; остальное — по кнопке -->
+                <div v-if="historyRest > 0 && !historyQuery.trim() && historyItems.length" class="history-more">
+                    <span>Показаны последние {{ historyItems.length }} из {{ historyTotal }}</span>
+                    <button class="btn" :disabled="historyLoadingMore" @click="loadMoreHistory(false)">Показать ещё {{ Math.min(200, historyRest) }}</button>
+                    <button class="btn" :disabled="historyLoadingMore" @click="loadMoreHistory(true)">Показать все</button>
+                </div>
                 </div>
                 </div>
             </div>
@@ -496,6 +503,7 @@
                     <span v-else class="card-hostname-edit">
                         <input ref="hostnameInput" v-model="cardHostname" @keydown.enter="saveHostname" @blur="cancelEditHostname">
                     </span>
+                    <span class="card-empty-toggle" :class="{ on: cardShowEmpty }" :title="cardShowEmpty ? 'Скрыть пустые поля' : 'Показать пустые поля'" @click="cardShowEmpty = !cardShowEmpty"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path v-if="cardShowEmpty" d="M4 10l4-4 4 4"/><path v-else d="M4 6l4 4 4-4"/></svg></span>
                     <span class="card-close" title="Закрыть" @click="closeCard">×</span>
                 </div>
                 <div class="card-body">
@@ -510,6 +518,7 @@
                                     <template v-if="r.copy">
                                         <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)"><span :class="{ 'val-chip': !!(cardValueStyle(r, line) || {}).backgroundColor }" :style="cardValueStyle(r, line)">{{ line }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                                     </template>
+                                    <span v-else-if="r.empty" class="ct-empty">—</span>
                                     <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)">{{ r.value }}</span>
                                     <template v-if="cardEditKey === r.key">
                                         <location-picker v-if="cardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="card.location_id" :options="locationOptions"

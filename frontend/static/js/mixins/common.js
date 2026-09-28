@@ -1,9 +1,16 @@
 // Общее: ошибки запросов, полоска загрузки, сообщения и подтверждения, выгрузка.
 
 import { apiFetch, pad2 } from "../util.js";
-import { FIELD_LABELS, LOCATION_FIELD_LABELS } from "../columns.js";
+import { LOCATION_FIELD_LABELS, buildFieldLabels } from "../columns.js";
 
 export default {
+    computed: {
+        // Подписи полей в Истории: полные названия столбцов + записи не-столбцы
+        fieldLabelMap() {
+            return buildFieldLabels(this.builtinColumns, this.historyLabels);
+        },
+    },
+
     methods: {
         // ---------- Общие ----------
 
@@ -65,16 +72,17 @@ export default {
             if (entity === "locations") {
                 return LOCATION_FIELD_LABELS[field] || field;
             }
+            const labels = this.fieldLabelMap;
             // Поля из computers.extra пишутся в историю как «extra.<ключ>»
             if (field && field.indexOf("extra.") === 0) {
                 field = field.slice(6);
-                const builtin = { "GSIT": "gsit", "Сост.": "state", "Метка": "label" }[field];
+                const builtin = this.builtinColumns.find(function (col) { return col.extraKey === field; });
                 if (builtin) {
-                    return FIELD_LABELS[builtin];
+                    return labels[builtin.field];
                 }
             }
-            if (FIELD_LABELS[field]) {
-                return FIELD_LABELS[field];
+            if (labels[field]) {
+                return labels[field];
             }
             const fd = this.fieldDefs.find(function (item) { return item.key === field; });
             return fd ? fd.label : field;

@@ -3,7 +3,7 @@
 //   main.js            — приложение: общее состояние (data), запуск, компоненты
 //   settings.js        — переключатели UI_OPTIONS, цветовые схемы, роли
 //   util.js            — запросы к API, localStorage, поиск по словам
-//   columns.js         — описание столбцов таблицы, подписи полей, дубли
+//   columns.js         — столбцы с сервера (GET /api/columns) в вид для таблицы, подписи полей, дубли
 //   widths.js          — автоширина столбцов
 //   tree-utils.js      — значки и ширина колонки дерева
 //   shortcuts.js       — сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
@@ -60,6 +60,12 @@ const app = Vue.createApp({
             showArchive: false,
             archiveSaving: false,
             rows: [],
+            // Карточка: показаны и пустые поля (кнопка в шапке, не запоминается)
+            cardShowEmpty: false,
+            // Описание встроенных столбцов с сервера (GET /api/columns)
+            builtinColumns: [],
+            cardGroups: [],
+            historyLabels: {},
             hiddenColumns: loadJson(HIDDEN_COLUMNS_KEY, []),
             searchHidden: loadJson(SEARCH_HIDDEN_KEY, false),
             locationFilter: null,
@@ -103,6 +109,11 @@ const app = Vue.createApp({
             historyError: "",
             historyItems: [],
             historyQuery: "",
+            // Всего записей и записей по дням (с сервера, точные, даже если
+            // загружена только часть — сначала 200, остальное по кнопке)
+            historyTotal: 0,
+            historyDayCounts: {},
+            historyLoadingMore: false,
 
             // Карточка
             card: null,
@@ -149,7 +160,7 @@ const app = Vue.createApp({
             await this.$nextTick();
             this.snapNavUser();
             window.addEventListener("resize", () => this.snapNavUser());
-            await Promise.all([this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
+            await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();
         }
     }

@@ -2,6 +2,7 @@
 изменить поле у всех. На каждый затронутый ПК — одна запись истории."""
 from fastapi import APIRouter, Body, Depends, HTTPException
 
+from api_columns import BULK_EXCLUDED
 from api_computers import (
     ChangeBatch,
     apply_fields,
@@ -20,11 +21,6 @@ from db import get_db
 from models import Computer
 
 router = APIRouter(prefix="/api", tags=["computer actions"])
-
-# Поля, которые нельзя менять всем выбранным сразу: расположение и № места —
-# через «Переместить», значения, которые должны быть у каждого ПК свои, — по одному
-BULK_EXCLUDED = {"location_id", "seat_no", "hostname", "ip", "mac", "inv_no", "serial", "vacuum"}
-
 
 def parse_ids(value, count=None):
     if not isinstance(value, list) or not value:

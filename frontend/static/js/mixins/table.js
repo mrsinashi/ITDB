@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
-import { apiFetch, saveJson, searchNorm, searchWords } from "../util.js";
-import { COLUMN_DEFS, DUP_FIELDS, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, compareCellValues, hasDuplicateValue, refreshDuplicates, styleKey } from "../columns.js";
+import { apiFetch, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, frameColorFor, hasDuplicateValue, isOverdue, OVERDUE_STYLE, refreshDuplicates, styleKey } from "../columns.js";
 import { TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 
 export default {
@@ -16,7 +16,7 @@ export default {
         // Все столбцы (и скрытые) — для меню «Столбцы»
         allColumns() {
             const self = this;
-            const base = COLUMN_DEFS.map(function (col) {
+            const base = this.builtinColumns.map(function (col) {
                 const manual = self.manualWidths[col.field];
                 const auto = self.autoWidths[col.field];
                 return Object.assign({}, col, {
@@ -179,9 +179,10 @@ export default {
                 return rows;
             }
             const field = this.sortField;
+            const sortCol = this.allColumns.find(function (c) { return c.field === field; });
             const dir = this.sortDir === "asc" ? 1 : -1;
             return rows.slice().sort(function (a, b) {
-                return compareCellValues(a[field], b[field]) * dir;
+                return compareCellValues(a[field], b[field], sortCol) * dir;
             });
         },
 
@@ -232,6 +233,39 @@ export default {
     methods: {
         // ---------- Таблица ----------
 
+        // Описание встроенных столбцов (с сервера): таблица, карточка, История
+        async loadColumns() {
+            try {
+                const response = await apiFetch("/api/columns");
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const data = await response.json();
+                this.builtinColumns = (data.columns || []).map(toColumnDef);
+                this.cardGroups = data.card_groups || [];
+                this.historyLabels = data.history_labels || {};
+                this.applyDefaultHidden();
+            } catch (e) {
+                this.tableError = String(e.message || e);
+            }
+        },
+
+        // Столбцы, скрытые по умолчанию, прячутся один раз: показанный
+        // пользователем столбец при следующей загрузке не скрывается снова
+        applyDefaultHidden() {
+            const seen = loadJson(DEFAULT_HIDDEN_SEEN_KEY, []);
+            const fresh = this.builtinColumns.filter(function (col) {
+                return col.hiddenByDefault && seen.indexOf(col.field) === -1;
+            }).map(function (col) { return col.field; });
+            if (!fresh.length) {
+                return;
+            }
+            this.hiddenColumns = this.hiddenColumns.concat(fresh.filter((field) => {
+                return this.hiddenColumns.indexOf(field) === -1;
+            }));
+            saveJson(DEFAULT_HIDDEN_SEEN_KEY, seen.concat(fresh));
+        },
+
         async loadTable() {
             this.tableLoading = true;
             this.startLoading();
@@ -243,7 +277,7 @@ export default {
                 }
                 const data = await response.json();
                 this.rows = data.rows || [];
-                refreshDuplicates(this.rows);
+                refreshDuplicates(this.rows, this.builtinColumns);
                 this.dupVersion++;
                 this.recalcWidths();
             } catch (e) {
@@ -333,7 +367,7 @@ export default {
         },
 
         recalcWidths() {
-            this.autoWidths = computeAutoWidths(this.rows, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles);
+            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -351,7 +385,7 @@ export default {
             if (col.field === this.lastStickyField) {
                 cls["sticky-edge"] = true;
             }
-            if (!row.archived && DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
+            if (!row.archived && col.dup && hasDuplicateValue(row[col.field], col.field)) {
                 cls["dup-red"] = true;
             }
             if (this.isEditing(row, col)) {
@@ -389,7 +423,7 @@ export default {
         // Цвет заливки ячейки: дубль — красный, иначе фон значения из
         // Справочников поверх фона столбца; null — без заливки
         cellFillOf(row, col) {
-            if (!row.archived && DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
+            if (!row.archived && col.dup && hasDuplicateValue(row[col.field], col.field)) {
                 return "var(--dup-bg)";
             }
             let fill = null;
@@ -463,6 +497,16 @@ export default {
             if (right || own) {
                 style["--v-line"] = mix(right || own, "var(--self-a)");
             }
+            // Рамка ячейки под курсором — в тон заливки (заливка темнее), а не
+            // бежевая: у самой ячейки и у соседа слева, который рисует её левую линию
+            const ownFrame = own && frameColorFor(own);
+            const rightFrame = right && frameColorFor(right);
+            if (ownFrame) {
+                style["--hf"] = ownFrame;
+            }
+            if (rightFrame) {
+                style["--hf-right"] = rightFrame;
+            }
             if (below) {
                 style["--h-line"] = mix(below, "var(--below-a)");
             } else if (own) {
@@ -486,7 +530,10 @@ export default {
         },
 
         cellSpanStyle(row, col) {
-            const base = this.cellTextStyle(row, col) || {};
+            let base = this.cellTextStyle(row, col) || {};
+            if (col.date && isOverdue(this.cellText(row, col))) {
+                base = Object.assign({}, base, OVERDUE_STYLE);
+            }
             if (this.isEditing(row, col)) {
                 return Object.assign({}, base, { visibility: "hidden" });
             }
@@ -793,7 +840,7 @@ export default {
                 }
                 if (index !== -1) {
                     Object.assign(this.rows[index], updated);
-                    refreshDuplicates(this.rows);
+                    refreshDuplicates(this.rows, this.builtinColumns);
                 this.dupVersion++;
                     this.recalcWidths();
                     this.flashCell(row.id, col.field);

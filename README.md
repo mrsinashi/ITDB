@@ -10,7 +10,7 @@
 | Часть | Что |
 |---|---|
 | Сервер | Debian, Python 3.13 (подходит 3.11+), PostgreSQL 17 |
-| Backend | FastAPI + SQLAlchemy, миграции Alembic — папка `backend/`. Сессия базы на запрос — `session=Depends(get_db)` (`db.py`); непредвиденная ошибка → ответ 500 «Ошибка на сервере: …», полный текст — в журнале uvicorn |
+| Backend | FastAPI + SQLAlchemy, миграции Alembic — папка `backend/`. Сессия базы на запрос — `session=Depends(get_db)` (`db.py`); непредвиденная ошибка → ответ 500 «Ошибка на сервере: …», полный текст — в журнале uvicorn. Встроенные столбцы ПК (таблица, карточка, выгрузка, История) описаны в одном месте — `api_columns.py` |
 | Frontend | Vue 3 без сборки — папка `frontend/static/` (сервер отдаёт её сам): разметка `index.html`, стили `app.css`, код — модули в `js/` (карта — в начале `js/main.js`) |
 | Миграции | `alembic/versions/` |
 

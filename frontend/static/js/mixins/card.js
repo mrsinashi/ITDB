@@ -26,52 +26,55 @@ export default {
             function F(key, label, value, copy, field) {
                 return { key: key, label: label, value: value, copy: !!copy, field: field === undefined ? key : field };
             }
-            const status = [F("status", "Статус", c.status)];
-            const place = [
-                F("building", "Адрес", c.building, true),
-                F("department", "Отделение", c.department, true),
-                F("floor", "Этаж", c.floor),
-                F("room", "Кабинет", this.cardRoom, true, null),
-                F("seat_no", "№ Места", c.seat_no)
-            ];
-            if (!c.location_id) {
-                // Без расположения — строка есть, чтобы его можно было задать
-                place.unshift(F("location", "Расположение", "не указано", false, null));
-            }
-            const net = [F("ip", "IP адрес", c.ip, true), F("mac", "MAC адрес", c.mac, true)];
-            const ids = [F("inv_no", "Инвентарный номер", c.inv_no, true), F("serial", "Серийный", c.serial, true)];
-            const hw = [
-                F("type", "Тип компьютера", c.type),
-                F("model", "Модель", c.model, true),
-                F("os", "Операционная система", c.os, true),
-                F("cpu", "Процессор", c.cpu, true),
-                F("ram", "Оперативная память", c.ram),
-                F("drive", "Дисковые накопители", c.drive, true),
-                F("gpu", "Видеокарта", c.gpu, true)
-            ];
-            const marks = [F("gsit", "GSIT", c.gsit), F("state", "Сост.", c.state), F("label", "Метка", c.label)];
+            const columns = {};
+            this.builtinColumns.forEach(function (col) { columns[col.field] = col; });
             const custom = this.tableFieldDefs.map(function (fd) {
                 return F("x-" + fd.key, fd.label, c[fd.key], false, fd.key);
             });
-            const note = [F("note", "Примечание", c.note)];
+            const cardRoom = this.cardRoom;
+            // Группы и порядок строк — из описания столбцов (сервер, CARD_GROUPS)
+            const groupRows = this.cardGroups.map(function (g) {
+                const rows = [];
+                g.fields.forEach(function (field) {
+                    const col = columns[field];
+                    if (field === "user_fields") {
+                        rows.push.apply(rows, custom);
+                    } else if (field === "room_code") {
+                        // Номер и название кабинета — одной строкой
+                        const room = F("room", "Кабинет", cardRoom, col && col.cardCopy, null);
+                        room.always = !!(col && col.cardAlways);
+                        rows.push(room);
+                    } else if (col) {
+                        const r = F(field, col.cardLabel, c[field], col.cardCopy);
+                        r.always = !!col.cardAlways;
+                        r.date = !!col.date;
+                        rows.push(r);
+                    }
+                });
+                if (!c.location_id && g.fields.indexOf("building") !== -1) {
+                    // Без расположения — строка есть, чтобы его можно было задать
+                    rows.unshift(F("location", "Расположение", "не указано", false, null));
+                }
+                return [g.title, rows];
+            });
 
+            // Пустые поля — только основные (always) или если развёрнуто
+            // кнопкой в шапке карточки; пустое показывается серым «—»
+            const showEmpty = this.cardShowEmpty;
             function filled(list) {
                 return list.filter(function (r) {
-                    return r.value !== null && r.value !== undefined && r.value !== "";
+                    const empty = r.value === null || r.value === undefined || r.value === "";
+                    return !empty || r.always || showEmpty;
+                }).map(function (r) {
+                    const empty = r.value === null || r.value === undefined || r.value === "";
+                    return empty ? Object.assign({}, r, { empty: true, copy: false }) : r;
                 });
             }
 
             if (!UI_OPTIONS.cardGroups) {
-                return filled([].concat(status, place, net, ids, hw, marks, custom, note));
+                return filled([].concat.apply([], groupRows.map(function (g) { return g[1]; })));
             }
-            const groups = [
-                [null, status],
-                ["Размещение", place],
-                ["Сеть", net],
-                ["Оборудование", hw],
-                ["Учёт", ids.concat(marks)],
-                ["Прочее", custom.concat(note)]
-            ];
+            const groups = groupRows;
             const result = [];
             groups.forEach(function (g) {
                 const rows = filled(g[1]);
@@ -143,7 +146,10 @@ export default {
             if (!td) {
                 return;
             }
-            el.style.width = td.clientWidth + "px";
+            // Ширина — ровно по ячейке: clientWidth округляется вверх, и на
+            // дробном масштабе (125%) редактор вылезал на 1px — снизу
+            // появлялась полоса прокрутки
+            el.style.width = "100%";
             el.style.height = td.clientHeight + "px";
             if (el.scrollHeight > el.clientHeight) {
                 el.style.height = el.scrollHeight + 2 + "px";
@@ -189,6 +195,7 @@ export default {
             this.card = row;
             this.setHoverRow(null); // подсветка остаётся на строке карточки
             this.cardHistoryOpen = false;
+            this.cardShowEmpty = false; // пустые поля всегда свёрнуты при открытии
             this.cardEditKey = null;
             this.cardHostname = row.hostname || "";
             this.editingHostname = false;

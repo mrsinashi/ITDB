@@ -7,57 +7,37 @@ export function normalizeKey(value) {
     return String(value).trim().toLowerCase();
 }
 
-let duplicateSets = {
-    ip: new Set(),
-    mac: new Set(),
-    hostname: new Set(),
-    inv_no: new Set(),
-    vacuum: new Set()
-};
+// Дубли: поле → множество значений, встречающихся больше одного раза.
+// Какие поля проверять и какие из них многострочные — из описания столбцов.
+let duplicateSets = {};
+let multilineDupFields = new Set();
 
-export function buildDuplicateSets(rows) {
-    const counters = {
-        ip: {},
-        mac: {},
-        hostname: {},
-        inv_no: {},
-        vacuum: {}
-    };
-
-    function add(field, value) {
-        const key = normalizeKey(value);
-        if (!key) {
-            return;
-        }
-        counters[field][key] = (counters[field][key] || 0) + 1;
-    }
+export function buildDuplicateSets(rows, columns) {
+    const dupColumns = (columns || []).filter(function (col) { return col.dup; });
+    const counters = {};
+    dupColumns.forEach(function (col) { counters[col.field] = {}; });
 
     rows.forEach(function (row) {
         if (row.archived) {
             return; // ПК из архива дублей не создают
         }
-        splitMulti(row.ip).forEach(function (value) { add("ip", value); });
-        splitMulti(row.mac).forEach(function (value) { add("mac", value); });
-        if (row.hostname) add("hostname", row.hostname);
-        if (row.inv_no) add("inv_no", row.inv_no);
-        splitMulti(row.vacuum).forEach(function (value) { add("vacuum", value); });
+        dupColumns.forEach(function (col) {
+            const values = col.multiline ? splitMulti(row[col.field]) : [row[col.field]];
+            values.forEach(function (value) {
+                const key = normalizeKey(value);
+                if (key) {
+                    counters[col.field][key] = (counters[col.field][key] || 0) + 1;
+                }
+            });
+        });
     });
 
-    function makeSet(counter) {
-        return new Set(
-            Object.keys(counter).filter(function (key) {
-                return counter[key] > 1;
-            })
-        );
-    }
-
-    return {
-        ip: makeSet(counters.ip),
-        mac: makeSet(counters.mac),
-        hostname: makeSet(counters.hostname),
-        inv_no: makeSet(counters.inv_no),
-        vacuum: makeSet(counters.vacuum)
-    };
+    const sets = {};
+    Object.keys(counters).forEach(function (field) {
+        const counter = counters[field];
+        sets[field] = new Set(Object.keys(counter).filter(function (key) { return counter[key] > 1; }));
+    });
+    return sets;
 }
 
 export function hasDuplicateValue(value, field) {
@@ -68,21 +48,18 @@ export function hasDuplicateValue(value, field) {
     if (!set) {
         return false;
     }
-    const multiFields = ["ip", "mac", "vacuum"];
-    let values;
-    if (multiFields.indexOf(field) !== -1) {
-        values = splitMulti(value);
-    } else {
-        values = [String(value)];
-    }
+    const values = multilineDupFields.has(field) ? splitMulti(value) : [String(value)];
     return values.some(function (item) {
         return set.has(normalizeKey(item));
     });
 }
 
-// Пересчитать дубли (после загрузки и правки строк)
-export function refreshDuplicates(rows) {
-    duplicateSets = buildDuplicateSets(rows);
+// Пересчитать дубли (после загрузки и правки строк); columns — встроенные столбцы
+export function refreshDuplicates(rows, columns) {
+    duplicateSets = buildDuplicateSets(rows, columns);
+    multilineDupFields = new Set((columns || []).filter(function (col) {
+        return col.dup && col.multiline;
+    }).map(function (col) { return col.field; }));
 }
 
 export const kindLabels = {
@@ -96,35 +73,48 @@ export const kindLabels = {
 // Определения столбцов таблицы
 // ============================================================
 
+// Встроенные столбцы описаны на сервере (backend/api_columns.py, GET /api/columns).
+// Здесь описание переводится в вид, который ждут таблица, карточка и Справочники.
 // values: false — значения почти всегда уникальны, в «Справочниках»
 // у такого столбца настраивается только оформление столбца целиком.
-export const COLUMN_DEFS = [
-    { field: "user", headerName: "ФИО", editable: true, values: false },
-    // location: правка — выбор узла дерева (двойной клик в режиме правки)
-    { field: "building", headerName: "Адрес", location: true },
-    { field: "department", headerName: "Отделение", location: true },
-    { field: "floor", headerName: "Эт.", fullName: "Этаж", center: true, location: true },
-    { field: "room_code", headerName: "Каб", fullName: "№ Кабинета", center: true, values: false, location: true },
-    { field: "room_name", headerName: "Кабинет", location: true },
-    { field: "seat_no", headerName: "№", fullName: "№ Места", center: true, editable: true, values: false },
-    { field: "hostname", headerName: "HOSTNAME", link: true, sticky: true, bold: true, editable: true, values: false },
-    { field: "ip", headerName: "IP", fullName: "IP адрес", sticky: true, editable: true, multiline: true, values: "subnet" },
-    { field: "vacuum", headerName: "VACUUM", fullName: "Vacuum", editable: true, multiline: true, values: false },
-    { field: "os", headerName: "OS", fullName: "Операционная система (ОС / OS)", center: true, editable: true  },
-    { field: "type", headerName: "ТИП", fullName: "Тип компьютера", center: true, editable: true },
-    { field: "model", headerName: "Модель", center: true, editable: true },
-    { field: "cpu", headerName: "CPU", fullName: "Процессор (ЦП / CPU)", center: true, editable: true },
-    { field: "ram", headerName: "RAM", fullName: "Оперативная память (ОЗУ / RAM)", center: true, editable: true },
-    { field: "drive", headerName: "DRIVE", fullName: "Дисковые накопители (DRIVE)", center: true, editable: true, multiline: true },
-    { field: "gpu", headerName: "GPU", fullName: "Видеокарта (ГП / GPU)", center: true, editable: true },
-    { field: "mac", headerName: "MAC", fullName: "MAC адрес", editable: true, multiline: true, values: false },
-    { field: "inv_no", headerName: "ИНВ", fullName: "Инвентарный номер", editable: true, values: false },
-    { field: "gsit", headerName: "GSIT", center: true, editable: true },
-    { field: "state", headerName: "Сост.", center: true, editable: true },
-    { field: "label", headerName: "Метка", center: true, editable: true },
-    { field: "status", headerName: "Статус", center: true, editable: true },
-    { field: "note", headerName: "Примечание", note: true, maxWidth: 200, editable: true, multiline: true, values: false }
-];
+export function toColumnDef(c) {
+    const col = {
+        field: c.key,
+        headerName: c.short,
+        cardLabel: c.card,
+        center: c.center,
+        sticky: c.sticky,
+        bold: c.bold,
+        link: c.link,
+        note: c.note,
+        multiline: c.multiline,
+        // location: правка — выбор узла дерева (двойной клик)
+        location: c.kind === "location",
+        editable: c.kind !== "location",
+        hiddenByDefault: c.hidden,
+        dup: c.dup,
+        bulk: c.bulk,
+        cardCopy: c.card_copy,
+        // В карточке всегда, даже пустое
+        cardAlways: c.card_always,
+        // Дата «ДД.ММ.ГГГГ»: сортировка по дате, просроченная — красным жирным
+        date: c.kind === "date",
+        // GSIT / Сост. / Метка лежат в computers.extra под русскими ключами
+        extraKey: c.extra_key
+    };
+    if (c.title !== c.short) {
+        col.fullName = c.title;
+    }
+    if (c.max_width) {
+        col.maxWidth = c.max_width;
+    }
+    if (c.values === "no") {
+        col.values = false;
+    } else if (c.values === "subnet") {
+        col.values = "subnet";
+    }
+    return col;
+}
 
 // Название столбца вне самой таблицы (меню, карточка, история, справочники)
 export function columnTitle(col) {
@@ -148,29 +138,15 @@ export function styleKey(field, line) {
     return String(line).trim().toLowerCase();
 }
 
-// Нельзя менять сразу у нескольких ПК (как BULK_EXCLUDED на сервере)
-export const BULK_EXCLUDED = ["location_id", "seat_no", "hostname", "ip", "mac", "inv_no", "serial", "vacuum"];
-
-// Поля, дубли в которых подсвечиваются красным
-export const DUP_FIELDS = ["ip", "mac", "hostname", "inv_no", "vacuum"];
-
-// Подписи полей в истории (ключ поля → как показывать)
-export const FIELD_LABELS = Object.assign(
-    {},
-    Object.fromEntries(COLUMN_DEFS.map(function (c) { return [c.field, columnTitle(c)]; })),
-    {
-        serial: "Серийный",
-        vnc: "VNC",
-        glpi_id: "GLPI",
-        temp_note: "Врем. примечание",
-        location_id: "Расположение",
-        seat_sort: "Порядок строки",
-        archived: "Архив",
-        replaced: "Заменил",
-        replaced_by: "Заменён на",
-        created: "Создан"
-    }
-);
+// Подписи полей в истории (ключ поля → как показывать): полные названия
+// столбцов и подписи записей, которые не столбцы (с сервера)
+export function buildFieldLabels(columns, historyLabels) {
+    return Object.assign(
+        {},
+        Object.fromEntries(columns.map(function (c) { return [c.field, columnTitle(c)]; })),
+        historyLabels || {}
+    );
+}
 export const LOCATION_FIELD_LABELS = {
     name: "Название",
     code: "Код",
@@ -182,12 +158,14 @@ export const LOCATION_FIELD_LABELS = {
 };
 
 export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
+// Столбцы, скрытые по умолчанию, которые уже были скрыты один раз: если
+// пользователь их показал, при следующей загрузке они не прячутся снова
+export const DEFAULT_HIDDEN_SEEN_KEY = "itdb.defaultHiddenSeen.v1";
 export const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
 
 // Поля карточки, которые можно править двойным кликом (ключ строки карточки → поле)
 export const LOCATION_EDIT = { field: "location_id", headerName: "Расположение", location: true };
 export const CARD_EDIT_EXTRA = {
-    serial: { field: "serial", headerName: "Серийный", editable: true },
     building: LOCATION_EDIT,
     department: LOCATION_EDIT,
     floor: LOCATION_EDIT,
@@ -202,7 +180,73 @@ export const LOCATION_FIELDS = ["building", "department", "floor", "room_code", 
 // Сортировка значений
 // ============================================================
 
-export function compareCellValues(a, b) {
+// Рамка ячейки под курсором для залитой ячейки — в тон заливки: тот же
+// оттенок темнее и чуть спокойнее (как бежевая рамка на бежевой строке).
+// fill — «#rrggbb» из Справочников или «var(--имя)» (дубль). Не цвет — null.
+const frameCache = new Map();
+
+export function frameColorFor(fill) {
+    if (frameCache.has(fill)) {
+        return frameCache.get(fill);
+    }
+    let hex = String(fill || "").trim();
+    const v = /^var\((--[\w-]+)\)$/.exec(hex);
+    if (v) {
+        hex = getComputedStyle(document.documentElement).getPropertyValue(v[1]).trim();
+    }
+    let m = /^#([0-9a-f]{3})$/i.exec(hex);
+    if (m) {
+        hex = "#" + m[1].split("").map(function (c) { return c + c; }).join("");
+    }
+    m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+    let result = null;
+    if (m) {
+        const r = parseInt(m[1], 16) / 255;
+        const g = parseInt(m[2], 16) / 255;
+        const b = parseInt(m[3], 16) / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const l = (max + min) / 2;
+        const d = max - min;
+        let h = 0;
+        let s = 0;
+        if (d) {
+            s = d / (1 - Math.abs(2 * l - 1));
+            if (max === r) {
+                h = ((g - b) / d + 6) % 6;
+            } else if (max === g) {
+                h = (b - r) / d + 2;
+            } else {
+                h = (r - g) / d + 4;
+            }
+            h *= 60;
+        }
+        result = "hsl(" + Math.round(h) + " " + Math.round(s * 70) + "% " + Math.round(Math.max(0, l - 0.13) * 100) + "%)";
+    }
+    frameCache.set(fill, result);
+    return result;
+}
+
+// «15.10.2026» → 20261015 (для сравнения); не дата — null
+export function dateKey(value) {
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(String(value || "").trim());
+    return m ? Number(m[3] + m[2] + m[1]) : null;
+}
+
+// Дата уже прошла (сегодняшняя — ещё не просрочена)
+export function isOverdue(value) {
+    const key = dateKey(value);
+    if (key === null) {
+        return false;
+    }
+    const d = new Date();
+    return key < d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+// Просроченная дата: красный жирный текст, без фона
+export const OVERDUE_STYLE = { color: "var(--overdue-text)", fontWeight: "700" };
+
+export function compareCellValues(a, b, col) {
     const aEmpty = a === null || a === undefined || a === "";
     const bEmpty = b === null || b === undefined || b === "";
     if (aEmpty && bEmpty) {
@@ -213,6 +257,9 @@ export function compareCellValues(a, b) {
     }
     if (bEmpty) {
         return -1;
+    }
+    if (col && col.date) {
+        return (dateKey(a) || 0) - (dateKey(b) || 0);
     }
     const sa = String(a).split("\n")[0];
     const sb = String(b).split("\n")[0];

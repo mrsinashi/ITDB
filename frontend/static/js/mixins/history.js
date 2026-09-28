@@ -1,7 +1,10 @@
 // Страница «История».
 
 import { apiFetch, matchesAllWords, searchWords, splitMulti } from "../util.js";
-import { refreshDuplicates, styleKey } from "../columns.js";
+import { OVERDUE_STYLE, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+
+// Сколько записей истории загружать сразу и по «Показать ещё»
+const HISTORY_PAGE = 200;
 
 export default {
     computed: {
@@ -42,9 +45,16 @@ export default {
         },
 
         historyCountText() {
-            const total = this.historyItems.length;
-            const shown = this.filteredHistory.length;
-            return shown === total ? "Записей: " + total : "Показано: " + shown + " из " + total;
+            const total = this.historyTotal;
+            if (!this.historyQuery.trim()) {
+                return "Записей: " + total;
+            }
+            return "Показано: " + this.filteredHistory.length + " из " + total;
+        },
+
+        // Сколько записей ещё не загружено (кнопки «Показать ещё» внизу)
+        historyRest() {
+            return Math.max(0, this.historyTotal - this.historyItems.length);
         },
     },
 
@@ -54,6 +64,13 @@ export default {
             this.$nextTick(() => {
                 this.pushHistoryDays();
             });
+        },
+
+        // Поиск идёт по всей истории — догрузить остальное
+        historyQuery(value) {
+            if (value.trim() && this.historyRest > 0) {
+                this.loadMoreHistory(true);
+            }
         },
     },
 
@@ -71,6 +88,16 @@ export default {
                 this._dayRaf = null;
                 this.pushHistoryDays();
             });
+        },
+
+        // Число записей за день: без поиска — точное с сервера (день мог
+        // загрузиться не целиком), с поиском — сколько найдено
+        historyDayCount(day) {
+            if (this.historyQuery.trim()) {
+                return day.items.length;
+            }
+            const count = this.historyDayCounts[day.date];
+            return count === undefined ? day.items.length : count;
         },
 
         pushHistoryDays() {
@@ -130,7 +157,10 @@ export default {
                     break;
                 }
             }
-            const st = this.effectiveStyle(r.field, choice);
+            let st = this.effectiveStyle(r.field, choice);
+            if (r.date && isOverdue(r.value)) {
+                st = Object.assign({}, st, OVERDUE_STYLE);
+            }
             return st.color || st.backgroundColor || st.fontWeight || st.fontStyle ? st : null;
         },
 
@@ -227,7 +257,7 @@ export default {
                 if (index >= 0) {
                     const updatedRow = Object.assign({}, this.rows[index], updated);
                     this.rows[index] = updatedRow;
-                    refreshDuplicates(this.rows);
+                    refreshDuplicates(this.rows, this.builtinColumns);
                 this.dupVersion++;
                     this.recalcWidths();
                     this.card = updatedRow;
@@ -242,22 +272,59 @@ export default {
 
         // ---------- История ----------
 
+        // Порция истории с сервера: записи + точные счётчики (всего и по дням)
+        async fetchHistory(offset, limit) {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+            const response = await apiFetch("/api/history?limit=" + limit + "&offset=" + offset + "&tz=" + encodeURIComponent(tz));
+            if (!response.ok) {
+                throw new Error(await this.errorText(response));
+            }
+            const data = await response.json();
+            this.historyTotal = data.total || 0;
+            this.historyDayCounts = data.days || {};
+            return data.items || [];
+        },
+
+        // Сначала — последние 200 записей, остальное — «Показать ещё / все»
         async loadHistory() {
             this.historyLoading = true;
             this.startLoading();
             this.historyError = "";
             try {
-                const response = await apiFetch("/api/history?limit=200");
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
+                this.historyItems = await this.fetchHistory(0, HISTORY_PAGE);
+                if (this.historyQuery.trim() && this.historyRest > 0) {
+                    this.loadMoreHistory(true);
                 }
-                const data = await response.json();
-                this.historyItems = data.items || [];
             } catch (e) {
                 this.historyError = String(e.message || e);
             }
             this.finishLoading();
             this.historyLoading = false;
+        },
+
+        async loadMoreHistory(all) {
+            if (this.historyLoadingMore) {
+                return;
+            }
+            this.historyLoadingMore = true;
+            this.startLoading();
+            try {
+                do {
+                    const limit = all ? 5000 : HISTORY_PAGE;
+                    const items = await this.fetchHistory(this.historyItems.length, limit);
+                    // Пока листали, могли добавиться новые записи — без повторов
+                    const seen = new Set(this.historyItems.map(function (item) { return item.id; }));
+                    const fresh = items.filter(function (item) { return !seen.has(item.id); });
+                    this.historyItems = this.historyItems.concat(fresh);
+                    if (!items.length) {
+                        break;
+                    }
+                } while (all && this.historyRest > 0);
+            } catch (e) {
+                this.toastError("Не удалось загрузить историю: " + (e.message || e));
+            }
+            this.finishLoading();
+            this.historyLoadingMore = false;
         },
     }
 };

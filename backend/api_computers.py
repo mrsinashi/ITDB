@@ -1,11 +1,12 @@
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 import re
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
 
+from api_columns import COLUMNS, COLUMNS_BY_KEY, EDITABLE_KEYS, EXTRA_FIELDS, keys_of
 from api_import import split_vacuum_logins
 from auth import require_editor
 
@@ -23,61 +24,26 @@ from models import (
 
 router = APIRouter(prefix="/api", tags=["computers"])
 
-SINGLE_FIELDS = {
-    "status",
-    "hostname",
-    "inv_no",
-    "serial",
-    "type",
-    "model",
-    "os",
-    "cpu",
-    "ram",
-    "gpu",
-    "vnc",
-}
+SINGLE_FIELDS = keys_of("text")
 
-MULTILINE_FIELDS = {
-    "drive",
-    "note",
-}
+MULTILINE_FIELDS = keys_of("multiline")
 
-EXTRA_FIELDS = {
-    "gsit": "GSIT",
-    "state": "Сост.",
-    "label": "Метка",
-}
+DATE_FIELDS = keys_of("date")
 
 # Поля-связи: хранятся не в computers, а в отдельных таблицах
-LINK_FIELDS = {"user", "vacuum"}
+LINK_FIELDS = keys_of("user", "vacuum")
 
 # Ключи, которые уже заняты встроенными полями строки таблицы.
 # Пользовательское поле с таким ключом затёрло бы встроенное значение.
-RESERVED_FIELD_KEYS = (
-    SINGLE_FIELDS
-    | MULTILINE_FIELDS
-    | EXTRA_FIELDS.keys()
-    | LINK_FIELDS
-    | {
-        "id",
-        "location_id",
-        "building",
-        "department",
-        "floor",
-        "room_code",
-        "room_name",
-        "seat_no",
-        "seat_sort",
-        "ip",
-        "mac",
-        "glpi_id",
-        "temp_note",
-        "extra",
-        "version",
-        "updated_at",
-        "archived",
-    }
-)
+RESERVED_FIELD_KEYS = set(COLUMNS_BY_KEY) | {
+    "id",
+    "location_id",
+    "seat_sort",
+    "extra",
+    "version",
+    "updated_at",
+    "archived",
+}
 
 # Ключи в computers.extra, под которыми лежат встроенные GSIT / Сост. / Метка.
 # Пользовательское поле с таким ключом (старые поля, созданные до проверки
@@ -187,6 +153,43 @@ def parse_seat_no(value):
         )
 
     return int(number)
+
+
+def parse_date(value):
+    """Дата из ввода: «15.10.2026», «15.10.26», «15.10» (этот год),
+    «2026-10-15». Пусто — None, не дата — 400."""
+    text = normalize_single(value)
+
+    if text is None:
+        return None
+
+    parts = None
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2}|\d{4}))?", text)
+
+    if m:
+        year = int(m.group(3)) if m.group(3) else date.today().year
+        parts = (year + 2000 if year < 100 else year, int(m.group(2)), int(m.group(1)))
+    else:
+        m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", text)
+
+        if m:
+            parts = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+    try:
+        if parts:
+            return date(*parts)
+    except ValueError:
+        pass
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"«{text}» — не дата. Нужно ДД.ММ.ГГГГ, например 15.10.2026.",
+    )
+
+
+def format_date(value):
+    """Дата для API и истории — только цифрами: «15.10.2026»."""
+    return value.strftime("%d.%m.%Y") if value else None
 
 
 LOCATION_PART_FIELDS = ("building", "department", "floor", "room_code", "room_name")
@@ -595,6 +598,28 @@ def set_vacuum_logins(session, computer, value):
     return vacuum_text(old_logins), vacuum_text(new_logins)
 
 
+def column_values(computer, parts, user_name, vacuum):
+    """Значения встроенных столбцов ПК (по описанию в api_columns)."""
+    extra = computer.extra or {}
+    values = {}
+
+    for column in COLUMNS:
+        if column.kind == "location":
+            values[column.key] = parts[column.key]
+        elif column.kind == "extra":
+            values[column.key] = extra.get(column.extra_key)
+        elif column.kind == "user":
+            values[column.key] = user_name
+        elif column.kind == "vacuum":
+            values[column.key] = vacuum
+        elif column.kind == "date":
+            values[column.key] = format_date(getattr(computer, column.key))
+        else:
+            values[column.key] = getattr(computer, column.key)
+
+    return values
+
+
 ARCHIVED_FILTERS = ("no", "yes", "all")
 
 
@@ -705,35 +730,18 @@ def computer_rows(session, archived="no"):
         row = {fd.key: extra.get(fd.key) for fd in field_defs}
 
         row.update(
+            column_values(
+                computer,
+                parts,
+                main_user_by_computer.get(computer.id),
+                vacuum_text(vacuum_logins),
+            )
+        )
+        row.update(
             {
                 "id": computer.id,
                 "location_id": computer.location_id,
-                "user": main_user_by_computer.get(computer.id),
-                "building": parts["building"],
-                "department": parts["department"],
-                "floor": parts["floor"],
-                "room_code": parts["room_code"],
-                "room_name": parts["room_name"],
-                "seat_no": computer.seat_no,
                 "_seat_sort": seat_sort,
-                "ip": computer.ip,
-                "hostname": computer.hostname,
-                "vacuum": vacuum_text(vacuum_logins),
-                "os": computer.os,
-                "type": computer.type,
-                "model": computer.model,
-                "cpu": computer.cpu,
-                "ram": computer.ram,
-                "drive": computer.drive,
-                "gpu": computer.gpu,
-                "mac": computer.mac,
-                "inv_no": computer.inv_no,
-                "serial": computer.serial,
-                "gsit": extra.get("GSIT"),
-                "state": extra.get("Сост."),
-                "label": extra.get("Метка"),
-                "status": computer.status,
-                "note": computer.note,
                 "archived": computer.archived,
                 "version": computer.version,
                 "updated_at": computer.updated_at,
@@ -911,14 +919,7 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
     extra = dict(computer.extra or {})
     extra_changed = False
 
-    allowed_fields = (
-        SINGLE_FIELDS
-        | MULTILINE_FIELDS
-        | EXTRA_FIELDS.keys()
-        | LINK_FIELDS
-        | {"ip", "mac", "seat_no", "location_id"}
-        | user_field_keys
-    )
+    allowed_fields = EDITABLE_KEYS | {"location_id"} | user_field_keys
 
     locations_by_id = None
     placement_changed = False
@@ -982,6 +983,17 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
         elif field in MULTILINE_FIELDS:
             new_value = normalize_multiline(value)
             old_value = getattr(computer, field)
+
+        elif field in DATE_FIELDS:
+            new_value = parse_date(value)
+            old_value = getattr(computer, field)
+
+            if old_value != new_value:
+                # В историю — как видно в таблице: «15.10.2026»
+                changes[field] = {"old": format_date(old_value), "new": format_date(new_value)}
+                setattr(computer, field, new_value)
+
+            continue
 
         elif field in SINGLE_FIELDS:
             new_value = normalize_single(value)
@@ -1111,30 +1123,19 @@ def update_computer(
 
     extra = computer.extra or {}
 
-    updated = {
-        "seat_no": computer.seat_no,
-        "ip": computer.ip,
-        "mac": computer.mac,
-        "drive": computer.drive,
-        "note": computer.note,
-        "version": computer.version,
-        "updated_at": computer.updated_at,
-    }
-
-    for field in SINGLE_FIELDS:
-        updated[field] = getattr(computer, field)
-
-    for frontend_key, extra_key in EXTRA_FIELDS.items():
-        updated[frontend_key] = extra.get(extra_key)
+    updated = column_values(
+        computer,
+        location_parts(computer.location_id, load_locations(session)),
+        main_person_name(session, computer),
+        vacuum_text(get_vacuum_logins(session, computer.id)),
+    )
 
     for key in user_field_keys:
         updated[key] = extra.get(key)
 
-    updated["user"] = main_person_name(session, computer)
-    updated["vacuum"] = vacuum_text(get_vacuum_logins(session, computer.id))
-
     updated["location_id"] = computer.location_id
-    updated.update(location_parts(computer.location_id, load_locations(session)))
+    updated["version"] = computer.version
+    updated["updated_at"] = computer.updated_at
 
     # Снимаем блокировку строки, если правок не было
     session.rollback()
@@ -1199,7 +1200,6 @@ def get_computer(computer_id: int, session=Depends(get_db)):
             History.entity_id == computer_id,
         )
         .order_by(History.at.desc(), History.id.desc())
-        .limit(20)
         .all()
     )
 

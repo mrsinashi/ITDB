@@ -448,7 +448,6 @@ async def apply_import(
             location_id=location_id,
             seat_no=seat_no,
             seat_sort=seat_sort,
-            temp_note=None,
             hostname=clean_text(rec.get("hostname")),
             ip="\n".join(ips) if ips else None,
             mac="\n".join(macs) if macs else None,

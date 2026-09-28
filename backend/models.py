@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -41,7 +42,8 @@ class Computer(Base):
     seat_no = Column(Integer, nullable=True)
     seat_sort = Column(Numeric, nullable=True)
 
-    temp_note = Column(Text, nullable=True)
+    # «Временно, до…»: дата, после которой временное размещение просрочено
+    temp_until = Column(Date, nullable=True)
 
     hostname = Column(Text, nullable=True)
     ip = Column(Text, nullable=True)

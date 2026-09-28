@@ -1,7 +1,7 @@
 // Таблица: новый компьютер и смена расположения, архив, действия с выбранными строками.
 
 import { apiFetch, searchNorm } from "../util.js";
-import { BULK_EXCLUDED, LOCATION_FIELDS } from "../columns.js";
+import { LOCATION_FIELDS } from "../columns.js";
 
 export default {
     computed: {
@@ -48,7 +48,7 @@ export default {
         // (это «Переместить») и без значений, которые у каждого ПК свои
         bulkColumns() {
             return this.allColumns.filter(function (col) {
-                return col.editable && !col.location && BULK_EXCLUDED.indexOf(col.field) === -1;
+                return col.editable && !col.location && col.bulk !== false;
             });
         },
 

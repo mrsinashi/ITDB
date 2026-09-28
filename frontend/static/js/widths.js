@@ -1,7 +1,7 @@
 // Замер ширины текста и автоматический размер столбцов
 // ============================================================
 
-import { COLUMN_DEFS, styleKey } from "./columns.js";
+import { styleKey } from "./columns.js";
 
 export const TABLE_WIDTHS_KEY = "itdb.tableWidths.v1";
 export const DEFAULT_MAX_WIDTH = 400;
@@ -58,7 +58,7 @@ export function cellOverhead() {
     return left + right + 1;
 }
 
-export function computeAutoWidths(rows, fieldDefs, choiceStyleMap, columnStyles) {
+export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMap, columnStyles) {
     ensureWidthProbe();
     syncProbeFont();
     const overhead = cellOverhead();
@@ -71,7 +71,7 @@ export function computeAutoWidths(rows, fieldDefs, choiceStyleMap, columnStyles)
     probe.textContent = "";
     const sortArrowSpace = arrowWidth + 3;
     const widths = {};
-    const allCols = COLUMN_DEFS.concat((fieldDefs || []).map(function (fd) {
+    const allCols = (builtinColumns || []).concat((fieldDefs || []).map(function (fd) {
         return { field: fd.key, headerName: fd.label };
     }));
     const styleMap = choiceStyleMap || {};
