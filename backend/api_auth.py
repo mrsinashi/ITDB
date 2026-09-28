@@ -2,9 +2,11 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+from pydantic import BaseModel
 from sqlalchemy import func
 
-from auth import SESSION_DAYS, create_session, get_current_user, verify_password
+from api_users import check_password, end_sessions
+from auth import SESSION_DAYS, create_session, get_current_user, hash_password, verify_password
 from db import get_db
 from models import User, UserSession
 
@@ -96,7 +98,7 @@ def login(
 
 # Допустимые личные настройки интерфейса
 THEMES = {"red", "green", "blue", "graphite", "teal"}
-ACCENT_PAGES = {"tree", "history", "choices"}
+ACCENT_PAGES = {"tree", "history", "choices", "users"}
 
 
 @router.get("/me")
@@ -158,6 +160,46 @@ def update_prefs(
     session.commit()
 
     return {"ok": True, "prefs": prefs}
+
+
+class PasswordChange(BaseModel):
+    current: str = ""
+    new: str = ""
+
+
+@router.post("/me/password")
+def change_password(
+    request: Request,
+    payload: PasswordChange,
+    user=Depends(get_current_user),
+    session=Depends(get_db),
+):
+    """Смена своего пароля (любая роль). Неверный текущий пароль считается
+    неудачной попыткой входа — тот же лимит, что у входа."""
+    ip = request.client.host if request.client else "unknown"
+
+    check_rate_limit(ip)
+
+    db_user = session.get(User, user["id"])
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден.")
+
+    if not verify_password(payload.current, db_user.password_hash):
+        register_failed_attempt(ip)
+        raise HTTPException(status_code=400, detail="Текущий пароль указан неверно.")
+
+    check_password(payload.new)
+
+    if payload.new == payload.current:
+        raise HTTPException(status_code=400, detail="Новый пароль совпадает с текущим.")
+
+    db_user.password_hash = hash_password(payload.new)
+    # Входы на других компьютерах завершаются, этот — остаётся
+    end_sessions(session, db_user.id, keep_token=user["token"])
+    session.commit()
+
+    return {"ok": True}
 
 
 @router.post("/logout")

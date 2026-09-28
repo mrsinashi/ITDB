@@ -324,6 +324,10 @@ body {
     font-size: 13px;
 }
 
+.user-card {
+    /* шире настроек: внизу две кнопки — «Сменить пароль» и «Выйти» (кратно 4px) */
+    width: 248px;
+}
 .user-card .uc-head {
     display: flex;
     align-items: center;
@@ -363,8 +367,31 @@ body {
 }
 .user-card .uc-foot {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     padding: 7px 8px;
+}
+/* Смена своего пароля — форма прямо в меню пользователя */
+.uc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px;
+}
+.uc-form .input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 6px;
+    font-size: 12px;
+}
+.uc-form .uc-error {
+    font-size: 12px;
+    color: var(--danger);
+}
+.uc-form .uc-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 2px;
 }
 .user-card .btn .ico {
     width: 13px;
@@ -2229,6 +2256,75 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     border-top: 1px solid var(--grid-line);
     font-size: 12px;
     color: var(--text-soft);
+}
+
+/* ============================================================
+   Пользователи (только администратор)
+   ============================================================ */
+
+/* Таблица в рамке Истории (.history-frame, .history-table), но ширина —
+   по содержимому, как у Дерева; справа снаружи — плашка действий
+   (.tree-actions), поэтому место под неё — отступом справа. */
+.users-wrap {
+    position: relative;
+    align-self: flex-start;
+    min-width: 420px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-right: 90px;
+}
+.users-table td {
+    white-space: nowrap;
+}
+.users-table td.u-login {
+    padding-right: 24px;
+}
+.users-table .u-name {
+    font-weight: 600;
+}
+.users-table .u-self {
+    margin-left: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+/* «отключён» — блочок в манере «в архиве» у карточки ПК */
+.users-table .u-off {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0 5px;
+    font-size: 11px;
+    line-height: 15px;
+    vertical-align: 1px;
+    color: var(--text-secondary);
+    border: 1px solid currentColor;
+    border-radius: var(--radius);
+    cursor: default;
+}
+.users-table th.u-created,
+.users-table td.u-created {
+    width: 1%;
+    padding-left: 16px;
+    padding-right: 16px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+/* Строка с плашкой действий остаётся подсвеченной, пока мышь на плашке */
+.users-table tbody tr.is-hover td {
+    background: var(--row-hover-bg);
+    border-right-color: var(--row-hover-line);
+}
+.users-table tbody tr.is-hover td:last-child {
+    border-right-color: transparent;
+}
+.add-bar .ab-login {
+    width: 160px;
+}
+.add-bar .ab-role {
+    padding: 2px 4px;
+}
+.add-bar .ab-password {
+    width: 230px;
 }
 
 /* ============================================================

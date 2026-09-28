@@ -15,6 +15,7 @@
             <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">Дерево</a>
             <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">История</a>
             <a href="#" @click.prevent="setView('choices')" :class="{ active: view === 'choices' }">Справочники</a>
+            <a v-if="isAdmin" href="#" @click.prevent="setView('users')" :class="{ active: view === 'users' }">Пользователи</a>
             <span class="menu-right">
                 <span class="dropdown-wrap nav-pop" ref="settingsWrap">
                     <a href="#" class="nav-icon" :class="{ open: openMenu === 'settings' }" @click.prevent="toggleMenu('settings')" title="Настройки">
@@ -45,7 +46,22 @@
                                 <span class="uc-role">{{ roleLabel }}</span>
                             </span>
                         </div>
-                        <div class="uc-foot">
+                        <!-- Смена своего пароля — прямо в меню, без отдельного окна -->
+                        <div v-if="ownPassword" class="uc-form" @keydown.enter.prevent="submitOwnPassword">
+                            <input ref="op-current" class="input" type="password" v-model="ownPassword.current" placeholder="Текущий пароль" autocomplete="current-password">
+                            <input class="input" type="password" v-model="ownPassword.next" placeholder="Новый пароль, от 6 знаков" autocomplete="new-password">
+                            <input class="input" type="password" v-model="ownPassword.repeat" placeholder="Новый пароль ещё раз" autocomplete="new-password">
+                            <div v-if="ownPassword.error" class="uc-error">{{ ownPassword.error }}</div>
+                            <div class="uc-buttons">
+                                <button class="btn" @click="ownPassword = null">Отмена</button>
+                                <button class="btn btn-primary" :disabled="ownPassword.saving" @click="submitOwnPassword">Сохранить</button>
+                            </div>
+                        </div>
+                        <div v-else class="uc-foot">
+                            <button class="btn" @click="openOwnPassword" title="Сменить свой пароль">
+                                <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.6 8.4 13.5 2.5M11.5 4.5l1.5 1.5M10 6l1.2 1.2"/></svg>
+                                Сменить пароль
+                            </button>
                             <button class="btn" @click="logout">
                                 <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5h-3v11h3M10 5l3 3-3 3M13 8H6"/></svg>
                                 Выйти
@@ -489,6 +505,82 @@
                     <button class="btn" :disabled="historyLoadingMore" @click="loadMoreHistory(true)">Показать все</button>
                 </div>
                 </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= Пользователи (только администратор) ================= -->
+        <section v-if="user && isAdmin && view === 'users'" class="view">
+            <div class="toolbar">
+                <div class="tb-left">
+                    <span class="tb-count">{{ usersCountText }}</span>
+                    <span v-if="usersError" class="tb-error" :title="usersError">{{ usersError }}</span>
+                </div>
+                <div class="tb-right">
+                    <button class="btn icon-only" :class="{ active: userBar && userBar.kind === 'new' }" @click="openNewUser" title="Новый пользователь"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></button>
+                    <span class="tb-divider"></span>
+                    <span class="dropdown-wrap" ref="pageSetWrap">
+                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                        <div v-if="openMenu === 'page'" class="dropdown right attached">
+                            <label><input type="checkbox" :checked="accentHeaders.users" @change="toggleAccentHeader('users')"> Акцентная шапка</label>
+                        </div>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Новый пользователь / изменить роль и пароль — строкой под панелью -->
+            <div v-if="userBar" class="add-bar user-bar" @keydown.enter="submitUserBar">
+                <template v-if="userBar.kind === 'new'">
+                    <span class="ab-title">Новый пользователь:</span>
+                    <input ref="ub-login" class="input ab-login" v-model="userBar.login" placeholder="Логин" spellcheck="false" autocomplete="off"
+                        title="Латинские буквы, цифры, точка, дефис, подчёркивание">
+                </template>
+                <span v-else class="ab-title">Изменить «{{ userBar.login }}»:</span>
+                <select ref="ub-role" class="input ab-role" v-model="userBar.role" :disabled="userBar.self"
+                    :title="userBar.self ? 'Свою роль изменить нельзя — это может сделать другой администратор' : 'Роль'">
+                    <option v-for="r in roleOptions" :key="r.key" :value="r.key">{{ r.label }}</option>
+                </select>
+                <input ref="ub-password" class="input ab-password" v-model="userBar.password" spellcheck="false" autocomplete="off"
+                    :placeholder="userBar.kind === 'new' ? 'Пароль, от 6 знаков' : 'Новый пароль (пусто — не менять)'"
+                    title="Пароль виден, чтобы его можно было продиктовать или переписать">
+                <button class="btn icon-only" @click="fillPassword" title="Придумать пароль"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M16 8h.01M8 8h.01M8 16h.01M16 16h.01M12 12h.01"/></svg></button>
+                <button class="btn btn-primary icon-only" :disabled="userBar.saving" @click="submitUserBar" :title="userBar.kind === 'new' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn icon-only" @click="closeUserBar" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <span v-if="userBar.error" class="ab-error">{{ userBar.error }}</span>
+            </div>
+
+            <!-- Таблица в манере Истории (та же рамка и шапка); ширина — по содержимому,
+                 справа снаружи рамки — плашка действий строки, как в Дереве -->
+            <div class="history-page">
+                <div class="users-wrap" @mouseleave="usersHover = null">
+                    <div class="history-frame" :class="{ empty: !users.length, 'accent-head': accentHeaders.users }">
+                        <div class="history-scroll" @scroll="usersHover = null">
+                            <div v-if="!usersLoading && !usersError && !users.length" class="empty-note">Пользователей нет.</div>
+                            <table v-if="users.length" class="history-table users-table" :class="{ 'accent-head': accentHeaders.users }">
+                                <thead>
+                                    <tr><th>Логин</th><th>Роль</th><th class="u-created">Создан</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="u in users" :key="u.id" :class="{ 'is-hover': usersHover && usersHover.id === u.id }"
+                                        @mouseenter="setUsersHover(u, $event.currentTarget)" @dblclick="openEditUser(u)">
+                                        <td class="u-login"><span class="u-name">{{ u.login }}</span><span v-if="u.is_self" class="u-self">это вы</span><span v-if="u.archived" class="u-off" title="Не может войти в систему">отключён</span></td>
+                                        <td class="u-role">{{ roleName(u.role) }}</td>
+                                        <td class="u-created">{{ formatDate(u.created_at) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="usersHover" class="tree-actions" :style="{ top: usersHover.top + 'px', height: usersHover.height + 'px' }">
+                        <span class="na-box">
+                            <span class="icon-btn" title="Изменить: роль, пароль (или двойной клик по строке)" @click="openEditUser(usersHover.user)">✎</span>
+                            <template v-if="!usersHover.user.is_self">
+                                <span class="na-sep"></span>
+                                <span v-if="!usersHover.user.archived" class="icon-btn danger" title="Отключить: не сможет войти, открытые входы завершатся" @click="setUserArchived(usersHover.user, true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/></svg></span>
+                                <span v-else class="icon-btn" title="Включить: снова сможет войти" @click="setUserArchived(usersHover.user, false)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg></span>
+                            </template>
+                        </span>
+                    </div>
                 </div>
             </div>
         </section>

@@ -9,7 +9,7 @@
 //   shortcuts.js       — сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
 //   mixins/            — методы и вычисляемые значения по разделам:
 //                        auth, table, table-actions, card, tree, history, choices, common,
-//                        suggest (подсказки при вводе)
+//                        suggest (подсказки при вводе), users (пользователи системы)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -29,6 +29,7 @@ import tree from "./mixins/tree.js";
 import history from "./mixins/history.js";
 import choices from "./mixins/choices.js";
 import suggest from "./mixins/suggest.js";
+import users from "./mixins/users.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -36,7 +37,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -52,7 +53,7 @@ const app = Vue.createApp({
             // Акценты (личные настройки): границы блоков цветом схемы и
             // цветная шапка таблиц — отдельно для каждой страницы
             accentBorders: false,
-            accentHeaders: { tree: true, history: true, choices: true },
+            accentHeaders: { tree: true, history: true, choices: true, users: true },
 
             // Таблица
             tableLoading: true,
@@ -118,6 +119,14 @@ const app = Vue.createApp({
             historyTotal: 0,
             historyDayCounts: {},
             historyLoadingMore: false,
+
+            // Пользователи системы (только admin)
+            users: [],
+            usersLoading: false,
+            usersError: "",
+            userBar: null,       // строка под панелью: новый / изменить
+            usersHover: null,    // строка под курсором — плашка действий
+            ownPassword: null,   // форма смены своего пароля в меню пользователя
 
             // Карточка
             card: null,

@@ -44,7 +44,8 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
-    // Esc закрывает строку добавления (Таблица) и форму узла (Дерево),
+    // Esc закрывает строку добавления (Таблица), форму узла (Дерево) и строку
+    // «Новый пользователь / Изменить» (Пользователи),
     // где бы ни был фокус; открытый список выбора расположения закрывается
     // своим Esc раньше (он не пропускает событие дальше)
     if (event.key === "Escape" && !event.defaultPrevented && !vm.card) {
@@ -58,6 +59,10 @@ window.addEventListener("keydown", function (event) {
         }
         if (vm.view === "tree" && vm.treeForm) {
             vm.treeForm = null;
+            return;
+        }
+        if (vm.view === "users" && vm.userBar) {
+            vm.closeUserBar();
             return;
         }
     }
