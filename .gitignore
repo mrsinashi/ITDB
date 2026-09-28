@@ -4,3 +4,8 @@ __pycache__/
 .env
 _patches/
 _BACKUP/
+# Описание оформления ведётся вне репозитория; инструменты контекста эпохи Qwen
+DESIGN.md
+CONTEXT.txt
+mkcontext.sh
+apply_context.*

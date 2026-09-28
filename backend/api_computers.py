@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timezone
+from decimal import Decimal
 import re
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -187,6 +188,136 @@ def parse_seat_no(value):
     return int(number)
 
 
+LOCATION_PART_FIELDS = ("building", "department", "floor", "room_code", "room_name")
+
+
+def load_locations(session):
+    return {location.id: location for location in session.query(Location).all()}
+
+
+def location_parts(location_id, locations_by_id):
+    """Адрес / отделение / этаж / кабинет ПК — для строки таблицы."""
+    parts = {field: None for field in LOCATION_PART_FIELDS}
+
+    current = locations_by_id.get(location_id) if location_id is not None else None
+    depth = 0
+
+    while current and depth < 20:
+        if current.kind == "building" and parts["building"] is None:
+            parts["building"] = current.name
+
+        elif current.kind == "department" and parts["department"] is None:
+            parts["department"] = current.name
+
+        elif current.kind == "floor" and parts["floor"] is None:
+            parts["floor"] = current.name
+
+        elif current.kind == "room" and parts["room_code"] is None and parts["room_name"] is None:
+            code = current.code
+            name = current.name
+
+            parts["room_code"] = code
+            parts["room_name"] = None if code and name == code else name
+
+        current = locations_by_id.get(current.parent_id)
+        depth += 1
+
+    return parts
+
+
+def location_title(location):
+    """Подпись узла как в дереве: «214 Процедурная», «2 этаж»."""
+    name = location.name or ""
+    code = ""
+
+    if location.kind == "room" and location.code:
+        code = location.code
+        name = "" if not location.name or location.name == location.code else location.name
+
+    if location.kind == "floor" and name.strip().isdigit():
+        name = name + " этаж"
+
+    return " ".join(part for part in (code, name) if part) or location.name or location.code or ""
+
+
+def location_path(location_id, locations_by_id):
+    """Полный путь узла для истории: «ул. Ленина, 1 / Терапия / 201 Ординаторская».
+    Разделитель не «→»: в истории стрелкой уже показано «было → стало»."""
+    titles = []
+    current = locations_by_id.get(location_id) if location_id is not None else None
+    depth = 0
+
+    while current and depth < 20:
+        titles.append(location_title(current))
+        current = locations_by_id.get(current.parent_id)
+        depth += 1
+
+    return " / ".join(reversed(titles)) if titles else None
+
+
+def get_active_location(session, value):
+    """Узел дерева по id из запроса; архивный или несуществующий — ошибка."""
+    if value is None or value == "":
+        raise HTTPException(
+            status_code=400,
+            detail="Выбери расположение.",
+        )
+
+    try:
+        location_id = int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="location_id должен быть числом.",
+        )
+
+    location = session.get(Location, location_id)
+
+    if not location or location.archived:
+        raise HTTPException(
+            status_code=400,
+            detail="Расположение не найдено.",
+        )
+
+    return location
+
+
+def seat_sort_in_location(session, location_id, seat_no, exclude_id=None):
+    """Порядок строки ПК в узле: после соседей с номером места не больше
+    его номера, без номера места — в конец узла."""
+    query = session.query(Computer).filter(
+        Computer.location_id == location_id,
+        Computer.seat_sort.isnot(None),
+    )
+
+    if exclude_id is not None:
+        query = query.filter(Computer.id != exclude_id)
+
+    neighbours = query.order_by(Computer.seat_sort, Computer.id).all()
+
+    if not neighbours:
+        return Decimal(1)
+
+    if seat_no is None:
+        return neighbours[-1].seat_sort + 1
+
+    before = [
+        index
+        for index, item in enumerate(neighbours)
+        if item.seat_no is not None and item.seat_no <= seat_no
+    ]
+
+    if not before:
+        return neighbours[0].seat_sort - 1
+
+    index = before[-1]
+
+    if index + 1 < len(neighbours):
+        return (neighbours[index].seat_sort + neighbours[index + 1].seat_sort) / 2
+
+    return neighbours[index].seat_sort + 1
+
+
 def normalize_person_name(value):
     if value is None:
         return None
@@ -360,56 +491,10 @@ def list_computers():
         location_parts_cache = {}
 
         def get_location_parts(location_id):
-            if location_id is None:
-                return {
-                    "building": None,
-                    "department": None,
-                    "floor": None,
-                    "room_code": None,
-                    "room_name": None,
-                }
+            if location_id not in location_parts_cache:
+                location_parts_cache[location_id] = location_parts(location_id, locations_by_id)
 
-            if location_id in location_parts_cache:
-                return location_parts_cache[location_id]
-
-            parts = {
-                "building": None,
-                "department": None,
-                "floor": None,
-                "room_code": None,
-                "room_name": None,
-            }
-
-            current = locations_by_id.get(location_id)
-            depth = 0
-
-            while current and depth < 20:
-                if current.kind == "building" and parts["building"] is None:
-                    parts["building"] = current.name
-
-                elif current.kind == "department" and parts["department"] is None:
-                    parts["department"] = current.name
-
-                elif current.kind == "floor" and parts["floor"] is None:
-                    parts["floor"] = current.name
-
-                elif current.kind == "room" and parts["room_code"] is None and parts["room_name"] is None:
-                    code = current.code
-                    name = current.name
-
-                    if code and name == code:
-                        parts["room_code"] = code
-                        parts["room_name"] = None
-                    else:
-                        parts["room_code"] = code
-                        parts["room_name"] = name
-
-                current = locations_by_id.get(current.parent_id)
-                depth += 1
-
-            location_parts_cache[location_id] = parts
-
-            return parts
+            return location_parts_cache[location_id]
 
         people = session.query(Person).all()
         people_by_id = {person.id: person for person in people}
@@ -535,6 +620,75 @@ def list_computers():
         session.close()
 
 
+@router.post("/computers")
+def create_computer(
+    payload: dict = Body(...),
+    user=Depends(require_editor),
+):
+    """Новый ПК: расположение обязательно, № места, HOSTNAME, IP — по желанию.
+    Остальное заполняется потом в таблице или карточке."""
+    session = SessionLocal()
+
+    try:
+        location = get_active_location(session, payload.get("location_id"))
+
+        seat_no = parse_seat_no(payload.get("seat_no"))
+        hostname = normalize_single(payload.get("hostname"))
+        ip = normalize_ip(payload.get("ip"))
+
+        computer = Computer(
+            status="установлен",
+            location_id=location.id,
+            seat_no=seat_no,
+            seat_sort=seat_sort_in_location(session, location.id, seat_no),
+            hostname=hostname,
+            ip=ip,
+            extra={},
+        )
+        session.add(computer)
+        session.flush()
+
+        locations_by_id = load_locations(session)
+
+        changes = {
+            "created": {
+                "old": None,
+                "new": location_path(location.id, locations_by_id),
+            }
+        }
+
+        for field, value in (("seat_no", seat_no), ("hostname", hostname), ("ip", ip)):
+            if value is not None:
+                changes[field] = {"old": None, "new": value}
+
+        session.add(
+            History(
+                entity="computers",
+                entity_id=computer.id,
+                user_name=user["login"],
+                changes=changes,
+            )
+        )
+
+        session.commit()
+
+        return {"ok": True, "id": computer.id}
+
+    except HTTPException:
+        session.rollback()
+        raise
+
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Не удалось добавить компьютер: {e}",
+        )
+
+    finally:
+        session.close()
+
+
 @router.patch("/computers/{computer_id}")
 def update_computer(
     computer_id: int,
@@ -598,9 +752,11 @@ def update_computer(
             | MULTILINE_FIELDS
             | EXTRA_FIELDS.keys()
             | LINK_FIELDS
-            | {"ip", "mac", "seat_no"}
+            | {"ip", "mac", "seat_no", "location_id"}
             | user_field_keys
         )
+
+        locations_by_id = None
 
         for field, value in payload.items():
             if field not in allowed_fields:
@@ -614,6 +770,28 @@ def update_computer(
 
                 if result:
                     changes["user"] = {"old": result[0], "new": result[1]}
+
+                continue
+
+            if field == "location_id":
+                location = get_active_location(session, value)
+
+                if location.id != computer.location_id:
+                    locations_by_id = locations_by_id or load_locations(session)
+
+                    changes["location_id"] = {
+                        "old": location_path(computer.location_id, locations_by_id),
+                        "new": location_path(location.id, locations_by_id),
+                    }
+
+                    computer.location_id = location.id
+                    # В новом узле строка встаёт по номеру места
+                    computer.seat_sort = seat_sort_in_location(
+                        session,
+                        location.id,
+                        computer.seat_no,
+                        exclude_id=computer.id,
+                    )
 
                 continue
 
@@ -721,6 +899,11 @@ def update_computer(
         updated["user"] = main_person.full_name if main_person else None
 
         updated["vacuum"] = vacuum_text(get_vacuum_logins(session, computer.id))
+
+        updated["location_id"] = computer.location_id
+        updated.update(
+            location_parts(computer.location_id, locations_by_id or load_locations(session))
+        )
 
         # Снимаем блокировку строки, если правок не было
         session.rollback()

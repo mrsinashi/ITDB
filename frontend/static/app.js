@@ -61,6 +61,22 @@ function splitMulti(value) {
         .filter(Boolean);
 }
 
+// ---------- Поиск по словам ----------
+// «хир орд 3»: каждое слово ищется отдельно, найтись должны все.
+// Регистр и ё/е не различаются.
+function searchNorm(text) {
+    return String(text).toLowerCase().replace(/ё/g, "е");
+}
+
+function searchWords(query) {
+    return searchNorm(query).split(/\s+/).filter(Boolean);
+}
+
+function matchesAllWords(text, words) {
+    const t = searchNorm(text);
+    return words.every(function (w) { return t.indexOf(w) !== -1; });
+}
+
 function normalizeKey(value) {
     if (value === null || value === undefined) {
         return "";
@@ -183,11 +199,12 @@ const kindLabels = {
 // у такого столбца настраивается только оформление столбца целиком.
 const COLUMN_DEFS = [
     { field: "user", headerName: "ФИО", editable: true, values: false },
-    { field: "building", headerName: "Адрес" },
-    { field: "department", headerName: "Отделение" },
-    { field: "floor", headerName: "Эт.", fullName: "Этаж", center: true },
-    { field: "room_code", headerName: "Каб", fullName: "№ Кабинета", center: true, values: false },
-    { field: "room_name", headerName: "Кабинет" },
+    // location: правка — выбор узла дерева (двойной клик в режиме правки)
+    { field: "building", headerName: "Адрес", location: true },
+    { field: "department", headerName: "Отделение", location: true },
+    { field: "floor", headerName: "Эт.", fullName: "Этаж", center: true, location: true },
+    { field: "room_code", headerName: "Каб", fullName: "№ Кабинета", center: true, values: false, location: true },
+    { field: "room_name", headerName: "Кабинет", location: true },
     { field: "seat_no", headerName: "№", fullName: "№ Места", center: true, editable: true, values: false },
     { field: "hostname", headerName: "HOSTNAME", link: true, sticky: true, bold: true, editable: true, values: false },
     { field: "ip", headerName: "IP", fullName: "IP адрес", sticky: true, editable: true, multiline: true, values: "subnet" },
@@ -243,7 +260,8 @@ const FIELD_LABELS = Object.assign(
         glpi_id: "GLPI",
         temp_note: "Врем. примечание",
         location_id: "Расположение",
-        seat_sort: "Порядок строки"
+        seat_sort: "Порядок строки",
+        created: "Создан"
     }
 );
 const LOCATION_FIELD_LABELS = {
@@ -258,11 +276,20 @@ const LOCATION_FIELD_LABELS = {
 
 const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
 const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
-const CHECKBOX_COL_WIDTH = 30;   // ширина столбца чекбоксов в режиме правки
-const CHECKBOX_ANIM_MS = 200;    // время выезда/заезда столбца чекбоксов
 
 // Поля карточки, которые можно править двойным кликом (ключ строки карточки → поле)
-const CARD_EDIT_EXTRA = { serial: { field: "serial", headerName: "Серийный", editable: true } };
+const LOCATION_EDIT = { field: "location_id", headerName: "Расположение", location: true };
+const CARD_EDIT_EXTRA = {
+    serial: { field: "serial", headerName: "Серийный", editable: true },
+    building: LOCATION_EDIT,
+    department: LOCATION_EDIT,
+    floor: LOCATION_EDIT,
+    room: LOCATION_EDIT,
+    location: LOCATION_EDIT
+};
+
+// Столбцы таблицы, которые показывают расположение ПК
+const LOCATION_FIELDS = ["building", "department", "floor", "room_code", "room_name"];
 
 // ============================================================
 // Замер ширины текста и автоматический размер столбцов
@@ -274,10 +301,8 @@ const WIDTH_EXTRA = 0;
 let widthProbe = null;
 
 // Обычная ячейка данных — образец для шрифта и отступов.
-// Ячейку с чекбоксом брать нельзя: у неё padding 2px, и все столбцы
-// становились уже на ~9px (баг «после правки всё сузилось»).
 function sampleDataCell() {
-    return document.querySelector(".data-table tbody td:not(.checkbox-col):not(.editing)");
+    return document.querySelector(".data-table tbody td:not(.editing)");
 }
 
 function ensureWidthProbe() {
@@ -438,15 +463,12 @@ const app = Vue.createApp({
             rows: [],
             hiddenColumns: loadJson(HIDDEN_COLUMNS_KEY, []),
             searchHidden: loadJson(SEARCH_HIDDEN_KEY, false),
-            checkboxVisible: false,
             locationFilter: null,
             savedFlash: {},
             pendingCells: {},
             openMenu: null,
             noteTooltip: { visible: false, text: "", top: 0, left: 0, width: 0 },
             stickyStuck: false,
-            checkboxStuck: false,
-            editMode: false,
             editingRowId: null,
             editingField: null,
             editValue: "",
@@ -454,6 +476,10 @@ const app = Vue.createApp({
             manualWidths: loadManualWidths(),
             sortField: null,
             sortDir: null,
+            // Форма «+ Компьютер» под панелью
+            newComputer: null,
+            newComputerError: "",
+            newComputerSaving: false,
 
             // Дерево
             treeLoading: false,
@@ -465,6 +491,8 @@ const app = Vue.createApp({
             treeIndex: {},
             treeOpenState: {},
             treeQuery: "",
+            choicesQuery: "",
+            choicesPos: 0,
             treeWidth: 480,
             treeHover: null,
             treeScrollbar: 0,
@@ -500,6 +528,10 @@ const app = Vue.createApp({
             fieldDefs: [],
             fieldDefsLoading: false,
             selectedRows: [],
+            selectAnchorId: null,   // строка, от которой идёт Shift+клик
+            dupVersion: 0,          // пересчитаны дубли — пересчитать заливку ячеек
+            altDown: false,         // зажат Alt — клик копирует значение
+            copyHint: null,         // подсветка значения под курсором при Alt
             newFieldDef: { key: "", label: "", field_type: "text" }
         };
     },
@@ -580,11 +612,47 @@ const app = Vue.createApp({
             return "Показано: " + this.displayedCount + " из " + this.rowCount;
         },
 
-        isAllSelected() {
-            if (this.displayRows.length === 0) {
-                return false;
+        selectedSet() {
+            return new Set(this.selectedRows);
+        },
+
+        // Заливка ячеек (фон из Справочников или красный дубля) — для линий сетки:
+        // Map id строки → { поле: цвет }. Строки без заливки в карту не входят.
+        cellFills() {
+            void this.dupVersion; // дубли считаются вне Vue — зависимость вручную
+            const map = new Map();
+            const cols = this.columns;
+            this.displayRows.forEach((row) => {
+                let fills = null;
+                cols.forEach((col) => {
+                    const f = this.cellFillOf(row, col);
+                    if (f) {
+                        (fills || (fills = {}))[col.field] = f;
+                    }
+                });
+                if (fills) {
+                    map.set(row.id, fills);
+                }
+            });
+            return map;
+        },
+
+        // Соседи ячейки: следующая строка и следующий столбец
+        nextRowId() {
+            const next = {};
+            const rows = this.displayRows;
+            for (let i = 0; i + 1 < rows.length; i++) {
+                next[rows[i].id] = rows[i + 1].id;
             }
-            return this.displayRows.every((row) => this.selectedRows.indexOf(row.id) !== -1);
+            return next;
+        },
+        nextColField() {
+            const next = {};
+            const cols = this.columns;
+            for (let i = 0; i + 1 < cols.length; i++) {
+                next[cols[i].field] = cols[i + 1].field;
+            }
+            return next;
         },
 
         totalWidth() {
@@ -602,20 +670,36 @@ const app = Vue.createApp({
                     return ids.has(row.location_id);
                 });
             }
-            const query = this.quickFilter.trim().toLowerCase();
-            if (!query) {
+            const words = searchWords(this.quickFilter);
+            if (!words.length) {
                 return rows;
             }
             const fields = (this.searchHidden ? this.allColumns : this.columns).map(function (col) {
                 return col.field;
             });
+            // Число среди нескольких слов («хир орд 3») ищется целиком: это № места,
+            // № кабинета или отдельное число внутри текста («Win 10»). Иначе «3»
+            // находилось бы в каждом IP 10.0.3.x, в этаже, в кабинете 301.
+            // Одно слово — как раньше, кусок где угодно (часть ИНВ, IP).
+            const whole = words.length > 1;
             return rows.filter(function (row) {
-                return fields.some(function (field) {
+                const texts = [];
+                fields.forEach(function (field) {
                     const value = row[field];
-                    if (value === null || value === undefined) {
-                        return false;
+                    if (value !== null && value !== undefined && value !== "") {
+                        texts.push({ field: field, text: searchNorm(value) });
                     }
-                    return String(value).toLowerCase().indexOf(query) !== -1;
+                });
+                return words.every(function (w) {
+                    if (whole && /^\d+$/.test(w)) {
+                        return texts.some(function (t) {
+                            if (t.field === "seat_no" || t.field === "room_code") {
+                                return t.text.trim() === w;
+                            }
+                            return /\s/.test(t.text.trim()) && t.text.split(/[\s,;]+/).indexOf(w) !== -1;
+                        });
+                    }
+                    return texts.some(function (t) { return t.text.indexOf(w) !== -1; });
                 });
             });
         },
@@ -650,7 +734,10 @@ const app = Vue.createApp({
             if (!this.card) {
                 return "";
             }
-            return [this.card.room_code, this.card.room_name].filter(Boolean).join(" ");
+            const code = this.card.room_code;
+            const name = this.card.room_name;
+            // Номер и название в одной строке — номер в скобках: «[214] Процедурная»
+            return code && name ? "[" + code + "] " + name : (code || name || "");
         },
 
         // Строки карточки ПК: [{ key, label, value, copy }] или { group }
@@ -659,31 +746,36 @@ const app = Vue.createApp({
             if (!c) {
                 return [];
             }
-            function F(key, label, value, copy) {
-                return { key: key, label: label, value: value, copy: !!copy };
+            // field — столбец таблицы, чьё оформление из Справочников показывать
+            function F(key, label, value, copy, field) {
+                return { key: key, label: label, value: value, copy: !!copy, field: field === undefined ? key : field };
             }
             const status = [F("status", "Статус", c.status)];
             const place = [
                 F("building", "Адрес", c.building, true),
                 F("department", "Отделение", c.department, true),
                 F("floor", "Этаж", c.floor),
-                F("room", "Кабинет", this.cardRoom, true),
+                F("room", "Кабинет", this.cardRoom, true, null),
                 F("seat_no", "№ Места", c.seat_no)
             ];
+            if (!c.location_id) {
+                // Без расположения — строка есть, чтобы его можно было задать
+                place.unshift(F("location", "Расположение", "не указано", false, null));
+            }
             const net = [F("ip", "IP адрес", c.ip, true), F("mac", "MAC адрес", c.mac, true)];
             const ids = [F("inv_no", "Инвентарный номер", c.inv_no, true), F("serial", "Серийный", c.serial, true)];
             const hw = [
                 F("type", "Тип компьютера", c.type),
                 F("model", "Модель", c.model, true),
-                F("os", "Операционная система (ОС / OS)", c.os, true),
-                F("cpu", "Процессор (ЦП / CPU)", c.cpu, true),
-                F("ram", "Оперативная память (ОЗУ / RAM)", c.ram),
-                F("drive", "Дисковые накопители (DRIVE)", c.drive, true),
-                F("gpu", "Видеокарта (ГП / GPU)", c.gpu, true)
+                F("os", "Операционная система", c.os, true),
+                F("cpu", "Процессор", c.cpu, true),
+                F("ram", "Оперативная память", c.ram),
+                F("drive", "Дисковые накопители", c.drive, true),
+                F("gpu", "Видеокарта", c.gpu, true)
             ];
             const marks = [F("gsit", "GSIT", c.gsit), F("state", "Сост.", c.state), F("label", "Метка", c.label)];
             const custom = this.tableFieldDefs.map(function (fd) {
-                return F("x-" + fd.key, fd.label, c[fd.key]);
+                return F("x-" + fd.key, fd.label, c[fd.key], false, fd.key);
             });
             const note = [F("note", "Примечание", c.note)];
 
@@ -720,30 +812,85 @@ const app = Vue.createApp({
 
         // Поиск по дереву: self — совпали сами, anc — предки совпавших
         treeMatch() {
-            const q = this.treeQuery.trim().toLowerCase();
+            // Слова ищутся по всему пути узла («хир орд» — ординаторские
+            // хирургии). Найденным считается верхний узел, на котором путь
+            // впервые собрал все слова; его потомки видны под ним.
+            const q = this.treeQuery.trim();
+            const words = searchWords(q);
             const self = new Set();
             const anc = new Set();
-            if (q) {
-                const walk = (nodes, parents) => {
+            if (words.length) {
+                const walk = (nodes, parents, parentPath) => {
                     nodes.forEach((node) => {
-                        const text = [node.code, node.name].filter(Boolean).join(" ").toLowerCase();
-                        if (text.indexOf(q) !== -1) {
+                        const own = [node.code, node.name, treeNodeTexts(node).name].filter(Boolean).join(" ");
+                        const path = parentPath + " / " + own;
+                        if (matchesAllWords(path, words)) {
                             self.add(node.id);
                             parents.forEach(function (id) { anc.add(id); });
+                            return;
                         }
                         if (node.children && node.children.length) {
-                            walk(node.children, parents.concat([node.id]));
+                            walk(node.children, parents.concat([node.id]), path);
                         }
                     });
                 };
-                walk(this.treeRoots, []);
+                walk(this.treeRoots, [], "");
             }
-            return { query: q, self: self, anc: anc, size: self.size };
+            return { query: q, words: words, self: self, anc: anc, size: self.size };
+        },
+
+        // Поиск в Справочниках: «ЦП 101» — раздел по словам в названии,
+        // значения — по остальным. Ничего не скрывается: совпавшие значения
+        // подсвечены, страница переходит к разделу (Enter — к следующему).
+        // Значение найдено, если все слова есть в «название раздела + значение»
+        // и хотя бы одно — в самом значении.
+        choicesMatch() {
+            const words = searchWords(this.choicesQuery);
+            const res = { words: words, blocks: [], blockSet: new Set(), valueSet: new Set(), hits: 0, pos: 0, current: null };
+            if (!words.length) {
+                return res;
+            }
+            this.styleBlocks.forEach(function (b) {
+                const label = searchNorm(b.label);
+                let found = matchesAllWords(label, words);
+                (b.values || []).forEach(function (v) {
+                    const value = searchNorm(v.value);
+                    if (matchesAllWords(label + " " + value, words) && words.some(function (w) { return value.indexOf(w) !== -1; })) {
+                        res.valueSet.add(b.field + "|" + v.key);
+                        res.hits++;
+                        found = true;
+                    }
+                });
+                if (found) {
+                    res.blocks.push(b.field);
+                    res.blockSet.add(b.field);
+                }
+            });
+            if (res.blocks.length) {
+                res.pos = this.choicesPos % res.blocks.length;
+                res.current = res.blocks[res.pos];
+            }
+            return res;
+        },
+
+        // Все узлы дерева в его порядке — для выбора расположения ПК
+        locationOptions() {
+            const list = [];
+            const walk = (nodes) => {
+                nodes.forEach((node) => {
+                    const entry = this.treeIndex[node.id];
+                    const path = entry ? entry.path : (node.name || node.code || "");
+                    list.push({ id: node.id, kind: node.kind, path: path, search: searchNorm(path) });
+                    walk(node.children || []);
+                });
+            };
+            walk(this.treeRoots);
+            return list;
         },
 
         filteredHistory() {
-            const q = this.historyQuery.trim().toLowerCase();
-            if (!q) {
+            const words = searchWords(this.historyQuery);
+            if (!words.length) {
                 return this.historyItems;
             }
             return this.historyItems.filter((item) => {
@@ -757,9 +904,8 @@ const app = Vue.createApp({
                     const ch = item.changes[field] || {};
                     parts.push(field, this.fieldLabel(item.entity, field), this.displayValue(ch.old), this.displayValue(ch.new));
                 });
-                return parts.some(function (p) {
-                    return p !== null && p !== undefined && String(p).toLowerCase().indexOf(q) !== -1;
-                });
+                const text = parts.filter(function (p) { return p !== null && p !== undefined; }).join("\n");
+                return matchesAllWords(text, words);
             });
         },
 
@@ -903,28 +1049,36 @@ const app = Vue.createApp({
             immediate: true
         },
 
-        editMode(newVal) {
-            if (!newVal) {
-                this.selectedRows = [];
-                if (this.openMenu === "selection") {
-                    this.closeMenus();
-                }
-            }
-            this.animateCheckboxCol(newVal);
-            this.$nextTick(() => {
-                this.updateStickyShadow();
-            });
+        choicesQuery() {
+            this.choicesPos = 0;
+            this.scrollToChoicesHit();
         },
 
         searchHidden(value) {
             saveJson(SEARCH_HIDDEN_KEY, value);
         },
 
-        // Сняли все галочки — меню действий больше не нужно
+        // Сняли выделение — меню действий больше не нужно
         "selectedRows.length"(count) {
             if (count === 0 && this.openMenu === "selection") {
                 this.closeMenus();
             }
+        },
+
+        // Vue перерисовал класс строки — вернуть ей подсветку под курсором
+        selectedRows() {
+            this.$nextTick(() => {
+                if (this.hoverRowEl) {
+                    this.hoverRowEl.classList.add("row-hover");
+                }
+            });
+        },
+
+        // Другой набор дней (поиск, обновление) — пересчитать выталкивание
+        historyDays() {
+            this.$nextTick(() => {
+                this.pushHistoryDays();
+            });
         },
 
         hiddenColumns() {
@@ -937,7 +1091,6 @@ const app = Vue.createApp({
 
     async mounted() {
         window.itdbTable = this;
-        this._cbWidth = 0;
         this.hoverRowEl = null;
         this.lastMouseX = undefined;
         this.lastMouseY = undefined;
@@ -1062,6 +1215,7 @@ const app = Vue.createApp({
                 this.rows = data.rows || [];
                 this.rowCount = data.total || this.rows.length;
                 duplicateSets = buildDuplicateSets(this.rows);
+                this.dupVersion++;
                 this.recalcWidths();
             } catch (e) {
                 this.tableError = String(e.message || e);
@@ -1099,7 +1253,6 @@ const app = Vue.createApp({
                 return;
             }
             const startTotal = this.totalWidth;
-            const cbWidth = this._cbWidth || 0;
 
             function onMouseMove(e) {
                 const delta = e.clientX - startX;
@@ -1109,7 +1262,7 @@ const app = Vue.createApp({
                 }
                 const appliedDelta = newWidth - startWidth;
                 colEl.style.width = newWidth + "px";
-                tableEl.style.width = (startTotal + appliedDelta + cbWidth) + "px";
+                tableEl.style.width = (startTotal + appliedDelta) + "px";
             }
 
             const self = this;
@@ -1204,6 +1357,33 @@ const app = Vue.createApp({
             return Object.keys(style).length ? style : null;
         },
 
+        // Цвет заливки ячейки: дубль — красный, иначе фон значения из
+        // Справочников поверх фона столбца; null — без заливки
+        cellFillOf(row, col) {
+            if (DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
+                return "var(--dup-bg)";
+            }
+            let fill = null;
+            const colStyle = this.columnStyles[col.field];
+            if (colStyle && colStyle.bg_color) {
+                fill = colStyle.bg_color;
+            }
+            const fieldStyles = this.choiceStyleMap[col.field];
+            const value = row[col.field];
+            if (fieldStyles && value !== null && value !== undefined && value !== "") {
+                for (const line of String(value).split("\n")) {
+                    const s = fieldStyles[styleKey(col.field, line)];
+                    if (s) {
+                        if (s.bg_color) {
+                            fill = s.bg_color;
+                        }
+                        break;
+                    }
+                }
+            }
+            return fill;
+        },
+
         cellTdStyle(row, col) {
             const style = {};
             // Сначала оформление столбца, поверх — оформление значения
@@ -1233,7 +1413,31 @@ const app = Vue.createApp({
                 style.fontWeight = "700";
             }
             if (col.sticky) {
-                style.left = "calc(var(--cb-w) + " + this.stickyLeft(col) + "px)";
+                style.left = this.stickyLeft(col) + "px";
+            }
+            // Заливка — как в Excel: фон идёт поверх линий сетки. У каждой
+            // ячейки свои линии справа и снизу; такая линия берёт цвет соседа
+            // справа/снизу, если он залит (правый и нижний перекрывают левый
+            // и верхний), иначе — своей заливки. Серая линия у залитых не видна.
+            // Синий слой выбранной строки подмешивается к цвету линии
+            // (--self-a — своя строка, --below-a — строка ниже).
+            const fills = this.cellFills;
+            const own = (fills.get(row.id) || {})[col.field];
+            const right = (fills.get(row.id) || {})[this.nextColField[col.field]];
+            const below = (fills.get(this.nextRowId[row.id]) || {})[col.field];
+            if (own) {
+                style.backgroundColor = own;
+            }
+            const mix = function (color, amount) {
+                return "color-mix(in srgb, var(--sel-base) " + amount + ", " + color + ")";
+            };
+            if (right || own) {
+                style["--v-line"] = mix(right || own, "var(--self-a)");
+            }
+            if (below) {
+                style["--h-line"] = mix(below, "var(--below-a)");
+            } else if (own) {
+                style["--h-line"] = mix(own, "var(--self-a)");
             }
             return Object.keys(style).length ? style : null;
         },
@@ -1261,7 +1465,7 @@ const app = Vue.createApp({
         },
 
         stickyLeft(col) {
-            let left = 0; // столбец чекбоксов добавляется через CSS-переменную --cb-w
+            let left = 0;
             for (const c of this.columns) {
                 if (c.field === col.field) {
                     break;
@@ -1306,13 +1510,20 @@ const app = Vue.createApp({
         },
 
         startEdit(row, col) {
-            if (!this.editMode || !this.canEdit || !col.editable) {
+            if (!this.canEdit || !(col.editable || col.location)) {
                 return;
             }
             if (this.editingRowId === row.id && this.editingField === col.field) {
                 return;
             }
             this.hideNoteTooltip();
+            if (col.location) {
+                // Выбор узла дерева; поле поиска фокусирует сам location-picker
+                this.ensureTree();
+                this.editingRowId = row.id;
+                this.editingField = col.field;
+                return;
+            }
             this.editingRowId = row.id;
             this.editingField = col.field;
             this.editValue = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
@@ -1360,42 +1571,6 @@ const app = Vue.createApp({
             this.saveCellValue(row, col, newValue);
         },
 
-        isRowSelected(row) {
-            return this.selectedRows.indexOf(row.id) !== -1;
-        },
-
-        toggleRowSelection(row) {
-            const index = this.selectedRows.indexOf(row.id);
-            if (index === -1) {
-                this.selectedRows.push(row.id);
-            } else {
-                this.selectedRows.splice(index, 1);
-            }
-        },
-
-        toggleAllSelection() {
-            const self = this;
-            if (this.isAllSelected) {
-                const displayIds = this.displayRows.map(function (row) { return row.id; });
-                this.selectedRows = this.selectedRows.filter(function (id) {
-                    return displayIds.indexOf(id) === -1;
-                });
-            } else {
-                const newIds = [];
-                this.displayRows.forEach(function (row) {
-                    if (self.selectedRows.indexOf(row.id) === -1) {
-                        newIds.push(row.id);
-                    }
-                });
-                this.selectedRows = this.selectedRows.concat(newIds);
-            }
-        },
-
-        clearSelection() {
-            this.selectedRows = [];
-            this.closeMenus();
-        },
-
         // ---------- Выпадающие меню панели (одно открыто за раз) ----------
 
         toggleMenu(name) {
@@ -1420,6 +1595,9 @@ const app = Vue.createApp({
             const refs = {
                 selection: this.$refs.selectionWrap,
                 columns: this.$refs.columnsWrap,
+                treeAdd: this.$refs.treeAddWrap,
+                add: this.$refs.addWrap,
+                export: this.$refs.exportWrap,
                 settings: this.$refs.settingsWrap,
                 user: this.$refs.userWrap,
                 page: this.$refs.pageSetWrap
@@ -1442,6 +1620,216 @@ const app = Vue.createApp({
             document.removeEventListener("keydown", this.onEscCloseMenu, true);
         },
 
+        // ---------- Расположение ПК и новый компьютер ----------
+
+        // Дерево нужно для выбора расположения; грузится один раз
+        async ensureTree() {
+            if (!this.treeRoots.length && !this.treeLoading) {
+                await this.loadTree();
+            }
+        },
+
+        onCellLocationPick(row, locationId) {
+            this.cancelEdit();
+            this.saveLocation(row, locationId);
+        },
+
+        onCardLocationPick(locationId) {
+            this.cardEditKey = null;
+            if (!this.card) {
+                return;
+            }
+            const row = this.rows.find((item) => item.id === this.card.id) || this.card;
+            this.saveLocation(row, locationId);
+        },
+
+        // Смена расположения: строка переезжает на своё место в порядке
+        // дерева, поэтому таблица перечитывается целиком
+        async saveLocation(row, locationId) {
+            if (!locationId || locationId === row.location_id) {
+                return;
+            }
+            try {
+                const response = await apiFetch("/api/computers/" + row.id, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ location_id: locationId, _version: row.version })
+                });
+                if (response.status === 409) {
+                    this.toastError(await this.errorText(response));
+                    await this.loadTable();
+                    this.refreshCardRow();
+                    return;
+                }
+                if (!response.ok) {
+                    this.toastError("Не удалось сохранить: " + (await this.errorText(response)));
+                    return;
+                }
+                await this.loadTable();
+                this.refreshCardRow();
+                this.reloadCardHistory(row.id);
+                LOCATION_FIELDS.concat(["location_id"]).forEach((field) => this.flashCell(row.id, field));
+                this.$nextTick(() => this.scrollToRow(row.id));
+            } catch (e) {
+                this.toastError("Не удалось сохранить: " + e);
+            }
+        },
+
+        // Открыта карточка этого ПК — перечитать её историю после правки
+        async reloadCardHistory(id) {
+            if (!this.card || this.card.id !== id) {
+                return;
+            }
+            try {
+                const response = await apiFetch("/api/computers/" + id);
+                if (!response.ok || !this.card || this.card.id !== id) {
+                    return;
+                }
+                const data = await response.json();
+                this.cardHistory = data.history || [];
+            } catch (e) {
+                // не страшно: история обновится при следующем открытии
+            }
+        },
+
+        // После перечитывания таблицы карточка показывает новую строку
+        refreshCardRow() {
+            if (!this.card) {
+                return;
+            }
+            const id = this.card.id;
+            const row = this.rows.find((item) => item.id === id);
+            if (row) {
+                this.card = row;
+            }
+        },
+
+        scrollToRow(id) {
+            const wrap = this.$refs.tableWrap;
+            const tr = wrap && wrap.querySelector('tr[data-id="' + id + '"]');
+            if (!tr) {
+                return false;
+            }
+            const w = wrap.getBoundingClientRect();
+            const r = tr.getBoundingClientRect();
+            const head = this.$refs.table ? this.$refs.table.tHead.getBoundingClientRect().height : 0;
+            if (r.top < w.top + head || r.bottom > w.bottom) {
+                wrap.scrollTop += r.top - w.top - head - (w.height - head) / 3;
+            }
+            return true;
+        },
+
+        toggleNewComputer() {
+            if (this.newComputer) {
+                this.closeNewComputer();
+                return;
+            }
+            this.ensureTree();
+            // По умолчанию — узел, выбранный фильтром из дерева
+            const locationId = this.locationFilter ? this.locationFilter.id : null;
+            this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "" };
+            this.newComputerError = "";
+            if (locationId) {
+                this.newComputer.seat_no = this.nextSeatNo(locationId);
+            }
+            this.$nextTick(() => this.focusNewComputer(locationId ? "hostname" : "location"));
+        },
+
+        closeNewComputer() {
+            this.newComputer = null;
+            this.newComputerError = "";
+        },
+
+        focusNewComputer(which) {
+            const el = this.$refs["nc-" + which];
+            const input = el && (el.$el ? el.$el.querySelector("input") : el);
+            if (input) {
+                input.focus();
+            }
+        },
+
+        // Следующий свободный № места в узле: наибольший + 1
+        nextSeatNo(locationId) {
+            let max = 0;
+            this.rows.forEach(function (row) {
+                if (row.location_id === locationId && Number(row.seat_no) > max) {
+                    max = Number(row.seat_no);
+                }
+            });
+            return String(max + 1);
+        },
+
+        onNewComputerLocation(locationId) {
+            if (!this.newComputer) {
+                return;
+            }
+            const changed = this.newComputer.location_id !== locationId;
+            this.newComputer.location_id = locationId;
+            if (changed) {
+                this.newComputer.seat_no = this.nextSeatNo(locationId);
+            }
+            this.newComputerError = "";
+            this.$nextTick(() => this.focusNewComputer("hostname"));
+        },
+
+        async submitNewComputer() {
+            const form = this.newComputer;
+            if (!form || this.newComputerSaving) {
+                return;
+            }
+            if (!form.location_id) {
+                this.newComputerError = "Выбери расположение.";
+                this.focusNewComputer("location");
+                return;
+            }
+            this.newComputerError = "";
+            this.newComputerSaving = true;
+            try {
+                const response = await apiFetch("/api/computers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        location_id: form.location_id,
+                        seat_no: form.seat_no,
+                        hostname: form.hostname,
+                        ip: form.ip
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const data = await response.json();
+                await this.loadTable();
+                this.flashRow(data.id);
+                this.$nextTick(() => {
+                    if (!this.scrollToRow(data.id)) {
+                        this.toast("Компьютер добавлен, но скрыт поиском или фильтром");
+                    }
+                });
+                this.toast("Добавлен: " + (form.hostname.trim() || "компьютер без имени"), "success");
+                // Форма остаётся открытой: можно сразу добавить следующий в тот же узел
+                form.hostname = "";
+                form.ip = "";
+                form.seat_no = this.nextSeatNo(form.location_id);
+                this.$nextTick(() => this.focusNewComputer("hostname"));
+            } catch (e) {
+                this.newComputerError = String(e.message || e);
+            }
+            this.newComputerSaving = false;
+        },
+
+        flashRow(id) {
+            this.allColumns.forEach((col) => this.flashCell(id, col.field));
+        },
+
+        // «Создан» — первым: в базе ключи изменений хранятся в другом порядке
+        orderedChanges(changes) {
+            if (!changes || !changes.created) {
+                return changes;
+            }
+            return Object.assign({ created: changes.created }, changes);
+        },
+
         startMove() {
             this.closeMenus();
             this.toast("Перемещение пока не реализовано");
@@ -1455,52 +1843,6 @@ const app = Vue.createApp({
         startSwap() {
             this.closeMenus();
             this.toast("Обмен пока не реализован");
-        },
-
-        // ---------- Выезд столбца чекбоксов ----------
-        // Анимируется одна CSS-переменная --cb-w на таблице (ширина столбца,
-        // сдвиг липких HOSTNAME/IP, ширина таблицы) — без перерисовки Vue.
-        // Повторное нажатие посреди анимации продолжает с текущей ширины.
-        animateCheckboxCol(show) {
-            const table = this.$refs.table;
-            const target = show ? CHECKBOX_COL_WIDTH : 0;
-            if (this._cbRaf) {
-                cancelAnimationFrame(this._cbRaf);
-                this._cbRaf = null;
-            }
-            if (show) {
-                this.checkboxVisible = true;
-            }
-            const from = this._cbWidth || 0;
-            const apply = (w) => {
-                this._cbWidth = w;
-                if (table) {
-                    table.style.setProperty("--cb-w", w + "px");
-                }
-            };
-            const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            if (!table || from === target || reduce) {
-                apply(target);
-                this.checkboxVisible = show;
-                return;
-            }
-            const duration = CHECKBOX_ANIM_MS * Math.abs(target - from) / CHECKBOX_COL_WIDTH;
-            const start = performance.now();
-            const step = (now) => {
-                const t = Math.min(1, (now - start) / duration);
-                const eased = 1 - Math.pow(1 - t, 3);
-                apply(Math.round((from + (target - from) * eased) * 10) / 10);
-                this.updateStickyShadow();
-                if (t < 1) {
-                    this._cbRaf = requestAnimationFrame(step);
-                } else {
-                    this._cbRaf = null;
-                    apply(target);
-                    this.checkboxVisible = show;
-                    this.updateStickyShadow();
-                }
-            };
-            this._cbRaf = requestAnimationFrame(step);
         },
 
         // ---------- Правка в карточке (двойной клик по строке) ----------
@@ -1534,6 +1876,10 @@ const app = Vue.createApp({
                 sel.removeAllRanges();
             }
             this.cardEditKey = r.key;
+            if (this.cardEditCol(r).location) {
+                this.ensureTree();
+                return;
+            }
             const value = this.card[this.cardEditCol(r).field];
             this.cardEditValue = value === null || value === undefined ? "" : String(value);
             this.$nextTick(() => {
@@ -1727,9 +2073,11 @@ const app = Vue.createApp({
                 if (index !== -1) {
                     Object.assign(this.rows[index], updated);
                     duplicateSets = buildDuplicateSets(this.rows);
+                this.dupVersion++;
                     this.recalcWidths();
                     this.flashCell(row.id, col.field);
                 }
+                this.reloadCardHistory(row.id);
             } catch (e) {
                 clearPending();
                 this.toastError("Не удалось сохранить: " + e);
@@ -1745,6 +2093,9 @@ const app = Vue.createApp({
                 this.rafId = null;
                 this.updateStickyShadow();
                 this.refreshHoverFromPoint();
+                if (this.copyHint) {
+                    this.updateCopyHint();
+                }
             });
         },
 
@@ -1754,8 +2105,6 @@ const app = Vue.createApp({
                 return;
             }
             // HOSTNAME прилипает, когда уезжают все столбцы перед ним.
-            // Столбец чекбоксов сюда не входит: он сам липкий и сдвигает
-            // точку прилипания на те же 30px.
             let threshold = 0;
             for (const col of this.columns) {
                 if (col.sticky) {
@@ -1765,14 +2114,17 @@ const app = Vue.createApp({
             }
             const scrollLeft = wrap.scrollLeft;
             this.stickyStuck = scrollLeft >= threshold;
-            // Тень у чекбоксов — пока под ними едут обычные столбцы.
-            // Когда к ним приклеились HOSTNAME/IP, тень у них, а не у чекбоксов.
-            this.checkboxStuck = this.editMode && scrollLeft > 0 && !this.stickyStuck;
         },
         
         onTableMouseMove(event) {
             this.lastMouseX = event.clientX;
             this.lastMouseY = event.clientY;
+            if (this.altDown !== event.altKey) {
+                this.altDown = event.altKey;
+            }
+            if (this.altDown || this.copyHint) {
+                this.updateCopyHint();
+            }
             const tr = event.target.closest("tbody tr");
             this.setHoverRow(tr);
         },
@@ -1780,6 +2132,7 @@ const app = Vue.createApp({
         onTableMouseLeave() {
             this.lastMouseX = undefined;
             this.lastMouseY = undefined;
+            this.copyHint = null;
             this.setHoverRow(null);
         },
         
@@ -1793,27 +2146,331 @@ const app = Vue.createApp({
         },
         
         setHoverRow(tr) {
+        // Открыта карточка — подсвечена её строка, куда бы ни ушёл курсор
+        if (this.card) {
+            const wrap = this.$refs.tableWrap;
+            tr = wrap ? wrap.querySelector('tbody tr[data-id="' + this.card.id + '"]') : null;
+        }
         if (this.hoverRowEl && this.hoverRowEl !== tr) {
             this.hoverRowEl.classList.remove("row-hover");
         }
-        if (tr && tr !== this.hoverRowEl) {
-            tr.classList.add("row-hover");
+        if (tr) {
+            tr.classList.add("row-hover"); // Vue мог сбросить класс, перерисовав строку
         }
             this.hoverRowEl = tr || null;
         },
 
-        onCellClick(row, col) {
+        // Нажатие мыши. С Ctrl / Shift / Alt браузер не должен выделять текст
+        // (Shift+клик — от прошлого места до курсора, в Firefox Ctrl+клик
+        // выделяет ячейки таблицы). Внутри открытого редактора — как обычно.
+        // Обычное нажатие строку не выделяет, но запоминает её: следующий
+        // Shift+клик выделит строки от неё. Ctrl — выделение протягиванием.
+        onCellMouseDown(event, row) {
+            if (event.button !== 0 || event.target.closest(".cell-edit, .loc-pick")) {
+                return;
+            }
+            const ctrl = event.ctrlKey || event.metaKey;
+            if (ctrl || event.shiftKey || event.altKey) {
+                event.preventDefault();
+            }
+            if (event.altKey || event.shiftKey) {
+                return;
+            }
+            this.selectAnchorId = row.id;
+            if (ctrl) {
+                this.startDragSelect(row);
+            }
+        },
+
+        // Клик по ячейке: Alt — копировать значение под курсором,
+        // Shift — выделение диапазона, обычный клик по HOSTNAME — карточка.
+        // Ctrl+клик уже обработан при нажатии (startDragSelect).
+        onCellClick(event, row, col) {
+            if (event.target.closest(".cell-edit, .loc-pick")) {
+                return;
+            }
+            if (event.altKey) {
+                this.copyCellValue(event);
+                return;
+            }
+            if (event.shiftKey) {
+                this.selectByClick(row, event.ctrlKey || event.metaKey, true);
+                return;
+            }
+            if (event.ctrlKey || event.metaKey) {
+                return;
+            }
             if (col.field === "hostname") {
-                if (!this.editMode) {
+                // Протянули мышью, чтобы выделить кусок имени, — карточку не открываем
+                const sel = window.getSelection ? String(window.getSelection()) : "";
+                if (!sel) {
                     this.openCard(row);
                 }
             }
+        },
+
+        // ---------- Выделение строк (как в Проводнике) ----------
+        // Ctrl+клик — добавить/убрать строку, Ctrl+протягивание — добавить/убрать
+        // строки по пути; Shift+клик — строки от прошлой (выбранной или просто
+        // нажатой) до этой вместо прежнего выделения; Ctrl+Shift+клик — добавить их.
+
+        // Ctrl+нажатие: строка выделяется (или снимается), дальше — протягивание.
+        // Что делать со строками по пути, решает первая: была выбрана — снимаем.
+        startDragSelect(row) {
+            const drag = {
+                startId: row.id,
+                add: !this.selectedSet.has(row.id),
+                base: this.selectedRows.slice(),
+                x: 0,
+                y: 0,
+                raf: null
+            };
+            this._drag = drag;
+            this.applyDragSelect(row.id);
+            const onMove = (e) => {
+                drag.x = e.clientX;
+                drag.y = e.clientY;
+                this.dragSelectAtPointer();
+                this.dragAutoScroll();
+            };
+            const onUp = () => {
+                document.removeEventListener("mousemove", onMove, true);
+                document.removeEventListener("mouseup", onUp, true);
+                if (drag.raf) {
+                    cancelAnimationFrame(drag.raf);
+                }
+                this._drag = null;
+            };
+            document.addEventListener("mousemove", onMove, true);
+            document.addEventListener("mouseup", onUp, true);
+        },
+
+        applyDragSelect(currentId) {
+            const drag = this._drag;
+            const ids = this.displayRows.map(function (r) { return r.id; });
+            const a = ids.indexOf(drag.startId);
+            const b = ids.indexOf(currentId);
+            if (a === -1 || b === -1) {
+                return;
+            }
+            const range = new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1));
+            if (drag.add) {
+                const base = new Set(drag.base);
+                this.selectedRows = drag.base.concat(Array.from(range).filter(function (id) { return !base.has(id); }));
+            } else {
+                this.selectedRows = drag.base.filter(function (id) { return !range.has(id); });
+            }
+        },
+
+        // Строка под курсором во время протягивания (по высоте — даже если
+        // курсор ушёл левее или правее таблицы)
+        dragSelectAtPointer() {
+            const drag = this._drag;
+            const wrap = this.$refs.tableWrap;
+            if (!drag || !wrap) {
+                return;
+            }
+            const box = wrap.getBoundingClientRect();
+            const x = Math.min(Math.max(drag.x, box.left + 1), box.right - 20);
+            const y = Math.min(Math.max(drag.y, box.top + 1), box.bottom - 2);
+            const el = document.elementFromPoint(x, y);
+            const tr = el ? el.closest(".data-table tbody tr") : null;
+            if (tr && tr.dataset.id) {
+                this.applyDragSelect(Number(tr.dataset.id));
+            }
+        },
+
+        // У верхнего/нижнего края таблицы — прокрутка, пока держат мышь
+        dragAutoScroll() {
+            const drag = this._drag;
+            const wrap = this.$refs.tableWrap;
+            if (!drag || !wrap || drag.raf) {
+                return;
+            }
+            const step = () => {
+                drag.raf = null;
+                if (this._drag !== drag) {
+                    return;
+                }
+                const box = wrap.getBoundingClientRect();
+                const head = wrap.querySelector("thead");
+                const top = box.top + (head ? head.offsetHeight : 0);
+                let dy = 0;
+                if (drag.y < top + 20) {
+                    dy = -Math.min(30, Math.ceil((top + 20 - drag.y) / 3));
+                } else if (drag.y > box.bottom - 20) {
+                    dy = Math.min(30, Math.ceil((drag.y - box.bottom + 20) / 3));
+                }
+                if (dy) {
+                    wrap.scrollTop += dy;
+                    this.dragSelectAtPointer();
+                    drag.raf = requestAnimationFrame(step);
+                }
+            };
+            step();
+        },
+
+        isRowSelected(row) {
+            return this.selectedSet.has(row.id);
+        },
+
+        selectByClick(row, ctrl, shift) {
+            const ids = this.displayRows.map(function (r) { return r.id; });
+            const from = this.selectAnchorId === null ? -1 : ids.indexOf(this.selectAnchorId);
+            if (shift && from !== -1) {
+                const to = ids.indexOf(row.id);
+                const range = ids.slice(Math.min(from, to), Math.max(from, to) + 1);
+                if (ctrl) {
+                    const have = this.selectedSet;
+                    this.selectedRows = this.selectedRows.concat(range.filter(function (id) { return !have.has(id); }));
+                } else {
+                    this.selectedRows = range;
+                }
+                return;
+            }
+            const index = this.selectedRows.indexOf(row.id);
+            if (index === -1) {
+                this.selectedRows.push(row.id);
+            } else if (!shift) {
+                this.selectedRows.splice(index, 1);
+            }
+            this.selectAnchorId = row.id;
+        },
+
+        // Ctrl+A — все видимые строки (с учётом поиска и фильтра по дереву)
+        selectAllVisible() {
+            this.selectedRows = this.displayRows.map(function (r) { return r.id; });
+            if (this.selectedRows.length) {
+                this.selectAnchorId = this.selectedRows[0];
+            }
+        },
+
+        clearSelection() {
+            this.selectedRows = [];
+            this.selectAnchorId = null;
+            this.closeMenus();
+        },
+
+        // ---------- Alt+клик: копирование ----------
+        // В многострочной ячейке (несколько IP, MAC, дисков) копируется та
+        // строка значения, над которой курсор; в остальных — значение целиком.
+        // Пока Alt зажат, это значение подсвечено (copyHint).
+
+        // Что скопирует клик в точке (x, y): { text, rect } или null
+        copyTargetAt(x, y) {
+            const el = document.elementFromPoint(x, y);
+            const td = el ? el.closest(".data-table tbody td") : null;
+            if (!td || td.classList.contains("editing")) {
+                return null;
+            }
+            const tr = td.parentElement;
+            const col = this.columns[td.cellIndex];
+            const id = Number(tr.dataset.id);
+            const row = this.displayRows.find(function (r) { return r.id === id; });
+            if (!col || !row) {
+                return null;
+            }
+            const value = row[col.field];
+            if (value === null || value === undefined || String(value).trim() === "") {
+                return null;
+            }
+            const text = String(value);
+            const span = td.querySelector("span");
+            const node = span ? span.firstChild : null;
+            const tdRect = td.getBoundingClientRect();
+            if (!node || node.nodeType !== 3 || node.data !== text) {
+                return { text: text.trim(), rect: { top: tdRect.top, bottom: tdRect.bottom, left: tdRect.left, right: tdRect.right, cellRight: tdRect.right } };
+            }
+            const range = document.createRange();
+            const clip = function (rect) {
+                // Обрезанное многоточием примечание — не шире ячейки
+                const left = Math.max(rect.left, tdRect.left + 2);
+                const right = Math.min(rect.right, tdRect.right - 2);
+                return { top: rect.top, bottom: rect.bottom, left: left, right: right, cellRight: tdRect.right };
+            };
+            const lines = text.split("\n");
+            if (lines.length < 2 || col.note) {
+                range.selectNodeContents(node);
+                return { text: text.trim(), rect: clip(range.getBoundingClientRect()) };
+            }
+            // Для каждой строки значения — её прямоугольник на экране;
+            // берём ту, что под курсором (или ближайшую по высоте).
+            let best = null;
+            let bestDist = Infinity;
+            let offset = 0;
+            lines.forEach(function (line) {
+                const start = offset;
+                offset += line.length + 1;
+                if (!line.trim()) {
+                    return;
+                }
+                range.setStart(node, start);
+                range.setEnd(node, start + line.length);
+                const rect = range.getBoundingClientRect();
+                if (!rect.height) {
+                    return;
+                }
+                const dist = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = { text: line.trim(), rect: clip(rect) };
+                }
+            });
+            return best;
+        },
+
+        copyCellValue(event) {
+            const target = this.copyTargetAt(event.clientX, event.clientY);
+            if (!target) {
+                return;
+            }
+            this.copyText(target.text);
+            if (this.copyHint) {
+                this.copyHint.done = true;
+            }
+        },
+
+        // Подсветка под курсором при зажатом Alt
+        updateCopyHint() {
+            if (!this.altDown || this.lastMouseX === undefined) {
+                this.copyHint = null;
+                return;
+            }
+            const target = this.copyTargetAt(this.lastMouseX, this.lastMouseY);
+            if (!target) {
+                this.copyHint = null;
+                return;
+            }
+            const r = target.rect;
+            const hint = {
+                text: target.text,
+                top: Math.round(r.top) - 1,
+                left: Math.round(r.left) - 3,
+                width: Math.round(r.right - r.left) + 6,
+                height: Math.round(r.bottom - r.top) + 2,
+                done: false
+            };
+            const old = this.copyHint;
+            if (old && old.text === hint.text && old.top === hint.top && old.left === hint.left) {
+                return; // то же значение — не сбрасывать зелёный «скопировано»
+            }
+            this.copyHint = hint;
+        },
+
+        // Второй щелчок двойного клика по HOSTNAME приходится уже на фон
+        // открывшейся карточки — он не должен её закрывать
+        onCardOverlayClick(event) {
+            if (event.detail > 1) {
+                return;
+            }
+            this.closeCard();
         },
 
         // ---------- Карточка ----------
 
         async openCard(row) {
             this.card = row;
+            this.setHoverRow(null); // подсветка остаётся на строке карточки
             this.cardHistoryOpen = false;
             this.cardEditKey = null;
             this.cardHostname = row.hostname || "";
@@ -1837,8 +2494,46 @@ const app = Vue.createApp({
             this.cardLoading = false;
         },
 
+        // ---------- История: строки дней ----------
+        // Липкая строка дня прилипает под шапкой, но у ячеек таблицы границей
+        // прилипания служит вся таблица, а не день (tbody) — строки дней
+        // наезжали друг на друга. Поэтому следующий день выталкивает
+        // прилипшую строку вверх вручную, как адреса в Дереве.
+        onHistoryScroll() {
+            if (this._dayRaf) {
+                return;
+            }
+            this._dayRaf = requestAnimationFrame(() => {
+                this._dayRaf = null;
+                this.pushHistoryDays();
+            });
+        },
+
+        pushHistoryDays() {
+            const sc = this.$refs.historyScroll;
+            const table = sc ? sc.querySelector(".history-table") : null;
+            if (!table || !table.tHead) {
+                return;
+            }
+            const headH = table.tHead.offsetHeight;
+            const limit = sc.getBoundingClientRect().top + headH;
+            Array.prototype.forEach.call(table.tBodies, function (tbody) {
+                const dayCell = tbody.rows[0] && tbody.rows[0].cells[0];
+                const last = tbody.rows[tbody.rows.length - 1];
+                if (!dayCell || !last) {
+                    return;
+                }
+                const push = last.getBoundingClientRect().bottom - dayCell.offsetHeight - limit;
+                const top = push < 0 ? (headH + push) + "px" : "";
+                if (dayCell.style.top !== top) {
+                    dayCell.style.top = top;
+                }
+            });
+        },
+
         closeCard() {
             this.card = null;
+            this.setHoverRow(null);
         },
 
         openCardById(id) {
@@ -1852,6 +2547,27 @@ const app = Vue.createApp({
 
         toggleCardHistory() {
             this.cardHistoryOpen = !this.cardHistoryOpen;
+        },
+
+        // Оформление значения в карточке — как в таблице: значение из
+        // Справочников поверх оформления столбца. line — строка значения
+        // (у многострочных — каждая своя); без line — первая оформленная.
+        cardValueStyle(r, line) {
+            if (!r.field) {
+                return null;
+            }
+            const fieldStyles = this.choiceStyleMap[r.field] || {};
+            let choice = null;
+            const lines = line === undefined ? String(r.value).split("\n") : [line];
+            for (const l of lines) {
+                const s = fieldStyles[styleKey(r.field, l)];
+                if (s) {
+                    choice = s;
+                    break;
+                }
+            }
+            const st = this.effectiveStyle(r.field, choice);
+            return st.color || st.backgroundColor || st.fontWeight || st.fontStyle ? st : null;
         },
 
         splitLines(value) {
@@ -1948,10 +2664,12 @@ const app = Vue.createApp({
                     const updatedRow = Object.assign({}, this.rows[index], updated);
                     this.rows[index] = updatedRow;
                     duplicateSets = buildDuplicateSets(this.rows);
+                this.dupVersion++;
                     this.recalcWidths();
                     this.card = updatedRow;
                     this.toast("Имя сохранено", "success");
                 }
+                this.reloadCardHistory(id);
             } catch (e) {
                 this.editingHostname = true;
                 this.toastError("Не удалось сохранить: " + (e.message || e));
@@ -2099,7 +2817,45 @@ const app = Vue.createApp({
             this.setView("table");
         },
 
-        openAddForm(node) {
+        kindLabel(kind) {
+            return kindLabels[kind] || kind;
+        },
+
+        // Подсветка слов поиска Справочников в тексте
+        hl(text) {
+            return highlightParts(String(text || ""), this.choicesMatch.words);
+        },
+
+        nextChoicesBlock() {
+            if (this.choicesMatch.blocks.length) {
+                this.choicesPos = (this.choicesPos + 1) % this.choicesMatch.blocks.length;
+                this.scrollToChoicesHit();
+            }
+        },
+
+        // Показать текущий найденный раздел и первое совпавшее значение в нём
+        scrollToChoicesHit() {
+            this.$nextTick(() => {
+                const field = this.choicesMatch.current;
+                if (!field) {
+                    return;
+                }
+                const block = document.querySelector('.st-block[data-field="' + field + '"]');
+                if (!block) {
+                    return;
+                }
+                block.scrollIntoView({ block: "nearest" });
+                const row = block.querySelector(".st-row.search-hit");
+                const list = block.querySelector(".st-values");
+                if (row && list) {
+                    list.scrollTop = row.offsetTop - list.offsetTop - 25;
+                }
+            });
+        },
+
+        // node — родитель («+» у строки дерева); без него — с панели, kind —
+        // что добавить (выбрано в меню «+»), родитель — из списка в форме
+        openAddForm(node, kind) {
             const allowedChildren = {
                 building: ["department"],
                 department: ["floor", "room"],
@@ -2116,6 +2872,9 @@ const app = Vue.createApp({
                 this.setTreeOpen(node.id, true);
                 const entry = this.treeIndex[node.id];
                 path = entry ? entry.path : "";
+            }
+            if (kind && kinds.indexOf(kind) !== -1) {
+                kinds = [kind];
             }
             this.treeForm = {
                 action: "add",
@@ -2942,28 +3701,34 @@ function computeTreeWidth(roots) {
     return Math.ceil(max) + 2;
 }
 
-// Разбивка строки на части для подсветки найденного
-function highlightParts(text, query) {
+// Разбивка строки на части для подсветки найденного (любое из слов)
+function highlightParts(text, words) {
     text = text || "";
-    if (!query) {
+    if (!words || !words.length) {
         return [{ t: text, m: false }];
     }
-    const lower = text.toLowerCase();
-    const parts = [];
-    let pos = 0;
-    let idx = lower.indexOf(query);
-    while (idx !== -1) {
-        if (idx > pos) {
-            parts.push({ t: text.slice(pos, idx), m: false });
+    const lower = searchNorm(text);
+    const marked = new Array(text.length).fill(false);
+    words.forEach(function (w) {
+        let idx = lower.indexOf(w);
+        while (idx !== -1) {
+            for (let i = idx; i < idx + w.length; i++) {
+                marked[i] = true;
+            }
+            idx = lower.indexOf(w, idx + w.length);
         }
-        parts.push({ t: text.slice(idx, idx + query.length), m: true });
-        pos = idx + query.length;
-        idx = lower.indexOf(query, pos);
+    });
+    const parts = [];
+    let i = 0;
+    while (i < text.length) {
+        let j = i;
+        while (j < text.length && marked[j] === marked[i]) {
+            j++;
+        }
+        parts.push({ t: text.slice(i, j), m: marked[i] });
+        i = j;
     }
-    if (pos < text.length) {
-        parts.push({ t: text.slice(pos), m: false });
-    }
-    return parts;
+    return parts.length ? parts : [{ t: text, m: false }];
 }
 
 app.component("tree-node", {
@@ -3005,10 +3770,10 @@ app.component("tree-node", {
             return treeNodeTexts(this.node);
         },
         codeParts() {
-            return highlightParts(this.texts.code, this.match.query);
+            return highlightParts(this.texts.code, this.match.words);
         },
         nameParts() {
-            return highlightParts(this.texts.name, this.match.query);
+            return highlightParts(this.texts.name, this.match.words);
         },
         canAddChild() {
             return this.node.kind !== "room";
@@ -3117,6 +3882,21 @@ app.component("tree-form", {
         if (input) {
             input.focus();
         }
+        // Форма с панели прилипает под шапкой и не уезжает при прокрутке;
+        // прилипший адрес встаёт под неё — ему нужна её высота (--tf-h)
+        if (this.form && this.form.top && this.$el.nodeType === 1 && window.ResizeObserver) {
+            const content = this.$el.parentElement;
+            this._ro = new ResizeObserver(() => {
+                content.style.setProperty("--tf-h", this.$el.offsetHeight + "px");
+            });
+            this._ro.observe(this.$el);
+        }
+    },
+    beforeUnmount() {
+        if (this._ro) {
+            this._ro.disconnect();
+            this.$el.parentElement && this.$el.parentElement.style.removeProperty("--tf-h");
+        }
     },
     methods: {
         submit() {
@@ -3130,7 +3910,7 @@ app.component("tree-form", {
         }
     },
     template: `
-        <div class="tree-form" v-if="form" :style="{ '--lvl': level }" @keydown.esc.stop="cancel">
+        <div class="tree-form" v-if="form" :class="{ 'tf-top': form.top }" :style="{ '--lvl': level }" @keydown.esc.stop="cancel">
             <span class="tf-title">{{ form.action === 'add' ? 'Добавить:' : 'Правка:' }}</span>
             <select v-if="form.kinds.length > 1" class="input" v-model="form.kind" @change="form.top && (form.parentId = null)">
                 <option v-for="k in form.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
@@ -3143,19 +3923,242 @@ app.component("tree-form", {
                 title="Код — короткое обозначение узла, необязательно. У кабинета это его номер (например, 214): он показывается в таблице в столбце «№ Кабинета» и по нему удобно искать. У адреса или отделения — сокращение для себя (например, «Л12», «ТО»).">
             <input class="input tf-name" v-model="form.name" @keydown.enter="submit" placeholder="Название">
             <span class="tf-buttons">
-                <button class="btn btn-primary" @click="submit">OK</button>
-                <button class="btn" @click="cancel">Отмена</button>
+                <button class="btn btn-primary icon-only" @click="submit" :title="form.action === 'add' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn icon-only" @click="cancel" title="Отмена (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </span>
             <span v-if="root.treeFormError" class="tf-error">{{ root.treeFormError }}</span>
         </div>
     `
 });
 
+// Выбор расположения ПК: поле поиска и список узлов дерева путями
+// («ул. Ленина, 1 → Терапия → 201»). Слова ищутся в любом месте пути.
+// editor — редактор поверх ячейки: открыт сразу, Esc и уход фокуса — отмена.
+// Список выносится в body: таблица и карточка обрезают всё, что за краем.
+app.component("location-picker", {
+    props: {
+        value: { default: null },
+        options: { type: Array, default: function () { return []; } },
+        editor: Boolean,
+        placeholder: { type: String, default: "" },
+        inputClass: { default: "" }
+    },
+    emits: ["pick", "cancel"],
+    data() {
+        return { open: false, query: "", active: 0, pos: null };
+    },
+    computed: {
+        current() {
+            const value = this.value;
+            return this.options.find(function (o) { return o.id === value; }) || null;
+        },
+        filtered() {
+            const words = searchWords(this.query);
+            if (!words.length) {
+                return this.options;
+            }
+            return this.options.filter(function (o) {
+                return words.every(function (w) { return o.search.indexOf(w) !== -1; });
+            });
+        },
+        shownText() {
+            return this.open ? this.query : (this.current ? this.current.path : "");
+        },
+        listStyle() {
+            const p = this.pos;
+            if (!p) {
+                return null;
+            }
+            const style = {
+                left: p.left + "px",
+                minWidth: p.minWidth + "px",
+                maxWidth: p.maxWidth + "px",
+                maxHeight: p.maxHeight + "px"
+            };
+            if (p.up) {
+                style.bottom = p.bottom + "px";
+            } else {
+                style.top = p.top + "px";
+            }
+            return style;
+        }
+    },
+    watch: {
+        query() {
+            this.active = 0;
+        },
+        // Дерево догрузилось, пока список открыт, — встать на текущий узел
+        options() {
+            if (this.open && !this.query) {
+                this.activateCurrent();
+            }
+        }
+    },
+    mounted() {
+        this._onMove = () => this.place();
+        window.addEventListener("scroll", this._onMove, true);
+        window.addEventListener("resize", this._onMove);
+        if (this.editor) {
+            const input = this.$refs.input;
+            const td = this.$el.closest("td");
+            if (td) {
+                input.style.width = Math.max(td.clientWidth, 260) + "px";
+                input.style.height = td.clientHeight + "px";
+            }
+            input.focus({ preventScroll: true });
+            this.show();
+        }
+    },
+    beforeUnmount() {
+        window.removeEventListener("scroll", this._onMove, true);
+        window.removeEventListener("resize", this._onMove);
+    },
+    methods: {
+        show() {
+            if (this.open) {
+                return;
+            }
+            this.open = true;
+            this.query = "";
+            this.activateCurrent();
+            this.$nextTick(() => this.place());
+        },
+        hide() {
+            this.open = false;
+            this.query = "";
+        },
+        activateCurrent() {
+            const value = this.value;
+            const i = this.filtered.findIndex(function (o) { return o.id === value; });
+            this.active = i >= 0 ? i : 0;
+            this.$nextTick(() => this.scrollActive(true));
+        },
+        place() {
+            if (!this.open || !this.$refs.input) {
+                return;
+            }
+            const r = this.$refs.input.getBoundingClientRect();
+            const minWidth = Math.max(Math.round(r.width), 420);
+            const left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - minWidth - 4));
+            const below = window.innerHeight - r.bottom;
+            const up = below < 220 && r.top > below;
+            this.pos = {
+                up: up,
+                left: left,
+                top: Math.round(r.bottom),
+                bottom: Math.round(window.innerHeight - r.top),
+                minWidth: minWidth,
+                maxWidth: window.innerWidth - left - 8,
+                maxHeight: Math.min(360, Math.round((up ? r.top : below) - 8))
+            };
+        },
+        scrollActive(center) {
+            const list = this.$refs.list;
+            const item = list && list.children[this.active];
+            if (!item || !item.classList.contains("ll-item")) {
+                return;
+            }
+            if (center) {
+                list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
+            } else if (item.offsetTop < list.scrollTop) {
+                list.scrollTop = item.offsetTop;
+            } else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) {
+                list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
+            }
+        },
+        onInput(event) {
+            this.query = event.target.value;
+            if (!this.open) {
+                this.open = true;
+                this.$nextTick(() => this.place());
+            }
+        },
+        onFocus() {
+            if (!this.editor) {
+                this.show();
+            }
+        },
+        onBlur() {
+            if (this.editor) {
+                this.$emit("cancel");
+            } else {
+                this.hide();
+            }
+        },
+        onKeydown(event) {
+            const key = event.key;
+            if (key === "ArrowDown" || key === "ArrowUp") {
+                event.preventDefault();
+                if (!this.open) {
+                    this.show();
+                    return;
+                }
+                const n = this.filtered.length;
+                if (n) {
+                    this.active = (this.active + (key === "ArrowDown" ? 1 : -1) + n) % n;
+                    this.$nextTick(() => this.scrollActive(false));
+                }
+            } else if (key === "Enter") {
+                if (!this.open) {
+                    return; // в форме Enter без открытого списка — дальше, к форме
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                const option = this.filtered[this.active];
+                if (option) {
+                    this.pick(option);
+                }
+            } else if (key === "Escape") {
+                if (this.editor) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.$emit("cancel");
+                } else if (this.open) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.hide();
+                }
+            } else if (key === "Tab" && !this.editor) {
+                this.hide();
+            }
+        },
+        pick(option) {
+            this.hide();
+            this.$emit("pick", option.id);
+        }
+    },
+    template: `
+        <span class="loc-pick">
+            <input ref="input" :class="inputClass" :value="shownText" autocomplete="off" spellcheck="false"
+                :placeholder="open && current ? current.path : placeholder"
+                :title="!open && current ? current.path : null"
+                @input="onInput" @focus="onFocus" @blur="onBlur" @keydown="onKeydown" @click="show">
+            <teleport to="body">
+                <div v-if="open && pos" ref="list" class="loc-list" :class="{ up: pos.up }" :style="listStyle" @mousedown.prevent>
+                    <div v-if="!options.length" class="ll-empty">Загрузка дерева…</div>
+                    <div v-else-if="!filtered.length" class="ll-empty">Ничего не найдено</div>
+                    <div v-for="(o, i) in filtered" :key="o.id" class="ll-item"
+                        :class="['kind-' + o.kind, { active: i === active, current: o.id === value }]"
+                        @mousemove="active = i" @click="pick(o)">{{ o.path }}</div>
+                </div>
+            </teleport>
+        </span>
+    `
+});
+
 app.mount("#app");
+
+// Сочетания клавиш проверяются по самой клавише (event.code), а не по букве:
+// так они работают в любой раскладке (Ctrl+F и в русской, где это «Ctrl+А»).
+
+// Фокус в поле ввода — там Ctrl+A, Esc и т. п. работают по-своему
+function isTypingTarget(el) {
+    return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+}
 
 // Ctrl+F — в поиск текущего раздела
 window.addEventListener("keydown", function (event) {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === "KeyF") {
         const input = Array.from(document.querySelectorAll(".tb-search input")).find(function (el) {
             return el.offsetParent !== null;
         });
@@ -3192,5 +4195,61 @@ window.addEventListener("keydown", function (event) {
         } else {
             vm.closeCard();
         }
+        return;
+    }
+    // Esc закрывает строку добавления (Таблица) и форму узла (Дерево),
+    // где бы ни был фокус; открытый список выбора расположения закрывается
+    // своим Esc раньше (он не пропускает событие дальше)
+    if (event.key === "Escape" && !event.defaultPrevented && !vm.card) {
+        if (vm.view === "table" && vm.newComputer) {
+            vm.closeNewComputer();
+            return;
+        }
+        if (vm.view === "tree" && vm.treeForm) {
+            vm.treeForm = null;
+            return;
+        }
+    }
+    if (vm.view !== "table" || vm.card || event.defaultPrevented || isTypingTarget(document.activeElement)) {
+        return;
+    }
+    // Ctrl+A — выделить все видимые строки таблицы
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyA") {
+        event.preventDefault();
+        vm.selectAllVisible();
+    } else if (event.key === "Escape" && vm.selectedRows.length && !vm.editingRowId) {
+        vm.clearSelection();
+    }
+});
+
+// Alt над таблицей: курсор «копировать», клик копирует значение.
+// Отпущенный Alt в Windows выделяет меню браузера — пока курсор над
+// таблицей, это гасится.
+window.addEventListener("keydown", function (event) {
+    const vm = window.itdbTable;
+    if (!vm || event.key !== "Alt") {
+        return;
+    }
+    vm.altDown = true;
+    if (vm.lastMouseX !== undefined) {
+        event.preventDefault();
+        vm.updateCopyHint();
+    }
+});
+window.addEventListener("keyup", function (event) {
+    const vm = window.itdbTable;
+    if (!vm || event.key !== "Alt") {
+        return;
+    }
+    vm.altDown = false;
+    vm.copyHint = null;
+    if (vm.lastMouseX !== undefined) {
+        event.preventDefault();
+    }
+});
+window.addEventListener("blur", function () {
+    if (window.itdbTable) {
+        window.itdbTable.altDown = false;
+        window.itdbTable.copyHint = null;
     }
 });

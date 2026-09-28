@@ -64,7 +64,7 @@
         <!-- ================= Таблица ================= -->
         <section v-if="user" v-show="view === 'table'" class="view">
 
-            <div class="toolbar" :class="{ 'editing-on': editMode }">
+            <div class="toolbar">
                 <div class="tb-left">
                     <span class="tb-count">{{ countText }}</span>
                     <button v-if="locationFilter" class="chip" @click="clearLocationFilter"
@@ -72,14 +72,16 @@
                         <span class="chip-text">{{ locationFilter.path }}</span><span class="chip-x">✕</span>
                     </button>
                     <span v-if="selectedRows.length > 0" class="dropdown-wrap" ref="selectionWrap">
-                        <button class="btn" :class="{ 'menu-open': openMenu === 'selection' }" @click="toggleMenu('selection')" title="Действия с выбранными">
+                        <button class="btn" :class="{ 'menu-open': openMenu === 'selection' }" @click="toggleMenu('selection')" title="Действия с выбранными. Выделение: Ctrl+клик, Shift+клик, Ctrl+A; снять — Esc">
                             Выбрано: {{ selectedRows.length }}<span class="caret">▼</span>
                         </button>
                         <div v-if="openMenu === 'selection'" class="dropdown attached">
-                            <button @click="startMove">Переместить</button>
-                            <button @click="startReplace">Заменить</button>
-                            <button @click="startSwap">Поменять местами</button>
-                            <div class="dd-sep"></div>
+                            <template v-if="canEdit">
+                                <button @click="startMove">Переместить</button>
+                                <button @click="startReplace">Заменить</button>
+                                <button @click="startSwap">Поменять местами</button>
+                                <div class="dd-sep"></div>
+                            </template>
                             <button @click="clearSelection">Снять выделение</button>
                         </div>
                     </span>
@@ -92,11 +94,11 @@
                 <div class="tb-right">
                     <span v-if="tableError" class="tb-error" :title="tableError">{{ tableError }}</span>
                     <!-- Появляются слева от постоянных кнопок: остальное не сдвигается -->
-                    <button v-if="sortField" class="btn" @click="resetSort">Сброс сортировки</button>
-                    <button v-if="hasManualWidths" class="btn" @click="resetWidths" title="Вернуть автоматическую ширину столбцов">Выровнять</button>
+                    <button v-if="sortField" class="btn icon-only" @click="resetSort" title="Сбросить сортировку"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></button>
+                    <button v-if="hasManualWidths" class="btn icon-only" @click="resetWidths" title="Выровнять: вернуть автоматическую ширину столбцов"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="m6 8-4 4 4 4"/><path d="M2 12h20"/></svg></button>
                     <span class="dropdown-wrap" ref="columnsWrap">
-                        <button class="btn" :class="{ 'has-badge': hiddenColumnCount > 0, 'menu-open': openMenu === 'columns' }" @click="toggleMenu('columns')" title="Показать или скрыть столбцы">
-                            Столбцы<span v-if="hiddenColumnCount > 0" class="btn-badge">{{ hiddenColumnCount }}</span>
+                        <button class="btn icon-only" :class="{ 'has-badge': hiddenColumnCount > 0, 'menu-open': openMenu === 'columns' }" @click="toggleMenu('columns')" title="Столбцы: показать или скрыть">
+                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg><span v-if="hiddenColumnCount > 0" class="btn-badge">{{ hiddenColumnCount }}</span>
                         </button>
                         <div v-if="openMenu === 'columns'" class="dropdown right attached columns-menu">
                             <div class="dd-scroll">
@@ -113,30 +115,52 @@
                             <button @click="showAllColumns" :disabled="hiddenColumnCount === 0">Показать все</button>
                         </div>
                     </span>
-                    <button v-if="canEdit" class="btn" :class="{ active: editMode }" @click="editMode = !editMode"
-                        :title="editMode ? 'Выключить режим правки' : 'Включить режим правки: двойной клик по ячейке — изменить'">✎ Правка</button>
                     <span class="tb-divider"></span>
-                    <button class="btn icon-only" @click="downloadExport" title="Выгрузить таблицу в Excel">
-                        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 11.5v2h11v-2"/></svg>
-                        Excel
-                    </button>
+                    <!-- Добавление и выгрузка — у каждого своя кнопка с меню:
+                         потом добавлять можно будет не только компьютер,
+                         выгружать — не только в Excel -->
+                    <span v-if="canEdit" class="dropdown-wrap" ref="addWrap">
+                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'add', active: newComputer }" @click="toggleMenu('add')" title="Добавить">
+                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="caret">▼</span>
+                        </button>
+                        <div v-if="openMenu === 'add'" class="dropdown right attached">
+                            <button @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
+                        </div>
+                    </span>
+                    <span class="dropdown-wrap" ref="exportWrap">
+                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'export' }" @click="toggleMenu('export')" title="Выгрузить">
+                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span class="caret">▼</span>
+                        </button>
+                        <div v-if="openMenu === 'export'" class="dropdown right attached">
+                            <button @click="closeMenus(); downloadExport()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel</button>
+                        </div>
+                    </span>
                 </div>
             </div>
 
+            <!-- Новый компьютер: строка под панелью. Остальные поля — потом в таблице или карточке -->
+            <div v-if="newComputer" class="add-bar">
+                <span class="ab-title">Новый компьютер:</span>
+                <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions"
+                    placeholder="Расположение: начни вводить адрес, отделение или кабинет" @pick="onNewComputerLocation"></location-picker>
+                <input ref="nc-seat" class="input ab-seat" v-model="newComputer.seat_no" placeholder="№ места" title="№ Места — только число" @keydown.enter="submitNewComputer">
+                <input ref="nc-hostname" class="input ab-host" v-model="newComputer.hostname" placeholder="HOSTNAME" spellcheck="false" @keydown.enter="submitNewComputer">
+                <input ref="nc-ip" class="input ab-ip" v-model="newComputer.ip" placeholder="IP" spellcheck="false" @keydown.enter="submitNewComputer">
+                <button class="btn btn-primary icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn icon-only" @click="closeNewComputer" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <span v-if="newComputerError" class="ab-error">{{ newComputerError }}</span>
+            </div>
+
             <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
-                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'checkbox-stuck': checkboxStuck, 'cb-hidden': !checkboxVisible, 'edit-mode': editMode }" ref="table" :style="{ width: 'calc(' + totalWidth + 'px + var(--cb-w))' }">
+                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'alt-copy': altDown }" ref="table" :style="{ width: totalWidth + 'px' }">
                     <colgroup>
-                        <col class="cb-col">
                         <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
                     </colgroup>
                     <thead>
                         <tr>
-                            <th class="checkbox-col">
-                                <input type="checkbox" :checked="isAllSelected" @change="toggleAllSelection" :tabindex="editMode ? 0 : -1">
-                            </th>
                             <th v-for="col in columns" :key="'th-' + col.field"
                                 :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === lastStickyField }"
-                                :style="col.sticky ? { left: 'calc(var(--cb-w) + ' + stickyLeft(col) + 'px)' } : null"
+                                :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
                                 @click="sortBy(col)">
                                 <span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
                                 <span class="resize-handle" @mousedown.stop.prevent="startResize($event, col)" @click.stop></span>
@@ -144,20 +168,20 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in displayRows" :key="row.id">
-                            <td class="checkbox-col">
-                                <input v-if="checkboxVisible" type="checkbox" :checked="isRowSelected(row)" @change="toggleRowSelection(row)">
-                            </td>
+                        <tr v-for="row in displayRows" :key="row.id" :data-id="row.id" :class="{ 'row-selected': selectedSet.has(row.id) }">
                             <td v-for="col in columns" :key="col.field"
                                 :class="cellClass(row, col)"
                                 :style="cellTdStyle(row, col)"
-                                @click="onCellClick(row, col)"
+                                @mousedown="onCellMouseDown($event, row)"
+                                @click="onCellClick($event, row, col)"
                                 @dblclick="startEdit(row, col)"
                                 @mouseenter="handleNoteEnter($event, row, col)"
                                 @mouseleave="hideNoteTooltip">
                                 <span :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)">{{ cellText(row, col) }}</span>
                                 <template v-if="isEditing(row, col)">
-                                    <textarea v-if="col.multiline" v-model="editValue"
+                                    <location-picker v-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
+                                        placeholder="Расположение…" @pick="onCellLocationPick(row, $event)" @cancel="cancelEdit"></location-picker>
+                                    <textarea v-else-if="col.multiline" v-model="editValue"
                                         @keydown="handleEditKeydown($event, row, col)"
                                         @input="onEditInput($event, col)"
                                         @blur="saveEdit(row, col)"
@@ -175,6 +199,8 @@
                     </tbody>
                 </table>
             </div>
+            <div v-if="copyHint" class="copy-hint" :class="{ done: copyHint.done }"
+                :style="{ top: copyHint.top + 'px', left: copyHint.left + 'px', width: copyHint.width + 'px', height: copyHint.height + 'px' }"></div>
             <div class="note-tooltip" v-if="noteTooltip.visible"
                 :style="{ top: noteTooltip.top + 'px', left: noteTooltip.left + 'px', width: noteTooltip.width + 'px' }">{{ noteTooltip.text }}</div>
         </section>
@@ -192,13 +218,16 @@
                     <span v-if="treeQuery" class="clear" title="Очистить (Esc)" @click="treeQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
-                    <button class="btn" @click="expandAllTree">Развернуть всё</button>
-                    <button class="btn" @click="collapseAllTree">Свернуть всё</button>
                     <template v-if="canEdit">
+                        <!-- Что добавить: адрес, отделение, этаж, кабинет -->
+                        <span class="dropdown-wrap" ref="treeAddWrap">
+                            <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'treeAdd', active: treeForm && treeForm.top }" @click="toggleMenu('treeAdd')" title="Добавить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="caret">▼</span></button>
+                            <div v-if="openMenu === 'treeAdd'" class="dropdown right attached">
+                                <button v-for="k in ['building', 'department', 'floor', 'room']" :key="k" @click="closeMenus(); openAddForm(null, k)">{{ kindLabel(k) }}</button>
+                            </div>
+                        </span>
                         <span class="tb-divider"></span>
-                        <button class="btn" @click="openAddForm(null)" title="Добавить адрес, отделение, этаж или кабинет">+ Добавить</button>
                     </template>
-                    <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
                         <div v-if="openMenu === 'page'" class="dropdown right attached">
@@ -215,7 +244,14 @@
                         <!-- Прокрутка внутри рамки: шапка и текущий адрес закрепляются сверху -->
                         <div class="tree-scroll" ref="treeScroll" @scroll="treeHover = null">
                             <div class="tree-content" ref="treeContent">
-                                <div class="tg-head"><span class="tg-name">Расположение</span><span class="tg-count">ПК</span></div>
+                                <div class="tg-head">
+                                    <span class="tg-name">Расположение
+                                        <span class="tg-tools">
+                                            <span class="tg-btn" title="Развернуть всё" @click="expandAllTree"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span>
+                                            <span class="tg-btn" title="Свернуть всё" @click="collapseAllTree"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg></span>
+                                        </span>
+                                    </span><span class="tg-count">ПК</span>
+                                </div>
                                 <tree-form v-if="treeForm && treeForm.top" :level="0"></tree-form>
                                 <div v-if="!treeLoading && !treeError && treeRoots.length === 0" class="tree-empty">Расположения не найдены.</div>
                                 <div v-else-if="treeQuery.trim() && treeMatch.size === 0" class="tree-empty">Ничего не найдено.</div>
@@ -248,7 +284,15 @@
              столбца целиком и значения (клик по значению — его оформление). -->
         <section v-if="user && view === 'choices'" class="view">
             <div class="toolbar">
-                <div class="tb-left">Оформление столбцов и значений таблицы</div>
+                <div class="tb-left">
+                    <span v-if="!choicesQuery.trim()">Оформление столбцов и значений таблицы</span>
+                    <span v-else class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter — следующий)</template></span>
+                </div>
+                <span class="tb-search">
+                    <input v-model="choicesQuery" placeholder="Поиск: раздел и значение, например «ЦП 101»" autocomplete="off"
+                        @keydown.enter.prevent="nextChoicesBlock" @keydown.esc.prevent="onSearchEsc($event, 'choicesQuery')">
+                    <span v-if="choicesQuery" class="clear" title="Очистить (Esc)" @click="choicesQuery = ''">×</span>
+                </span>
                 <div class="tb-right">
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -262,9 +306,10 @@
                 <!-- Блок на каждый столбец таблицы, в том же порядке: первая строка —
                      оформление столбца целиком, ниже — значения (из справочника и из данных). -->
                 <div class="st-grid">
-                    <div v-for="b in styleBlocks" :key="b.field" class="st-block">
+                    <div v-for="b in styleBlocks" :key="b.field" class="st-block" :data-field="b.field"
+                        :class="{ 'search-hit': choicesMatch.blockSet.has(b.field), 'search-current': choicesMatch.current === b.field }">
                         <div class="st-head">
-                            <span class="st-title">{{ b.label }}</span>
+                            <span class="st-title"><template v-for="(p, i) in hl(b.label)" :key="i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></span>
                             <span v-if="b.extra" class="st-tag" title="Пользовательское поле">польз.</span>
                             <span v-if="b.orphan" class="st-tag" title="Справочник поля, которого нет в таблице">вне таблицы</span>
                             <span v-if="b.valuesOn" class="st-head-n" title="Значений">{{ b.values.length }}</span>
@@ -277,8 +322,8 @@
                         </div>
                         <template v-if="b.valuesOn">
                             <div class="st-values">
-                                <div v-for="v in b.values" :key="v.key" class="st-row" :class="{ unused: v.count === 0 }">
-                                    <span class="st-val" :title="v.value"><span :class="{ boxed: !!effectiveStyle(b.field, v.choice).backgroundColor }" :style="effectiveStyle(b.field, v.choice)">{{ v.value }}</span></span>
+                                <div v-for="v in b.values" :key="v.key" class="st-row" :class="{ unused: v.count === 0, 'search-hit': choicesMatch.valueSet.has(b.field + '|' + v.key) }">
+                                    <span class="st-val" :title="v.value"><span :class="{ boxed: !!effectiveStyle(b.field, v.choice).backgroundColor }" :style="effectiveStyle(b.field, v.choice)"><template v-if="choicesMatch.valueSet.has(b.field + '|' + v.key)"><template v-for="(p, i) in hl(v.value)" :key="i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></template><template v-else>{{ v.value }}</template></span></span>
                                     <span class="st-n" :title="'ПК с этим значением: ' + v.count">{{ v.count }}</span>
                                     <style-controls :value="v.choice" :disabled="!canEdit" @change="setValueStyle(b.field, v, $event)"></style-controls>
                                     <span class="st-act">
@@ -348,7 +393,7 @@
                     <span v-if="historyQuery" class="clear" title="Очистить (Esc)" @click="historyQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
-                    <button class="btn" @click="loadHistory">Обновить</button>
+                    <button class="btn icon-only" @click="loadHistory" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -361,7 +406,7 @@
             <!-- Отступ сверху — вне прокрутки: над шапкой ничего не проезжает -->
             <div class="history-page">
                 <div class="history-frame" :class="{ empty: !filteredHistory.length, 'accent-head': accentHeaders.history }">
-                <div class="history-scroll">
+                <div class="history-scroll" ref="historyScroll" @scroll="onHistoryScroll">
                 <div v-if="!historyLoading && !historyError && historyItems.length === 0" class="empty-note">История пока пуста.</div>
                 <div v-else-if="historyQuery.trim() && filteredHistory.length === 0" class="empty-note">Ничего не найдено.</div>
                 <!-- Записи по дням: дата — строкой-разделителем (прилипает под шапкой),
@@ -383,9 +428,9 @@
                             <td class="h-user">{{ item.user_name || "—" }}</td>
                             <td class="h-changes">
                                 <div class="changes">
-                                    <template v-for="(change, field) in item.changes" :key="field">
+                                    <template v-for="(change, field) in orderedChanges(item.changes)" :key="field">
                                         <span class="field" :title="field">{{ fieldLabel(item.entity, field) }}</span>
-                                        <span class="ch-val"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span><span class="new">{{ displayValue(change.new) }}</span></span>
+                                        <span class="ch-val"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span></span>
                                     </template>
                                 </div>
                             </td>
@@ -398,7 +443,7 @@
         </section>
 
         <!-- ================= Карточка ПК ================= -->
-        <div v-if="card" class="card-overlay" @click.self="closeCard">
+        <div v-if="card" class="card-overlay" @click.self="onCardOverlayClick">
             <div class="card">
                 <div class="card-head">
                     <span v-if="!editingHostname" class="card-hostname">
@@ -420,11 +465,13 @@
                                 <td class="ct-label">{{ r.label }}</td>
                                 <td class="ct-value" :class="{ editing: cardEditKey === r.key }">
                                     <template v-if="r.copy">
-                                        <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)">{{ line }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
+                                        <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)"><span :class="{ 'val-chip': !!(cardValueStyle(r, line) || {}).backgroundColor }" :style="cardValueStyle(r, line)">{{ line }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                                     </template>
-                                    <template v-else>{{ r.value }}</template>
+                                    <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)">{{ r.value }}</span>
                                     <template v-if="cardEditKey === r.key">
-                                        <textarea v-if="cardEditCol(r).multiline" ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
+                                        <location-picker v-if="cardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="card.location_id" :options="locationOptions"
+                                            placeholder="Расположение…" @pick="onCardLocationPick" @cancel="cardEditKey = null"></location-picker>
+                                        <textarea v-else-if="cardEditCol(r).multiline" ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onCardEditKeydown($event, r)" @input="growCardEditor($event.target)" @blur="saveCardEdit(r)"></textarea>
                                         <input v-else ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onCardEditKeydown($event, r)" @blur="saveCardEdit(r)">
@@ -459,9 +506,9 @@
                                 {{ formatTime(item.at) }}<template v-if="item.user_name"> · {{ item.user_name }}</template>
                             </div>
                             <div class="changes">
-                                <template v-for="(change, field) in item.changes" :key="field">
+                                <template v-for="(change, field) in orderedChanges(item.changes)" :key="field">
                                     <span class="field" :title="field">{{ fieldLabel('computers', field) }}</span>
-                                    <span class="ch-val"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span><span class="new">{{ displayValue(change.new) }}</span></span>
+                                    <span class="ch-val"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span></span>
                                 </template>
                             </div>
                         </div>

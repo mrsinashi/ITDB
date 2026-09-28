@@ -55,7 +55,7 @@
     --menu-hover-text: #fff;
     --menu-muted: #d9a8a8;
 
-    /* Режим правки: полоска под панелью */
+    /* Значок-счётчик на кнопке панели */
     --edit-accent: #f0b35c;
 
     /* Таблица */
@@ -67,6 +67,19 @@
     --grid-line: #e5e5e5;
     --row-hover-bg: #f9e6ce;
     --row-hover-line: #e8d9be;
+    --cell-hover-frame: #e0c49c;    /* рамка ячейки под курсором — чуть темнее бежевой строки */
+    /* Выбранные строки (Ctrl/Shift+клик, Ctrl+A): синий слой поверх фона ячейки,
+       поэтому видно и на ячейках с цветом из справочника */
+    --sel-base: rgb(38, 110, 220);
+    --search-hit-bg: #fff6d6;       /* найденное поиском в Справочниках */
+    --search-current: #e9b949;  /* синий выделения; слой — он же с прозрачностью */
+    --row-sel-tint: rgba(38, 110, 220, 0.17);
+    --row-sel-tint-hover: rgba(38, 110, 220, 0.27);
+    --row-sel-line: #b9cff0;
+    --row-sel-frame: #93b4e4;
+    /* Зажат Alt: значение, которое скопирует клик */
+    --copy-hint-bg: rgba(0, 0, 0, 0.12);        /* затемнение — на любом фоне */
+    --copy-hint-done: rgba(30, 140, 30, 0.28);
     --dup-bg: #ffd6d6;
     --saved-bg: #d5efd5;
     --sticky-shadow: 3px 0 4px rgba(0, 0, 0, 0.12);
@@ -469,11 +482,6 @@ body {
     white-space: nowrap;
 }
 
-/* Режим правки: цветная линия по низу панели (без сдвига вёрстки) */
-.toolbar.editing-on {
-    box-shadow: inset 0 -2px 0 var(--edit-accent);
-}
-
 .toolbar .tb-left {
     grid-column: 1;
     justify-self: start;
@@ -581,6 +589,23 @@ body.ui-light-toolbar .toolbar .tb-error {
 }
 .toolbar .btn.icon-only {
     padding: 3px 6px;
+}
+/* Кнопки-значки панели — квадратные, значок крупнее */
+.toolbar .btn.icon-only .ico {
+    width: 15px;
+    height: 15px;
+    vertical-align: -3px;
+}
+/* Кнопка-значок с меню: маленькая стрелка справа */
+.toolbar .btn.icon-only .caret {
+    margin-left: 3px;
+    vertical-align: 1px;
+}
+/* Значки в пунктах выпадающего меню */
+.dropdown button .ico {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
 }
 
 /* Число скрытых столбцов — значок в углу кнопки, ширина кнопки не меняется */
@@ -823,6 +848,96 @@ select.input {
 }
 
 /* ============================================================
+   Новый компьютер и выбор расположения
+   ============================================================ */
+
+/* Строка «Новый компьютер» под панелью — как форма узла в дереве */
+.add-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: var(--surface-head);
+    border-bottom: 1px solid var(--gray-line);
+    font-size: 12px;
+    flex: 0 0 auto;
+}
+.add-bar .ab-title {
+    color: var(--text-secondary);
+}
+.add-bar .input {
+    padding: 2px 6px;
+}
+.add-bar .ab-loc .input {
+    width: 440px;
+    box-sizing: border-box;
+}
+.add-bar .ab-seat {
+    width: 60px;
+}
+.add-bar .ab-host {
+    width: 140px;
+}
+.add-bar .ab-ip {
+    width: 120px;
+}
+.add-bar .btn {
+    padding: 2px 9px;
+}
+.add-bar .btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+.add-bar .ab-error {
+    color: var(--danger);
+}
+
+.loc-pick {
+    display: inline-block;
+}
+.loc-pick input {
+    text-overflow: ellipsis;
+}
+/* Список узлов — в манере выпадающих меню панели */
+.loc-list {
+    position: fixed;
+    z-index: 200;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 3px;
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    color: var(--menu-text);
+    font-size: 12px;
+}
+.loc-list.up {
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+.loc-list .ll-item {
+    padding: 3px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+.loc-list .ll-item.active {
+    background: var(--menu-hover-bg);
+    color: var(--menu-hover-text);
+}
+/* Текущее расположение ПК */
+.loc-list .ll-item.current {
+    font-weight: 600;
+}
+.loc-list .ll-empty {
+    padding: 3px 9px;
+    color: var(--menu-muted);
+}
+
+/* ============================================================
    Таблица
    ============================================================ */
 
@@ -887,7 +1002,15 @@ select.input {
     white-space: pre-line;
     overflow-wrap: break-word;
     color: var(--text);
-    --grid-shadow: inset -1px 0 0 var(--grid-line), inset 0 -1px 0 var(--grid-line);
+    /* Линии сетки: у каждой ячейки — справа (--v-line) и снизу (--h-line).
+       Состояния строк меняют только эти цвета. */
+    --v-line: var(--grid-line);
+    --h-line: var(--grid-line);
+    /* Сколько синего подмешать к линии залитой ячейки (см. cellTdStyle):
+       своя строка / строка ниже выбраны — как слой выделения */
+    --self-a: 0%;
+    --below-a: 0%;
+    --grid-shadow: inset -1px 0 0 var(--v-line), inset 0 -1px 0 var(--h-line);
     box-shadow: var(--grid-shadow);
 }
 
@@ -902,14 +1025,10 @@ select.input {
 .data-table td.link span {
     color: var(--host-color);
 }
-/* Подчёркивание — только в режиме просмотра: там клик открывает карточку.
-   В режиме правки HOSTNAME — обычная ячейка (двойной клик — правка). */
-body.ui-dark-hostname .data-table:not(.edit-mode) td.link:hover span {
+/* Клик по HOSTNAME открывает карточку */
+body.ui-dark-hostname .data-table td.link:hover span {
     text-decoration: underline;
     text-underline-offset: 2px;
-}
-.data-table.edit-mode td.link {
-    cursor: default;
 }
 
 /* Значение сохраняется — уже новое, но приглушено */
@@ -919,29 +1038,95 @@ body.ui-dark-hostname .data-table:not(.edit-mode) td.link:hover span {
 
 .data-table tbody tr.row-hover td {
     background: var(--row-hover-bg);
-    --grid-shadow: inset -1px 0 0 var(--row-hover-line), inset 0 0 0 var(--row-hover-line);
-}
-.data-table tbody tr:hover td.dup-red {
-    --grid-shadow: inset -1px 0 0 var(--grid-line), inset 0 -1px 0 var(--grid-line);
+    --v-line: var(--row-hover-line);
+    --h-line: transparent;
 }
 
-.dup-red {
-    position: relative;
-    background-color: var(--dup-bg) !important;
-    border-right-color: var(--dup-bg) !important;
-    border-bottom-color: var(--dup-bg) !important;
+
+/* Выбранные строки. Синий — полупрозрачный слой (background-image) поверх
+   цвета ячейки: у ячеек с фоном из справочника он остаётся виден.
+   Под курсором выбранная строка — не бежевая, а синяя темнее. */
+.data-table tbody tr.row-selected td {
+    background-image: linear-gradient(var(--row-sel-tint), var(--row-sel-tint));
+    --v-line: var(--row-sel-line);
+    --h-line: var(--row-sel-line);
 }
-.dup-red::before {
+/* Синяя линия и над выбранными: верхняя линия строки — это нижняя линия
+   строки над ней */
+.data-table tbody tr:has(+ tr.row-selected) td {
+    --h-line: var(--row-sel-line);
+    --below-a: 17%;
+}
+.data-table tbody tr:has(+ tr.row-selected.row-hover) td {
+    --below-a: 27%;
+}
+.data-table tbody tr.row-selected td {
+    --self-a: 17%;
+}
+.data-table tbody tr.row-selected.row-hover td {
+    --self-a: 27%;
+}
+.data-table tbody tr.row-selected.row-hover td {
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--row-sel-tint-hover), var(--row-sel-tint-hover));
+}
+
+/* Ячейка под курсором — рамка точно по линиям сетки вокруг неё: левая
+   и верхняя линии сетки лежат в соседних ячейках (у каждой ячейки линии
+   справа и снизу), поэтому рамка начинается на 1px левее и выше.
+   Цвет — в тон строки (--hf): бежевая строка — бежевая темнее, выбранная — синяя.
+   Цвета непрозрачные: левая линия рисуется дважды (см. ниже). */
+.data-table tbody tr {
+    --hf: var(--cell-hover-frame);
+}
+.data-table tbody tr.row-selected {
+    --hf: var(--row-sel-frame);
+}
+.data-table tbody td:hover::after {
     content: "";
     position: absolute;
     top: -1px;
     left: -1px;
     right: 0;
     bottom: 0;
-    border-top: 1px solid var(--dup-bg);
-    border-left: 1px solid var(--dup-bg);
+    border: 1px solid var(--hf);
+    pointer-events: none;
+    z-index: 1;
+}
+/* Левую линию рамки перекрывает липкий столбец слева (IP над VACUUM),
+   поэтому её рисует и сам сосед — своей линией справа. */
+.data-table tbody td:has(+ td:hover) {
+    box-shadow: inset -1px 0 0 var(--hf), var(--grid-shadow);
+}
+.data-table.sticky-stuck tbody td.sticky-edge:has(+ td:hover) {
+    box-shadow: inset -1px 0 0 var(--hf), var(--grid-shadow), var(--sticky-shadow);
+}
+.data-table tbody td.editing::after {
+    display: none;
+}
+/* Зажат Alt: курсор обычный, значение, которое скопирует клик (в многострочной
+   ячейке — одна строка), затемнено. Слой поверх таблицы: над синим выделением
+   и цветами справочника. Значка нет — значения часто занимают всю ячейку. */
+.data-table.alt-copy tbody td,
+.data-table.alt-copy tbody td.link {
+    cursor: default;
+}
+body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
+    text-decoration: none;
+}
+.copy-hint {
+    position: fixed;
+    z-index: 30;
+    box-sizing: border-box;
+    border-radius: 3px;
+    background: var(--copy-hint-bg);
     pointer-events: none;
 }
+.copy-hint.done {
+    background: var(--copy-hint-done);
+}
+
+/* Дубль — красная заливка (цвет задаёт cellTdStyle, как у цветов справочника) */
 
 /* Ячейка только что сохранена: короткая зелёная вспышка.
    Зелёный — это слой поверх фона ячейки (inset-тень рисуется над фоном,
@@ -977,6 +1162,13 @@ body.ui-dark-hostname .data-table:not(.edit-mode) td.link:hover span {
 }
 .data-table tbody tr.row-hover td.sticky {
     background: var(--row-hover-bg);
+}
+.data-table tbody tr.row-selected td.sticky {
+    background-image: linear-gradient(var(--row-sel-tint), var(--row-sel-tint));
+}
+.data-table tbody tr.row-selected.row-hover td.sticky {
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--row-sel-tint-hover), var(--row-sel-tint-hover));
 }
 .data-table.sticky-stuck td.sticky-edge,
 .data-table.sticky-stuck th.sticky-edge {
@@ -1014,7 +1206,7 @@ body.ui-dark-hostname .data-table:not(.edit-mode) td.link:hover span {
 .data-table td.cell-editing:not(.sticky) {
     position: relative;
 }
-.data-table td:not(.sticky):not(.checkbox-col) {
+.data-table td:not(.sticky) {
     position: relative;
 }
 .data-table td.editing {
@@ -1038,47 +1230,6 @@ body.ui-dark-hostname .data-table:not(.edit-mode) td.link:hover span {
     overflow: hidden;
     resize: none;
     white-space: pre-line;
-}
-
-/* Чекбоксы выделения. Ширина столбца — CSS-переменная --cb-w,
-   app.js плавно меняет её 0 ↔ 30px при входе/выходе из режима правки. */
-.data-table {
-    --cb-w: 0px;
-}
-.data-table col.cb-col {
-    width: var(--cb-w);
-}
-.data-table .checkbox-col {
-    padding: 0 !important;
-    text-align: center;
-    line-height: 0;
-    overflow: hidden;
-}
-thead .checkbox-col {
-    position: sticky;
-    left: 0;
-    z-index: 6; /* как у липких th: HOSTNAME идёт позже в DOM и перекрывает тень чекбоксов */
-    background: var(--grid-head-bg);
-}
-.data-table td.checkbox-col {
-    position: sticky;
-    left: 0;
-    z-index: 3;
-    background: var(--bg);
-}
-/* Режим правки выключен и столбец свернулся — ни чекбоксов, ни линий */
-.data-table.cb-hidden .checkbox-col {
-    visibility: hidden;
-    box-shadow: none;
-}
-/* Тень, пока под чекбоксами едут обычные столбцы (снимается, когда приклеились HOSTNAME/IP) */
-.data-table.checkbox-stuck .checkbox-col {
-    box-shadow: var(--grid-shadow), var(--sticky-shadow);
-}
-.checkbox-col input[type="checkbox"] {
-    display: block;
-    margin: 0 auto;
-    cursor: pointer;
 }
 
 /* ============================================================
@@ -1299,6 +1450,10 @@ thead .checkbox-col {
     line-height: 16px;
     text-align: center;
 }
+/* Строка «История» под курсором бежевая — блочок в тон, как числа в дереве */
+.card-section.toggle-sec:hover .sec-count {
+    background: var(--row-hover-chip);
+}
 .sec-chevron {
     width: 14px;
     height: 14px;
@@ -1312,6 +1467,18 @@ thead .checkbox-col {
 
 .card-sec-body {
     padding: 0 10px 6px;
+}
+/* Под VACUUM строки не подсвечиваются бежевым — значок серый */
+.card-sec-body .copy-ico {
+    color: var(--text-muted);
+}
+/* Значение с фоном из Справочников — блочком, как на странице Справочников:
+   край блочка там же, где начинается обычный текст; фон — поверх подсветки строки */
+.card-table .val-chip {
+    display: inline-block;
+    padding: 0 5px;
+    border-radius: var(--radius);
+    line-height: 17px;
 }
 
 .card-history {
@@ -1443,6 +1610,35 @@ thead .checkbox-col {
     align-items: center;
     padding-left: 8px;
 }
+/* Развернуть / свернуть всё — стрелки в шапке, справа от «Расположение» */
+.tg-head .tg-tools {
+    display: flex;
+    gap: 1px;
+    margin-left: auto;
+    margin-right: 4px;
+}
+.tg-head .tg-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 18px;
+    border-radius: var(--radius);
+    color: inherit;
+    opacity: 0.75;
+    cursor: pointer;
+}
+.tg-head .tg-btn svg {
+    width: 13px;
+    height: 13px;
+}
+.tg-head .tg-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.08);
+}
+.tree-grid.accent-head .tg-head .tg-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
 .tg-head .tg-count {
     flex: 0 0 46px;
     display: flex;
@@ -1481,7 +1677,7 @@ thead .checkbox-col {
 /* Текущий адрес закрепляется под шапкой, пока видны его строки */
 .node-row.kind-building {
     position: sticky;
-    top: 24px;
+    top: calc(24px + var(--tf-h, 0px)); /* под шапкой и формой добавления, если открыта */
     z-index: 3;
     background: var(--gray-group);
     border-top: 1px solid var(--group-line);
@@ -1667,6 +1863,12 @@ thead .checkbox-col {
     border-bottom: 1px solid var(--grid-line);
     font-size: 12px;
 }
+/* Форма с панели («+» → что добавить) — прилипает под шапкой */
+.tree-form.tf-top {
+    position: sticky;
+    top: 24px;
+    z-index: 4;
+}
 /* «Куда» — отдельной строкой: путь бывает длинным */
 .tree-form .tf-parent {
     flex: 1 1 100%;
@@ -1687,6 +1889,16 @@ thead .checkbox-col {
 }
 .tree-form .btn {
     padding: 2px 9px;
+}
+.tree-form .btn.icon-only,
+.add-bar .btn.icon-only {
+    padding: 2px 6px;
+    line-height: 0;
+}
+.tree-form .btn .ico,
+.add-bar .btn .ico {
+    width: 14px;
+    height: 14px;
 }
 .tree-form .tf-buttons {
     display: flex;
@@ -1817,10 +2029,15 @@ thead .checkbox-col {
     z-index: 2;
     padding: 3px 8px;
     background: var(--gray-group);
-    border-bottom: 1px solid var(--gray-line);
+    border-bottom: 1px solid var(--group-line);
     font-weight: 600;
     color: var(--text-strong);
     font-variant-numeric: tabular-nums;
+}
+/* Линия над строкой дня — нижняя линия последней записи прошлого дня:
+   того же цвета, что и под строкой дня (как у адресов в дереве) */
+.history-table tbody tr:last-child td {
+    border-bottom-color: var(--group-line);
 }
 /* Число записей за день — блочком */
 .h-day-count {
@@ -1915,6 +2132,27 @@ thead .checkbox-col {
 .choices-page {
     padding: 10px 12px 30px;
 }
+/* Поиск в Справочниках: совпавшие значения — жёлтым, слова — как в Дереве */
+.st-row.search-hit {
+    background: var(--search-hit-bg);
+}
+.st-row.search-hit:hover {
+    background: var(--row-hover-bg);
+}
+.st-title mark,
+.st-val mark {
+    background: #fbe3a8;
+    color: inherit;
+    border-radius: 2px;
+}
+.choices-page.accent-head .st-title mark {
+    background: rgba(255, 255, 255, 0.3);
+}
+/* Текущий найденный раздел (Enter — следующий) — обводка */
+.st-block.search-current {
+    box-shadow: 0 0 0 2px var(--search-current);
+    border-radius: var(--radius);
+}
 
 /* Блоки столбцов — в порядке таблицы, слева направо и сверху вниз.
    Манера главной таблицы: серая шапка, линии сетки, плотные строки. */
@@ -1979,21 +2217,19 @@ thead .checkbox-col {
 .st-val {
     flex: 1;
     min-width: 0;
-    /* запас слева под блочок: обрезка по его краю, а не по тексту */
-    padding-left: 5px;
-    margin-left: -5px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     color: var(--text);
 }
-/* Значение с цветом фона — маленьким цветным блочком */
+/* Значение с цветом фона — маленьким цветным блочком. Край блочка — там же,
+   где начинается обычный текст: один отступ от края для всех значений
+   (так же в карточке ПК, .val-chip) */
 .st-val span.boxed {
     display: inline-block;
     max-width: 100%;
     box-sizing: border-box;
     padding: 0 5px;
-    margin-left: -5px;
     border-radius: var(--radius);
     line-height: 17px;
     overflow: hidden;
