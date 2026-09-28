@@ -75,6 +75,7 @@ RESERVED_FIELD_KEYS = (
         "extra",
         "version",
         "updated_at",
+        "archived",
     }
 )
 
@@ -464,12 +465,30 @@ def set_vacuum_logins(session, computer, value):
     return vacuum_text(old_logins), vacuum_text(new_logins)
 
 
+ARCHIVED_FILTERS = ("no", "yes", "all")
+
+
 @router.get("/computers")
-def list_computers():
+def list_computers(archived: str = "no"):
+    """Строки таблицы. archived: no — рабочие ПК (по умолчанию),
+    yes — только архив, all — все (у строки есть признак archived)."""
+    if archived not in ARCHIVED_FILTERS:
+        raise HTTPException(
+            status_code=400,
+            detail="archived: no, yes или all.",
+        )
+
     session = SessionLocal()
 
     try:
-        computers = session.query(Computer).all()
+        query = session.query(Computer)
+
+        if archived == "no":
+            query = query.filter(Computer.archived == False)
+        elif archived == "yes":
+            query = query.filter(Computer.archived == True)
+
+        computers = query.all()
         locations = session.query(Location).all()
 
         locations_by_id = {location.id: location for location in locations}
@@ -583,6 +602,7 @@ def list_computers():
                     "label": extra.get("Метка"),
                     "status": computer.status,
                     "note": computer.note,
+                    "archived": computer.archived,
                     "version": computer.version,
                     "updated_at": computer.updated_at,
                 }
@@ -683,6 +703,92 @@ def create_computer(
         raise HTTPException(
             status_code=400,
             detail=f"Не удалось добавить компьютер: {e}",
+        )
+
+    finally:
+        session.close()
+
+
+@router.post("/computers/archive")
+def archive_computers(
+    payload: dict = Body(...),
+    user=Depends(require_editor),
+):
+    """В архив или обратно: {"ids": [...], "archived": true/false}.
+    ПК уже в нужном состоянии пропускаются. История — запись на каждый ПК."""
+    session = SessionLocal()
+
+    try:
+        ids = payload.get("ids")
+        archived = payload.get("archived")
+
+        if not isinstance(ids, list) or not ids:
+            raise HTTPException(
+                status_code=400,
+                detail="Не выбраны компьютеры.",
+            )
+
+        if not isinstance(archived, bool):
+            raise HTTPException(
+                status_code=400,
+                detail="archived должен быть true или false.",
+            )
+
+        try:
+            ids = {int(value) for value in ids}
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="ids должны быть числами.",
+            )
+
+        computers = (
+            session.query(Computer)
+            .filter(Computer.id.in_(ids))
+            .with_for_update()
+            .all()
+        )
+
+        if len(computers) != len(ids):
+            raise HTTPException(
+                status_code=404,
+                detail="Часть компьютеров не найдена. Обнови таблицу.",
+            )
+
+        now = datetime.now(timezone.utc)
+        changed = []
+
+        for computer in computers:
+            if computer.archived == archived:
+                continue
+
+            session.add(
+                History(
+                    entity="computers",
+                    entity_id=computer.id,
+                    user_name=user["login"],
+                    changes={"archived": {"old": computer.archived, "new": archived}},
+                )
+            )
+
+            computer.archived = archived
+            computer.version = (computer.version or 1) + 1
+            computer.updated_at = now
+            changed.append(computer.id)
+
+        session.commit()
+
+        return {"ok": True, "changed": sorted(changed)}
+
+    except HTTPException:
+        session.rollback()
+        raise
+
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Не удалось изменить архив: {e}",
         )
 
     finally:

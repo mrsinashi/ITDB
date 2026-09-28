@@ -91,6 +91,7 @@ def locations_tree():
 
         computer_counts = (
             session.query(Computer.location_id, func.count(Computer.id))
+            .filter(Computer.archived == False)
             .group_by(Computer.location_id)
             .all()
         )
@@ -103,7 +104,7 @@ def locations_tree():
 
         unlocated = (
             session.query(func.count(Computer.id))
-            .filter(Computer.location_id.is_(None))
+            .filter(Computer.location_id.is_(None), Computer.archived == False)
             .scalar()
         ) or 0
 
@@ -368,10 +369,11 @@ def archive_location(
 
         computers = (
             session.query(func.count(Computer.id))
-            .filter(Computer.location_id == location.id)
+            .filter(Computer.location_id == location.id, Computer.archived == False)
             .scalar()
         )
 
+        # ПК из архива узел не держат: у них остаётся прежнее расположение
         if computers:
             raise HTTPException(
                 status_code=400,

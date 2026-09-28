@@ -68,16 +68,7 @@ def get_export_columns():
     return COLUMNS[:status_index] + extra_columns + COLUMNS[status_index:]
 
 
-@router.get("/computers.xlsx")
-def export_computers():
-    data = list_computers()
-    rows = data.get("rows", [])
-    columns = get_export_columns()
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Компьютеры"
-
+def fill_sheet(ws, rows, columns):
     header_font = Font(bold=True)
     wrap_alignment = Alignment(wrap_text=True, vertical="top")
 
@@ -96,11 +87,26 @@ def export_computers():
 
     ws.freeze_panes = "A2"
 
+
+@router.get("/computers.xlsx")
+def export_computers(archive: bool = False):
+    """Рабочие ПК; archive=true — ещё лист «Архив» с ПК из архива."""
+    columns = get_export_columns()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Компьютеры"
+    fill_sheet(ws, list_computers(archived="no")["rows"], columns)
+
+    if archive:
+        fill_sheet(wb.create_sheet("Архив"), list_computers(archived="yes")["rows"], columns)
+
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
 
-    filename = f"itdb_computers_{date.today().isoformat()}.xlsx"
+    suffix = "_archive" if archive else ""
+    filename = f"itdb_computers{suffix}_{date.today().isoformat()}.xlsx"
 
     return StreamingResponse(
         buffer,

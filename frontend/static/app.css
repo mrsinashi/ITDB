@@ -1298,6 +1298,21 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     opacity: 1;
 }
 
+/* Отметка «в архиве» рядом с именем: блочок в тон меню */
+.card-hostname .card-archived {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0 5px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 16px;
+    vertical-align: 2px;
+    color: var(--nav-text);
+    border: 1px solid currentColor;
+    border-radius: var(--radius);
+    cursor: default;
+}
+
 .card-hostname-edit {
     display: flex;
     align-items: center;

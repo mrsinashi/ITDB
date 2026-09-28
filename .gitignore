@@ -9,3 +9,4 @@ DESIGN.md
 CONTEXT.txt
 mkcontext.sh
 apply_context.*
+.pytest_cache/

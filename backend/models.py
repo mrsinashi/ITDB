@@ -65,6 +65,9 @@ class Computer(Base):
     extra = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     note = Column(Text, nullable=True)
 
+    # Удаления нет: ПК убирается в архив (скрыт из таблицы, дерева, выгрузки)
+    archived = Column(Boolean, nullable=False, server_default="false")
+
     version = Column(Integer, nullable=False, server_default="1")
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

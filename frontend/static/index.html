@@ -77,9 +77,13 @@
                         </button>
                         <div v-if="openMenu === 'selection'" class="dropdown attached">
                             <template v-if="canEdit">
-                                <button @click="startMove">Переместить</button>
-                                <button @click="startReplace">Заменить</button>
-                                <button @click="startSwap">Поменять местами</button>
+                                <template v-if="!showArchive">
+                                    <button @click="startMove">Переместить</button>
+                                    <button @click="startReplace">Заменить</button>
+                                    <button @click="startSwap">Поменять местами</button>
+                                    <button @click="setArchived(selectedRows.slice(), true)">В архив</button>
+                                </template>
+                                <button v-else @click="setArchived(selectedRows.slice(), false)">Вернуть из архива</button>
                                 <div class="dd-sep"></div>
                             </template>
                             <button @click="clearSelection">Снять выделение</button>
@@ -116,6 +120,12 @@
                         </div>
                     </span>
                     <span class="tb-divider"></span>
+                    <!-- Архив: без выбранных строк — показать архив / вернуться к таблице,
+                         с выбранными — убрать их в архив (в архиве — вернуть) -->
+                    <button class="btn icon-only" :class="{ active: showArchive }" :disabled="archiveSaving" @click="onArchiveButton" :title="archiveButtonTitle">
+                        <svg v-if="archiveAction === 'restore'" class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/></svg>
+                        <svg v-else class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+                    </button>
                     <!-- Добавление и выгрузка — у каждого своя кнопка с меню:
                          потом добавлять можно будет не только компьютер,
                          выгружать — не только в Excel -->
@@ -132,7 +142,8 @@
                             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span class="caret">▼</span>
                         </button>
                         <div v-if="openMenu === 'export'" class="dropdown right attached">
-                            <button @click="closeMenus(); downloadExport()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel</button>
+                            <button @click="closeMenus(); downloadExport(false)" title="Рабочие ПК, без архива"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel</button>
+                            <button @click="closeMenus(); downloadExport(true)" title="Архив — на отдельном листе"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel (С архивом)</button>
                         </div>
                     </span>
                 </div>
@@ -449,6 +460,7 @@
                     <span v-if="!editingHostname" class="card-hostname">
                         <span :class="{ 'copy-val': card.hostname }" :title="card.hostname ? 'Скопировать' : null" @click="card.hostname && copyText(card.hostname)">{{ card.hostname || "Без имени" }}<svg v-if="card.hostname" class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
                         <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startEditHostname">✎</span>
+                        <span v-if="card.archived" class="card-archived" title="Компьютер в архиве: его нет в таблице, дереве и выгрузке">в архиве</span>
                     </span>
                     <span v-else class="card-hostname-edit">
                         <input ref="hostnameInput" v-model="cardHostname" @keydown.enter="saveHostname" @blur="cancelEditHostname">

@@ -110,6 +110,9 @@ function buildDuplicateSets(rows) {
     }
 
     rows.forEach(function (row) {
+        if (row.archived) {
+            return; // ПК из архива дублей не создают
+        }
         splitMulti(row.ip).forEach(function (value) { add("ip", value); });
         splitMulti(row.mac).forEach(function (value) { add("mac", value); });
         if (row.hostname) add("hostname", row.hostname);
@@ -261,6 +264,7 @@ const FIELD_LABELS = Object.assign(
         temp_note: "Врем. примечание",
         location_id: "Расположение",
         seat_sort: "Порядок строки",
+        archived: "Архив",
         created: "Создан"
     }
 );
@@ -458,8 +462,10 @@ const app = Vue.createApp({
             // Таблица
             tableLoading: true,
             tableError: "",
-            rowCount: 0,
             quickFilter: "",
+            // Таблица показывает архив (кнопка «Архив» на панели)
+            showArchive: false,
+            archiveSaving: false,
             rows: [],
             hiddenColumns: loadJson(HIDDEN_COLUMNS_KEY, []),
             searchHidden: loadJson(SEARCH_HIDDEN_KEY, false),
@@ -606,10 +612,49 @@ const app = Vue.createApp({
         },
 
         countText() {
+            const total = this.showArchive ? "В архиве: " : "Всего: ";
             if (this.displayedCount === this.rowCount) {
-                return "Всего: " + this.rowCount;
+                return total + this.rowCount;
             }
-            return "Показано: " + this.displayedCount + " из " + this.rowCount;
+            return "Показано: " + this.displayedCount + " из " + this.rowCount + (this.showArchive ? " в архиве" : "");
+        },
+
+        // В this.rows — все ПК, и рабочие, и из архива (признак archived)
+        activeRows() {
+            return this.rows.filter(function (row) { return !row.archived; });
+        },
+
+        // Строки текущего режима таблицы: рабочие или архив
+        modeRows() {
+            const archive = this.showArchive;
+            return this.rows.filter(function (row) { return !!row.archived === archive; });
+        },
+
+        rowCount() {
+            return this.modeRows.length;
+        },
+
+        // Кнопка «Архив»: с выбранными строками — убрать в архив / вернуть,
+        // без выбора — показать архив / вернуться к таблице
+        archiveAction() {
+            if (this.canEdit && this.selectedRows.length) {
+                return this.showArchive ? "restore" : "archive";
+            }
+            return "toggle";
+        },
+
+        archiveButtonTitle() {
+            const n = this.selectedRows.length;
+            if (this.archiveAction === "archive") {
+                return "В архив: выбранные (" + n + ")";
+            }
+            if (this.archiveAction === "restore") {
+                return "Вернуть из архива: выбранные (" + n + ")";
+            }
+            if (this.showArchive) {
+                return "Архив открыт. Нажми, чтобы вернуться к таблице";
+            }
+            return "Архив: показать ПК из архива" + (this.canEdit ? ". Если сначала выбрать строки — уберёт их в архив" : "");
         },
 
         selectedSet() {
@@ -663,7 +708,7 @@ const app = Vue.createApp({
         },
 
         filteredRows() {
-            let rows = this.rows;
+            let rows = this.modeRows;
             if (this.locationFilter) {
                 const ids = this.locationFilter.ids;
                 rows = rows.filter(function (row) {
@@ -969,7 +1014,7 @@ const app = Vue.createApp({
         // Значения — из справочника и из самих данных, с числом ПК.
         styleBlocks() {
             const byField = this.choicesByField;
-            const rows = this.rows;
+            const rows = this.activeRows;
             const collect = (field, multiline, subnet) => {
                 const map = new Map();
                 (byField[field] || []).forEach(function (ch) {
@@ -1207,13 +1252,12 @@ const app = Vue.createApp({
             this.startLoading();
             this.tableError = "";
             try {
-                const response = await apiFetch("/api/computers");
+                const response = await apiFetch("/api/computers?archived=all");
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
                 const data = await response.json();
                 this.rows = data.rows || [];
-                this.rowCount = data.total || this.rows.length;
                 duplicateSets = buildDuplicateSets(this.rows);
                 this.dupVersion++;
                 this.recalcWidths();
@@ -1322,7 +1366,7 @@ const app = Vue.createApp({
             if (col.field === this.lastStickyField) {
                 cls["sticky-edge"] = true;
             }
-            if (DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
+            if (!row.archived && DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
                 cls["dup-red"] = true;
             }
             if (this.isEditing(row, col)) {
@@ -1360,7 +1404,7 @@ const app = Vue.createApp({
         // Цвет заливки ячейки: дубль — красный, иначе фон значения из
         // Справочников поверх фона столбца; null — без заливки
         cellFillOf(row, col) {
-            if (DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
+            if (!row.archived && DUP_FIELDS.indexOf(col.field) !== -1 && hasDuplicateValue(row[col.field], col.field)) {
                 return "var(--dup-bg)";
             }
             let fill = null;
@@ -1724,6 +1768,8 @@ const app = Vue.createApp({
                 this.closeNewComputer();
                 return;
             }
+            // Новый ПК появится среди рабочих — из архива уходим
+            this.setArchiveView(false);
             this.ensureTree();
             // По умолчанию — узел, выбранный фильтром из дерева
             const locationId = this.locationFilter ? this.locationFilter.id : null;
@@ -1752,7 +1798,7 @@ const app = Vue.createApp({
         nextSeatNo(locationId) {
             let max = 0;
             this.rows.forEach(function (row) {
-                if (row.location_id === locationId && Number(row.seat_no) > max) {
+                if (!row.archived && row.location_id === locationId && Number(row.seat_no) > max) {
                     max = Number(row.seat_no);
                 }
             });
@@ -1828,6 +1874,72 @@ const app = Vue.createApp({
                 return changes;
             }
             return Object.assign({ created: changes.created }, changes);
+        },
+
+        // ---------- Архив ----------
+
+        onArchiveButton() {
+            if (this.archiveAction === "toggle") {
+                this.setArchiveView(!this.showArchive);
+            } else {
+                this.setArchived(this.selectedRows.slice(), this.archiveAction === "archive");
+            }
+        },
+
+        setArchiveView(on) {
+            if (this.showArchive === on) {
+                return;
+            }
+            this.showArchive = on;
+            // Выбранные строки другого режима не видны — снимаем
+            this.selectedRows = [];
+            this.selectAnchorId = null;
+            if (on) {
+                this.closeNewComputer();
+            }
+            this.cancelEdit();
+            this.$nextTick(() => {
+                if (this.$refs.tableWrap) {
+                    this.$refs.tableWrap.scrollTop = 0;
+                }
+            });
+        },
+
+        async setArchived(ids, archived) {
+            this.closeMenus();
+            if (!ids.length || this.archiveSaving) {
+                return;
+            }
+            this.archiveSaving = true;
+            try {
+                const response = await apiFetch("/api/computers/archive", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids: ids, archived: archived })
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                let text;
+                if (ids.length === 1) {
+                    const row = this.rows.find(function (r) { return r.id === ids[0]; });
+                    const name = (row && row.hostname) || "компьютер без имени";
+                    text = (archived ? "В архиве: " : "Возвращён из архива: ") + name;
+                } else {
+                    text = (archived ? "В архив убрано ПК: " : "Возвращено из архива ПК: ") + ids.length;
+                }
+                this.selectedRows = [];
+                this.selectAnchorId = null;
+                await this.loadTable();
+                if (this.card && ids.indexOf(this.card.id) !== -1) {
+                    this.refreshCardRow();
+                    this.reloadCardHistory(this.card.id);
+                }
+                this.toast(text, "success");
+            } catch (e) {
+                this.toastError("Не удалось: " + (e.message || e));
+            }
+            this.archiveSaving = false;
         },
 
         startMove() {
@@ -2809,6 +2921,7 @@ const app = Vue.createApp({
             };
             walk(node);
             const entry = this.treeIndex[node.id];
+            this.setArchiveView(false);
             this.locationFilter = {
                 id: node.id,
                 path: entry ? entry.path : (node.name || node.code || ""),
@@ -3584,15 +3697,19 @@ const app = Vue.createApp({
             if (value === null || value === undefined) {
                 return "—";
             }
+            if (typeof value === "boolean") {
+                return value ? "да" : "нет";
+            }
             if (typeof value === "object") {
                 return JSON.stringify(value);
             }
             return String(value);
         },
 
-        async downloadExport() {
+        // withArchive — ещё лист «Архив» с ПК из архива
+        async downloadExport(withArchive) {
             try {
-                const response = await apiFetch("/api/export/computers.xlsx");
+                const response = await apiFetch("/api/export/computers.xlsx" + (withArchive ? "?archive=true" : ""));
                 if (!response.ok) {
                     this.toastError("Не удалось выгрузить: " + (await this.errorText(response)));
                     return;
