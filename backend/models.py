@@ -174,7 +174,11 @@ class User(Base):
     )
 
     id = Column(Integer, primary_key=True)
+    # Как ввели (Ivanov.P); вход и занятость — без учёта регистра (индекс
+    # uq_users_login_lower по lower(login), миграция c3e8f1a7d2b5)
     login = Column(Text, nullable=False)
+    full_name = Column(Text)   # ФИО: «Иванов Иван Иванович»; на панели — «Иванов И.И.»
+    position = Column(Text)    # должность
     password_hash = Column(Text, nullable=False)
     role = Column(Text, nullable=False, server_default="reader")
     archived = Column(Boolean, nullable=False, server_default="false")

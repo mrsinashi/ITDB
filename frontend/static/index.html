@@ -35,8 +35,8 @@
                     </div>
                 </span>
                 <span class="dropdown-wrap nav-pop" ref="userWrap">
-                    <a href="#" class="nav-user" ref="navUser" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')">
-                        {{ user.login }}
+                    <a href="#" class="nav-user" ref="navUser" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')" :title="navUserTitle">
+                        {{ navUserName }}
                     </a>
                     <div v-if="openMenu === 'user'" class="nav-card user-card">
                         <div class="uc-head">
@@ -57,11 +57,37 @@
                                 <button class="btn btn-primary" :disabled="ownPassword.saving" @click="submitOwnPassword">Сохранить</button>
                             </div>
                         </div>
+                        <!-- Свои логин, ФИО, должность — тоже прямо в меню -->
+                        <div v-else-if="ownProfile" class="uc-form" @keydown.enter.prevent="submitOwnProfile">
+                            <label class="uc-label">Логин</label>
+                            <input ref="pf-login" class="input" v-model="ownProfile.login" spellcheck="false" autocomplete="off"
+                                title="Латинские буквы (большие и маленькие), цифры, точка, дефис, подчёркивание. Входить можно в любом регистре">
+                            <label class="uc-label">ФИО</label>
+                            <input class="input" v-model="ownProfile.full_name" placeholder="Фамилия Имя Отчество" autocomplete="off">
+                            <label class="uc-label">Должность</label>
+                            <input class="input" v-model="ownProfile.position" autocomplete="off">
+                            <div v-if="ownProfile.error" class="uc-error">{{ ownProfile.error }}</div>
+                            <div class="uc-buttons">
+                                <button class="btn" @click="ownProfile = null">Отмена</button>
+                                <button class="btn btn-primary" :disabled="ownProfile.saving" @click="submitOwnProfile">Сохранить</button>
+                            </div>
+                        </div>
                         <div v-else class="uc-foot">
-                            <button class="btn" @click="openOwnPassword" title="Сменить свой пароль">
-                                <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.6 8.4 13.5 2.5M11.5 4.5l1.5 1.5M10 6l1.2 1.2"/></svg>
-                                Сменить пароль
-                            </button>
+                            <span class="dropdown-wrap uc-actions">
+                                <button class="btn" :class="{ 'menu-open': ownMenu }" @click="ownMenu = !ownMenu" title="Изменить свои данные">
+                                    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span class="caret">▼</span>
+                                </button>
+                                <div v-if="ownMenu" class="dropdown attached">
+                                    <button @click="openOwnPassword">
+                                        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.6 8.4 13.5 2.5M11.5 4.5l1.5 1.5M10 6l1.2 1.2"/></svg>
+                                        Сменить пароль
+                                    </button>
+                                    <button @click="openOwnProfile">
+                                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+                                        Редактировать
+                                    </button>
+                                </div>
+                            </span>
                             <button class="btn" @click="logout">
                                 <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5h-3v11h3M10 5l3 3-3 3M13 8H6"/></svg>
                                 Выйти
@@ -597,19 +623,21 @@
 
             <!-- Новый пользователь / изменить роль и пароль — строкой под панелью -->
             <div v-if="userBar" class="add-bar user-bar" @keydown.enter="submitUserBar">
-                <template v-if="userBar.kind === 'new'">
-                    <span class="ab-title">Новый пользователь:</span>
-                    <input ref="ub-login" class="input ab-login" v-model="userBar.login" placeholder="Логин" spellcheck="false" autocomplete="off"
-                        title="Латинские буквы, цифры, точка, дефис, подчёркивание">
-                </template>
-                <span v-else class="ab-title">Изменить «{{ userBar.login }}»:</span>
+                <span v-if="userBar.kind === 'new'" class="ab-title">Новый пользователь:</span>
+                <span v-else class="ab-title">Изменить «{{ userBar.was }}»:</span>
+                <input ref="ub-login" class="input ab-login" v-model="userBar.login" placeholder="Логин" spellcheck="false" autocomplete="off"
+                    title="Логин: латинские буквы (большие и маленькие), цифры, точка, дефис, подчёркивание. Входить можно в любом регистре">
+                <input ref="ub-fio" class="input ab-fio" v-model="userBar.full_name" placeholder="ФИО" spellcheck="false" autocomplete="off"
+                    title="Фамилия Имя Отчество — на панели будет «Фамилия И.О.»">
+                <input class="input ab-position" v-model="userBar.position" placeholder="Должность" autocomplete="off">
                 <select ref="ub-role" class="input ab-role" v-model="userBar.role" :disabled="userBar.self"
                     :title="userBar.self ? 'Свою роль изменить нельзя — это может сделать другой администратор' : 'Роль'">
                     <option v-for="r in roleOptions" :key="r.key" :value="r.key">{{ r.label }}</option>
                 </select>
                 <!-- Пароль скрыт (этап 22), повтор обязателен; глаз — показать оба поля -->
                 <input ref="ub-password" class="input ab-password" :type="userBar.show ? 'text' : 'password'" v-model="userBar.password" spellcheck="false" autocomplete="new-password"
-                    :placeholder="userBar.kind === 'new' ? 'Пароль, от 6 знаков' : 'Новый пароль (пусто — не менять)'">
+                    :placeholder="userBar.kind === 'new' ? 'Пароль, от 6 знаков' : 'Новый пароль'"
+                    :title="userBar.kind === 'new' ? 'Пароль, от 6 знаков' : 'Новый пароль. Пусто — пароль не меняется'">
                 <input ref="ub-repeat" class="input ab-password" :type="userBar.show ? 'text' : 'password'" v-model="userBar.repeat" spellcheck="false" autocomplete="new-password"
                     placeholder="Пароль ещё раз">
                 <button class="btn icon-only" :class="{ active: userBar.show }" @click="userBar.show = !userBar.show" :title="userBar.show ? 'Скрыть пароль' : 'Показать пароль'">
@@ -631,12 +659,14 @@
                             <div v-if="!usersLoading && !usersError && !users.length" class="empty-note">Пользователей нет.</div>
                             <table v-if="users.length" class="history-table users-table" :class="{ 'accent-head': accentHeaders.users }">
                                 <thead>
-                                    <tr><th>Логин</th><th>Роль</th><th class="u-created">Создан</th></tr>
+                                    <tr><th>Логин</th><th>ФИО</th><th>Должность</th><th>Роль</th><th class="u-created">Создан</th></tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="u in users" :key="u.id" :class="{ 'is-hover': usersHover && usersHover.id === u.id }"
                                         @mouseenter="setUsersHover(u, $event.currentTarget)" @dblclick="openEditUser(u)">
                                         <td class="u-login"><span class="u-name">{{ u.login }}</span><span v-if="u.is_self" class="u-self">это вы</span><span v-if="u.archived" class="u-off" title="Не может войти в систему">отключён</span></td>
+                                        <td class="u-fio">{{ u.full_name || "" }}</td>
+                                        <td class="u-position">{{ u.position || "" }}</td>
                                         <td class="u-role">{{ roleName(u.role) }}</td>
                                         <td class="u-created">{{ formatDate(u.created_at) }}</td>
                                     </tr>
@@ -646,7 +676,7 @@
                     </div>
                     <div v-if="usersHover" class="tree-actions" :style="{ top: usersHover.top + 'px', height: usersHover.height + 'px' }">
                         <span class="na-box">
-                            <span class="icon-btn" title="Изменить: роль, пароль (или двойной клик по строке)" @click="openEditUser(usersHover.user)">✎</span>
+                            <span class="icon-btn" title="Изменить: логин, ФИО, должность, роль, пароль (или двойной клик по строке)" @click="openEditUser(usersHover.user)">✎</span>
                             <template v-if="!usersHover.user.is_self">
                                 <span class="na-sep"></span>
                                 <span v-if="!usersHover.user.archived" class="icon-btn danger" title="Отключить: не сможет войти, открытые входы завершатся" @click="setUserArchived(usersHover.user, true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/></svg></span>

@@ -1,9 +1,10 @@
 """Пользователи системы — раздел администратора: список, новый пользователь,
-роль, новый пароль, отключение (архив, удаления нет).
+логин, ФИО, должность, роль, новый пароль, отключение (архив, удаления нет).
+Свои логин, ФИО и должность любой пользователь меняет сам — api_auth.py.
 
 Свою роль и отключение себя администратор менять не может — так в системе
 всегда остаётся хотя бы один работающий администратор (он сам). Изменения
-пользователей в Историю не пишутся (как и справочники)."""
+пишутся в Историю (видит только администратор); пароль — только «задан новый»."""
 import re
 from datetime import datetime
 from typing import Optional
@@ -21,8 +22,10 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 ROLES = ("admin", "editor", "reader")
 
-# Логин: латиница, цифры, точка, дефис, подчёркивание; хранится строчными
-LOGIN_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
+# Логин: латиница (любой регистр), цифры, точка, дефис, подчёркивание. Хранится
+# как ввели; вход и проверка занятости — без учёта регистра
+LOGIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$")
+TEXT_MAX = 200
 
 PASSWORD_MIN = 6
 PASSWORD_MAX = 200
@@ -31,6 +34,8 @@ PASSWORD_MAX = 200
 class UserOut(BaseModel):
     id: int
     login: str
+    full_name: Optional[str]
+    position: Optional[str]
     role: str
     archived: bool
     created_at: datetime
@@ -39,11 +44,16 @@ class UserOut(BaseModel):
 
 class UserCreate(BaseModel):
     login: str = ""
+    full_name: Optional[str] = None
+    position: Optional[str] = None
     role: str = "reader"
     password: str = ""
 
 
 class UserUpdate(BaseModel):
+    login: Optional[str] = None
+    full_name: Optional[str] = None
+    position: Optional[str] = None
     role: Optional[str] = None
     password: Optional[str] = None
     archived: Optional[bool] = None
@@ -62,6 +72,71 @@ def check_password(password):
 
     if not password.strip():
         raise HTTPException(status_code=400, detail="Пароль не может состоять из пробелов.")
+
+
+def clean_login(value):
+    login = (value or "").strip()
+
+    if not login:
+        raise HTTPException(status_code=400, detail="Нужно указать логин.")
+
+    if not LOGIN_RE.match(login):
+        raise HTTPException(
+            status_code=400,
+            detail="Логин — латинские буквы, цифры, точка, дефис или подчёркивание (до 40 символов).",
+        )
+
+    return login
+
+
+def check_login_free(session, login, exclude_id=None):
+    """Логин свободен без учёта регистра (ivanov и Ivanov — один логин)."""
+    query = session.query(User).filter(func.lower(User.login) == login.lower())
+
+    if exclude_id is not None:
+        query = query.filter(User.id != exclude_id)
+
+    exists = query.first()
+
+    if exists:
+        detail = "Такой логин уже есть"
+        detail += " (пользователь отключён — его можно включить)." if exists.archived else "."
+        raise HTTPException(status_code=409, detail=detail)
+
+
+def clean_text(value, what):
+    """ФИО, должность: лишние пробелы убираются, пусто — None."""
+    text = " ".join((value or "").split())
+
+    if len(text) > TEXT_MAX:
+        raise HTTPException(status_code=400, detail=f"{what}: слишком длинно (до {TEXT_MAX} символов).")
+
+    return text or None
+
+
+# Логин, ФИО, должность — общее для правки администратором и своей правки
+PROFILE_FIELDS = ("login", "full_name", "position")
+
+
+def apply_profile(session, user, payload):
+    """Записать в пользователя login / full_name / position из payload (None — не
+    менять). Возвращает изменения для истории."""
+    before = {name: getattr(user, name) for name in PROFILE_FIELDS}
+
+    if payload.login is not None:
+        login = clean_login(payload.login)
+
+        if login != user.login:
+            check_login_free(session, login, exclude_id=user.id)
+            user.login = login
+
+    if payload.full_name is not None:
+        user.full_name = clean_text(payload.full_name, "ФИО")
+
+    if payload.position is not None:
+        user.position = clean_text(payload.position, "Должность")
+
+    return {name: {"old": before[name], "new": getattr(user, name)} for name in PROFILE_FIELDS}
 
 
 def check_role(role):
@@ -83,6 +158,8 @@ def user_out(user, me):
     return UserOut(
         id=user.id,
         login=user.login,
+        full_name=user.full_name,
+        position=user.position,
         role=user.role,
         archived=user.archived,
         created_at=user.created_at,
@@ -93,38 +170,32 @@ def user_out(user, me):
 @router.get("", response_model=list[UserOut])
 def list_users(me=Depends(require_admin), session=Depends(get_db)):
     # Сначала работающие, потом отключённые; внутри — по логину
-    users = session.query(User).order_by(User.archived, User.login).all()
+    users = session.query(User).order_by(User.archived, func.lower(User.login)).all()
     return [user_out(user, me) for user in users]
 
 
 @router.post("", response_model=UserOut)
 def create_user(payload: UserCreate, me=Depends(require_admin), session=Depends(get_db)):
-    login = payload.login.strip().lower()
-
-    if not login:
-        raise HTTPException(status_code=400, detail="Нужно указать логин.")
-
-    if not LOGIN_RE.match(login):
-        raise HTTPException(
-            status_code=400,
-            detail="Логин — латинские буквы, цифры, точка, дефис или подчёркивание (до 40 символов).",
-        )
-
+    login = clean_login(payload.login)
+    full_name = clean_text(payload.full_name, "ФИО")
+    position = clean_text(payload.position, "Должность")
     check_role(payload.role)
     check_password(payload.password)
+    check_login_free(session, login)
 
-    exists = session.query(User).filter(func.lower(User.login) == login).first()
-
-    if exists:
-        detail = "Такой логин уже есть"
-        detail += " (пользователь отключён — его можно включить)." if exists.archived else "."
-        raise HTTPException(status_code=409, detail=detail)
-
-    user = User(login=login, role=payload.role, password_hash=hash_password(payload.password))
+    user = User(
+        login=login,
+        full_name=full_name,
+        position=position,
+        role=payload.role,
+        password_hash=hash_password(payload.password),
+    )
     session.add(user)
     session.flush()
     log_change(session, "users", user.id, me["login"], {
         "created": {"old": None, "new": login},
+        "full_name": {"old": None, "new": full_name},
+        "position": {"old": None, "new": position},
         "role": {"old": None, "new": user.role},
     }, title=login)
     session.commit()
@@ -146,7 +217,7 @@ def update_user(
 
     is_self = user.id == me["id"]
     before = {"role": user.role, "archived": user.archived}
-    changes = {}
+    changes = apply_profile(session, user, payload)
 
     if payload.role is not None and payload.role != user.role:
         if is_self:

@@ -40,7 +40,7 @@ def main():
 
         session.add(
             User(
-                login=login.lower(),
+                login=login,  # как ввели; вход — без учёта регистра
                 password_hash=hash_password(password),
                 role="admin",
             )

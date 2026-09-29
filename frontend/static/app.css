@@ -397,6 +397,24 @@ body {
     padding: 3px 6px;
     font-size: 12px;
 }
+/* Подписи полей в форме «Редактировать» (этап 22) */
+.uc-form .uc-label {
+    margin-top: 2px;
+    margin-bottom: -3px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+/* ✎ ▾ — «Сменить пароль», «Редактировать» */
+.user-card .uc-actions .dropdown {
+    min-width: 170px;
+}
+.user-card .uc-actions .btn.menu-open {
+    background: var(--tb-ctrl-hover-bg);
+    border-bottom-left-radius: 0;
+}
+.user-card .uc-actions .btn .caret {
+    margin-left: 4px;
+}
 .uc-form .uc-error {
     font-size: 12px;
     color: var(--danger);
@@ -2737,7 +2755,9 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .users-table td {
     white-space: nowrap;
 }
-.users-table td.u-login {
+.users-table td.u-login,
+.users-table td.u-fio,
+.users-table td.u-position {
     padding-right: 24px;
 }
 .users-table .u-name {
@@ -2778,13 +2798,19 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     border-right-color: transparent;
 }
 .add-bar .ab-login {
-    width: 160px;
+    width: 130px;
+}
+.add-bar .ab-fio {
+    width: 220px;
+}
+.add-bar .ab-position {
+    width: 150px;
 }
 .add-bar .ab-role {
     padding: 2px 4px;
 }
 .add-bar .ab-password {
-    width: 190px;
+    width: 150px;
 }
 
 /* ============================================================

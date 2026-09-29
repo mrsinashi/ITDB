@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -46,6 +46,30 @@ async def unexpected_error(request: Request, call_next):
             status_code=500,
             content={"detail": f"Ошибка на сервере: {message}"},
         )
+
+
+# Только HTTPS (этап 22). Снаружи программу видно только через Caddy (https;
+# с http Caddy перенаправляет на https и шлёт HSTS), сама она слушает 127.0.0.1.
+# Эта проверка — страховка на случай, если её запустят на всех адресах
+# (--host 0.0.0.0): любой запрос не по https, кроме как с самого сервера,
+# получает отказ — и страница входа тоже, чтобы пароль не ушёл открытым текстом.
+# Схему (https) uvicorn берёт из заголовков Caddy — им он верит только от
+# 127.0.0.1 (--forwarded-allow-ips, по умолчанию так и есть).
+LOCAL_HOSTS = {"127.0.0.1", "::1"}
+
+
+@app.middleware("http")
+async def https_only(request: Request, call_next):
+    client = request.client.host if request.client else ""
+
+    if request.url.scheme != "https" and client not in LOCAL_HOSTS:
+        return PlainTextResponse(
+            "ITDB открывается только по защищённому адресу https://…\n"
+            "Обычный http отключён, чтобы пароли и данные не передавались открыто.",
+            status_code=403,
+        )
+
+    return await call_next(request)
 
 
 app.include_router(auth_router)

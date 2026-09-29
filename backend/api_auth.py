@@ -1,12 +1,13 @@
 import os
 from collections import defaultdict
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import func
 
-from api_users import check_password, end_sessions
+from api_users import apply_profile, check_password, end_sessions
 from auth import SESSION_DAYS, create_session, get_current_user, hash_password, verify_password
 from db import get_db
 from history_log import PASSWORD_SET, log_change
@@ -101,6 +102,19 @@ def login(
     }
 
 
+def me_out(db_user, user):
+    return {
+        "id": user["id"],
+        "login": db_user.login if db_user else user["login"],
+        "full_name": db_user.full_name if db_user else None,
+        "position": db_user.position if db_user else None,
+        "role": user["role"],
+        "prefs": (db_user.prefs if db_user else None) or {},
+        # Пометка копии рядом с «ITDB» (ITDB_LABEL=DEV в .env dev-копии)
+        "label": (os.environ.get("ITDB_LABEL") or "").strip(),
+    }
+
+
 # Допустимые личные настройки интерфейса
 THEMES = {"red", "green", "blue", "graphite", "teal"}
 ACCENT_PAGES = {"tree", "history", "choices", "users"}
@@ -108,17 +122,33 @@ ACCENT_PAGES = {"tree", "history", "choices", "users"}
 
 @router.get("/me")
 def me(user=Depends(get_current_user), session=Depends(get_db)):
-    db_user = session.get(User, user["id"])
-    prefs = (db_user.prefs if db_user else None) or {}
+    return me_out(session.get(User, user["id"]), user)
 
-    return {
-        "id": user["id"],
-        "login": user["login"],
-        "role": user["role"],
-        "prefs": prefs,
-        # Пометка копии рядом с «ITDB» (ITDB_LABEL=DEV в .env dev-копии)
-        "label": (os.environ.get("ITDB_LABEL") or "").strip(),
-    }
+
+class ProfileChange(BaseModel):
+    login: Optional[str] = None
+    full_name: Optional[str] = None
+    position: Optional[str] = None
+
+
+@router.patch("/me/profile")
+def update_profile(
+    payload: ProfileChange,
+    user=Depends(get_current_user),
+    session=Depends(get_db),
+):
+    """Свои логин, ФИО и должность (любая роль; роль и пароль — не здесь).
+    Вход остаётся: сессия привязана к пользователю, а не к логину."""
+    db_user = session.get(User, user["id"])
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден.")
+
+    changes = apply_profile(session, db_user, payload)
+    log_change(session, "users", db_user.id, db_user.login, changes, title=db_user.login)
+    session.commit()
+
+    return me_out(db_user, user)
 
 
 @router.patch("/me/prefs")

@@ -1,9 +1,10 @@
 // Пользователи системы (страница только у администратора) и смена своего
 // пароля (меню пользователя справа вверху — у любой роли).
 //
-// Новый пользователь и «Изменить» (роль, новый пароль) — строкой под панелью,
-// как «Новый компьютер». Отключение — архив: удаления нет. Свою роль и
-// отключение себя сервер не даёт (в системе всегда есть администратор).
+// Новый пользователь и «Изменить» (логин, ФИО, должность, роль, новый пароль) —
+// строкой под панелью, как «Новый компьютер». Отключение — архив: удаления нет.
+// Свою роль и отключение себя сервер не даёт (в системе всегда есть
+// администратор). Свои логин, ФИО и должность любой меняет в меню пользователя.
 
 import { ROLE_LABELS } from "../settings.js";
 import { apiFetch } from "../util.js";
@@ -17,6 +18,8 @@ export default {
         openMenu(name) {
             if (name !== "user") {
                 this.ownPassword = null;
+                this.ownProfile = null;
+                this.ownMenu = false;
             }
         },
     },
@@ -90,14 +93,21 @@ export default {
                 this.closeUserBar();
                 return;
             }
-            this.userBar = { kind: "new", login: "", role: "reader", password: "", repeat: "", show: false, error: "", saving: false };
+            this.userBar = this.emptyUserBar("reader", false);
             this.$nextTick(() => this.focusRef("ub-login"));
+        },
+
+        emptyUserBar(role, show) {
+            return { kind: "new", login: "", full_name: "", position: "", role: role, password: "", repeat: "", show: show, error: "", saving: false };
         },
 
         openEditUser(u) {
             this.usersHover = null;
-            this.userBar = { kind: "edit", id: u.id, login: u.login, self: u.is_self, role: u.role, password: "", repeat: "", show: false, error: "", saving: false };
-            this.$nextTick(() => this.focusRef(u.is_self ? "ub-password" : "ub-role"));
+            this.userBar = {
+                kind: "edit", id: u.id, was: u.login, login: u.login, full_name: u.full_name || "", position: u.position || "",
+                self: u.is_self, role: u.role, password: "", repeat: "", show: false, error: "", saving: false
+            };
+            this.$nextTick(() => this.focusRef("ub-fio"));
         },
 
         closeUserBar() {
@@ -126,7 +136,7 @@ export default {
             let method = "POST";
             let body;
             if (bar.kind === "new") {
-                body = { login: bar.login, role: bar.role, password: bar.password };
+                body = { login: bar.login, full_name: bar.full_name, position: bar.position, role: bar.role, password: bar.password };
             } else {
                 const was = this.users.find(function (u) { return u.id === bar.id; });
                 url += "/" + bar.id;
@@ -134,6 +144,14 @@ export default {
                 body = {};
                 if (was && bar.role !== was.role) {
                     body.role = bar.role;
+                }
+                // Только то, что поменяли (пробелы по краям не в счёт)
+                if (was) {
+                    ["login", "full_name", "position"].forEach(function (name) {
+                        if ((bar[name] || "").trim() !== (was[name] || "")) {
+                            body[name] = bar[name];
+                        }
+                    });
                 }
                 if (bar.password) {
                     body.password = bar.password;
@@ -159,10 +177,13 @@ export default {
                 if (bar.kind === "new") {
                     // Строка остаётся открытой — можно завести следующего
                     this.toast("Добавлен пользователь: " + saved.login, "success");
-                    this.userBar = { kind: "new", login: "", role: bar.role, password: "", repeat: "", show: bar.show, error: "", saving: false };
+                    this.userBar = this.emptyUserBar(bar.role, bar.show);
                     this.$nextTick(() => this.focusRef("ub-login"));
                 } else {
                     const parts = [];
+                    if (body.login || body.full_name !== undefined || body.position !== undefined) {
+                        parts.push("данные изменены");
+                    }
                     if (body.role) {
                         parts.push("роль — " + this.roleName(body.role).toLowerCase());
                     }
@@ -170,6 +191,11 @@ export default {
                         parts.push("пароль изменён");
                     }
                     this.toast(saved.login + ": " + parts.join(", "), "success");
+                    // Себя — сразу и на панели
+                    if (bar.self && this.user) {
+                        Object.assign(this.user, { login: saved.login, full_name: saved.full_name, position: saved.position });
+                        this.$nextTick(() => this.snapNavUser());
+                    }
                     this.closeUserBar();
                 }
             } catch (e) {
@@ -214,8 +240,51 @@ export default {
         // ---------- Свой пароль (меню пользователя) ----------
 
         openOwnPassword() {
+            this.ownMenu = false;
+            this.ownProfile = null;
             this.ownPassword = { current: "", next: "", repeat: "", error: "", saving: false };
             this.$nextTick(() => this.focusRef("op-current"));
+        },
+
+        // «Редактировать» в меню пользователя: свои логин, ФИО, должность
+        openOwnProfile() {
+            this.ownMenu = false;
+            this.ownPassword = null;
+            const u = this.user;
+            this.ownProfile = { login: u.login, full_name: u.full_name || "", position: u.position || "", error: "", saving: false };
+            this.$nextTick(() => this.focusRef("pf-login"));
+        },
+
+        async submitOwnProfile() {
+            const f = this.ownProfile;
+            if (!f || f.saving) {
+                return;
+            }
+            f.saving = true;
+            f.error = "";
+            try {
+                const response = await apiFetch("/api/auth/me/profile", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ login: f.login, full_name: f.full_name, position: f.position })
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const me = await response.json();
+                Object.assign(this.user, { login: me.login, full_name: me.full_name, position: me.position });
+                this.ownProfile = null;
+                this.closeMenus();
+                this.$nextTick(() => this.snapNavUser());
+                if (this.view === "users" && this.isAdmin) {
+                    this.loadUsers();
+                }
+                this.toast("Данные сохранены", "success");
+            } catch (e) {
+                f.error = e.message || String(e);
+            } finally {
+                f.saving = false;
+            }
         },
 
         async submitOwnPassword() {

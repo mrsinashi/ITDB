@@ -36,7 +36,7 @@ from api_computers import (
     vacuum_text,
 )
 from api_locations import check_can_archive, check_duplicate, clean, validate_name_code
-from api_users import ROLES, end_sessions
+from api_users import ROLES, check_login_free, clean_login, clean_text, end_sessions
 from history_log import choice_title, column_label
 from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, User
 
@@ -53,12 +53,13 @@ SIMPLE = {
     "choices": {"model": Choice, "fields": {"value", "color", "bg_color", "bold", "italic"}},
     "field_defs": {"model": FieldDef, "fields": {"label", "archived"}},
     "column_styles": {"model": ColumnStyle, "fields": {"color", "bg_color", "bold", "italic"}},
-    "users": {"model": User, "fields": {"role", "archived"}, "admin": True},
+    "users": {"model": User, "fields": {"login", "full_name", "position", "role", "archived"}, "admin": True},
 }
 SIMPLE_LABELS = {
     "value": "Значение", "color": "Цвет текста", "bg_color": "Фон", "bold": "Жирный",
     "italic": "Курсив", "label": "Название", "archived": "Архив", "role": "Роль",
     "password": "Пароль", "created": "Создано", "deleted": "Удалено",
+    "login": "Логин", "full_name": "ФИО", "position": "Должность",
 }
 
 ENTITIES = ("computers", "locations") + tuple(SIMPLE)
@@ -419,8 +420,15 @@ def set_simple_value(session, entity, obj, field, value, user):
             raise HTTPException(status_code=400, detail=f"«{value}» уже есть в этом справочнике.")
 
     if entity == "users":
-        if obj.id == user["id"]:
+        if obj.id == user["id"] and field in ("role", "archived"):
             raise HTTPException(status_code=400, detail="Свою роль и отключение себя изменить нельзя.")
+
+        if field == "login":
+            value = clean_login(value)
+            check_login_free(session, value, exclude_id=obj.id)
+
+        if field in ("full_name", "position"):
+            value = clean_text(value, SIMPLE_LABELS[field])
 
         if field == "role" and value not in ROLES:
             raise HTTPException(status_code=400, detail="Неизвестная роль.")

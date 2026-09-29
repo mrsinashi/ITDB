@@ -1,15 +1,13 @@
 """Сессия базы на запрос (get_db) и общий обработчик непредвиденных ошибок."""
-from fastapi.testclient import TestClient
 
 import api_computers
-from conftest import PASSWORDS, add_computer, ok
+from conftest import PASSWORDS, add_computer, https_client, ok
 from db import engine
-from main import app
 
 
 def client_without_raise(role="editor"):
     """Клиент, который отдаёт ответ 500, а не пробрасывает ошибку в тест."""
-    client = TestClient(app, raise_server_exceptions=False)
+    client = https_client(raise_server_exceptions=False)
     ok(client.post("/api/auth/login", json={"login": role, "password": PASSWORDS[role]}))
     return client
 

@@ -48,6 +48,16 @@ export function splitMulti(value) {
         .filter(Boolean);
 }
 
+// «Иванов Иван Иванович» → «Иванов И.И.»; без ФИО — логин (панель, этап 22)
+export function shortName(fullName, login) {
+    const words = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    if (!words.length) {
+        return login || "";
+    }
+    const initials = words.slice(1, 3).map(function (w) { return w.charAt(0).toUpperCase() + "."; }).join("");
+    return initials ? words[0] + " " + initials : words[0];
+}
+
 // ---------- Поиск по словам ----------
 // «хир орд 3»: каждое слово ищется отдельно, найтись должны все.
 // Регистр и ё/е не различаются.

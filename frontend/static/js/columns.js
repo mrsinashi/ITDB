@@ -170,7 +170,10 @@ export const SIMPLE_FIELD_LABELS = {
     role: "Роль",
     password: "Пароль",
     created: "Создано",
-    deleted: "Удалено"
+    deleted: "Удалено",
+    login: "Логин",
+    full_name: "ФИО",
+    position: "Должность"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

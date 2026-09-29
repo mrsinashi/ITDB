@@ -1,7 +1,7 @@
 """История справочников, польз. полей, оформления столбцов, пользователей (этап 19б)."""
 import itertools
 
-from conftest import ok
+from conftest import https_client, ok
 
 _numbers = itertools.count(1)
 
@@ -134,10 +134,7 @@ def test_admin_cannot_undo_own_role(admin):
     me = ok(admin.get("/api/auth/me"))
 
     # Другой админ понизил нашего — запись о нас; отменить её сами мы не можем
-    from fastapi.testclient import TestClient
-    from main import app
-
-    second = TestClient(app)
+    second = https_client()
     ok(second.post("/api/auth/login", json={"login": login, "password": "secret1"}))
     ok(second.patch(f"/api/users/{me['id']}", json={"role": "editor"}))
     record = latest(second, "users")
@@ -154,10 +151,7 @@ def test_own_password_change_logged(admin):
     login = f"hist{next(_numbers)}"
     ok(admin.post("/api/users", json={"login": login, "role": "reader", "password": "secret1"}))
 
-    from fastapi.testclient import TestClient
-    from main import app
-
-    client = TestClient(app)
+    client = https_client()
     ok(client.post("/api/auth/login", json={"login": login, "password": "secret1"}))
     ok(client.post("/api/auth/me/password", json={"current": "secret1", "new": "newpass1"}))
 

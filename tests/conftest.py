@@ -135,8 +135,14 @@ def clean_data(database):
     yield
 
 
+def https_client(**kwargs):
+    """Клиент по https: программа (с этапа 22) отвечает только по https,
+    кроме запросов с самого сервера."""
+    return TestClient(app, base_url="https://testserver", **kwargs)
+
+
 def login(role):
-    client = TestClient(app)
+    client = https_client()
     response = client.post(
         "/api/auth/login",
         json={"login": role, "password": PASSWORDS[role]},
@@ -162,7 +168,7 @@ def reader(database):
 
 @pytest.fixture
 def anon(database):
-    return TestClient(app)
+    return https_client()
 
 
 # ---------- Помощники: создать узлы и ПК через API ----------

@@ -1,7 +1,7 @@
 // Вход, выход, личные настройки (цветовая схема, акценты).
 
 import { ROLE_LABELS, THEMES, applyTheme } from "../settings.js";
-import { apiFetch } from "../util.js";
+import { apiFetch, shortName } from "../util.js";
 
 export default {
     computed: {
@@ -16,6 +16,19 @@ export default {
 
         userInitial() {
             return this.user && this.user.login ? this.user.login.charAt(0).toUpperCase() : "?";
+        },
+
+        // На панели — «Фамилия И.О.» (без ФИО — логин), в подсказке — полностью
+        navUserName() {
+            return this.user ? shortName(this.user.full_name, this.user.login) : "";
+        },
+
+        navUserTitle() {
+            const u = this.user;
+            if (!u) {
+                return null;
+            }
+            return [u.full_name, u.position, "логин: " + u.login].filter(Boolean).join("\n");
         },
 
         roleLabel() {
