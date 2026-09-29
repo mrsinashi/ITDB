@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -87,6 +88,9 @@ def login(
         value=token,
         httponly=True,
         samesite="lax",
+        # За Caddy по https — кука только для https (схему uvicorn берёт из
+        # заголовков Caddy, см. deploy/itdb.service); dev по http — как раньше
+        secure=request.url.scheme == "https",
         max_age=SESSION_DAYS * 24 * 60 * 60,
     )
 
@@ -112,6 +116,8 @@ def me(user=Depends(get_current_user), session=Depends(get_db)):
         "login": user["login"],
         "role": user["role"],
         "prefs": prefs,
+        # Пометка копии рядом с «ITDB» (ITDB_LABEL=DEV в .env dev-копии)
+        "label": (os.environ.get("ITDB_LABEL") or "").strip(),
     }
 
 

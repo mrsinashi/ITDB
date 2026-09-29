@@ -10,7 +10,7 @@
 <body>
     <div id="app" v-cloak>
         <nav class="top-menu" v-if="user">
-            <span class="brand">ITDB</span>
+            <span class="brand">ITDB<span v-if="user.label" class="brand-label" title="Эта копия ITDB помечена в .env (ITDB_LABEL)">{{ user.label }}</span></span>
             <a href="#" @click.prevent="setView('table')" :class="{ active: view === 'table' }">Таблица</a>
             <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">Дерево</a>
             <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">История</a>

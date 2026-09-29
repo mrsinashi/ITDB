@@ -9,7 +9,7 @@ from alembic import context
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(BASE_DIR, "backend"))
 
-from db import Base
+from db import Base  # db сам читает .env в корне проекта
 import models  # noqa
 
 config = context.config
@@ -20,7 +20,7 @@ if config.config_file_name is not None:
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set")
+    raise RuntimeError("Не задан DATABASE_URL: добавь его в файл .env в корне проекта.")
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 

@@ -1,0 +1,12 @@
+# Caddy перед боевой копией ITDB: https на 443, с 80 — перенаправление на https.
+# Установка: apt install caddy; этот файл — в /etc/caddy/Caddyfile;
+# systemctl reload caddy. Проверка файла: caddy validate --config /etc/caddy/Caddyfile
+#
+# Сертификат — от внутреннего CA организации, на оба адреса (README,
+# «Боевая копия», шаг «Сертификат»). Другое имя или IP — поправить строку ниже.
+
+itdb.lan, 192.168.0.181 {
+	tls /etc/caddy/certs/itdb.crt /etc/caddy/certs/itdb.key
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}

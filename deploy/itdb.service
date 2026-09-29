@@ -1,0 +1,28 @@
+# Служба боевой копии ITDB: автозапуск с сервером, перезапуск при падении.
+# Установка (из /opt/itdb):
+#   cp deploy/itdb.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now itdb
+# Журнал: journalctl -u itdb -e      Перезапуск: systemctl restart itdb
+
+[Unit]
+Description=ITDB — учёт компьютеров
+After=network.target postgresql.service
+
+[Service]
+WorkingDirectory=/opt/itdb
+# Настройки (DATABASE_URL) читает systemd — .env может быть доступен только root
+EnvironmentFile=/opt/itdb/.env
+# Только внутри сервера: снаружи — Caddy на 80/443 (deploy/Caddyfile).
+# Caddy на этом же сервере — ему uvicorn верит в заголовках X-Forwarded-*
+# (настоящий IP клиента для лимита попыток входа, https для куки).
+ExecStart=/opt/itdb/.venv/bin/uvicorn main:app --app-dir backend --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=3
+# Отдельный временный пользователь без прав: программе хватает чтения файлов
+DynamicUser=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

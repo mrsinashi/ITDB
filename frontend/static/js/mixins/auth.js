@@ -42,6 +42,10 @@ export default {
                 // Схема — личная: у пользователя без настройки — красная,
                 // даже если в этом браузере до него работал другой
                 const prefs = (this.user && this.user.prefs) || {};
+                // Пометка копии (DEV) — и во вкладке браузера
+                if (this.user && this.user.label) {
+                    document.title = "ITDB · " + this.user.label;
+                }
                 this.theme = applyTheme(prefs.theme || "red");
                 this.accentBorders = !!prefs.accent_borders;
                 this.accentHeaders = Object.assign({ tree: true, history: true, choices: true, users: true }, prefs.accent_headers || {});

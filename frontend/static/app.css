@@ -256,6 +256,20 @@ body {
     font-size: 14px;
 }
 
+/* Пометка копии рядом с «ITDB» (ITDB_LABEL в .env, например DEV) — блочком,
+   как «в архиве» у карточки */
+.top-menu .brand-label {
+    margin-left: 7px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 14px;
+    letter-spacing: 0.04em;
+    color: var(--nav-text);
+    border: 1px solid currentColor;
+    border-radius: var(--radius);
+}
+
 .top-menu a {
     display: flex;
     align-items: center;

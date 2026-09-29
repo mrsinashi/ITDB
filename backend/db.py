@@ -3,10 +3,14 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from env_file import read_env_file
+
+read_env_file()
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set")
+    raise RuntimeError("Не задан DATABASE_URL: добавь его в файл .env в корне проекта (см. README).")
 
 engine = create_engine(DATABASE_URL)
 

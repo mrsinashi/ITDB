@@ -25,10 +25,13 @@
    su postgres -c "createuser -P itdb"
    su postgres -c "createdb -O itdb itdb"
    ```
-2. Файл `.env` в корне проекта (в git не попадает):
+2. Файл `.env` в корне проекта (в git не попадает; программа, миграции и тесты читают
+   его сами). Значение с `&` — в кавычках:
    ```
-   DATABASE_URL=postgresql+psycopg://itdb:ПАРОЛЬ@localhost/itdb
+   DATABASE_URL="postgresql+psycopg://itdb:ПАРОЛЬ@localhost/itdb"
    ```
+   В копии для проверок (dev) можно добавить `ITDB_LABEL=DEV` — рядом с «ITDB» в меню
+   и во вкладке браузера появится пометка, чтобы не спутать с боевой копией.
 3. Виртуальное окружение и библиотеки:
    ```
    python3 -m venv .venv
@@ -36,21 +39,19 @@
    ```
 4. Создать таблицы в базе и первого администратора:
    ```
-   set -a; . ./.env; set +a
    .venv/bin/alembic upgrade head
    .venv/bin/python backend/create_admin.py
    ```
 
-## Запуск
+## Запуск (dev — для проверки патчей)
 
 ```
-set -a; . ./.env; set +a
 .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8001 --app-dir backend
 ```
 
-Открыть в браузере `http://СЕРВЕР:8001`. Остановить — Ctrl+C.
-Первая строка загружает `DATABASE_URL` из `.env`; в новом окне терминала её нужно
-выполнить заново.
+Открыть в браузере `http://СЕРВЕР:8001`. Остановить — Ctrl+C. Настройки программа
+берёт из `.env` сама (прежняя строка `set -a; . ./.env; set +a` не нужна, но и не
+мешает). Постоянная работа для коллег — раздел «Боевая копия».
 
 Документация API — `http://СЕРВЕР:8001/docs`.
 
@@ -85,7 +86,6 @@ set -a; . ./.env; set +a
    ```
 4. Если в описании этапа сказано «нужна миграция»:
    ```
-   set -a; . ./.env; set +a
    .venv/bin/alembic upgrade head
    ```
 5. Перезапустить сервер (Ctrl+C и снова команда из раздела «Запуск»).
@@ -95,13 +95,103 @@ set -a; . ./.env; set +a
 
 ```
 git pull
-set -a; . ./.env; set +a
 .venv/bin/pip install -r requirements.txt
 .venv/bin/alembic upgrade head
 ```
 
 Затем перезапустить сервер. Если библиотеки и миграции не менялись, лишние команды
-ничего не делают — выполнять их можно всегда.
+ничего не делают — выполнять их можно всегда. Боевая копия обновляется одной командой —
+см. ниже.
+
+## Боевая копия (постоянная работа)
+
+Рядом с dev-копией (`/opt/itdb-dev`, порт 8001, запуск вручную) работает боевая —
+`/opt/itdb`: своя база, служба systemd (запуск с сервером, перезапуск при падении),
+снаружи — Caddy с https на обычных портах 443 и 80 (с 80 — перенаправление на https).
+Сама программа слушает только внутри сервера, `127.0.0.1:8000`. Файлы для неё — в
+папке `deploy/`. Порядок работы: патч → dev → проверка → коммит в GitHub →
+`deploy/update.sh` на боевой.
+
+Адреса: `https://itdb.lan` и `https://192.168.0.181` (другие — поправить
+`deploy/Caddyfile` и сертификат).
+
+### Установка (один раз, под root)
+
+1. Caddy и база:
+   ```
+   apt install caddy
+   su postgres -c "createdb -O itdb itdb_prod"
+   ```
+2. Код и библиотеки:
+   ```
+   git clone https://github.com/mrsinashi/ITDB.git /opt/itdb
+   cd /opt/itdb
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   ```
+3. Файл `/opt/itdb/.env` (пароль — тот же, что у пользователя `itdb` в dev; пометки
+   `ITDB_LABEL` здесь нет):
+   ```
+   DATABASE_URL="postgresql+psycopg://itdb:ПАРОЛЬ@localhost/itdb_prod"
+   ```
+   ```
+   chmod 600 /opt/itdb/.env
+   ```
+4. Данные: перенести из dev-базы (вместе с пользователями системы и историей) —
+   скрипт возьмёт адреса баз из `.env` обеих копий и откажется, если в боевой уже
+   есть компьютеры:
+   ```
+   /opt/itdb/deploy/copy-db.sh /opt/itdb-dev
+   ```
+   Или начать с пустой базы: `.venv/bin/alembic upgrade head` и
+   `.venv/bin/python backend/create_admin.py`.
+5. Служба:
+   ```
+   cp /opt/itdb/deploy/itdb.service /etc/systemd/system/
+   systemctl daemon-reload
+   systemctl enable --now itdb
+   systemctl status itdb
+   ```
+6. Сертификат от внутреннего CA — на имя и на IP сразу. Ключ и запрос создаются на
+   этом сервере:
+   ```
+   mkdir -p /etc/caddy/certs && cd /etc/caddy/certs
+   openssl req -new -newkey rsa:2048 -nodes -keyout itdb.key -out itdb.csr \
+       -subj "/CN=itdb.lan" -addext "subjectAltName=DNS:itdb.lan,IP:192.168.0.181"
+   ```
+   `itdb.csr` подписать на сервере сертификации (в сертификате должно остаться
+   `subjectAltName` — имя и IP; если у CA есть промежуточный сертификат — дописать его
+   в конец файла сертификата). Готовый сертификат положить как
+   `/etc/caddy/certs/itdb.crt`, затем:
+   ```
+   chown root:caddy itdb.key itdb.crt && chmod 640 itdb.key
+   ```
+   Корневой сертификат CA должен быть в доверенных на ПК коллег (если ваш CA уже
+   раздаётся по сети — ничего делать не нужно).
+7. Caddy:
+   ```
+   cp /opt/itdb/deploy/Caddyfile /etc/caddy/Caddyfile
+   caddy validate --config /etc/caddy/Caddyfile
+   systemctl reload caddy
+   ```
+8. Проверить: `https://192.168.0.181` в браузере (замок без предупреждений), вход,
+   таблица. `http://192.168.0.181` должен перенаправлять на https.
+
+### Обновление боевой копии
+
+После коммита этапа в GitHub:
+```
+/opt/itdb/deploy/update.sh
+```
+Скрипт: `git pull` → библиотеки → миграции → перезапуск службы; на первой ошибке
+остановится, и служба продолжит работать на прежнем коде.
+
+### Если что-то не так
+
+- Журнал программы: `journalctl -u itdb -e`; Caddy: `journalctl -u caddy -e`.
+- Сертификат: `openssl x509 -in /etc/caddy/certs/itdb.crt -noout -subject -ext subjectAltName`.
+- Сменить имя или IP: строка сайта в `/etc/caddy/Caddyfile` и новый сертификат с тем
+  же набором `subjectAltName`, затем `systemctl reload caddy`.
 
 ## Миграции
 
