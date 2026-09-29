@@ -8,6 +8,7 @@ from sqlalchemy import func
 from api_users import check_password, end_sessions
 from auth import SESSION_DAYS, create_session, get_current_user, hash_password, verify_password
 from db import get_db
+from history_log import PASSWORD_SET, log_change
 from models import User, UserSession
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -195,6 +196,8 @@ def change_password(
         raise HTTPException(status_code=400, detail="Новый пароль совпадает с текущим.")
 
     db_user.password_hash = hash_password(payload.new)
+    log_change(session, "users", db_user.id, db_user.login,
+               {"password": {"old": None, "new": PASSWORD_SET}}, title=db_user.login)
     # Входы на других компьютерах завершаются, этот — остаётся
     end_sessions(session, db_user.id, keep_token=user["token"])
     session.commit()

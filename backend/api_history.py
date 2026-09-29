@@ -5,9 +5,9 @@ from pydantic import BaseModel
 from sqlalchemy import desc, func, text
 
 from api_computers import ChangeBatch
-from auth import require_editor
+from auth import get_current_user, require_editor
 from db import get_db
-from history_undo import cancel_changes, revert_value, value_history
+from history_undo import SIMPLE, Ref, cancel_changes, find_object, object_title, revert_value, value_history
 from models import Computer, History, Location
 
 router = APIRouter(prefix="/api", tags=["history"])
@@ -34,20 +34,26 @@ def history(
     user: Optional[str] = None,
     entity: Optional[str] = None,
     entity_id: Optional[int] = None,
+    entity_key: Optional[str] = None,
     cancelled: bool = False,
+    me=Depends(get_current_user),
     session=Depends(get_db),
 ):
     """Записи истории, новые сверху, порциями: limit (до 5000) начиная с offset.
     total — сколько записей всего, days — сколько записей в каждый день
     (день — по часовому поясу tz браузера): счётчики точные, даже если
     загружена только часть записей.
-    Фильтры: user — кто менял, entity (+ entity_id) — что менялось.
+    Фильтры: user — кто менял, entity (+ entity_id / entity_key) — что менялось.
+    Записи о пользователях системы видит только администратор.
     Отменённые целиком записи — только с cancelled=true (и в счётчиках тоже).
     users — все, кто что-либо менял (для фильтра)."""
     limit = min(max(limit, 1), HISTORY_PAGE_MAX)
     offset = max(offset, 0)
 
     filters = []
+
+    if me["role"] != "admin":
+        filters.append(History.entity != "users")
 
     if user:
         filters.append(History.user_name == user)
@@ -57,6 +63,9 @@ def history(
 
         if entity_id is not None:
             filters.append(History.entity_id == entity_id)
+
+        if entity_key is not None:
+            filters.append(History.entity_key == entity_key)
 
     if not cancelled:
         filters.append(History.cancelled == False)
@@ -123,6 +132,17 @@ def history(
         for location in locations:
             location_name_by_id[location.id] = location.name
 
+    # Справочники, поля, оформление, пользователи — название сейчас, а если
+    # объекта уже нет (удалённое значение) — каким оно было при записи
+    simple_titles = {}
+
+    for item in items:
+        ref = Ref(item.entity, item.entity_id, item.entity_key)
+
+        if item.entity in SIMPLE and ref not in simple_titles:
+            obj = find_object(session, ref, lock=False)
+            simple_titles[ref] = object_title(session, obj, ref) if obj is not None else None
+
     result = []
 
     for item in items:
@@ -132,12 +152,15 @@ def history(
             title = hostname_by_id.get(item.entity_id)
         elif item.entity == "locations":
             title = location_name_by_id.get(item.entity_id)
+        elif item.entity in SIMPLE:
+            title = simple_titles.get(Ref(item.entity, item.entity_id, item.entity_key)) or item.title
 
         result.append(
             {
                 "id": item.id,
                 "entity": item.entity,
                 "entity_id": item.entity_id,
+                "entity_key": item.entity_key,
                 "user_name": item.user_name,
                 "at": item.at,
                 "title": title,
@@ -155,9 +178,19 @@ def history(
 
 
 @router.get("/history/value")
-def history_of_value(entity: str, entity_id: int, field: str, session=Depends(get_db)):
+def history_of_value(
+    entity: str,
+    entity_id: int,
+    field: str,
+    entity_key: Optional[str] = None,
+    me=Depends(get_current_user),
+    session=Depends(get_db),
+):
     """Все изменения одного поля объекта (и отменённые) — окно «История значения»."""
-    return value_history(session, entity, entity_id, field)
+    if entity == "users" and me["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Это доступно только администратору.")
+
+    return value_history(session, Ref(entity, entity_id, entity_key), field)
 
 
 class CancelItem(BaseModel):

@@ -2,7 +2,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
 from auth import require_editor
 from db import get_db
+from history_log import choice_title, diff, log_change
 from models import Choice
+
+# Поля значения справочника, которые пишутся в историю (порядок — нет)
+HISTORY_FIELDS = ("value", "color", "bg_color", "bold", "italic")
 
 router = APIRouter(prefix="/api/choices", tags=["choices"])
 
@@ -61,6 +65,9 @@ def create_choice(
     ) or 0
     choice = Choice(field=field, value=value, sort=max_sort + 1)
     session.add(choice)
+    session.flush()
+    log_change(session, "choices", choice.id, user["login"],
+               {"created": {"old": None, "new": value}}, title=choice_title(session, choice))
     session.commit()
     return {"ok": True, "id": choice.id}
 
@@ -78,6 +85,7 @@ def update_choice(
             status_code=404,
             detail="Значение не найдено.",
         )
+    before = {name: getattr(choice, name) for name in HISTORY_FIELDS}
     if "value" in payload:
         new_value = (payload.get("value") or "").strip()
         if not new_value:
@@ -118,6 +126,8 @@ def update_choice(
                 status_code=400,
                 detail="sort должен быть числом.",
             )
+    log_change(session, "choices", choice.id, user["login"],
+               diff(choice, HISTORY_FIELDS, before), title=choice_title(session, choice))
     session.commit()
     return {"ok": True, "id": choice.id}
 
@@ -130,6 +140,8 @@ def delete_choice(
     choice = session.get(Choice, choice_id)
     if not choice:
         raise HTTPException(status_code=404, detail="Значение не найдено.")
+    log_change(session, "choices", choice.id, user["login"],
+               {"deleted": {"old": choice.value, "new": None}}, title=choice_title(session, choice))
     session.delete(choice)
     session.commit()
     return {"ok": True, "id": choice_id}

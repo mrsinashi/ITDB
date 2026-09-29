@@ -154,6 +154,10 @@ class History(Base):
     id = Column(Integer, primary_key=True)
     entity = Column(Text, nullable=False)
     entity_id = Column(Integer, nullable=False)
+    # Ключ объекта без числового id (оформление столбца — имя столбца; entity_id = 0)
+    entity_key = Column(Text, nullable=True)
+    # Название объекта на момент записи — если объекта уже нет (удалённое значение)
+    title = Column(Text, nullable=True)
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     # {поле: {"old", "new"}}; у поля могут быть пометки: "cancelled" — изменение

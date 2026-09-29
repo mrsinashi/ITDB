@@ -8,8 +8,16 @@
 // Окно «История значения» — двойной клик по полю в записи (Истории и карточки).
 
 import { apiFetch } from "../util.js";
+import { FIXED_HISTORY_FIELDS } from "../columns.js";
 
-const ENTITY_FILTERS = { computers: "Компьютеры", locations: "Расположения" };
+const ENTITY_FILTERS = {
+    computers: "Компьютеры",
+    locations: "Расположения",
+    choices: "Справочники",
+    field_defs: "Польз. поля",
+    column_styles: "Оформление столбцов",
+    users: "Пользователи системы"
+};
 
 // Выделение в списке по клику: Ctrl — добавить/убрать, Shift — диапазон от
 // прошлой строки, Ctrl+Shift — добавить диапазон. single — обычный клик
@@ -34,8 +42,13 @@ function clickSelect(selected, ids, anchor, id, event, single) {
 
 export default {
     computed: {
+        // Пользователей системы в фильтре видит только администратор
         historyEntityFilters() {
-            return ENTITY_FILTERS;
+            const result = Object.assign({}, ENTITY_FILTERS);
+            if (!this.isAdmin) {
+                delete result.users;
+            }
+            return result;
         },
 
         // Выбранные записи Истории (только из видимых сейчас)
@@ -90,7 +103,7 @@ export default {
 
         vhCanCancel() {
             const d = this.valueDialog && this.valueDialog.data;
-            return !!d && d.kind !== "created" && this.vhSelectedRows.some(function (r) { return r.item && !r.item.cancelled; });
+            return !!d && (d.kind === "value" || d.kind === "info") && this.vhSelectedRows.some(function (r) { return r.item && !r.item.cancelled; });
         },
 
         vhHasCancelled() {
@@ -99,7 +112,14 @@ export default {
         },
 
         vhCanRestore() {
-            return this.vhSelectedRows.some(function (r) { return r.item && r.item.cancelled; });
+            const d = this.valueDialog && this.valueDialog.data;
+            return !!d && d.kind !== "gone" && this.vhSelectedRows.some(function (r) { return r.item && r.item.cancelled; });
+        },
+
+        // Отменять и возвращать пользователей системы может только администратор
+        vhCanAct() {
+            const vd = this.valueDialog;
+            return !!vd && !!vd.data && this.canEdit && (vd.entity !== "users" || this.isAdmin);
         },
 
         vhCanRevert() {
@@ -109,7 +129,7 @@ export default {
             }
             const r = this.vhSelectedRows[0];
             const value = r.initial ? r.value : r.item.new;
-            return this.displayValue(value) !== this.displayValue(d.current);
+            return this.displayValue(value) !== this.displayValue(d.current) && d.kind === "value";
         },
     },
 
@@ -152,9 +172,9 @@ export default {
             return "Отменил " + (c.by || "—") + " " + this.formatTime(c.at);
         },
 
-        // Двойной клик открывает «Историю значения» (у создания — нет)
+        // Двойной клик открывает «Историю значения» (у создания, удаления и пароля — нет)
         canOpenValue(entity, field) {
-            return (entity === "computers" || entity === "locations") && field !== "created";
+            return !!ENTITY_FILTERS[entity] && FIXED_HISTORY_FIELDS.indexOf(field) === -1;
         },
 
         toggleShowCancelled() {
@@ -175,6 +195,9 @@ export default {
                 if (f.entityId !== null) {
                     params.set("entity_id", f.entityId);
                 }
+                if (f.entityKey) {
+                    params.set("entity_key", f.entityKey);
+                }
             }
             if (this.historyShowCancelled) {
                 params.set("cancelled", "true");
@@ -190,7 +213,7 @@ export default {
 
         setHistoryEntity(entity) {
             this.closeMenus();
-            this.historyFilter = Object.assign({}, this.historyFilter, { entity: entity || null, entityId: null, title: "" });
+            this.historyFilter = Object.assign({}, this.historyFilter, { entity: entity || null, entityId: null, entityKey: null, title: "" });
             this.loadHistory();
         },
 
@@ -199,6 +222,7 @@ export default {
             this.historyFilter = Object.assign({}, this.historyFilter, {
                 entity: item.entity,
                 entityId: item.entity_id,
+                entityKey: item.entity_key || null,
                 title: item.title || ("#" + item.entity_id)
             });
             this.loadHistory();
@@ -277,11 +301,16 @@ export default {
             }
         },
 
-        // После отмены и возврата: значения ПК и узлов изменились —
-        // перечитать Историю, таблицу, открытую карточку и дерево
+        // После отмены и возврата: значения ПК, узлов, справочников и т. п.
+        // изменились — перечитать Историю, таблицу, открытую карточку, дерево,
+        // Справочники (оформление таблицы) и пользователей
         async afterHistoryAction() {
             const cardId = this.card ? this.card.id : null;
-            const tasks = [this.loadTable()];
+            const tasks = [this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()];
+            tasks.push(this.loadTable());
+            if (this.view === "users" && this.isAdmin) {
+                tasks.push(this.loadUsers());
+            }
             if (this.view === "history") {
                 tasks.push(this.loadHistory());
             }
@@ -300,12 +329,12 @@ export default {
 
         // ---------- Окно «История значения» ----------
 
-        async openValueHistory(entity, entityId, field) {
+        async openValueHistory(entity, entityId, field, entityKey) {
             if (!this.canOpenValue(entity, field)) {
                 return;
             }
             window.getSelection && window.getSelection().removeAllRanges();
-            this.valueDialog = { entity: entity, entityId: entityId, field: field, data: null, selected: [], anchor: null, busy: false, error: "" };
+            this.valueDialog = { entity: entity, entityId: entityId, entityKey: entityKey || null, field: field, data: null, selected: [], anchor: null, busy: false, error: "" };
             await this.loadValueHistory();
         },
 
@@ -316,6 +345,9 @@ export default {
             }
             try {
                 const params = new URLSearchParams({ entity: vd.entity, entity_id: vd.entityId, field: vd.field });
+                if (vd.entityKey) {
+                    params.set("entity_key", vd.entityKey);
+                }
                 const response = await apiFetch("/api/history/value?" + params);
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
@@ -382,7 +414,7 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.toast(vd.data.label + ": возвращено «" + this.displayValue(r.initial ? r.value : r.item.new) + "»", "success");
+                this.toast(vd.data.label + ": возвращено «" + this.historyValue(vd.entity, vd.field, r.initial ? r.value : r.item.new) + "»", "success");
                 await this.afterHistoryAction();
                 await this.loadValueHistory();
             } catch (e) {

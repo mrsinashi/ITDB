@@ -18,6 +18,7 @@
 Служебные поля записей («Заменил», «Заменён на», старые поля) отменяются
 только пометкой: значения у них нет.
 """
+from collections import namedtuple
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -35,23 +36,61 @@ from api_computers import (
     vacuum_text,
 )
 from api_locations import check_can_archive, check_duplicate, clean, validate_name_code
-from models import Computer, FieldDef, History, Location, Person
+from api_users import ROLES, end_sessions
+from history_log import choice_title, column_label
+from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, User
 
-ENTITIES = ("computers", "locations")
+# Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ — столбец)
+Ref = namedtuple("Ref", "entity entity_id entity_key")
 
 # Поля узла дерева, которые можно вернуть
 LOCATION_VALUE_FIELDS = {"name", "code", "archived"}
 LOCATION_LABELS = {"name": "Название", "code": "Код", "archived": "Архив"}
 
+# Этап 19б: справочники, польз. поля, оформление столбцов, пользователи системы.
+# fields — поля, которые можно отменить и вернуть; admin — только администратор.
+SIMPLE = {
+    "choices": {"model": Choice, "fields": {"value", "color", "bg_color", "bold", "italic"}},
+    "field_defs": {"model": FieldDef, "fields": {"label", "archived"}},
+    "column_styles": {"model": ColumnStyle, "fields": {"color", "bg_color", "bold", "italic"}},
+    "users": {"model": User, "fields": {"role", "archived"}, "admin": True},
+}
+SIMPLE_LABELS = {
+    "value": "Значение", "color": "Цвет текста", "bg_color": "Фон", "bold": "Жирный",
+    "italic": "Курсив", "label": "Название", "archived": "Архив", "role": "Роль",
+    "password": "Пароль", "created": "Создано", "deleted": "Удалено",
+}
+
+ENTITIES = ("computers", "locations") + tuple(SIMPLE)
+
+# Не отменяются: создание, удаление (удалённое не вернуть), смена пароля
+FIXED_FIELDS = {"created", "deleted", "password"}
+
 # Ключ в extra → ключ в API (GSIT → gsit)
 EXTRA_API_KEYS = {extra_key: key for key, extra_key in EXTRA_FIELDS.items()}
 
 
+def ref_of(record):
+    return Ref(record.entity, record.entity_id, record.entity_key)
+
+
+def check_rights(entity, user):
+    if entity not in ENTITIES:
+        raise HTTPException(status_code=400, detail="Для этого объекта отмены нет.")
+
+    if SIMPLE.get(entity, {}).get("admin") and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Это действие доступно только администратору.")
+
+
 def field_kind(entity, field):
     """value — у поля есть значение (можно отменить и вернуть);
-    info — служебная пометка (только отменить); created — создание (нельзя)."""
-    if field == "created":
-        return "created"
+    info — служебная пометка (только отменить); fixed — создание, удаление,
+    смена пароля (нельзя)."""
+    if field in FIXED_FIELDS:
+        return "fixed"
+
+    if entity in SIMPLE:
+        return "value" if field in SIMPLE[entity]["fields"] else "info"
 
     if entity == "locations":
         return "value" if field in LOCATION_VALUE_FIELDS else "info"
@@ -68,6 +107,9 @@ def field_kind(entity, field):
 
 
 def field_label(session, entity, field):
+    if entity in SIMPLE:
+        return SIMPLE_LABELS.get(field, field)
+
     if entity == "locations":
         return LOCATION_LABELS.get(field, HISTORY_LABELS.get(field, field))
 
@@ -89,40 +131,67 @@ def field_label(session, entity, field):
     return HISTORY_LABELS.get(field, field)
 
 
-def load_object(session, entity, entity_id, lock=True):
-    if entity not in ENTITIES:
+def find_object(session, ref, lock=True):
+    """Объект истории или None, если его уже нет (удалённое значение справочника).
+    Оформления столбца может не быть (пустое удаляется) — тогда пустое, не в базе."""
+    if ref.entity not in ENTITIES:
         raise HTTPException(status_code=400, detail="Для этого объекта отмены нет.")
 
-    model = Computer if entity == "computers" else Location
-    query = session.query(model).filter(model.id == entity_id)
+    if ref.entity == "column_styles":
+        obj = session.get(ColumnStyle, ref.entity_key)
+        return obj or ColumnStyle(field=ref.entity_key, bold=False, italic=False)
+
+    models = {"computers": Computer, "locations": Location}
+    model = models.get(ref.entity) or SIMPLE[ref.entity]["model"]
+    query = session.query(model).filter(model.id == ref.entity_id)
 
     if lock:
         query = query.with_for_update()
 
-    obj = query.first()
+    return query.first()
 
-    if not obj:
-        raise HTTPException(status_code=404, detail="Объект не найден.")
+
+def load_object(session, ref, lock=True):
+    obj = find_object(session, ref, lock)
+
+    if obj is None:
+        detail = "Значения больше нет в справочнике." if ref.entity == "choices" else "Объект не найден."
+        raise HTTPException(status_code=404, detail=detail)
 
     return obj
 
 
-def object_title(obj, entity):
+def object_title(session, obj, ref):
+    entity = ref.entity
+
     if entity == "computers":
         return obj.hostname or f"ПК #{obj.id}"
 
-    return obj.name or obj.code or f"#{obj.id}"
+    if entity == "locations":
+        return obj.name or obj.code or f"#{obj.id}"
+
+    if entity == "choices":
+        return choice_title(session, obj)
+
+    if entity == "field_defs":
+        return obj.label
+
+    if entity == "column_styles":
+        return column_label(session, ref.entity_key)
+
+    return obj.login
 
 
-def field_chain(session, entity, entity_id, field):
+def field_chain(session, ref, field):
     """Записи истории объекта, где менялось поле, — от старых к новым."""
-    records = (
-        session.query(History)
-        .filter(History.entity == entity, History.entity_id == entity_id)
-        .order_by(History.at, History.id)
-        .with_for_update()
-        .all()
+    query = session.query(History).filter(
+        History.entity == ref.entity, History.entity_id == ref.entity_id
     )
+
+    if ref.entity_key is not None:
+        query = query.filter(History.entity_key == ref.entity_key)
+
+    records = query.order_by(History.at, History.id).with_for_update().all()
 
     return [record for record in records if field in (record.changes or {})]
 
@@ -175,7 +244,7 @@ class Values:
         return change.get(side)
 
     def current(self, entity, obj, field):
-        if entity == "locations":
+        if entity == "locations" or entity in SIMPLE:
             return getattr(obj, field)
 
         if field == "archived":
@@ -230,11 +299,14 @@ def same(field, a, b):
     return a is not None and b is not None and str(a) == str(b)
 
 
-def set_value(session, entity, obj, field, value, batch):
+def set_value(session, entity, obj, field, value, batch, user):
     """Поставить полю значение из истории. Возвращает изменения для записи
     истории ({поле: {"old", "new"}}); соседи со сдвинутым № места — в batch."""
     if entity == "locations":
         return set_location_value(session, obj, field, value)
+
+    if entity in SIMPLE:
+        return set_simple_value(session, entity, obj, field, value, user)
 
     if field == "archived":
         value = bool(value)
@@ -318,6 +390,62 @@ def set_location_value(session, location, field, value):
     return {field: {"old": old, "new": getattr(location, field)}}
 
 
+def set_simple_value(session, entity, obj, field, value, user):
+    """Справочник, польз. поле, оформление столбца, пользователь системы —
+    с теми же проверками, что и при обычной правке."""
+    old = getattr(obj, field)
+
+    if same(field, old, value):
+        return {}
+
+    if field in ("bold", "italic", "archived"):
+        value = bool(value)
+    elif field in ("color", "bg_color"):
+        value = value or None
+    elif field in ("value", "label"):
+        value = (value or "").strip()
+
+        if not value:
+            raise HTTPException(status_code=400, detail="Значение не может быть пустым.")
+
+    if entity == "choices" and field == "value":
+        exists = (
+            session.query(Choice)
+            .filter(Choice.field == obj.field, Choice.value == value, Choice.id != obj.id)
+            .first()
+        )
+
+        if exists:
+            raise HTTPException(status_code=400, detail=f"«{value}» уже есть в этом справочнике.")
+
+    if entity == "users":
+        if obj.id == user["id"]:
+            raise HTTPException(status_code=400, detail="Свою роль и отключение себя изменить нельзя.")
+
+        if field == "role" and value not in ROLES:
+            raise HTTPException(status_code=400, detail="Неизвестная роль.")
+
+        if field == "archived" and value:
+            end_sessions(session, obj.id)
+
+    setattr(obj, field, value)
+
+    # Оформление столбца: пустое удаляется, новое добавляется
+    if entity == "column_styles":
+        empty = not (obj.color or obj.bg_color or obj.bold or obj.italic)
+        stored = session.get(ColumnStyle, obj.field) is not None
+
+        if empty and stored:
+            session.delete(obj)
+        elif not empty and not stored:
+            session.add(obj)
+
+        # Следующее свойство того же столбца (в одной отмене) должно увидеть строку
+        session.flush()
+
+    return {field: {"old": old, "new": value}}
+
+
 def touch(entity, obj):
     """ПК изменился без новой записи истории — версия +1 (правка из таблицы
     со старой версией получит «обнови таблицу»)."""
@@ -351,24 +479,24 @@ def cancel_changes(session, items, cancel, user, batch):
         if change is None or bool(change.get("cancelled")) == cancel:
             continue
 
-        if field_kind(record.entity, field) == "created":
+        check_rights(record.entity, user)
+
+        if field_kind(record.entity, field) == "fixed":
             raise HTTPException(
                 status_code=400,
-                detail="Создание не отменяется: удаления в системе нет, только архив.",
+                detail="Создание, удаление и смена пароля не отменяются.",
             )
 
-        if record.entity not in ENTITIES:
-            raise HTTPException(status_code=400, detail="Эту запись отменить нельзя.")
-
-        groups.setdefault((record.entity, record.entity_id, field), []).append(record.id)
+        groups.setdefault((ref_of(record), field), []).append(record.id)
 
     values = Values(session)
     stamp = {"by": user["login"], "at": datetime.now(timezone.utc).isoformat()} if cancel else None
     count = 0
 
-    for (entity, entity_id, field), ids in groups.items():
-        obj = load_object(session, entity, entity_id)
-        chain = field_chain(session, entity, entity_id, field)
+    for (ref, field), ids in groups.items():
+        entity = ref.entity
+        obj = load_object(session, ref)
+        chain = field_chain(session, ref, field)
         kind = field_kind(entity, field)
 
         if kind == "value":
@@ -381,7 +509,7 @@ def cancel_changes(session, items, cancel, user, batch):
                 shown = values.display(entity, field, current)
                 raise HTTPException(
                     status_code=409,
-                    detail=f"«{label}» у «{object_title(obj, entity)}» менялось не через историю "
+                    detail=f"«{label}» у «{object_title(session, obj, ref)}» менялось не через историю "
                            f"(сейчас: {shown if shown not in (None, '') else '—'}). Отмена не выполнена.",
                 )
 
@@ -395,7 +523,7 @@ def cancel_changes(session, items, cancel, user, batch):
             target = values.of_change(entity, field, change, side)
 
             if not same(field, target, values.current(entity, obj, field)):
-                if set_value(session, entity, obj, field, target, batch):
+                if set_value(session, entity, obj, field, target, batch, user):
                     touch(entity, obj)
 
     return count
@@ -405,15 +533,17 @@ def revert_value(session, record, field, initial, user, batch):
     """Поставить полю значение из записи истории («стало») или исходное
     («было» самого первого изменения). Новая запись — с пометкой revert."""
     entity = record.entity
+    ref = ref_of(record)
+    check_rights(entity, user)
 
-    if entity not in ENTITIES or field_kind(entity, field) != "value":
+    if field_kind(entity, field) != "value":
         raise HTTPException(status_code=400, detail="У этого поля нет значения, которое можно вернуть.")
 
-    obj = load_object(session, entity, record.entity_id)
+    obj = load_object(session, ref)
     values = Values(session)
 
     if initial:
-        chain = field_chain(session, entity, record.entity_id, field)
+        chain = field_chain(session, ref, field)
         change, side = chain[0].changes[field], "old"
     else:
         change, side = record.changes[field], "new"
@@ -423,7 +553,7 @@ def revert_value(session, record, field, initial, user, batch):
     if same(field, target, values.current(entity, obj, field)):
         raise HTTPException(status_code=400, detail="Значение уже такое.")
 
-    changes = set_value(session, entity, obj, field, target, batch)
+    changes = set_value(session, entity, obj, field, target, batch, user)
 
     if not changes:
         raise HTTPException(status_code=400, detail="Значение уже такое.")
@@ -435,7 +565,9 @@ def revert_value(session, record, field, initial, user, batch):
     session.add(
         History(
             entity=entity,
-            entity_id=obj.id,
+            entity_id=ref.entity_id,
+            entity_key=ref.entity_key,
+            title=object_title(session, obj, ref) if entity in SIMPLE else None,
             user_name=user["login"],
             changes=changes,
         )
@@ -444,23 +576,31 @@ def revert_value(session, record, field, initial, user, batch):
     return obj
 
 
-def value_history(session, entity, entity_id, field):
-    """История одного поля объекта для окна «История значения»."""
-    obj = load_object(session, entity, entity_id, lock=False)
+def value_history(session, ref, field):
+    """История одного поля объекта для окна «История значения».
+    Удалённого объекта (значение справочника) нет — история только для просмотра."""
+    obj = find_object(session, ref, lock=False)
+    query = session.query(History).filter(
+        History.entity == ref.entity, History.entity_id == ref.entity_id
+    )
+
+    if ref.entity_key is not None:
+        query = query.filter(History.entity_key == ref.entity_key)
+
     records = [
         record
-        for record in (
-            session.query(History)
-            .filter(History.entity == entity, History.entity_id == entity_id)
-            .order_by(History.at.desc(), History.id.desc())
-            .all()
-        )
+        for record in query.order_by(History.at.desc(), History.id.desc()).all()
         if field in (record.changes or {})
     ]
 
-    kind = field_kind(entity, field)
+    kind = field_kind(ref.entity, field) if obj is not None else "gone"
     values = Values(session)
-    current = values.current(entity, obj, field) if kind == "value" else None
+    current = values.current(ref.entity, obj, field) if kind == "value" else None
+
+    if obj is not None:
+        title = object_title(session, obj, ref)
+    else:
+        title = next((record.title for record in records if record.title), f"#{ref.entity_id}")
 
     items = []
 
@@ -479,13 +619,14 @@ def value_history(session, entity, entity_id, field):
         )
 
     return {
-        "entity": entity,
-        "entity_id": entity_id,
+        "entity": ref.entity,
+        "entity_id": ref.entity_id,
+        "entity_key": ref.entity_key,
         "field": field,
-        "label": field_label(session, entity, field),
-        "title": object_title(obj, entity),
+        "label": field_label(session, ref.entity, field),
+        "title": title,
         "kind": kind,
-        "current": values.display(entity, field, current),
+        "current": values.display(ref.entity, field, current),
         "initial": records[-1].changes[field].get("old") if records else None,
         "items": items,
     }

@@ -2148,7 +2148,8 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .history-table .h-obj {
     width: 1%;
     white-space: nowrap;
-    max-width: 260px;
+    /* «Справочник Процессор: Pentium G5400» — помещается целиком (этап 19б) */
+    max-width: 340px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -2342,6 +2343,19 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .ch-cancelled .h-mark,
 .ch-val.ch-cancelled .h-mark {
     color: var(--text-muted);
+}
+/* Цвет из оформления в истории — образец рядом со значением */
+.h-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+    vertical-align: -1px;
+    border: 1px solid rgba(0, 0, 0, 0.25);
+    border-radius: 2px;
+}
+.ch-cancelled .h-swatch {
+    opacity: 0.5;
 }
 /* Поле, у которого есть «История значения», — по двойному клику */
 .changes .ch-open {

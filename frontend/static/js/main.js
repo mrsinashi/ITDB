@@ -124,7 +124,7 @@ const app = Vue.createApp({
             // Отменённые изменения: по умолчанию скрыты и не считаются (глаз в шапке)
             historyShowCancelled: false,
             // Фильтр: кто менял и что (вид объекта или один объект)
-            historyFilter: { user: null, entity: null, entityId: null, title: "" },
+            historyFilter: { user: null, entity: null, entityId: null, entityKey: null, title: "" },
             historyUsers: [],
             historySelected: [],    // выбранные записи (Ctrl/Shift+клик)
             historyAnchor: null,

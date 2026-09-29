@@ -150,6 +150,31 @@ export function buildFieldLabels(columns, historyLabels) {
         historyLabels || {}
     );
 }
+// Этап 19б: справочники, польз. поля, оформление столбцов, пользователи системы
+export const ENTITY_LABELS = {
+    computers: "ПК",
+    locations: "Расположение",
+    choices: "Справочник",
+    field_defs: "Поле",
+    column_styles: "Оформление",
+    users: "Пользователь"
+};
+export const SIMPLE_FIELD_LABELS = {
+    value: "Значение",
+    color: "Цвет текста",
+    bg_color: "Фон",
+    bold: "Жирный",
+    italic: "Курсив",
+    label: "Название",
+    archived: "Архив",
+    role: "Роль",
+    password: "Пароль",
+    created: "Создано",
+    deleted: "Удалено"
+};
+// Не отменяются и не открывают «Историю значения»
+export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];
+
 export const LOCATION_FIELD_LABELS = {
     name: "Название",
     code: "Код",

@@ -532,9 +532,9 @@
                                     <template v-for="(change, field) in shownChanges(item.changes)" :key="field">
                                         <span class="field" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue(item.entity, field) }"
                                             :title="canOpenValue(item.entity, field) ? 'Двойной клик — история значения' : null"
-                                            @dblclick="openValueHistory(item.entity, item.entity_id, field)">{{ fieldLabel(item.entity, field) }}</span>
+                                            @dblclick="openValueHistory(item.entity, item.entity_id, field, item.entity_key)">{{ fieldLabel(item.entity, field) }}</span>
                                         <span class="ch-val" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue(item.entity, field) }"
-                                            @dblclick="openValueHistory(item.entity, item.entity_id, field)"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
+                                            @dblclick="openValueHistory(item.entity, item.entity_id, field, item.entity_key)"><template v-if="field !== 'created'"><span class="old"><span v-if="isColorChange(item.entity, field) && change.old" class="h-swatch" :style="{ background: change.old }"></span>{{ historyValue(item.entity, field, change.old) }}</span><span class="arrow">→</span></template><span class="new"><span v-if="isColorChange(item.entity, field) && change.new" class="h-swatch" :style="{ background: change.new }"></span>{{ historyValue(item.entity, field, change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
                                     </template>
                                 </div>
                             </td>
@@ -727,7 +727,8 @@
             <div class="dialog vh-dialog" role="dialog">
                 <div class="vh-head">
                     <span class="vh-title"><b>{{ valueDialog.data ? valueDialog.data.title : "…" }}</b><template v-if="valueDialog.data"> · {{ valueDialog.data.label }}</template></span>
-                    <span v-if="valueDialog.data && valueDialog.data.kind === 'value'" class="vh-now">сейчас: <b>{{ displayValue(valueDialog.data.current) }}</b></span>
+                    <span v-if="valueDialog.data && valueDialog.data.kind === 'value'" class="vh-now">сейчас: <b>{{ historyValue(valueDialog.entity, valueDialog.field, valueDialog.data.current) }}</b></span>
+                    <span v-else-if="valueDialog.data && valueDialog.data.kind === 'gone'" class="vh-now">объекта уже нет — только просмотр</span>
                     <span class="vh-close" title="Закрыть (Esc)" @click="closeValueDialog">×</span>
                 </div>
                 <div class="vh-body">
@@ -741,25 +742,25 @@
                                 <template v-if="r.item">
                                     <td class="h-time">{{ formatTime(r.item.at) }}</td>
                                     <td class="h-user">{{ r.item.user_name || "—" }}</td>
-                                    <td class="ch-val" :class="{ 'ch-cancelled': r.item.cancelled }"><span class="old">{{ displayValue(r.item.old) }}</span><span class="arrow">→</span><span class="new">{{ displayValue(r.item.new) }}</span><span v-if="r.item.revert" class="h-mark">возврат значения</span><span v-if="r.item.cancelled" class="h-mark" :title="cancelTitle(r.item)">отменено</span></td>
+                                    <td class="ch-val" :class="{ 'ch-cancelled': r.item.cancelled }"><span class="old"><span v-if="isColorChange(valueDialog.entity, field) && r.item.old" class="h-swatch" :style="{ background: r.item.old }"></span>{{ historyValue(valueDialog.entity, valueDialog.field, r.item.old) }}</span><span class="arrow">→</span><span class="new"><span v-if="isColorChange(valueDialog.entity, field) && r.item.new" class="h-swatch" :style="{ background: r.item.new }"></span>{{ historyValue(valueDialog.entity, valueDialog.field, r.item.new) }}</span><span v-if="r.item.revert" class="h-mark">возврат значения</span><span v-if="r.item.cancelled" class="h-mark" :title="cancelTitle(r.item)">отменено</span></td>
                                 </template>
                                 <template v-else>
                                     <td class="h-time">—</td>
                                     <td class="h-user"></td>
-                                    <td class="ch-val">Исходное значение: <span class="new">{{ displayValue(r.value) }}</span></td>
+                                    <td class="ch-val">Исходное значение: <span class="new">{{ historyValue(valueDialog.entity, valueDialog.field, r.value) }}</span></td>
                                 </template>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-                <div v-if="canEdit && valueDialog.data" class="vh-hint">
+                <div v-if="vhCanAct && valueDialog.data.kind !== 'gone'" class="vh-hint">
                     Отменить — изменение помечается «отменено», значение пересчитывается, новой записи нет.
                     Вернуть — поле получает значение выбранной строки, в Истории — запись «возврат значения».
                     Выбор нескольких строк — Ctrl / Shift.
                 </div>
                 <div class="dialog-buttons">
                     <span v-if="valueDialog.error" class="vh-error">{{ valueDialog.error }}</span>
-                    <template v-if="canEdit && valueDialog.data">
+                    <template v-if="vhCanAct && valueDialog.data.kind !== 'gone'">
                         <button v-if="vhHasCancelled" class="btn" :disabled="!vhCanRestore || valueDialog.busy" @click="vhCancel(false)">Восстановить</button>
                         <button class="btn" :disabled="!vhCanCancel || valueDialog.busy" @click="vhCancel(true)">Отменить изменения</button>
                         <button v-if="valueDialog.data.kind === 'value'" class="btn btn-primary" :disabled="!vhCanRevert || valueDialog.busy" @click="vhRevert">Вернуть это значение</button>

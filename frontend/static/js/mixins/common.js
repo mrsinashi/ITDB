@@ -1,7 +1,8 @@
 // Общее: ошибки запросов, полоска загрузки, сообщения и подтверждения, выгрузка.
 
 import { apiFetch, pad2 } from "../util.js";
-import { LOCATION_FIELD_LABELS, buildFieldLabels } from "../columns.js";
+import { ENTITY_LABELS, LOCATION_FIELD_LABELS, SIMPLE_FIELD_LABELS, buildFieldLabels } from "../columns.js";
+import { ROLE_LABELS } from "../settings.js";
 
 export default {
     computed: {
@@ -59,18 +60,15 @@ export default {
         },
 
         entityLabel(entity) {
-            if (entity === "computers") {
-                return "ПК";
-            }
-            if (entity === "locations") {
-                return "Расположение";
-            }
-            return entity;
+            return ENTITY_LABELS[entity] || entity;
         },
 
         fieldLabel(entity, field) {
             if (entity === "locations") {
                 return LOCATION_FIELD_LABELS[field] || field;
+            }
+            if (entity !== "computers") {
+                return SIMPLE_FIELD_LABELS[field] || field;
             }
             const labels = this.fieldLabelMap;
             // Поля из computers.extra пишутся в историю как «extra.<ключ>»
@@ -190,6 +188,19 @@ export default {
             } else {
                 start();
             }
+        },
+
+        // Значение в Истории с учётом поля: роль — словами
+        historyValue(entity, field, value) {
+            if (entity === "users" && field === "role" && value) {
+                return ROLE_LABELS[value] || value;
+            }
+            return this.displayValue(value);
+        },
+
+        // Цвет из оформления — рядом со значением образец
+        isColorChange(entity, field) {
+            return (entity === "choices" || entity === "column_styles") && (field === "color" || field === "bg_color");
         },
 
         displayValue(value) {

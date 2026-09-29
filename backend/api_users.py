@@ -14,6 +14,7 @@ from sqlalchemy import func
 
 from auth import hash_password, require_admin
 from db import get_db
+from history_log import PASSWORD_SET, log_change
 from models import User, UserSession
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -121,6 +122,11 @@ def create_user(payload: UserCreate, me=Depends(require_admin), session=Depends(
 
     user = User(login=login, role=payload.role, password_hash=hash_password(payload.password))
     session.add(user)
+    session.flush()
+    log_change(session, "users", user.id, me["login"], {
+        "created": {"old": None, "new": login},
+        "role": {"old": None, "new": user.role},
+    }, title=login)
     session.commit()
 
     return user_out(user, me)
@@ -139,6 +145,8 @@ def update_user(
         raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
     is_self = user.id == me["id"]
+    before = {"role": user.role, "archived": user.archived}
+    changes = {}
 
     if payload.role is not None and payload.role != user.role:
         if is_self:
@@ -162,9 +170,14 @@ def update_user(
     if payload.password:
         check_password(payload.password)
         user.password_hash = hash_password(payload.password)
+        changes["password"] = {"old": None, "new": PASSWORD_SET}
         # Старые входы с прежним паролем больше не действуют (свой текущий — остаётся)
         end_sessions(session, user.id, keep_token=me["token"] if is_self else None)
 
+    for name, old in before.items():
+        changes[name] = {"old": old, "new": getattr(user, name)}
+
+    log_change(session, "users", user.id, me["login"], changes, title=user.login)
     session.commit()
 
     return user_out(user, me)

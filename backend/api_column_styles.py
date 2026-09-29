@@ -4,7 +4,10 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from auth import require_editor
 from db import get_db
+from history_log import column_label, log_change
 from models import ColumnStyle
+
+STYLE_FIELDS = ("color", "bg_color", "bold", "italic")
 
 router = APIRouter(prefix="/api/column-styles", tags=["column_styles"])
 
@@ -50,6 +53,7 @@ def update_column_style(
     existed = item is not None
     if not existed:
         item = ColumnStyle(field=field, bold=False, italic=False)
+    before = style_dict(item)
     if "color" in payload:
         item.color = clean_color(payload.get("color"))
     if "bg_color" in payload:
@@ -60,6 +64,10 @@ def update_column_style(
         item.italic = bool(payload.get("italic"))
 
     result = style_dict(item)
+    # Оформление столбца: entity_id 0, столбец — в entity_key
+    log_change(session, "column_styles", 0, user["login"],
+               {name: {"old": before[name], "new": result[name]} for name in STYLE_FIELDS},
+               title=column_label(session, field), entity_key=field)
     empty = not (item.color or item.bg_color or item.bold or item.italic)
     if empty and existed:
         session.delete(item)

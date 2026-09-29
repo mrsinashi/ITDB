@@ -5,6 +5,7 @@ from sqlalchemy import func
 from api_computers import is_reserved_field_key
 from auth import require_editor
 from db import get_db
+from history_log import log_change
 from models import FieldDef
 
 router = APIRouter(prefix="/api/field-defs", tags=["field_defs"])
@@ -77,6 +78,9 @@ def create_field_def(
     max_sort = session.query(func.max(FieldDef.sort)).scalar() or 0
     fd = FieldDef(key=key, label=label, field_type=field_type, sort=max_sort + 1)
     session.add(fd)
+    session.flush()
+    log_change(session, "field_defs", fd.id, user["login"],
+               {"created": {"old": None, "new": f"{label} ({key})"}}, title=label)
     session.commit()
     return {"ok": True, "id": fd.id}
 
@@ -95,6 +99,8 @@ def update_field_def(
         new_label = (payload.get("label") or "").strip()
         if not new_label:
             raise HTTPException(status_code=400, detail="Название не может быть пустым.")
+        log_change(session, "field_defs", fd.id, user["login"],
+                   {"label": {"old": fd.label, "new": new_label}}, title=new_label)
         fd.label = new_label
     if "sort" in payload:
         try:
@@ -115,5 +121,7 @@ def archive_field_def(
     if not fd or fd.archived:
         raise HTTPException(status_code=404, detail="Поле не найдено.")
     fd.archived = True
+    log_change(session, "field_defs", fd.id, user["login"],
+               {"archived": {"old": False, "new": True}}, title=fd.label)
     session.commit()
     return {"ok": True, "id": fd.id}
