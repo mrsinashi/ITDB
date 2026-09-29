@@ -83,10 +83,31 @@
             <div class="toolbar">
                 <div class="tb-left">
                     <span class="tb-count">{{ countText }}</span>
-                    <button v-if="locationFilter" class="chip" @click="clearLocationFilter"
-                        :title="'Показаны только ПК из «' + locationFilter.path + '». Нажми, чтобы показать все'">
-                        <span class="chip-text">{{ locationFilter.path }}</span><span class="chip-x">✕</span>
-                    </button>
+                    <!-- Фильтры: по дереву и по столбцам. Не помещаются — сжимаются, полный текст в подсказке -->
+                    <span v-if="locationFilter || activeColFilters.length" class="tb-chips">
+                        <button v-if="locationFilter" class="chip" @click="clearLocationFilter"
+                            :title="'Показаны только ПК из «' + locationFilter.path + '». Нажми, чтобы показать все'">
+                            <span class="chip-text">{{ locationFilter.path }}</span><span class="chip-x">✕</span>
+                        </button>
+                        <template v-if="activeColFilters.length < 3">
+                            <button v-for="item in activeColFilters" :key="'cf-' + item.col.field" class="chip" @click="clearColFilter(item.col.field)" :title="colFilterChipTitle(item)">
+                                <span class="chip-text">{{ colFilterChipText(item) }}</span><span class="chip-x">✕</span>
+                            </button>
+                        </template>
+                    </span>
+                    <!-- Три фильтра и больше — одной кнопкой со списком -->
+                    <span v-if="activeColFilters.length >= 3" class="dropdown-wrap" ref="colFilterListWrap">
+                        <button class="chip" :class="{ 'menu-open': openMenu === 'colFilterList' }" @click="toggleMenu('colFilterList')" title="Фильтры по столбцам">
+                            <span class="chip-text">Фильтры: {{ activeColFilters.length }}</span><span class="caret">▼</span>
+                        </button>
+                        <div v-if="openMenu === 'colFilterList'" class="dropdown attached cf-list-menu">
+                            <button v-for="item in activeColFilters" :key="'cfl-' + item.col.field" @click="clearColFilter(item.col.field)" :title="colFilterChipTitle(item)">
+                                <span class="cfl-text">{{ colFilterChipText(item) }}</span><span class="cfl-x">✕</span>
+                            </button>
+                            <div class="dd-sep"></div>
+                            <button @click="clearAllColFilters">Сбросить все</button>
+                        </div>
+                    </span>
                     <span v-if="selectedRows.length > 0" class="dropdown-wrap" ref="selectionWrap">
                         <button class="btn" :class="{ 'menu-open': openMenu === 'selection' }" @click="toggleMenu('selection')" title="Действия с выбранными. Выделение: Ctrl+клик, Shift+клик, Ctrl+A; снять — Esc">
                             Выбрано: {{ selectedRows.length }}<span class="caret">▼</span>
@@ -116,6 +137,7 @@
                 <div class="tb-right">
                     <span v-if="tableError" class="tb-error" :title="tableError">{{ tableError }}</span>
                     <!-- Появляются слева от постоянных кнопок: остальное не сдвигается -->
+                    <button v-if="activeColFilters.length" class="btn icon-only" @click="clearAllColFilters" title="Сбросить фильтры по столбцам"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.013 3H2l8 9.46V19l4 2v-8.54l.9-1.055"/><path d="m22 3-5 5"/><path d="m17 3 5 5"/></svg></button>
                     <button v-if="sortField" class="btn icon-only" @click="resetSort" title="Сбросить сортировку"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></button>
                     <button v-if="hasManualWidths" class="btn icon-only" @click="resetWidths" title="Выровнять: вернуть автоматическую ширину столбцов"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="m6 8-4 4 4 4"/><path d="M2 12h20"/></svg></button>
                     <span class="dropdown-wrap" ref="columnsWrap">
@@ -219,11 +241,12 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <th v-for="col in columns" :key="'th-' + col.field"
-                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === lastStickyField }"
+                            <th v-for="col in columns" :key="'th-' + col.field" :data-field="col.field"
+                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === lastStickyField, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field }"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
-                                @click="sortBy(col)">
+                                @click="sortBy(col)" @contextmenu.prevent="openColFilter(col, $event)">
                                 <span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
+                                <span class="th-filter" :class="{ on: isColFiltered(col.field) }" :title="isColFiltered(col.field) ? 'Фильтр включён — изменить' : 'Фильтр по значениям (или правый клик по шапке)'" @click.stop="openColFilter(col, $event)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                                 <span class="resize-handle" @mousedown.stop.prevent="startResize($event, col)" @click.stop></span>
                             </th>
                         </tr>
@@ -627,6 +650,31 @@
                 </div>
             </div>
         </section>
+
+        <!-- ================= Фильтр по столбцу: значения под шапкой ================= -->
+        <teleport to="body">
+            <div v-if="openMenu === 'colFilter' && colFilterMenu" ref="colFilterPanel" class="cf-menu" :style="colFilterMenuStyle">
+                <input ref="colFilterInput" class="cf-search" v-model="colFilterMenu.query" placeholder="Найти значение" spellcheck="false" autocomplete="off"
+                    :title="colFilterMenuTitle + '. Enter — показать только найденные'" @keydown.enter.prevent="onColFilterEnter">
+                <label class="cf-item cf-all" v-if="colFilterShown.length">
+                    <input type="checkbox" :checked="colFilterAllState === true" :indeterminate.prop="colFilterAllState === null" @change="toggleColFilterAll">
+                    <span class="cf-value">{{ colFilterMenu.query.trim() ? "Все найденные" : "Все" }}</span>
+                </label>
+                <div class="cf-list">
+                    <label v-for="o in colFilterShown" :key="'cfv-' + o.key" class="cf-item">
+                        <input type="checkbox" :checked="isColFilterChecked(o.key)" @change="toggleColFilterValue(o)">
+                        <span class="cf-value" :class="{ 'val-chip': !!(colFilterItemStyle(o) || {}).backgroundColor, 'cf-empty': o.empty }" :style="colFilterItemStyle(o)">{{ o.value }}</span>
+                        <span class="cf-only" title="Показать только это значение" @click.prevent.stop="onlyColFilterValues([o])">только</span>
+                        <span class="cf-count" title="ПК с этим значением">{{ o.count }}</span>
+                    </label>
+                    <div v-if="!colFilterShown.length" class="cf-none">Ничего не найдено</div>
+                </div>
+                <div class="cf-foot">
+                    <button class="btn" :disabled="!isColFiltered(colFilterMenu.field)" @click="clearColFilter(colFilterMenu.field)">Сбросить</button>
+                    <button class="btn" @click="closeMenus">Закрыть</button>
+                </div>
+            </div>
+        </teleport>
 
         <!-- ================= Подсказки при вводе (ячейка, карточка, «Изменить поле…») ================= -->
         <teleport to="body">

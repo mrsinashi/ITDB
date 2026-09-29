@@ -526,7 +526,7 @@ body {
 
 .toolbar .tb-left {
     grid-column: 1;
-    justify-self: start;
+    justify-self: stretch;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -687,6 +687,44 @@ body.ui-light-toolbar .toolbar .tb-error {
     color: var(--tb-ctrl-text);
     cursor: pointer;
     max-width: 320px;
+}
+/* Плашки фильтров (Таблица): при нехватке места сжимаются, а не наезжают на поиск */
+.toolbar .tb-left > * {
+    flex: none;
+}
+.toolbar .tb-left > .tb-chips {
+    display: flex;
+    gap: 6px;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+.toolbar .tb-chips .chip {
+    flex: 0 1 auto;
+    min-width: 44px;
+}
+.toolbar .chip .chip-x {
+    flex: none;
+}
+.toolbar .chip.menu-open {
+    background: var(--tb-ctrl-hover-bg);
+    border-bottom-left-radius: 0;
+}
+/* «Фильтры: N ▾» — каждый фильтр строкой, ✕ справа */
+.cf-list-menu {
+    min-width: 220px;
+}
+.cf-list-menu button {
+    justify-content: space-between;
+    gap: 16px;
+}
+.cf-list-menu .cfl-text {
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cf-list-menu .cfl-x {
+    opacity: 0.6;
 }
 .toolbar .chip:hover {
     background: var(--tb-ctrl-hover-bg);
@@ -1089,6 +1127,159 @@ select.input {
     bottom: 0;
     width: 6px;
     cursor: col-resize;
+}
+
+/* Фильтр по столбцу (этап 21): воронка у правого края шапки — при наведении,
+   у отфильтрованного столбца — всегда, цветом стрелки сортировки */
+.data-table th.filtered {
+    padding-right: 16px;
+}
+.th-filter {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 16px;
+    border-radius: 2px;
+    background: inherit;
+    color: var(--text-muted);
+    visibility: hidden;
+}
+.th-filter svg {
+    width: 10px;
+    height: 10px;
+    fill: none;
+}
+.data-table th:hover .th-filter,
+.data-table th.filter-open .th-filter,
+.th-filter.on {
+    visibility: visible;
+}
+.th-filter:hover {
+    color: var(--text-strong);
+    box-shadow: inset 0 0 0 10px rgba(0, 0, 0, 0.08);
+}
+.th-filter.on {
+    color: var(--brand);
+}
+.th-filter.on svg {
+    fill: currentColor;
+}
+.data-table th.filter-open {
+    background: var(--grid-head-sorted-bg);
+}
+
+/* Список значений под шапкой — в манере выпадающих меню, угол в угол с ячейкой */
+.cf-menu {
+    position: fixed;
+    z-index: 200;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    color: var(--menu-text);
+    font-size: 12px;
+}
+.cf-menu .cf-search {
+    box-sizing: border-box;
+    width: 100%;
+    height: 24px;
+    padding: 0 7px;
+    margin-bottom: 3px;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--tb-input-border);
+    border-radius: var(--radius);
+    outline: none;
+}
+.cf-menu .cf-search:focus {
+    border-color: var(--brand-focus);
+}
+.cf-menu .cf-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+.cf-menu .cf-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.cf-menu .cf-item:hover {
+    background: var(--menu-hover-bg);
+    color: var(--menu-hover-text);
+}
+.cf-menu .cf-item input {
+    margin: 0;
+    flex: none;
+    accent-color: var(--brand);
+}
+.cf-menu .cf-all {
+    border-bottom: 1px solid var(--menu-border);
+    border-radius: 2px 2px 0 0;
+    margin-bottom: 2px;
+}
+.cf-menu .cf-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cf-menu .cf-value.val-chip {
+    padding: 0 5px;
+    margin-left: -5px;
+    border-radius: var(--radius);
+}
+.cf-menu .cf-value.cf-empty {
+    color: var(--menu-muted);
+}
+.cf-menu .cf-only {
+    margin-left: auto;
+    padding: 0 4px;
+    font-size: 11px;
+    color: var(--menu-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    visibility: hidden;
+}
+.cf-menu .cf-item:hover .cf-only {
+    visibility: visible;
+}
+.cf-menu .cf-only:hover {
+    color: var(--menu-hover-text);
+}
+.cf-menu .cf-count {
+    margin-left: auto;
+    min-width: 16px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--menu-muted);
+}
+.cf-menu .cf-only + .cf-count {
+    margin-left: 0;
+}
+.cf-menu .cf-none {
+    padding: 3px 7px;
+    color: var(--menu-muted);
+}
+.cf-menu .cf-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 4px;
+    margin-top: 3px;
+    border-top: 1px solid var(--menu-border);
 }
 
 .data-table td {

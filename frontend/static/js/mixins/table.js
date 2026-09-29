@@ -132,46 +132,9 @@ export default {
             return base;
         },
 
+        // Фильтр по дереву, фильтры по столбцам (mixins/col-filters.js), поиск
         filteredRows() {
-            let rows = this.modeRows;
-            if (this.locationFilter) {
-                const ids = this.locationFilter.ids;
-                rows = rows.filter(function (row) {
-                    return ids.has(row.location_id);
-                });
-            }
-            const words = searchWords(this.quickFilter);
-            if (!words.length) {
-                return rows;
-            }
-            const fields = (this.searchHidden ? this.allColumns : this.columns).map(function (col) {
-                return col.field;
-            });
-            // Число среди нескольких слов («хир орд 3») ищется целиком: это № места,
-            // № кабинета или отдельное число внутри текста («Win 10»). Иначе «3»
-            // находилось бы в каждом IP 10.0.3.x, в этаже, в кабинете 301.
-            // Одно слово — как раньше, кусок где угодно (часть ИНВ, IP).
-            const whole = words.length > 1;
-            return rows.filter(function (row) {
-                const texts = [];
-                fields.forEach(function (field) {
-                    const value = row[field];
-                    if (value !== null && value !== undefined && value !== "") {
-                        texts.push({ field: field, text: searchNorm(value) });
-                    }
-                });
-                return words.every(function (w) {
-                    if (whole && /^\d+$/.test(w)) {
-                        return texts.some(function (t) {
-                            if (t.field === "seat_no" || t.field === "room_code") {
-                                return t.text.trim() === w;
-                            }
-                            return /\s/.test(t.text.trim()) && t.text.split(/[\s,;]+/).indexOf(w) !== -1;
-                        });
-                    }
-                    return texts.some(function (t) { return t.text.indexOf(w) !== -1; });
-                });
-            });
+            return this.searchRows(this.applyColFilters(this.locationRows, null));
         },
 
         displayRows() {
@@ -368,7 +331,7 @@ export default {
         },
 
         recalcWidths() {
-            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles);
+            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, this.colFilters);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -689,8 +652,14 @@ export default {
                 user: this.$refs.userWrap,
                 page: this.$refs.pageSetWrap,
                 historySel: this.$refs.historySelWrap,
-                historyFilter: this.$refs.historyFilterWrap
+                historyFilter: this.$refs.historyFilterWrap,
+                colFilter: this.$refs.colFilterPanel,
+                colFilterList: this.$refs.colFilterListWrap
             };
+            // Клик по воронке в шапке решает сам: та же — закрыть, другая — открыть её
+            if (this.openMenu === "colFilter" && event.target.closest(".th-filter")) {
+                return;
+            }
             const wrap = refs[this.openMenu];
             if (!wrap || !wrap.contains(event.target)) {
                 this.closeMenus();
@@ -735,6 +704,42 @@ export default {
         },
 
         // ---------- Поиск ----------
+
+        // Строки, в которых нашлись все слова поиска по базе
+        searchRows(rows) {
+            const words = searchWords(this.quickFilter);
+            if (!words.length) {
+                return rows;
+            }
+            const fields = (this.searchHidden ? this.allColumns : this.columns).map(function (col) {
+                return col.field;
+            });
+            // Число среди нескольких слов («хир орд 3») ищется целиком: это № места,
+            // № кабинета или отдельное число внутри текста («Win 10»). Иначе «3»
+            // находилось бы в каждом IP 10.0.3.x, в этаже, в кабинете 301.
+            // Одно слово — как раньше, кусок где угодно (часть ИНВ, IP).
+            const whole = words.length > 1;
+            return rows.filter(function (row) {
+                const texts = [];
+                fields.forEach(function (field) {
+                    const value = row[field];
+                    if (value !== null && value !== undefined && value !== "") {
+                        texts.push({ field: field, text: searchNorm(value) });
+                    }
+                });
+                return words.every(function (w) {
+                    if (whole && /^\d+$/.test(w)) {
+                        return texts.some(function (t) {
+                            if (t.field === "seat_no" || t.field === "room_code") {
+                                return t.text.trim() === w;
+                            }
+                            return /\s/.test(t.text.trim()) && t.text.split(/[\s,;]+/).indexOf(w) !== -1;
+                        });
+                    }
+                    return texts.some(function (t) { return t.text.indexOf(w) !== -1; });
+                });
+            });
+        },
 
         // Esc в поле поиска: сначала очищает, второй раз — убирает фокус
         onSearchEsc(event, prop) {

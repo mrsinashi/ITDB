@@ -20,15 +20,17 @@
 
 ## Первая установка
 
-1. Создать базу и пользователя PostgreSQL (имя, пароль — свои):
+1. Создать базу и пользователя PostgreSQL (пароль — свой). На сервере всё тестовое
+   помечено `dev`: у копии для проверок база и пользователь `itdb_dev`, простое имя
+   `itdb` — только у боевой копии (раздел «Боевая копия»):
    ```
-   su postgres -c "createuser -P itdb"
-   su postgres -c "createdb -O itdb itdb"
+   su postgres -c "createuser -P itdb_dev"
+   su postgres -c "createdb -O itdb_dev itdb_dev"
    ```
 2. Файл `.env` в корне проекта (в git не попадает; программа, миграции и тесты читают
    его сами). Значение с `&` — в кавычках:
    ```
-   DATABASE_URL="postgresql+psycopg://itdb:ПАРОЛЬ@localhost/itdb"
+   DATABASE_URL="postgresql+psycopg://itdb_dev:ПАРОЛЬ@localhost/itdb_dev"
    ```
    В копии для проверок (dev) можно добавить `ITDB_LABEL=DEV` — рядом с «ITDB» в меню
    и во вкладке браузера появится пометка, чтобы не спутать с боевой копией.
@@ -117,10 +119,11 @@ git pull
 
 ### Установка (один раз, под root)
 
-1. Caddy и база:
+1. Caddy, база и пользователь PostgreSQL `itdb` (пароль — свой, не как у dev):
    ```
    apt install caddy
-   su postgres -c "createdb -O itdb itdb_prod"
+   su postgres -c "createuser -P itdb"
+   su postgres -c "createdb -O itdb itdb"
    ```
 2. Код и библиотеки:
    ```
@@ -129,10 +132,9 @@ git pull
    python3 -m venv .venv
    .venv/bin/pip install -r requirements.txt
    ```
-3. Файл `/opt/itdb/.env` (пароль — тот же, что у пользователя `itdb` в dev; пометки
-   `ITDB_LABEL` здесь нет):
+3. Файл `/opt/itdb/.env` (пароль пользователя `itdb`; пометки `ITDB_LABEL` здесь нет):
    ```
-   DATABASE_URL="postgresql+psycopg://itdb:ПАРОЛЬ@localhost/itdb_prod"
+   DATABASE_URL="postgresql+psycopg://itdb:ПАРОЛЬ@localhost/itdb"
    ```
    ```
    chmod 600 /opt/itdb/.env
@@ -210,13 +212,13 @@ git pull
 запустятся.
 
 Один раз:
-1. Создать тестовую базу (владелец — тот же пользователь, что у рабочей):
+1. Создать тестовую базу (владелец — пользователь dev-копии):
    ```
-   su postgres -c "createdb -O itdb itdb_test"
+   su postgres -c "createdb -O itdb_dev itdb_test"
    ```
 2. Добавить в `.env` отдельной строкой (пароль — как в `DATABASE_URL`):
    ```
-   TEST_DATABASE_URL=postgresql+psycopg://itdb:ПАРОЛЬ@localhost/itdb_test
+   TEST_DATABASE_URL=postgresql+psycopg://itdb_dev:ПАРОЛЬ@localhost/itdb_test
    ```
 3. Поставить библиотеки для тестов (`pytest`, `httpx2`; серверу они не нужны):
    ```
