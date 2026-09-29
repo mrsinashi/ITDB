@@ -1130,9 +1130,28 @@ select.input {
 }
 
 /* Фильтр по столбцу (этап 21): воронка у правого края шапки — при наведении,
-   у отфильтрованного столбца — всегда, цветом стрелки сортировки */
-.data-table th.filtered {
-    padding-right: 16px;
+   у отфильтрованного столбца — всегда, цветом стрелки сортировки.
+   Место под неё в шапке есть всегда (этап 22): подпись стоит по центру, а если
+   справа до воронки мало места — сдвигается левее (правый отступ не меньше
+   значка). Автоширина столбца учитывает значок (FILTER_ICON_SPACE в widths.js). */
+.data-table th .th-in {
+    display: flex;
+    align-items: baseline;
+}
+.data-table th .th-pad {
+    flex: 1 1 0;
+    min-width: 0;
+}
+.data-table th .th-pad-r {
+    min-width: 14px;
+}
+.data-table th .th-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.data-table th .sort-arrow {
+    flex: none;
 }
 .th-filter {
     position: absolute;
@@ -2765,7 +2784,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     padding: 2px 4px;
 }
 .add-bar .ab-password {
-    width: 230px;
+    width: 190px;
 }
 
 /* ============================================================

@@ -58,10 +58,11 @@ export function cellOverhead() {
     return left + right + 1;
 }
 
-// Место под значок фильтра в шапке отфильтрованного столбца (.th-filter, этап 21)
-export const FILTER_ICON_SPACE = 12;
+// Место под значок фильтра справа в шапке (.th-filter, .th-pad-r) — у всех столбцов:
+// значок не должен наезжать на подпись и при наведении (этап 22)
+export const FILTER_ICON_SPACE = 14;
 
-export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMap, columnStyles, colFilters) {
+export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMap, columnStyles) {
     ensureWidthProbe();
     syncProbeFont();
     const overhead = cellOverhead();
@@ -82,7 +83,7 @@ export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMa
     allCols.forEach(function (col) {
         const colBold = col.bold || !!(colStyles[col.field] && colStyles[col.field].bold);
         probe.style.fontWeight = "600";
-        let max = measureTextWidth(col.headerName) + sortArrowSpace + (colFilters && colFilters[col.field] ? FILTER_ICON_SPACE : 0);
+        let max = measureTextWidth(col.headerName) + sortArrowSpace + FILTER_ICON_SPACE;
         rows.forEach(function (row) {
             const value = row[col.field];
             if (value === null || value === undefined || value === "") {

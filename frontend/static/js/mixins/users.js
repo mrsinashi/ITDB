@@ -69,10 +69,15 @@ export default {
             return Array.from(bytes, function (n) { return PASSWORD_CHARS[n % PASSWORD_CHARS.length]; }).join("");
         },
 
+        // Придуманный пароль — в оба поля (они скрыты) и в буфер обмена: его можно
+        // вставить в письмо пользователю или посмотреть глазом рядом с полями
         fillPassword() {
             if (this.userBar) {
-                this.userBar.password = this.makePassword();
+                const password = this.makePassword();
+                this.userBar.password = password;
+                this.userBar.repeat = password;
                 this.userBar.error = "";
+                this.copyText(password, "Пароль придуман и скопирован в буфер обмена");
                 // Фокус — в поле пароля: Enter сохраняет, а не придумывает заново
                 this.$nextTick(() => this.focusRef("ub-password"));
             }
@@ -85,13 +90,13 @@ export default {
                 this.closeUserBar();
                 return;
             }
-            this.userBar = { kind: "new", login: "", role: "reader", password: "", error: "", saving: false };
+            this.userBar = { kind: "new", login: "", role: "reader", password: "", repeat: "", show: false, error: "", saving: false };
             this.$nextTick(() => this.focusRef("ub-login"));
         },
 
         openEditUser(u) {
             this.usersHover = null;
-            this.userBar = { kind: "edit", id: u.id, login: u.login, self: u.is_self, role: u.role, password: "", error: "", saving: false };
+            this.userBar = { kind: "edit", id: u.id, login: u.login, self: u.is_self, role: u.role, password: "", repeat: "", show: false, error: "", saving: false };
             this.$nextTick(() => this.focusRef(u.is_self ? "ub-password" : "ub-role"));
         },
 
@@ -109,6 +114,12 @@ export default {
         async submitUserBar() {
             const bar = this.userBar;
             if (!bar || bar.saving) {
+                return;
+            }
+            // Повтор пароля: у нового — всегда, при изменении — если пароль задают
+            if ((bar.password || bar.repeat) && bar.password !== bar.repeat) {
+                bar.error = bar.repeat ? "Пароль и повтор не совпадают." : "Повтори пароль во втором поле.";
+                this.$nextTick(() => this.focusRef(bar.repeat ? "ub-password" : "ub-repeat"));
                 return;
             }
             let url = "/api/users";
@@ -148,7 +159,7 @@ export default {
                 if (bar.kind === "new") {
                     // Строка остаётся открытой — можно завести следующего
                     this.toast("Добавлен пользователь: " + saved.login, "success");
-                    this.userBar = { kind: "new", login: "", role: bar.role, password: "", error: "", saving: false };
+                    this.userBar = { kind: "new", login: "", role: bar.role, password: "", repeat: "", show: bar.show, error: "", saving: false };
                     this.$nextTick(() => this.focusRef("ub-login"));
                 } else {
                     const parts = [];

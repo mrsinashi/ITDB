@@ -160,11 +160,6 @@ export default {
             return { left: p.left + "px", top: p.top + "px", width: p.width + "px" };
         },
 
-        // Поля с фильтром — для пересчёта ширины шапки
-        colFilterFields() {
-            return Object.keys(this.colFilters).sort().join(",");
-        },
-
         colFilterMenuTitle() {
             const menu = this.colFilterMenu;
             const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
@@ -179,11 +174,6 @@ export default {
                 this.colFilterMenu = null;
                 this.removeColFilterMove();
             }
-        },
-
-        // Шапка отфильтрованного столбца шире на значок фильтра
-        colFilterFields() {
-            this.recalcWidths();
         },
     },
 

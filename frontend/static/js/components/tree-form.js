@@ -2,6 +2,20 @@
 
 import { kindLabels } from "../columns.js";
 
+// Что добавляется / что правится — подпись в начале формы (этап 22)
+const NEW_LABELS = {
+    building: "Новый адрес",
+    department: "Новое отделение",
+    floor: "Новый этаж",
+    room: "Новый кабинет"
+};
+const EDIT_LABELS = {
+    building: "Изменить адрес",
+    department: "Изменить отделение",
+    floor: "Изменить этаж",
+    room: "Изменить кабинет"
+};
+
 export default {
     inject: ["root"],
     props: {
@@ -10,6 +24,28 @@ export default {
     computed: {
         form() {
             return this.root.treeForm;
+        },
+        // «Новое отделение в:» (с панели, дальше — выбор, куда), «Новый кабинет:»
+        // (под узлом), «Добавить: [Этаж ▾]» (под узлом, если можно разное),
+        // «Изменить кабинет:»
+        title() {
+            const f = this.form;
+            if (f.action !== "add") {
+                return (EDIT_LABELS[f.kind] || "Изменить") + ":";
+            }
+            if (f.kinds.length > 1) {
+                return "Добавить:";
+            }
+            const what = NEW_LABELS[f.kind] || "Добавить";
+            return what + (f.top && f.kind !== "building" ? " в:" : ":");
+        },
+        // Подсказка у подписи: полный путь, куда добавляется
+        titleHint() {
+            const f = this.form;
+            if (f.action === "add" && !f.top && f.path) {
+                return "Внутри: " + f.path;
+            }
+            return f.action !== "add" && f.path ? f.path : null;
         }
     },
     mounted() {
@@ -46,7 +82,7 @@ export default {
     },
     template: `
         <div class="tree-form" v-if="form" :class="{ 'tf-top': form.top }" :style="{ '--lvl': level }" @keydown.esc.stop="cancel">
-            <span class="tf-title">{{ form.action === 'add' ? 'Добавить:' : 'Правка:' }}</span>
+            <span class="tf-title" :title="titleHint">{{ title }}</span>
             <select v-if="form.kinds.length > 1" class="input" v-model="form.kind" @change="form.top && (form.parentId = null)">
                 <option v-for="k in form.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
             </select>

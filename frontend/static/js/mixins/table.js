@@ -331,7 +331,7 @@ export default {
         },
 
         recalcWidths() {
-            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, this.colFilters);
+            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });

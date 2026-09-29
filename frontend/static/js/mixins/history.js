@@ -170,7 +170,8 @@ export default {
 
         // Копирование в буфер. navigator.clipboard работает только по https
         // или на localhost, поэтому есть запасной путь через execCommand.
-        async copyText(text) {
+        // doneText — своё сообщение вместо «Скопировано: значение» (для пароля).
+        async copyText(text, doneText) {
             text = String(text);
             let ok = false;
             try {
@@ -197,7 +198,7 @@ export default {
                 ta.remove();
             }
             if (ok) {
-                this.toast("Скопировано: " + text, "success", 1800);
+                this.toast(doneText || "Скопировано: " + text, "success", doneText ? 4000 : 1800);
             } else {
                 this.toastError("Не удалось скопировать");
             }
