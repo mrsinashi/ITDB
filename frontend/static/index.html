@@ -446,6 +446,25 @@
             <div class="toolbar">
                 <div class="tb-left">
                     <span class="tb-count">{{ historyCountText }}</span>
+                    <button v-if="historyFilter.user" class="chip" @click="setHistoryUser(null)" title="Показаны только изменения этого пользователя. Нажми, чтобы показать все">
+                        <span class="chip-text">Пользователь: {{ historyFilter.user }}</span><span class="chip-x">✕</span>
+                    </button>
+                    <button v-if="historyFilter.entity" class="chip" @click="setHistoryEntity(null)" title="Показаны только эти объекты. Нажми, чтобы показать все">
+                        <span class="chip-text">{{ historyEntityChip() }}</span><span class="chip-x">✕</span>
+                    </button>
+                    <span v-if="historySelected.length > 0" class="dropdown-wrap" ref="historySelWrap">
+                        <button class="btn" :class="{ 'menu-open': openMenu === 'historySel' }" @click="toggleMenu('historySel')" title="Действия с выбранными записями. Выделение: Ctrl+клик, Shift+клик, Ctrl+A; снять — Esc">
+                            Выбрано: {{ historySelected.length }}<span class="caret">▼</span>
+                        </button>
+                        <div v-if="openMenu === 'historySel'" class="dropdown attached">
+                            <template v-if="canEdit">
+                                <button @click="cancelSelectedHistory(true)" :disabled="!historySelectedCanCancel" title="Изменения помечаются «отменено», значения полей пересчитываются. Новой записи нет">Отменить изменения</button>
+                                <button v-if="historyShowCancelled" @click="cancelSelectedHistory(false)" :disabled="!historySelectedCanRestore" title="Снять пометку «отменено» — значения снова как после этих изменений">Восстановить отменённые</button>
+                                <div class="dd-sep"></div>
+                            </template>
+                            <button @click="clearHistorySelection">Снять выделение</button>
+                        </div>
+                    </span>
                     <span v-if="historyError" class="tb-error" :title="historyError">{{ historyError }}</span>
                 </div>
                 <span class="tb-search">
@@ -454,6 +473,20 @@
                     <span v-if="historyQuery" class="clear" title="Очистить (Esc)" @click="historyQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
+                    <span class="dropdown-wrap" ref="historyFilterWrap">
+                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'historyFilter', active: historyFiltered }" @click="toggleMenu('historyFilter')" title="Фильтр: кто и что менял"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span class="caret">▼</span></button>
+                        <div v-if="openMenu === 'historyFilter'" class="dropdown right attached h-filter-menu">
+                            <div class="dd-title">Пользователь</div>
+                            <div class="dd-scroll">
+                                <button :class="{ on: !historyFilter.user }" @click="setHistoryUser(null)">Все<svg v-if="!historyFilter.user" class="dd-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg></button>
+                                <button v-for="u in historyUsers" :key="u" :class="{ on: historyFilter.user === u }" @click="setHistoryUser(u)">{{ u }}<svg v-if="historyFilter.user === u" class="dd-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg></button>
+                            </div>
+                            <div class="dd-sep"></div>
+                            <div class="dd-title">Объект</div>
+                            <button :class="{ on: !historyFilter.entity }" @click="setHistoryEntity(null)">Все<svg v-if="!historyFilter.entity" class="dd-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg></button>
+                            <button v-for="(label, key) in historyEntityFilters" :key="key" :class="{ on: historyFilter.entity === key && historyFilter.entityId === null }" @click="setHistoryEntity(key)">{{ label }}<svg v-if="historyFilter.entity === key && historyFilter.entityId === null" class="dd-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg></button>
+                        </div>
+                    </span>
                     <button class="btn icon-only" @click="loadHistory" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
@@ -466,32 +499,42 @@
             </div>
             <!-- Отступ сверху — вне прокрутки: над шапкой ничего не проезжает -->
             <div class="history-page">
-                <div class="history-frame" :class="{ empty: !filteredHistory.length, 'accent-head': accentHeaders.history }">
+                <div class="history-frame" :class="{ empty: !!historyError, 'accent-head': accentHeaders.history }">
                 <div class="history-scroll" ref="historyScroll" @scroll="onHistoryScroll">
-                <div v-if="!historyLoading && !historyError && historyItems.length === 0" class="empty-note">История пока пуста.</div>
-                <div v-else-if="historyQuery.trim() && filteredHistory.length === 0" class="empty-note">Ничего не найдено.</div>
                 <!-- Записи по дням: дата — строкой-разделителем (прилипает под шапкой),
-                     в строке только время. Все цифры те же: дд.мм.гггг и чч:мм:сс. -->
-                <table v-if="filteredHistory.length" class="history-table" :class="{ 'accent-head': accentHeaders.history }">
+                     в строке только время. Все цифры те же: дд.мм.гггг и чч:мм:сс.
+                     Таблица с шапкой видна и без записей: в шапке — глаз «отменённые». -->
+                <table v-if="!historyError" class="history-table" :class="{ 'accent-head': accentHeaders.history }">
                     <thead>
-                        <tr><th class="h-time">Время</th><th class="h-obj">Объект</th><th class="h-user">Пользователь</th><th>Изменения</th></tr>
+                        <tr><th class="h-time">Время</th><th class="h-obj">Объект</th><th class="h-user">Пользователь</th><th class="h-changes-th"><span class="h-th">Изменения
+                            <span class="h-tools">
+                                <span class="h-tool" :class="{ on: historyShowCancelled }" :title="historyShowCancelled ? 'Скрыть отменённые изменения' : 'Показать отменённые изменения'" @click="toggleShowCancelled"><template v-if="historyShowCancelled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></template><template v-else><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.8 0 3.4-.5 4.8-1.3"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M2 2l20 20"/></svg></template></span>
+                            </span></span></th></tr>
                     </thead>
+                    <tbody v-if="!filteredHistory.length && !historyLoading">
+                        <tr class="h-empty"><td colspan="4">{{ historyQuery.trim() || historyFiltered ? "Ничего не найдено." : "История пока пуста." }}</td></tr>
+                    </tbody>
                     <tbody v-for="day in historyDays" :key="day.key">
                         <tr class="h-day">
                             <td colspan="4">{{ day.date }}<span class="h-day-count" title="Записей за день">{{ historyDayCount(day) }}</span></td>
                         </tr>
-                        <tr v-for="item in day.items" :key="item.id">
+                        <tr v-for="item in day.items" :key="item.id" :class="{ 'h-selected': isHistorySelected(item), 'h-cancelled': item.cancelled }"
+                            @mousedown="onHistoryRowMouseDown($event)" @click="onHistoryRowClick($event, item)">
                             <td class="h-time">{{ formatClock(item.at) }}</td>
                             <td class="h-obj">
                                 <span v-if="item.entity === 'computers'" class="h-link" @click="openCardById(item.entity_id)" title="Открыть карточку">{{ item.title || ('ПК #' + item.entity_id) }}</span>
                                 <span v-else class="h-other" :title="entityLabel(item.entity) + ' ' + (item.title || ('#' + item.entity_id))"><span class="h-obj-kind">{{ entityLabel(item.entity) }}</span>{{ item.title || ('#' + item.entity_id) }}</span>
+                                <span v-if="historyFilter.entityId === null" class="h-only" title="Показать изменения только этого объекта" @click="filterHistoryObject(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                             </td>
-                            <td class="h-user">{{ item.user_name || "—" }}</td>
+                            <td class="h-user"><span v-if="item.user_name" class="h-user-link" title="Показать изменения только этого пользователя" @click="setHistoryUser(item.user_name)">{{ item.user_name }}</span><template v-else>—</template></td>
                             <td class="h-changes">
                                 <div class="changes">
-                                    <template v-for="(change, field) in orderedChanges(item.changes)" :key="field">
-                                        <span class="field" :title="field">{{ fieldLabel(item.entity, field) }}</span>
-                                        <span class="ch-val"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span></span>
+                                    <template v-for="(change, field) in shownChanges(item.changes)" :key="field">
+                                        <span class="field" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue(item.entity, field) }"
+                                            :title="canOpenValue(item.entity, field) ? 'Двойной клик — история значения' : null"
+                                            @dblclick="openValueHistory(item.entity, item.entity_id, field)">{{ fieldLabel(item.entity, field) }}</span>
+                                        <span class="ch-val" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue(item.entity, field) }"
+                                            @dblclick="openValueHistory(item.entity, item.entity_id, field)"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
                                     </template>
                                 </div>
                             </td>
@@ -654,24 +697,74 @@
                         <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                     </div>
                     <div class="card-section toggle-sec" :class="{ open: cardHistoryOpen }" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
-                        <span>История</span><span v-if="!cardLoading" class="sec-count" title="Изменений">{{ cardHistory.length }}</span>
+                        <span>История</span><span v-if="!cardLoading" class="sec-count" title="Изменений">{{ cardHistoryShown.length }}</span>
                         <svg class="sec-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
                     </div>
                     <div v-if="cardHistoryOpen" class="card-sec-body">
                         <div v-if="cardError" style="color: var(--danger);">{{ cardError }}</div>
-                        <div v-else-if="!cardLoading && cardHistory.length === 0" class="muted">Изменений пока нет.</div>
-                        <div v-for="item in cardHistory" :key="item.id" class="card-history">
+                        <div v-else-if="!cardLoading && cardHistoryShown.length === 0" class="muted">Изменений пока нет.</div>
+                        <div v-for="item in cardHistoryShown" :key="item.id" class="card-history" :class="{ 'h-cancelled': item.cancelled }">
                             <div class="card-history-head">
                                 {{ formatTime(item.at) }}<template v-if="item.user_name"> · {{ item.user_name }}</template>
                             </div>
                             <div class="changes">
-                                <template v-for="(change, field) in orderedChanges(item.changes)" :key="field">
-                                    <span class="field" :title="field">{{ fieldLabel('computers', field) }}</span>
-                                    <span class="ch-val"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span></span>
+                                <template v-for="(change, field) in shownChanges(item.changes)" :key="field">
+                                    <span class="field" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue('computers', field) }"
+                                        :title="canOpenValue('computers', field) ? 'Двойной клик — история значения' : null"
+                                        @dblclick="openValueHistory('computers', card.id, field)">{{ fieldLabel('computers', field) }}</span>
+                                    <span class="ch-val" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue('computers', field) }"
+                                        @dblclick="openValueHistory('computers', card.id, field)"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
                                 </template>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= История значения (двойной клик по полю в записи) ================= -->
+        <div v-if="valueDialog" class="dialog-overlay" @mousedown.self="closeValueDialog">
+            <div class="dialog vh-dialog" role="dialog">
+                <div class="vh-head">
+                    <span class="vh-title"><b>{{ valueDialog.data ? valueDialog.data.title : "…" }}</b><template v-if="valueDialog.data"> · {{ valueDialog.data.label }}</template></span>
+                    <span v-if="valueDialog.data && valueDialog.data.kind === 'value'" class="vh-now">сейчас: <b>{{ displayValue(valueDialog.data.current) }}</b></span>
+                    <span class="vh-close" title="Закрыть (Esc)" @click="closeValueDialog">×</span>
+                </div>
+                <div class="vh-body">
+                    <table v-if="valueDialog.data" class="history-table vh-table">
+                        <thead>
+                            <tr><th class="h-time">Время</th><th class="h-user">Пользователь</th><th>Было → стало</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="r in vhRows" :key="r.key" :class="{ 'h-selected': valueDialog.selected.indexOf(r.key) !== -1, 'h-cancelled': r.item && r.item.cancelled, 'vh-initial': r.initial }"
+                                @mousedown="vhRowMouseDown($event)" @click="vhRowClick($event, r)" @dblclick="vhCanRevert && canEdit && vhRevert()">
+                                <template v-if="r.item">
+                                    <td class="h-time">{{ formatTime(r.item.at) }}</td>
+                                    <td class="h-user">{{ r.item.user_name || "—" }}</td>
+                                    <td class="ch-val" :class="{ 'ch-cancelled': r.item.cancelled }"><span class="old">{{ displayValue(r.item.old) }}</span><span class="arrow">→</span><span class="new">{{ displayValue(r.item.new) }}</span><span v-if="r.item.revert" class="h-mark">возврат значения</span><span v-if="r.item.cancelled" class="h-mark" :title="cancelTitle(r.item)">отменено</span></td>
+                                </template>
+                                <template v-else>
+                                    <td class="h-time">—</td>
+                                    <td class="h-user"></td>
+                                    <td class="ch-val">Исходное значение: <span class="new">{{ displayValue(r.value) }}</span></td>
+                                </template>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div v-if="canEdit && valueDialog.data" class="vh-hint">
+                    Отменить — изменение помечается «отменено», значение пересчитывается, новой записи нет.
+                    Вернуть — поле получает значение выбранной строки, в Истории — запись «возврат значения».
+                    Выбор нескольких строк — Ctrl / Shift.
+                </div>
+                <div class="dialog-buttons">
+                    <span v-if="valueDialog.error" class="vh-error">{{ valueDialog.error }}</span>
+                    <template v-if="canEdit && valueDialog.data">
+                        <button v-if="vhHasCancelled" class="btn" :disabled="!vhCanRestore || valueDialog.busy" @click="vhCancel(false)">Восстановить</button>
+                        <button class="btn" :disabled="!vhCanCancel || valueDialog.busy" @click="vhCancel(true)">Отменить изменения</button>
+                        <button v-if="valueDialog.data.kind === 'value'" class="btn btn-primary" :disabled="!vhCanRevert || valueDialog.busy" @click="vhRevert">Вернуть это значение</button>
+                    </template>
+                    <button class="btn" @click="closeValueDialog">Закрыть</button>
                 </div>
             </div>
         </div>

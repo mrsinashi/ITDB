@@ -719,8 +719,17 @@ body.ui-light-toolbar .toolbar .tb-error {
     border-color: var(--brand-dark);
     color: #fff;
 }
+/* Недоступная кнопка (например, в окне «История значения», пока ничего не выбрано) */
+.btn:disabled,
+.btn:disabled:hover {
+    opacity: 0.5;
+    cursor: default;
+}
 .btn-primary:hover {
     background: var(--brand-dark);
+}
+.btn-primary:disabled:hover {
+    background: var(--brand);
 }
 .btn-danger {
     background: var(--danger-strong);
@@ -2245,6 +2254,219 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .empty-note {
     color: var(--text-muted);
     padding: 4px 2px;
+}
+
+/* ---------- История: отмена, возврат, фильтры, выделение (этап 19) ---------- */
+
+/* Глаз «отменённые» — в шапке справа от «Изменения», как стрелки в шапке Дерева */
+.history-table .h-th {
+    display: flex;
+    align-items: center;
+}
+.history-table .h-tools {
+    display: flex;
+    margin-left: auto;
+    margin-right: -4px;
+}
+.history-table .h-tool {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 18px;
+    border-radius: var(--radius);
+    color: inherit;
+    opacity: 0.75;
+    cursor: pointer;
+}
+.history-table .h-tool svg {
+    width: 14px;
+    height: 14px;
+}
+.history-table .h-tool:hover,
+.history-table .h-tool.on {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.08);
+}
+.history-table.accent-head .h-tool:hover,
+.history-table.accent-head .h-tool.on {
+    background: rgba(255, 255, 255, 0.18);
+}
+.history-table tr.h-empty td {
+    color: var(--text-muted);
+    border-bottom: none;
+}
+
+/* Выбранные записи — синий слой, как в главной таблице */
+.history-table tbody tr.h-selected td {
+    background-image: linear-gradient(var(--row-sel-tint), var(--row-sel-tint));
+    border-bottom-color: var(--row-sel-line);
+}
+.history-table tbody tr.h-selected:hover td {
+    background: var(--bg);
+    background-image: linear-gradient(var(--row-sel-tint-hover), var(--row-sel-tint-hover));
+}
+.history-table tbody tr {
+    user-select: text;
+}
+
+/* Отменённое (видно только с глазом): серым, с пометкой «отменено» */
+.history-table tr.h-cancelled td,
+.history-table tr.h-cancelled .h-link,
+.history-table tr.h-cancelled .h-other,
+.card-history.h-cancelled .card-history-head,
+.changes .ch-cancelled,
+.ch-val.ch-cancelled .new,
+.ch-val.ch-cancelled .old,
+.ch-val.ch-cancelled .arrow {
+    color: var(--text-muted);
+}
+.ch-val.ch-cancelled .old {
+    text-decoration-color: rgba(0, 0, 0, 0.18);
+}
+/* Пометки «отменено», «возврат значения» — блочком, как «отключён» */
+.h-mark {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0 4px;
+    font-size: 11px;
+    line-height: 14px;
+    vertical-align: 1px;
+    color: var(--text-secondary);
+    border: 1px solid currentColor;
+    border-radius: var(--radius);
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: default;
+}
+.ch-cancelled .h-mark,
+.ch-val.ch-cancelled .h-mark {
+    color: var(--text-muted);
+}
+/* Поле, у которого есть «История значения», — по двойному клику */
+.changes .ch-open {
+    cursor: default;
+}
+
+/* Пользователь — клик: только его изменения; значок у объекта — только этот объект */
+.history-table .h-user-link {
+    cursor: pointer;
+}
+.history-table .h-user-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.history-table .h-only {
+    display: inline-flex;
+    vertical-align: -2px;
+    margin-left: 5px;
+    color: var(--text-muted);
+    visibility: hidden;
+    cursor: pointer;
+}
+.history-table .h-only svg {
+    width: 12px;
+    height: 12px;
+}
+.history-table tbody tr:hover .h-only {
+    visibility: visible;
+}
+.history-table .h-only:hover {
+    color: var(--text-strong);
+}
+
+/* Меню фильтра: заголовки разделов, галочка у выбранного */
+.dropdown .dd-title {
+    padding: 4px 12px 2px;
+    font-size: 11px;
+    color: var(--menu-muted);
+}
+.h-filter-menu {
+    min-width: 180px;
+}
+.h-filter-menu .dd-scroll {
+    max-height: 240px;
+}
+.dropdown button .dd-check {
+    width: 13px;
+    height: 13px;
+    margin-left: auto;
+    padding-left: 12px;
+}
+
+/* Окно «История значения» */
+.dialog.vh-dialog {
+    width: 720px;
+    display: flex;
+    flex-direction: column;
+    max-height: 70vh;
+}
+.vh-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px 8px 14px;
+    background: var(--nav-bg);
+    color: var(--nav-text);
+    font-size: 13px;
+}
+.vh-head .vh-title b {
+    color: #fff;
+    font-weight: 600;
+}
+.vh-head .vh-now {
+    margin-left: auto;
+    font-size: 12px;
+}
+.vh-head .vh-now b {
+    color: #fff;
+    font-weight: 600;
+    white-space: pre-wrap;
+}
+.vh-head .vh-close {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+.vh-head .vh-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.15);
+}
+.vh-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    margin: 10px 12px;
+    border: 1px solid var(--gray-line);
+    border-radius: var(--radius);
+}
+.vh-table tbody tr {
+    cursor: default;
+    user-select: none;
+}
+.vh-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.vh-table tr.vh-initial td {
+    background: var(--surface-alt);
+}
+.vh-hint {
+    padding: 0 14px 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-soft);
+}
+.dialog-buttons .vh-error {
+    margin-right: auto;
+    align-self: center;
+    font-size: 12px;
+    color: var(--danger);
 }
 
 /* История: загружены не все записи — кнопки догрузки под таблицей */

@@ -142,10 +142,11 @@ export function styleKey(field, line) {
 
 // Подписи полей в истории (ключ поля → как показывать): полные названия
 // столбцов и подписи записей, которые не столбцы (с сервера)
+// Подписи полей в Истории — как в карточке, без расшифровок в скобках (этап 19)
 export function buildFieldLabels(columns, historyLabels) {
     return Object.assign(
         {},
-        Object.fromEntries(columns.map(function (c) { return [c.field, columnTitle(c)]; })),
+        Object.fromEntries(columns.map(function (c) { return [c.field, c.cardLabel || columnTitle(c)]; })),
         historyLabels || {}
     );
 }

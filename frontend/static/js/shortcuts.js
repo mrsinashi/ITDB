@@ -23,6 +23,14 @@ window.addEventListener("keydown", function (event) {
     if (!vm) {
         return;
     }
+    // Окно «История значения»: Esc — закрыть
+    if (vm.valueDialog && !vm.dialog) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            vm.closeValueDialog();
+        }
+        return;
+    }
     // Открыт диалог подтверждения: Esc — отмена, Enter — OK
     if (vm.dialog) {
         if (event.key === "Escape") {
@@ -65,6 +73,16 @@ window.addEventListener("keydown", function (event) {
             vm.closeUserBar();
             return;
         }
+    }
+    // История: Ctrl+A — выделить все видимые записи, Esc — снять выделение
+    if (vm.view === "history" && !vm.card && !event.defaultPrevented && !isTypingTarget(document.activeElement)) {
+        if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyA") {
+            event.preventDefault();
+            vm.selectAllHistory();
+        } else if (event.key === "Escape" && vm.historySelected.length) {
+            vm.clearHistorySelection();
+        }
+        return;
     }
     if (vm.view !== "table" || vm.card || event.defaultPrevented || isTypingTarget(document.activeElement)) {
         return;

@@ -156,7 +156,12 @@ class History(Base):
     entity_id = Column(Integer, nullable=False)
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    # {поле: {"old", "new"}}; у поля могут быть пометки: "cancelled" — изменение
+    # отменено ({"by", "at"}), "revert" — это возврат значения из истории,
+    # "old_id"/"new_id" — id узлов у расположения (в old/new — путь текстом)
     changes = Column(JSONB, nullable=False)
+    # Отменены все поля записи: по умолчанию запись не показывается и не считается
+    cancelled = Column(Boolean, nullable=False, server_default="false")
 
 class User(Base):
     __tablename__ = "users"

@@ -47,7 +47,7 @@ export default {
         historyCountText() {
             const total = this.historyTotal;
             if (!this.historyQuery.trim()) {
-                return "Записей: " + total;
+                return (this.historyFiltered ? "Найдено: " : "Записей: ") + total;
             }
             return "Показано: " + this.filteredHistory.length + " из " + total;
         },
@@ -109,7 +109,7 @@ export default {
             const headH = table.tHead.offsetHeight;
             const limit = sc.getBoundingClientRect().top + headH;
             Array.prototype.forEach.call(table.tBodies, function (tbody) {
-                const dayCell = tbody.rows[0] && tbody.rows[0].cells[0];
+                const dayCell = tbody.rows[0] && tbody.rows[0].classList.contains("h-day") && tbody.rows[0].cells[0];
                 const last = tbody.rows[tbody.rows.length - 1];
                 if (!dayCell || !last) {
                     return;
@@ -274,14 +274,18 @@ export default {
 
         // Порция истории с сервера: записи + точные счётчики (всего и по дням)
         async fetchHistory(offset, limit) {
-            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-            const response = await apiFetch("/api/history?limit=" + limit + "&offset=" + offset + "&tz=" + encodeURIComponent(tz));
+            const params = this.historyParams();
+            params.set("limit", limit);
+            params.set("offset", offset);
+            params.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+            const response = await apiFetch("/api/history?" + params);
             if (!response.ok) {
                 throw new Error(await this.errorText(response));
             }
             const data = await response.json();
             this.historyTotal = data.total || 0;
             this.historyDayCounts = data.days || {};
+            this.historyUsers = data.users || [];
             return data.items || [];
         },
 

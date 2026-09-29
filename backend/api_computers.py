@@ -332,18 +332,26 @@ class ChangeBatch:
         self.changes = defaultdict(dict)
         self.computers = {}
 
-    def record(self, computer, field, old, new):
+    def record(self, computer, field, old, new, old_id=None, new_id=None):
+        """old_id / new_id — id узлов у расположения (old / new — путь текстом)."""
         changes = self.changes[computer.id]
         self.computers[computer.id] = computer
 
         if field in changes:
             changes[field]["new"] = new
 
+            if new_id is not None:
+                changes[field]["new_id"] = new_id
+
             if changes[field]["old"] == new:
                 del changes[field]
 
         elif old != new:
             changes[field] = {"old": old, "new": new}
+
+            if old_id is not None or new_id is not None:
+                changes[field]["old_id"] = old_id
+                changes[field]["new_id"] = new_id
 
     def finish(self, session):
         now = datetime.now(timezone.utc)
@@ -949,6 +957,9 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
                 changes["location_id"] = {
                     "old": location_path(computer.location_id, locations_by_id),
                     "new": location_path(location.id, locations_by_id),
+                    # id узлов — чтобы откат из истории не зависел от названий
+                    "old_id": computer.location_id,
+                    "new_id": location.id,
                 }
 
                 computer.location_id = location.id
@@ -1209,6 +1220,7 @@ def get_computer(computer_id: int, session=Depends(get_db)):
             "at": item.at,
             "user_name": item.user_name,
             "changes": item.changes or {},
+            "cancelled": item.cancelled,
         }
         for item in items
     ]

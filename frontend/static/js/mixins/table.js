@@ -687,7 +687,9 @@ export default {
                 export: this.$refs.exportWrap,
                 settings: this.$refs.settingsWrap,
                 user: this.$refs.userWrap,
-                page: this.$refs.pageSetWrap
+                page: this.$refs.pageSetWrap,
+                historySel: this.$refs.historySelWrap,
+                historyFilter: this.$refs.historyFilterWrap
             };
             const wrap = refs[this.openMenu];
             if (!wrap || !wrap.contains(event.target)) {

@@ -9,7 +9,8 @@
 //   shortcuts.js       — сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
 //   mixins/            — методы и вычисляемые значения по разделам:
 //                        auth, table, table-actions, card, tree, history, choices, common,
-//                        suggest (подсказки при вводе), users (пользователи системы)
+//                        suggest (подсказки при вводе), users (пользователи системы),
+//                        history-undo (отмена и возврат из Истории, фильтры Истории)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -30,6 +31,7 @@ import history from "./mixins/history.js";
 import choices from "./mixins/choices.js";
 import suggest from "./mixins/suggest.js";
 import users from "./mixins/users.js";
+import historyUndo from "./mixins/history-undo.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -37,7 +39,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -119,6 +121,15 @@ const app = Vue.createApp({
             historyTotal: 0,
             historyDayCounts: {},
             historyLoadingMore: false,
+            // Отменённые изменения: по умолчанию скрыты и не считаются (глаз в шапке)
+            historyShowCancelled: false,
+            // Фильтр: кто менял и что (вид объекта или один объект)
+            historyFilter: { user: null, entity: null, entityId: null, title: "" },
+            historyUsers: [],
+            historySelected: [],    // выбранные записи (Ctrl/Shift+клик)
+            historyAnchor: null,
+            // Окно «История значения» (двойной клик по полю в записи)
+            valueDialog: null,
 
             // Пользователи системы (только admin)
             users: [],

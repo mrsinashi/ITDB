@@ -312,6 +312,26 @@ def archive_location(
             detail="Узел не найден.",
         )
 
+    check_can_archive(session, location)
+
+    location.archived = True
+
+    session.add(
+        History(
+            entity="locations",
+            entity_id=location.id,
+            user_name=user["login"],
+            changes={"archived": {"old": False, "new": True}},
+        )
+    )
+
+    session.commit()
+
+    return {"ok": True, "id": location.id}
+
+
+def check_can_archive(session, location):
+    """Узел можно убрать в архив, только если в нём нет рабочих узлов и ПК."""
     children = (
         session.query(func.count(Location.id))
         .filter(
@@ -339,18 +359,3 @@ def archive_location(
             status_code=400,
             detail="В узле есть компьютеры. Сначала перемести их.",
         )
-
-    location.archived = True
-
-    session.add(
-        History(
-            entity="locations",
-            entity_id=location.id,
-            user_name=user["login"],
-            changes={"archived": {"old": False, "new": True}},
-        )
-    )
-
-    session.commit()
-
-    return {"ok": True, "id": location.id}

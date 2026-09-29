@@ -67,6 +67,8 @@ def set_location(batch, computer, location_id, locations_by_id):
             "location_id",
             location_path(computer.location_id, locations_by_id),
             location_path(location_id, locations_by_id),
+            old_id=computer.location_id,
+            new_id=location_id,
         )
         computer.location_id = location_id
 
