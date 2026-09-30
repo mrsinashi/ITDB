@@ -22,7 +22,7 @@ from pydantic import BaseModel
 import scan_collect
 from api_computers import load_locations, location_path
 from api_scan import SOURCES, RunOut, load_source, run_out
-from auth import require_admin
+from auth import require_admin, require_editor
 from db import get_db
 from history_log import log_change
 from api_columns import COLUMNS_BY_KEY
@@ -343,7 +343,7 @@ def reset_record(kind: str, source_id: int, me=Depends(require_admin), session=D
 # ---------- Названия: соответствия значений (этап 25б) ----------
 
 NAME_FIELD_KEYS = set(NAME_FIELDS)
-ALIAS_KINDS = {"same": "одно и то же", "differ": "разное"}
+ALIAS_KINDS = {"same": "одно и то же", "differ": "разное", "keep": "в таблице своё"}
 
 
 class NameIn(BaseModel):
@@ -398,15 +398,18 @@ def list_names(me=Depends(require_admin), session=Depends(get_db)):
 
 
 @router.post("/names")
-def add_name(payload: NameIn, me=Depends(require_admin), session=Depends(get_db)):
-    """«Одно и то же» (same) или «это разное» (differ) для значения источника и
-    значения таблицы. У одного значения источника «одно и то же» — одно."""
+def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db)):
+    """Решение по паре «значение источника — значение таблицы»: same («одно и то
+    же» — для всех ПК, одно на значение источника), differ («это разное»), keep
+    («в таблице своё» — не расхождение, но и не одно и то же), auto (забыть
+    решение по паре — как решит сравнение). Редактор тоже может: это решения
+    режима «Расхождения»."""
     field = payload.field
 
     if field not in NAME_FIELD_KEYS:
         raise HTTPException(status_code=400, detail="Для этого поля соответствия не задаются.")
 
-    if payload.kind not in ALIAS_KINDS:
+    if payload.kind not in ALIAS_KINDS and payload.kind != "auto":
         raise HTTPException(status_code=400, detail="Неизвестный вид соответствия.")
 
     source, table = clean_text(payload.source), clean_text(payload.table)
@@ -419,20 +422,34 @@ def add_name(payload: NameIn, me=Depends(require_admin), session=Depends(get_db)
 
     source_key, table_key = key_of(source), key_of(table)
     query = session.query(ScanAlias).filter(ScanAlias.field == field, ScanAlias.source_key == source_key)
+    removed = []
 
     # Новое решение по той же паре заменяет старое; «одно и то же» — одно на значение
     for old in query:
         if old.table_key == table_key or (payload.kind == "same" and old.kind == "same"):
+            removed.append(old)
             session.delete(old)
 
     session.flush()
+    title = f"{field_title(field)}: {source}"
+
+    if payload.kind == "auto":
+        if removed:
+            log_change(
+                session, "scan_aliases", 0, me["login"],
+                {"deleted": {"old": "; ".join(f"{ALIAS_KINDS[a.kind]}: {a.table_value}" for a in removed), "new": None}},
+                title=title, entity_key=field,
+            )
+        session.commit()
+        return {"ok": True}
+
     session.add(ScanAlias(
         field=field, source=source, source_key=source_key, table_value=table, table_key=table_key,
         kind=payload.kind, user_name=me["login"],
     ))
     log_change(
         session, "scan_aliases", 0, me["login"], {payload.kind: {"old": None, "new": table}},
-        title=f"{field_title(field)}: {source}", entity_key=field,
+        title=title, entity_key=field,
     )
     session.commit()
     return {"ok": True}

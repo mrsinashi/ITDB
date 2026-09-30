@@ -337,6 +337,24 @@ class ScanAlias(Base):
     source_key = Column(Text, nullable=False)
     table_value = Column(Text, nullable=False)
     table_key = Column(Text, nullable=False)
-    kind = Column(Text, nullable=False, server_default="same")  # same / differ
+    kind = Column(Text, nullable=False, server_default="same")  # same / differ / keep
+    user_name = Column(Text, nullable=True)
+    at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ScanReject(Base):
+    """Отклонённое значение сканера (этап 26): этому ПК в этом поле значение
+    value не предлагать, пока источник отдаёт то же самое (value_key — ключ
+    значения как в источнике; изменилось — снова расхождение)."""
+    __tablename__ = "scan_rejects"
+    __table_args__ = (
+        UniqueConstraint("computer_id", "field", "value_key", name="uq_scan_rejects"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
+    field = Column(Text, nullable=False)
+    value = Column(Text, nullable=False)
+    value_key = Column(Text, nullable=False)
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

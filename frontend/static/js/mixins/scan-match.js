@@ -19,6 +19,16 @@ const MARK_TITLES = {
     "≈": "В таблице записана часть того, что видит источник",
     "≠": "Отличается"
 };
+const MANUAL_TITLES = {
+    same: "Одно и то же (задано вручную, для всех ПК)",
+    differ: "Разное (задано вручную)",
+    keep: "В таблице своё (задано вручную): не расхождение, но и не одно и то же — другим ПК табличное значение не предлагается"
+};
+const MANUAL_NEXT = {
+    same: "одно и то же",
+    differ: "разное",
+    keep: "в таблице своё"
+};
 const HOW_TITLES = {
     manual: "так названо вручную (вкладка «Названия»)",
     learned: "так это названо у других ПК в таблице",
@@ -154,6 +164,9 @@ export default {
 
     methods: {
         setScanTab(tab) {
+            if (this.scanTab !== tab) {
+                this.scanMatchQuery = "";   // у вкладок разный поиск
+            }
             this.scanTab = tab;
             this.scanLinkBar = null;
             if (tab === "names") {
@@ -189,6 +202,7 @@ export default {
                 const data = await response.json();
                 if (kind === this.scanMatch.source) {
                     this.scanMatch.data = data;
+                    this.scanFitCompare();
                 }
             } catch (e) {
                 this.scanMatch.error = "Не удалось загрузить записи: " + (e.message || e);
@@ -291,6 +305,7 @@ export default {
             if (this.scanTab === "match" && this.scanMatch.source === run.source) {
                 this.loadScanRecords();
             }
+            this.loadDiffs();
         },
 
         // После загрузки настроек: идущие запуски — следить
@@ -411,44 +426,68 @@ export default {
             }
             this.scanMatch.open = open;
             this.scanMatch.hover = null;
+            this.scanFitCompare();
         },
 
         // Строки «поле | источник | ITDB» для раскрытой записи. Сравнивает сервер
         // (scan_values.py): значение источника — уже в названиях таблицы, raw — как в источнике
         scanCompareRows(r) {
-            const title = this.scanMatchTitle;
             return (r.compare || []).map((c) => {
                 const col = this.builtinColumns.find(function (x) { return x.field === c.field; });
-                const single = !String(c.raw || "").includes("\n") && !String(c.itdb || "").includes("\n");
                 const renamed = c.raw && c.source !== c.raw;
-                const hows = (c.how || "").split(",").filter(Boolean).map(function (h) { return HOW_TITLES[h]; });
+                const hows = (c.how || "").split(",").filter(Boolean).map(function (h) { return HOW_TITLES[h]; }).filter(Boolean);
+                // Двойной клик по отметке — у однострочных полей-названий, когда есть оба значения
+                const cycle = NAME_FIELDS.includes(c.field) && c.manual !== undefined;
+                const next = cycle ? this.scanNextMark(c) : null;
                 return Object.assign({}, c, {
                     label: col ? col.headerName : c.field,
-                    rawText: renamed ? "в " + title + ": " + c.raw.split("\n").join(", ") : "",
-                    markTitle: (MARK_TITLES[c.mark] || "") + (hows.length ? " — " + hows.join("; ") : ""),
-                    // «Одно и то же» — отличается, но это одно значение, названное иначе
-                    canSame: NAME_FIELDS.includes(c.field) && single && c.mark === "≠",
-                    // «Это разное» — сочтено одинаковым, хотя написано иначе
-                    canDiffer: NAME_FIELDS.includes(c.field) && single && c.mark === "=" && c.raw.toLowerCase() !== c.itdb.toLowerCase()
+                    rawText: renamed ? c.raw.split("\n").join(", ") : "",
+                    symbol: c.manual === "keep" ? "⇐" : c.mark,
+                    cycle: cycle,
+                    next: next,
+                    markTitle: (c.manual ? MANUAL_TITLES[c.manual] : (MARK_TITLES[c.mark] || "")) +
+                        (!c.manual && hows.length ? " — " + hows.join("; ") : "") +
+                        (cycle ? "\nДвойной клик — " + (next ? MANUAL_NEXT[next] : "как решит сравнение") : "")
                 });
             });
         },
 
-        async scanSetName(c, kind) {
+        // Круг решений по паре: как решит сравнение → «одно и то же» (или «разное»,
+        // если и так совпало) → «в таблице своё» → снова как решит сравнение
+        scanNextMark(c) {
+            const order = c.auto_equal ? [null, "differ", "keep"] : [null, "same", "keep"];
+            const i = order.indexOf(c.manual || null);
+            return order[(i + 1) % order.length];
+        },
+
+        async scanCycleMark(c) {
+            if (!c.cycle) {
+                return;
+            }
             try {
                 const response = await apiFetch("/api/scan/names", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ field: c.field, source: c.raw, table: c.itdb, kind: kind })
+                    body: JSON.stringify({ field: c.field, source: c.raw, table: c.itdb, kind: c.next || "auto" })
                 });
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.toast(c.label + ": «" + c.raw + "» — " + (kind === "same" ? "то же, что «" : "не то же, что «") + c.itdb + "»", "success");
+                this.toast(c.label + ": «" + c.raw + "» и «" + c.itdb + "» — " + (c.next ? MANUAL_NEXT[c.next] : "как решит сравнение"), "success");
                 await this.loadScanRecords();
             } catch (e) {
                 this.toastError(e.message || e);
             }
+        },
+
+        // Табличка сравнения во всю ширину — без скругления угла
+        scanFitCompare() {
+            this.$nextTick(() => {
+                document.querySelectorAll(".sm-compare").forEach(function (table) {
+                    const box = table.parentElement;
+                    table.classList.toggle("full", table.offsetWidth >= box.clientWidth - 1);
+                });
+            });
         },
 
         // ---------- Вкладка «Названия» ----------
@@ -474,6 +513,16 @@ export default {
             return col ? col.headerName : field;
         },
 
+        scanNameKindTitle(n) {
+            if (n.kind === "differ") {
+                return "Разное: не считать одним и тем же";
+            }
+            if (n.kind === "keep") {
+                return "В таблице своё: при таком значении источника в таблице так и оставить. Это не «одно и то же» — другим ПК табличное значение не предлагается";
+            }
+            return "Одно и то же";
+        },
+
         scanNameOrigin(n) {
             if (n.origin === "learned") {
                 return "по таблице · " + n.count + " ПК";
@@ -497,8 +546,20 @@ export default {
 
         async differScanName(n) {
             this.scanNames.hover = null;
-            await this.scanSetName({ field: n.field, raw: n.source, itdb: n.table, label: this.scanFieldLabel(n.field) }, "differ");
-            await this.loadScanNames();
+            try {
+                const response = await apiFetch("/api/scan/names", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ field: n.field, source: n.source, table: n.table, kind: "differ" })
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                this.toast(this.scanFieldLabel(n.field) + ": «" + n.source + "» и «" + n.table + "» — разное", "success");
+                await this.loadScanNames();
+            } catch (e) {
+                this.toastError(e.message || e);
+            }
         },
 
         setScanNameHover(n, rowEl) {
@@ -519,37 +580,30 @@ export default {
             return a.name + (a.version ? " " + a.version : "") + " — " + parts.join(", ");
         },
 
-        scanFullText(r) {
+        // Строки под табличкой: { label, text } — подпись полужирным
+        scanDetailLines(r) {
             const f = r.full || {};
-            const parts = [];
-            if (f.os) {
-                parts.push("ОС: " + f.os);
-            }
-            if (f.cpu && f.cpu.length) {
-                parts.push("ЦП: " + f.cpu.join(", "));
-            }
-            if (f.memory_mb) {
-                parts.push("ОЗУ: " + f.memory_mb + " МБ");
-            }
-            if (f.disks && f.disks.length) {
-                parts.push("Диски: " + f.disks.map(function (d) { return (d.name || "?") + " (" + Math.round(d.mb / 1000) + " ГБ)"; }).join(", "));
-            }
-            if (f.gpus && f.gpus.length) {
-                parts.push("Видео: " + f.gpus.join(", "));
-            }
-            if (f.manufacturer || f.model) {
-                parts.push("Модель: " + [f.manufacturer, f.model].filter(Boolean).join(" "));
-            }
+            const lines = [];
+            const add = function (label, text, bad) {
+                if (text) {
+                    lines.push({ label: label, text: text, bad: !!bad });
+                }
+            };
+            add(r.state === "conflict" ? "Конфликт:" : "Пояснение:", r.note, r.state === "conflict");
+            add("Антивирусы:", (r.antivirus || []).map(this.scanAntivirusText).join("; "));
+            add("ОС:", f.os);
+            add("ЦП:", (f.cpu || []).join(", "));
+            add("ОЗУ:", f.memory_mb ? f.memory_mb + " МБ" : "");
+            add("Диски:", (f.disks || []).map(function (d) { return (d.name || "?") + " (" + Math.round(d.mb / 1000) + " ГБ)"; }).join(", "));
+            add("Видео:", (f.gpus || []).join(", "));
+            add("Модель:", [f.manufacturer, f.model].filter(Boolean).join(" "));
             if (f.serial && f.serial !== r.values.serial) {
-                parts.push("Серийный в источнике: " + f.serial + " (не признак)");
+                add("Серийный в источнике:", f.serial + " (не признак)");
             }
-            if (f.uuid) {
-                parts.push("UUID: " + f.uuid);
-            }
-            if (f.tag) {
-                parts.push("Тег агента: " + f.tag);
-            }
-            return parts;
+            add("UUID:", f.uuid);
+            add("Тег агента:", f.tag);
+            (r.decisions || []).forEach((d) => add("Решение:", this.scanDecisionText(d)));
+            return lines;
         },
 
         scanDecisionText(d) {

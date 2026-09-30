@@ -123,7 +123,9 @@ export default {
 
         setView(view) {
             this.view = view;
-            if (view === "tree") {
+            if (view === "table") {
+                this.loadDiffs();
+            } else if (view === "tree") {
                 this.loadTree();
             } else if (view === "history") {
                 this.loadHistory();

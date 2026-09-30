@@ -18,6 +18,10 @@
    остаётся как в источнике.
 3. Вручную можно сказать и «это разное» — тогда похожие значения не
    считаются одинаковыми.
+4. «В таблице своё» (этап 26, случай «ЕГИСЗ»): пара «значение источника —
+   значение таблицы» — не расхождение, в таблице так и оставить. Но это не
+   «одно и то же»: из такой пары ничего не учится, и ПК без значения в таблице
+   получит значение источника, а не табличное.
 """
 import re
 from collections import Counter, defaultdict
@@ -119,8 +123,16 @@ def drive_parts(line):
     return ("ssd" if kind == "nvme" else kind), size
 
 
-def same_line(field, a, b):
-    """Одно ли это значение (без словаря)."""
+def model_marks(words):
+    """«Номерные» слова — буквы с цифрами: g6, m600, j3710, i5-10400."""
+    return {w for w in words if re.search(r"\d", w) and re.search(r"[a-zа-я]", w)}
+
+
+def same_line(field, a, b, strict=False):
+    """Одно ли это значение (без словаря). strict — для подстановки названия
+    другим ПК: в более коротком должны быть все «номерные» слова длинного
+    («HP ProDesk 400» не название для «HP ProDesk 400 G6 MT», а «M600» —
+    для «Lenovo ThinkCentre M600» да)."""
     if key_of(a) == key_of(b):
         return True
 
@@ -140,7 +152,14 @@ def same_line(field, a, b):
     if not ta or not tb:
         return False
 
-    return ta <= tb or tb <= ta
+    if not (ta <= tb or tb <= ta):
+        return False
+
+    if strict:
+        short, long_ = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+        return model_marks(long_) <= short
+
+    return True
 
 
 class Names:
@@ -152,12 +171,15 @@ class Names:
     def __init__(self, aliases=(), table_values=None, choices=None, pairs=()):
         self.same = {}
         self.differ = defaultdict(set)
+        self.keep = defaultdict(set)
 
         for alias in aliases:
             key = (alias["field"], key_of(alias["source"]))
 
             if alias["kind"] == "same":
                 self.same[key] = alias["table"]
+            elif alias["kind"] == "keep":
+                self.keep[key].add(key_of(alias["table"]))
             else:
                 self.differ[key].add(key_of(alias["table"]))
 
@@ -170,6 +192,9 @@ class Names:
         for field, source, table in pairs:
             for s_line in lines_of(source) if field in MULTI_NAME_FIELDS else [source]:
                 for t_line in lines_of(table) if field in MULTI_NAME_FIELDS else [table]:
+                    if self.is_keep(field, s_line, t_line):
+                        break   # «в таблице своё» — не учить
+
                     if self.equal(field, s_line, t_line):
                         # Считаются и совпадающие: побеждает, как записано у большинства
                         self.learned[(field, key_of(s_line))][t_line] += 1
@@ -183,7 +208,25 @@ class Names:
 
     # ---------- одна строка ----------
 
-    def equal(self, field, source, table):
+    def is_keep(self, field, source, table):
+        return key_of(table) in self.keep.get((field, key_of(source)), ())
+
+    def manual(self, field, source, table):
+        """Ручное решение по паре: same / differ / keep / None."""
+        key = (field, key_of(source))
+
+        if self.is_keep(field, source, table):
+            return "keep"
+
+        if key_of(table) in self.differ.get(key, ()):
+            return "differ"
+
+        if key in self.same and key_of(self.same[key]) == key_of(table):
+            return "same"
+
+        return None
+
+    def equal(self, field, source, table, strict=False):
         """Одно ли и то же строка источника и строка таблицы (с учётом ручных)."""
         key = (field, key_of(source))
 
@@ -193,7 +236,7 @@ class Names:
         if key in self.same and key_of(self.same[key]) == key_of(table):
             return True
 
-        return same_line(field, source, table)
+        return same_line(field, source, table, strict)
 
     def canonical_line(self, field, source):
         """Название строки источника так, как его пишут в таблице.
@@ -216,11 +259,11 @@ class Names:
         candidates = Counter()
 
         for value in self.choices.get(field, []):
-            if self.equal(field, source, value):
+            if self.equal(field, source, value, strict=True):
                 candidates[value] += 1000   # Справочник — главнее
 
         for value, count in (self.table_values.get(field) or {}).items():
-            if self.equal(field, source, value):
+            if self.equal(field, source, value, strict=True):
                 candidates[value] += count
 
         if candidates:
@@ -263,13 +306,18 @@ class Names:
         unmatched_src = 0
 
         for line in src_lines:
-            hit = next((i for i, t in enumerate(tab_lines) if i not in matched_tab and self.equal(field, line, t)), None)
+            keep = next((i for i, t in enumerate(tab_lines) if i not in matched_tab and self.is_keep(field, line, t)), None)
+            hit = keep if keep is not None else next(
+                (i for i, t in enumerate(tab_lines) if i not in matched_tab and self.equal(field, line, t)), None
+            )
 
             if hit is not None:
                 matched_tab.add(hit)
                 shown.append(tab_lines[hit])
 
-                if key_of(line) != key_of(tab_lines[hit]):
+                if keep is not None:
+                    hows.add("keep")
+                elif key_of(line) != key_of(tab_lines[hit]):
                     hows.add("same")
             else:
                 unmatched_src += 1
@@ -288,4 +336,11 @@ class Names:
         else:
             mark = "≠"
 
-        return {"source": "\n".join(shown), "raw": raw, "mark": mark, "how": ",".join(sorted(hows))}
+        result = {"source": "\n".join(shown), "raw": raw, "mark": mark, "how": ",".join(sorted(hows))}
+
+        # Ручное решение по паре (для однострочных): его показывает и меняет отметка
+        if len(src_lines) == 1 and len(tab_lines) == 1:
+            result["manual"] = self.manual(field, src_lines[0], tab_lines[0])
+            result["auto_equal"] = same_line(field, src_lines[0], tab_lines[0])
+
+        return result

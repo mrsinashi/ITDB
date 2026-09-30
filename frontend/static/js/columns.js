@@ -197,7 +197,8 @@ export const SIMPLE_FIELD_LABELS = {
     reset: "Решения забыты",
     // Соответствия названий (этап 25б)
     same: "Одно и то же",
-    differ: "Разное"
+    differ: "Разное",
+    keep: "В таблице своё"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

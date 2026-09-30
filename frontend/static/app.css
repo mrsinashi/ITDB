@@ -3610,21 +3610,30 @@ body.login-page {
    Сканирование: вкладки, сбор, «Сопоставление» (этап 25)
    ============================================================ */
 
-/* Вкладки страницы на панели — две кнопки встык, выбранная включена */
-.toolbar .scan-tabs {
-    display: inline-flex;
+/* Вкладки страницы на второй панели — как вкладки верхнего меню: во всю высоту
+   панели, от её левого края, выбранная — залита (этап 26, просьба пользователя) */
+.toolbar .tb-tabs {
+    display: flex;
+    align-items: stretch;
+    height: 35px;
+    margin: -5px 0 -5px -10px;
 }
-.toolbar .scan-tabs .btn:first-child {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
+.toolbar .tb-tabs a {
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    color: var(--tb-text);
+    text-decoration: none;
+    font-size: 13px;
 }
-.toolbar .scan-tabs .btn + .btn {
-    margin-left: -1px;
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
+.toolbar .tb-tabs a:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--tb-ctrl-text);
 }
-.toolbar .scan-tabs .btn.active {
-    position: relative;
+.toolbar .tb-tabs a.active {
+    background: var(--tb-ctrl-on-bg);
+    color: var(--tb-ctrl-on-text);
+    font-weight: 600;
 }
 
 /* Итог сбора в блоке источника: как строка проверки, со ссылкой на вкладку */
@@ -3797,98 +3806,133 @@ body.login-page {
 .sm-state.st-dup {
     color: var(--text-muted);
 }
-.sm-table tbody tr.sm-open:not(.is-hover) td {
-    background: var(--surface-alt);
+/* Раскрытая запись остаётся подсвеченной, пока открыта */
+.history-table.sm-table tbody tr.sm-open td {
+    background: var(--row-hover-bg);
+    border-right-color: var(--row-hover-line);
 }
-/* Подробности записи: без подсветки под курсором */
-.history-table.sm-table tbody tr.sm-detail td,
-.history-table.sm-table tbody tr.sm-detail:hover td {
+.history-table.sm-table tbody tr.sm-open td:last-child {
+    border-right-color: transparent;
+}
+/* Подробности записи: без отступов и подсветки под курсором */
+.history-table.sm-table tbody tr.sm-detail > td,
+.history-table.sm-table tbody tr.sm-detail:hover > td {
+    padding: 0;
     background: #fff;
     border-right-color: transparent;
     cursor: default;
-}
-.sm-detail-in {
-    padding: 4px 2px 6px;
     white-space: normal;
-    max-width: 900px;
 }
-.sm-note {
-    margin-bottom: 6px;
+/* Табличка сравнения: прижата к левому и верхнему краю, ширина — по значениям,
+   пока есть место; своя линия справа и снизу, угол скруглён, если не во всю ширину.
+   Правила большой таблицы (.history-table td / th, липкая шапка) сюда не доходят */
+.smc-box {
+    display: flex;
+}
+.history-table .sm-compare {
+    max-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 12px;
-    color: var(--text);
 }
-.sm-note.bad {
-    color: var(--danger);
-}
-.sm-compare {
-    border-collapse: collapse;
-    font-size: 12px;
-}
-.sm-compare th,
-.sm-compare td {
+.history-table .sm-compare th,
+.history-table .sm-compare td,
+.history-table .sm-compare td:last-child,
+.history-table tbody:last-child .sm-compare tr:last-child td {
+    position: static;
+    height: auto;
     padding: 2px 8px;
-    border: 1px solid var(--grid-line);
+    border: none;
+    border-right: 1px solid var(--grid-line);
+    border-bottom: 1px solid var(--grid-line);
+    box-shadow: none;
+    background: #fff;
     vertical-align: top;
     text-align: left;
-    white-space: pre;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
 }
-.sm-compare th {
-    background: var(--grid-head-bg);
+/* Шапка — серая, как строка адреса в Дереве */
+.history-table .sm-compare th,
+.history-table.accent-head .sm-compare th {
+    background: var(--gray-group);
+    color: var(--text-strong);
+    font-size: 12px;
     font-weight: 600;
-    color: var(--grid-head-text);
+    border-right-color: var(--group-line);
+    border-bottom-color: var(--group-line);
 }
-.sm-compare .smc-label {
+.history-table .sm-compare td.smc-label {
     background: var(--surface-alt);
     color: var(--text-strong);
+    white-space: nowrap;
 }
-.sm-compare .smc-v {
-    min-width: 120px;
+.history-table .sm-compare .smc-v {
+    min-width: 110px;
     font-variant-numeric: tabular-nums;
 }
-.sm-compare .smc-mark {
+.history-table .sm-compare .smc-raw {
+    color: var(--text-muted);
+}
+.history-table .sm-compare .smc-mark {
     width: 12px;
-    padding: 2px 4px;
+    padding: 2px 5px;
     text-align: center;
+    white-space: nowrap;
     color: var(--text-strong);
 }
+.history-table .sm-compare td.smc-mark.cycle {
+    cursor: pointer;
+    user-select: none;
+}
+.history-table .sm-compare td.smc-mark.cycle:hover {
+    background: var(--row-hover-bg);
+}
+/* Решение задано вручную — отметка подчёркнута */
+.history-table .sm-compare td.smc-mark.manual {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+}
+.history-table .sm-compare:not(.full) tr:last-child td:last-child {
+    border-bottom-right-radius: var(--radius);
+}
+/* Подсветка строк большой таблицы под курсором и «у последней строки нет нижней
+   линии» (.history-table tbody:last-child tr:last-child td) в табличку не попадают */
+.history-table.sm-table tbody tr.sm-detail .sm-compare td {
+    background: #fff;
+    border-right: 1px solid var(--grid-line);
+    border-bottom: 1px solid var(--grid-line);
+}
+.history-table.sm-table tbody tr.sm-detail .sm-compare th {
+    border-right: 1px solid var(--group-line);
+    border-bottom: 1px solid var(--group-line);
+}
+.history-table.sm-table tbody tr.sm-detail .sm-compare td.smc-label {
+    background: var(--surface-alt);
+}
+.history-table.sm-table tbody tr.sm-detail .sm-compare td.smc-mark.cycle:hover {
+    background: var(--row-hover-bg);
+}
 .sm-lines {
-    margin-top: 6px;
+    padding: 5px 8px 6px;
     font-size: 12px;
     line-height: 18px;
     color: var(--text);
+}
+.sm-lines b {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.sm-lines .bad,
+.sm-lines .bad b {
+    color: var(--danger);
 }
 .add-bar.scan-link-bar .ab-loc .input {
     width: 440px;
 }
 
-/* Названия (этап 25б): значение источника в названиях таблицы и как было */
-.sm-compare .smc-raw {
-    display: block;
-    font-size: 11px;
-    color: var(--text-muted);
-}
-.sm-compare th.smc-act,
-.sm-compare td.smc-act {
-    border: none;
-    padding: 2px 4px;
-    background: #fff;
-}
-.smc-btn {
-    padding: 0 5px;
-    border: 1px solid var(--gray-line);
-    border-radius: var(--radius);
-    background: #fff;
-    color: var(--text-secondary);
-    font: inherit;
-    font-size: 11px;
-    line-height: 16px;
-    cursor: pointer;
-    white-space: nowrap;
-}
-.smc-btn:hover {
-    background: var(--row-hover-bg);
-    color: var(--text-strong);
-}
+/* Названия (этап 25б) */
 .sm-intro {
     max-width: 900px;
     margin-bottom: 8px;
@@ -3913,4 +3957,72 @@ body.login-page {
 }
 .sm-table.names-table tbody tr:not(.sm-detail):not(.h-empty) {
     cursor: default;
+}
+
+/* ============================================================
+   Режим «Расхождения» (этап 26)
+   ============================================================ */
+.sm-filters .sb-gap {
+    flex: 1;
+}
+.sm-filters .btn {
+    height: 22px;
+    padding: 0 9px;
+    font-size: 12px;
+}
+.diff-wrap {
+    min-width: 720px;
+}
+.diff-table td {
+    vertical-align: top;
+}
+.diff-table tr.h-day td .df-host {
+    color: var(--text-strong);
+    font-weight: 600;
+    text-decoration: none;
+}
+.diff-table tr.h-day td .df-host:hover {
+    text-decoration: underline;
+}
+.diff-table tr.h-day td .df-place {
+    margin-left: 10px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+.diff-table td.df-field {
+    color: var(--text-strong);
+}
+.diff-table td.df-v {
+    white-space: pre-line;
+    font-variant-numeric: tabular-nums;
+}
+.diff-table td.df-new {
+    font-weight: 600;
+}
+.diff-table .df-raw,
+.diff-table .df-empty {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+.diff-table td.df-src {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.diff-table th.df-c,
+.diff-table td.df-c {
+    width: 1%;
+    text-align: center;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+.diff-table .df-pair {
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.diff-table .df-pair:hover {
+    color: var(--text-strong);
+}
+.sm-intro b {
+    font-weight: 600;
+    color: var(--text-strong);
 }

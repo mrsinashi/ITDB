@@ -623,6 +623,7 @@ def value_history(session, ref, field):
                 "new": change.get("new"),
                 "cancelled": change.get("cancelled"),
                 "revert": bool(change.get("revert")),
+                "scan": change.get("scan"),
             }
         )
 

@@ -461,7 +461,7 @@ def test_names_learned_and_manual():
     assert names.compare("model", "HP 400", "HP")["mark"] == "≠"          # «это разное»
 
 
-def test_names_api(admin, editor, room, glpi_url):
+def test_names_api(admin, editor, reader, room, glpi_url):
     add_pc(editor, room["room"], "pc-1", mac="D8:BB:C1:00:00:01", os="Windows 10", cpu="Intel Pentium J3710", model="M600")
     Glpi.computers = {
         1: pc("pc-1", ports=[(ETH, "d8:bb:c1:00:00:01", [])], cpu="Intel(R) Pentium(R) CPU J3710 @ 1.60GHz",
@@ -496,9 +496,116 @@ def test_names_api(admin, editor, room, glpi_url):
     manual = [n for n in ok(admin.get("/api/scan/names")) if n["origin"] == "manual"]
     assert len(manual) == 2
     assert admin.post("/api/scan/names", json={"field": "hostname", "source": "a", "table": "b"}).status_code == 400
-    assert editor.post("/api/scan/names", json={"field": "os", "source": "a", "table": "b"}).status_code == 403
+    # Редактор тоже решает (режим «Расхождения»), только чтение — нет
+    assert reader.post("/api/scan/names", json={"field": "os", "source": "a", "table": "b"}).status_code == 403
     for n in manual:
         ok(admin.delete(f"/api/scan/names/{n['id']}"))
     assert not [n for n in ok(admin.get("/api/scan/names")) if n["origin"] == "manual"]
     items = ok(admin.get("/api/history", params={"entity": "scan_aliases"}))["items"]
     assert len(items) == 4 and items[0]["title"].startswith(("OS: ", "CPU: "))
+
+
+# ---------- Расхождения (этап 26) ----------
+
+
+def diffs_of(client, rejected=False):
+    return ok(client.get("/api/scan/diffs", params={"rejected": rejected}))
+
+
+def test_keep_is_not_same():
+    """«В таблице своё» (ЕГИСЗ): пара — не расхождение, но ничему не учит."""
+    names = sv.Names(
+        aliases=[{"field": "model", "source": "ASUS PRIME H370-PLUS", "table": "ЕГИСЗ", "kind": "keep"}],
+        table_values={"model": {"ЕГИСЗ": 30}},
+        pairs=[("model", "ASUS PRIME H370-PLUS", "ЕГИСЗ")] * 30,
+    )
+    row = names.compare("model", "ASUS PRIME H370-PLUS", "ЕГИСЗ")
+    assert (row["mark"], row["manual"], row["source"]) == ("=", "keep", "ЕГИСЗ")
+    # ПК без значения в таблице — получит значение источника, не «ЕГИСЗ»
+    assert names.canonical_line("model", "ASUS PRIME H370-PLUS") == ("ASUS PRIME H370-PLUS", "")
+    # Другое значение таблицы при той же плате — расхождение
+    assert names.compare("model", "ASUS PRIME H370-PLUS", "Aquarius")["mark"] == "≠"
+
+
+def test_diffs_accept_reject_keep(admin, editor, reader, room, glpi_url):
+    loc = room["room"]
+    first = add_pc(editor, loc, "egisz-1", mac="04:D9:F5:00:00:01", model="ЕГИСЗ", ram="16")
+    second = add_pc(editor, loc, "egisz-2", mac="04:D9:F5:00:00:02", model="ЕГИСЗ")
+    Glpi.computers = {
+        1: pc("egisz-1", ports=[(ETH, "04:d9:f5:00:00:01", ["10.0.1.60"])], maker="ASUSTeK COMPUTER INC.", model="PRIME H370-PLUS"),
+        2: pc("egisz-2", ports=[(ETH, "04:d9:f5:00:00:02", [])], maker="ASUSTeK COMPUTER INC.", model="PRIME H370-PLUS"),
+    }
+    setup_source(admin, glpi_url)
+    collect(admin)
+
+    assert reader.get("/api/scan/diffs").status_code == 403
+    data = diffs_of(editor)
+    items = {(d["computer_id"], d["field"]): d for d in data["items"]}
+    assert data["computers"] == 2 and data["sources"] == ["glpi"]
+    model = items[(first, "model")]
+    assert (model["table"], model["proposed"], model["kind"], model["same_pair"]) == ("ЕГИСЗ", "ASUS PRIME H370-PLUS", "diff", 1)
+    assert items[(first, "ip")]["kind"] == "fill" and items[(first, "ram")]["proposed"] == "8"
+    assert items[(first, "os")]["proposed"] == "Win 10"
+
+    # «В таблице своё» — у обоих ПК модель больше не расхождение
+    ok(editor.post("/api/scan/names", json={"field": "model", "source": "ASUS PRIME H370-PLUS", "table": "ЕГИСЗ", "kind": "keep"}))
+    assert not [d for d in diffs_of(editor)["items"] if d["field"] == "model"]
+
+    # Отклонить RAM у первого — скрыто, но видно среди отклонённых; вернуть
+    ok(editor.post("/api/scan/diffs/reject", json={"items": [{"computer_id": first, "field": "ram", "raw": "8"}]}))
+    data = diffs_of(editor)
+    assert (first, "ram") not in {(d["computer_id"], d["field"]) for d in data["items"]} and data["rejected"] == 1
+    shown = [d for d in diffs_of(editor, True)["items"] if d["rejected_by"]]
+    assert [(d["field"], d["rejected_by"]) for d in shown] == [("ram", "editor")]
+    ok(editor.post("/api/scan/diffs/unreject", json={"items": [{"computer_id": first, "field": "ram", "raw": "8"}]}))
+    assert (first, "ram") in {(d["computer_id"], d["field"]) for d in diffs_of(editor)["items"]}
+
+    # Принять IP и OS — в ПК и в Историю с пометкой источника
+    result = ok(editor.post("/api/scan/diffs/accept", json={"items": [
+        {"computer_id": first, "field": "ip", "value": "10.0.1.60", "table": "", "source": "GLPI №1"},
+        {"computer_id": first, "field": "os", "value": "Win 10", "table": "", "source": "GLPI №1"},
+        {"computer_id": second, "field": "os", "value": "Win 10", "table": "уже другое", "source": "GLPI №2"},
+    ]}))
+    assert result["accepted"] == 2 and len(result["skipped"]) == 1
+    row = get_row(editor, first)
+    assert (row["ip"], row["os"]) == ("10.0.1.60", "Win 10")
+    history = ok(editor.get("/api/history", params={"entity": "computers", "entity_id": first}))["items"]
+    assert history[0]["changes"]["ip"]["scan"] == "GLPI №1"
+    assert {(d["computer_id"], d["field"]) for d in diffs_of(editor)["items"]} >= {(second, "os")}
+    assert (first, "os") not in {(d["computer_id"], d["field"]) for d in diffs_of(editor)["items"]}
+
+    # Выключенный источник — расхождений нет
+    ok(admin.patch("/api/scan/sources/glpi", json={"enabled": False}))
+    assert diffs_of(editor)["items"] == []
+
+
+def test_names_cycle_auto(admin, editor, room, glpi_url):
+    """Двойной клик по отметке: «одно и то же» → «в таблице своё» → как решит сравнение."""
+    add_pc(editor, room["room"], "pc-1", mac="D8:BB:C1:00:00:01", model="ЕГИСЗ")
+    Glpi.computers = {1: pc("pc-1", ports=[(ETH, "d8:bb:c1:00:00:01", [])], maker="ASUS", model="PRIME H370-PLUS")}
+    setup_source(admin, glpi_url)
+    collect(admin)
+
+    def model_row():
+        return {c["field"]: c for c in records(admin)[1][1]["compare"]}["model"]
+
+    row = model_row()
+    assert (row["mark"], row["manual"], row["auto_equal"]) == ("≠", None, False)
+    body = {"field": "model", "source": row["raw"], "table": "ЕГИСЗ"}
+    ok(admin.post("/api/scan/names", json=dict(body, kind="same")))
+    assert (model_row()["mark"], model_row()["manual"]) == ("=", "same")
+    ok(admin.post("/api/scan/names", json=dict(body, kind="keep")))
+    assert (model_row()["mark"], model_row()["manual"]) == ("=", "keep")
+    assert len([n for n in ok(admin.get("/api/scan/names")) if n["origin"] == "manual"]) == 1
+    ok(admin.post("/api/scan/names", json=dict(body, kind="auto")))
+    assert (model_row()["mark"], model_row()["manual"]) == ("≠", None)
+    assert not [n for n in ok(admin.get("/api/scan/names")) if n["origin"] == "manual"]
+
+
+def test_canonical_keeps_model_numbers():
+    """Название из таблицы подставляется, только если в нём все «номерные» части."""
+    names = sv.Names(table_values={"model": {"HP ProDesk 400": 5, "M600": 3}})
+    assert names.canonical_line("model", "HP ProDesk 400 G6 MT") == ("HP ProDesk 400 G6 MT", "")
+    assert names.canonical_line("model", "Lenovo ThinkCentre M600") == ("M600", "table")
+    # У самого ПК менее подробное значение — не расхождение
+    assert names.compare("model", "HP ProDesk 400 G6 MT", "HP ProDesk 400")["mark"] == "="

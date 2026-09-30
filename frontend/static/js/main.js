@@ -13,7 +13,8 @@
 //                        history-undo (отмена и возврат из Истории, фильтры Истории),
 //                        col-filters (фильтры по столбцам в шапке таблицы),
 //                        scan (Сканирование: подключения к источникам, подсети),
-//                        scan-match (сбор из GLPI / GSIT, вкладка «Сопоставление»)
+//                        scan-match (сбор из GLPI / GSIT, вкладки «Сопоставление», «Названия»),
+//                        scan-diffs (режим «Расхождения» на странице «Таблица»)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -38,6 +39,7 @@ import historyUndo from "./mixins/history-undo.js";
 import colFilters from "./mixins/col-filters.js";
 import scan from "./mixins/scan.js";
 import scanMatch from "./mixins/scan-match.js";
+import scanDiffs from "./mixins/scan-diffs.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -45,7 +47,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -176,6 +178,20 @@ const app = Vue.createApp({
             },
             scanMatchQuery: "",  // поиск на «Сопоставлении» и «Названиях»
             scanNames: { items: [], loading: false, error: "", hover: null },
+            // Этап 26: режим «Расхождения» на странице «Таблица»
+            diffMode: false,
+            diffs: {
+                items: [],          // /api/scan/diffs (и отклонённые — с rejected_by)
+                count: 0,           // расхождений без отклонённых — на кнопке
+                rejected: 0,
+                sources: [],
+                loading: false,
+                error: "",
+                field: "all",       // фильтр по полю
+                pair: null,         // «ещё у N ПК»: { field, table, raw }
+                showRejected: false,
+                hover: null
+            },
             scanLinkBar: null,   // «Привязать запись к ПК:» — строка под панелью
 
             // Карточка
@@ -223,8 +239,10 @@ const app = Vue.createApp({
             await this.$nextTick();
             this.snapNavUser();
             window.addEventListener("resize", () => this.snapNavUser());
+            window.addEventListener("resize", () => this.scanFitCompare());
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();
+            this.loadDiffs();
         }
     }
 });
