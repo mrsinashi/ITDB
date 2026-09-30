@@ -159,7 +159,8 @@ export const ENTITY_LABELS = {
     column_styles: "Оформление",
     users: "Пользователь",
     scan_sources: "Подключение",
-    scan_subnets: "Подсеть"
+    scan_subnets: "Подсеть",
+    scan_records: "Запись"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -188,7 +189,11 @@ export const SIMPLE_FIELD_LABELS = {
     purpose: "Назначение",
     building: "Адрес",
     scan: "Сканировать",
-    note: "Примечание"
+    note: "Примечание",
+    // Сопоставление записей GLPI / GSIT с ПК (этап 25)
+    link: "Это ПК",
+    reject: "Не этот ПК",
+    reset: "Решения забыты"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

@@ -31,6 +31,10 @@ export default {
             this.loadScanSubnets();
         },
 
+        scanTopCountText() {
+            return this.scanTab === "match" ? this.scanMatchCountText : this.scanCountText;
+        },
+
         async loadScanSources() {
             this.scanError = "";
             this.startLoading();
@@ -45,6 +49,10 @@ export default {
                 const forms = {};
                 data.sources.forEach((s) => { forms[s.kind] = this.scanFormFrom(s); });
                 this.scanForms = forms;
+                this.resumeScanRuns();
+                if (this.scanTab === "match") {
+                    this.setScanTab("match");
+                }
             } catch (e) {
                 this.scanError = "Не удалось загрузить настройки: " + (e.message || e);
             } finally {

@@ -18,7 +18,7 @@ import scan_jabber
 from auth import require_admin
 from db import get_db
 from history_log import PASSWORD_SET, log_change
-from models import Computer, Location, ScanSource, ScanSubnet
+from models import Computer, Location, ScanRun, ScanSource, ScanSubnet
 from scan_http import SourceError, check_url
 from secret_box import decrypt, encrypt, key_ready
 
@@ -53,6 +53,37 @@ NOTE_MAX = 500
 # ---------- Источники ----------
 
 
+class RunOut(BaseModel):
+    """Запуск сбора (этап 25): stats — счётчики отчёта, пока идёт — progress."""
+    id: int
+    source: str
+    status: str
+    user_name: Optional[str]
+    started_at: datetime
+    finished_at: Optional[datetime]
+    message: Optional[str]
+    stats: dict
+
+
+# Запуск «идёт», начатый до старта программы, уже не идёт: программу
+# перезапускали (в базе его закроет следующий сбор — scan_collect.running_run)
+PROCESS_STARTED = datetime.now(timezone.utc)
+INTERRUPTED = "Сбор прервался: программу перезапустили."
+
+
+def interrupted(run):
+    return run.status == "running" and run.started_at < PROCESS_STARTED
+
+
+def run_out(run):
+    stopped = interrupted(run)
+    return RunOut(
+        id=run.id, source=run.source, status="error" if stopped else run.status, user_name=run.user_name,
+        started_at=run.started_at, finished_at=run.finished_at, message=INTERRUPTED if stopped else run.message,
+        stats=run.stats or {},
+    )
+
+
 class SourceOut(BaseModel):
     kind: str
     title: str
@@ -66,6 +97,7 @@ class SourceOut(BaseModel):
     checked_at: Optional[datetime]
     check_ok: Optional[bool]
     check_message: Optional[str]
+    last_run: Optional[RunOut] = None
 
 
 class SourcesOut(BaseModel):
@@ -115,7 +147,12 @@ def fresh_days_of(source, kind):
     return value if isinstance(value, int) else FRESH_DAYS_DEFAULT
 
 
-def source_out(kind, source):
+def last_run_of(session, kind):
+    run = session.query(ScanRun).filter(ScanRun.source == kind).order_by(ScanRun.id.desc()).first()
+    return run_out(run) if run else None
+
+
+def source_out(kind, source, last_run=None):
     secrets = (source.secrets or {}) if source else {}
     glpi = SOURCES[kind]["glpi"]
     fields = SECRET_FIELDS if glpi else ("password",)
@@ -133,6 +170,7 @@ def source_out(kind, source):
         checked_at=source.checked_at if source else None,
         check_ok=source.check_ok if source else None,
         check_message=source.check_message if source else None,
+        last_run=last_run,
     )
 
 
@@ -194,7 +232,7 @@ def list_sources(me=Depends(require_admin), session=Depends(get_db)):
     rows = {source.kind: source for source in session.query(ScanSource).all()}
     return SourcesOut(
         key_ready=key_ready(),
-        sources=[source_out(kind, rows.get(kind)) for kind in SOURCES],
+        sources=[source_out(kind, rows.get(kind), last_run_of(session, kind)) for kind in SOURCES],
     )
 
 
@@ -295,7 +333,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         title=SOURCES[kind]["title"], entity_key=kind,
     )
     session.commit()
-    return source_out(kind, source)
+    return source_out(kind, source, last_run_of(session, kind))
 
 
 @router.post("/sources/{kind}/check", response_model=CheckOut)

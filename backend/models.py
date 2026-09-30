@@ -258,3 +258,65 @@ class ScanSubnet(Base):
     scan = Column(Boolean, nullable=False, server_default="true")
     note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ScanRun(Base):
+    """Запуск сбора из источника (этап 25): кто, когда, итог и счётчики отчёта
+    (stats: total, fresh, stale, no_date, dups, key, link, name, conflict, none;
+    пока идёт — progress {done, total})."""
+    __tablename__ = "scan_runs"
+
+    id = Column(Integer, primary_key=True)
+    source = Column(Text, nullable=False)
+    status = Column(Text, nullable=False, server_default="running")  # running / ok / error
+    user_name = Column(Text, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    message = Column(Text, nullable=True)
+    stats = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+
+
+class ScanRecord(Base):
+    """Запись о ПК из источника (GLPI, GSIT) с последнего сбора — только
+    свежие (проверенные источником не раньше N дней назад). В таблицу ПК
+    ничего не пишется: data — значения в формате ITDB (values), антивирусы,
+    полные названия; keys — признаки для сопоставления (физические MAC,
+    настоящий серийный, UUID); dup_of — запись того же источника, дублем
+    которой эта считается (то же железо). С каким ПК ITDB сопоставлена
+    запись, не хранится — считается на лету (scan_match.py), чтобы правка
+    MAC или серийного в таблице сразу меняла сопоставление."""
+    __tablename__ = "scan_records"
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", name="uq_scan_records_source_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    source = Column(Text, nullable=False)
+    source_id = Column(Integer, nullable=False)
+    name = Column(Text, nullable=True)
+    checked_at = Column(DateTime(timezone=True), nullable=True)
+    data = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    keys = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    dup_of = Column(Integer, nullable=True)
+    run_id = Column(Integer, nullable=True)
+    seen_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ScanLink(Base):
+    """Решение администратора о записи источника (этап 25): link — это этот ПК
+    (сопоставлять с ним, что бы ни говорили признаки), reject — это не этот ПК
+    (не предлагать его). Переживает повторные сборы: запись может пропасть
+    (устарела) и вернуться."""
+    __tablename__ = "scan_links"
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", "computer_id", name="uq_scan_links"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    source = Column(Text, nullable=False)
+    source_id = Column(Integer, nullable=False)
+    computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
+    action = Column(Text, nullable=False)  # link / reject
+    title = Column(Text, nullable=True)    # имя записи на момент решения
+    user_name = Column(Text, nullable=True)
+    at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -12,7 +12,8 @@
 //                        suggest (подсказки при вводе), users (пользователи системы),
 //                        history-undo (отмена и возврат из Истории, фильтры Истории),
 //                        col-filters (фильтры по столбцам в шапке таблицы),
-//                        scan (Сканирование: подключения к источникам, подсети)
+//                        scan (Сканирование: подключения к источникам, подсети),
+//                        scan-match (сбор из GLPI / GSIT, вкладка «Сопоставление»)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -36,6 +37,7 @@ import users from "./mixins/users.js";
 import historyUndo from "./mixins/history-undo.js";
 import colFilters from "./mixins/col-filters.js";
 import scan from "./mixins/scan.js";
+import scanMatch from "./mixins/scan-match.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -43,7 +45,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -159,6 +161,21 @@ const app = Vue.createApp({
             scanPurposes: {},
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
             subnetHover: null,   // подсеть под курсором — плашка действий
+            // Этап 25: вкладки страницы, сбор и сопоставление
+            scanTab: "settings", // settings — подключения и подсети, match — сопоставление
+            scanRuns: {},        // kind → запуск сбора, за которым следим
+            scanPollTimer: null,
+            scanMatch: {
+                source: "glpi",
+                data: null,      // ответ /api/scan/records
+                loading: false,
+                error: "",
+                filter: "all",   // all / matched / name / conflict / none / dup
+                open: {},        // source_id → раскрыта подробность
+                hover: null      // запись под курсором — плашка действий
+            },
+            scanMatchQuery: "",
+            scanLinkBar: null,   // «Привязать запись к ПК:» — строка под панелью
 
             // Карточка
             card: null,

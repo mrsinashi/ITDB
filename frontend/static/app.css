@@ -3605,3 +3605,258 @@ body.login-page {
 .side-add .dropdown {
     z-index: 30;
 }
+
+/* ============================================================
+   Сканирование: вкладки, сбор, «Сопоставление» (этап 25)
+   ============================================================ */
+
+/* Вкладки страницы на панели — две кнопки встык, выбранная включена */
+.toolbar .scan-tabs {
+    display: inline-flex;
+}
+.toolbar .scan-tabs .btn:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.toolbar .scan-tabs .btn + .btn {
+    margin-left: -1px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+.toolbar .scan-tabs .btn.active {
+    position: relative;
+}
+
+/* Итог сбора в блоке источника: как строка проверки, со ссылкой на вкладку */
+.scan-status .ss-note {
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: pre-line;
+}
+.scan-status .ss-link {
+    align-self: flex-start;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.scan-status .ss-link:hover {
+    color: var(--text-strong);
+}
+
+.scan-match-page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px 12px;
+}
+.sm-empty {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.sm-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+.sm-head .sm-title {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.sm-head .sm-sources {
+    display: inline-flex;
+    gap: 5px;
+}
+.sm-head .sm-run-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.sm-head .sm-run {
+    color: var(--text);
+}
+.sm-head .sm-run.bad {
+    color: var(--danger);
+}
+.sm-head .btn {
+    padding: 2px 9px;
+    font-size: 12px;
+}
+.sm-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 8px;
+}
+/* Кнопки-блочки: источник и фильтр по итогу, выбранная — цветом схемы */
+.sm-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    box-sizing: border-box;
+    padding: 0 7px;
+    border: 1px solid var(--gray-line);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.sm-filters .sm-chip {
+    padding-right: 3px;
+}
+.sm-chip:hover {
+    background: var(--row-hover-bg);
+}
+.sm-chip .su-n {
+    padding: 0 4px;
+    border-radius: var(--radius);
+    background: #e6e6e6;
+    font-size: 11px;
+    line-height: 15px;
+    font-variant-numeric: tabular-nums;
+}
+.sm-chip.on {
+    background: var(--brand);
+    border-color: var(--brand-dark);
+    color: #fff;
+}
+.sm-chip.on .su-n {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+}
+.sm-error {
+    margin-bottom: 6px;
+    color: var(--danger);
+    font-size: 12px;
+}
+
+/* Таблица записей: ширина по содержимому, справа — место под плашку */
+.sm-wrap {
+    flex: 0 1 auto;
+    width: fit-content;
+    max-width: calc(100% - 110px);
+    min-width: 640px;
+    margin-right: 110px;
+}
+.sm-table tbody tr:not(.sm-detail):not(.h-empty) {
+    cursor: pointer;
+}
+.sm-table td.sm-id,
+.sm-table th.sm-id {
+    width: 1%;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.sm-table td.sm-id a {
+    color: inherit;
+    text-decoration: none;
+}
+.sm-table td.sm-id a:hover {
+    text-decoration: underline;
+}
+.sm-table td.sm-name {
+    font-weight: 600;
+}
+.sm-table th.sm-c,
+.sm-table td.sm-c {
+    text-align: center;
+}
+.sm-table td.sm-date,
+.sm-table td.sm-multi {
+    font-variant-numeric: tabular-nums;
+}
+.sm-table td.sm-multi {
+    white-space: pre;
+}
+.sm-table td.sm-pc {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Итог сопоставления: «привязать?» и «конфликт» — блочком, нет / дубль — серым */
+.sm-state.st-name,
+.sm-state.st-conflict {
+    display: inline-block;
+    padding: 0 4px;
+    border: 1px solid #cfcfcf;
+    border-radius: var(--radius);
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--text-strong);
+}
+.sm-state.st-conflict {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+.sm-state.st-none,
+.sm-state.st-dup {
+    color: var(--text-muted);
+}
+.sm-table tbody tr.sm-open:not(.is-hover) td {
+    background: var(--surface-alt);
+}
+/* Подробности записи: без подсветки под курсором */
+.history-table.sm-table tbody tr.sm-detail td,
+.history-table.sm-table tbody tr.sm-detail:hover td {
+    background: #fff;
+    border-right-color: transparent;
+    cursor: default;
+}
+.sm-detail-in {
+    padding: 4px 2px 6px;
+    white-space: normal;
+    max-width: 900px;
+}
+.sm-note {
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--text);
+}
+.sm-note.bad {
+    color: var(--danger);
+}
+.sm-compare {
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.sm-compare th,
+.sm-compare td {
+    padding: 2px 8px;
+    border: 1px solid var(--grid-line);
+    vertical-align: top;
+    text-align: left;
+    white-space: pre;
+}
+.sm-compare th {
+    background: var(--grid-head-bg);
+    font-weight: 600;
+    color: var(--grid-head-text);
+}
+.sm-compare .smc-label {
+    background: var(--surface-alt);
+    color: var(--text-strong);
+}
+.sm-compare .smc-v {
+    min-width: 120px;
+    font-variant-numeric: tabular-nums;
+}
+.sm-compare .smc-mark {
+    width: 12px;
+    padding: 2px 4px;
+    text-align: center;
+    color: var(--text-strong);
+}
+.sm-lines {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text);
+}
+.add-bar.scan-link-bar .ab-loc .input {
+    width: 440px;
+}

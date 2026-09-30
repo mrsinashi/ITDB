@@ -710,11 +710,20 @@
         <section v-if="user && isAdmin && view === 'scan'" class="view">
             <div class="toolbar">
                 <div class="tb-left">
-                    <span class="tb-count">{{ scanCountText }}</span>
+                    <span class="scan-tabs">
+                        <button class="btn" :class="{ active: scanTab === 'settings' }" @click="setScanTab('settings')" title="Подключения к GLPI, GSIT, Jabber и подсети">Подключения</button><button class="btn" :class="{ active: scanTab === 'match' }" @click="setScanTab('match')" title="Записи GLPI и GSIT с последнего сбора: с какими ПК они сопоставлены">Сопоставление</button>
+                    </span>
+                    <span class="tb-count">{{ scanTopCountText() }}</span>
                     <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
                 </div>
+                <span v-if="scanTab === 'match'" class="tb-search">
+                    <input v-model="scanMatchQuery" placeholder="Поиск по записям: имя, IP, MAC, серийный, ПК" autocomplete="off"
+                        @keydown.esc.prevent="onSearchEsc($event, 'scanMatchQuery')">
+                    <span v-if="scanMatchQuery" class="clear" title="Очистить (Esc)" @click="scanMatchQuery = ''">×</span>
+                </span>
                 <div class="tb-right">
-                    <button class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
+                    <button v-if="scanTab === 'settings'" class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
+                    <button v-else class="btn icon-only" @click="loadScanRecords" title="Обновить: сопоставить заново с текущими данными таблицы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -725,8 +734,17 @@
                 </div>
             </div>
 
+            <!-- Привязать запись источника к ПК — строкой под панелью -->
+            <div v-if="scanLinkBar && scanTab === 'match'" class="add-bar scan-link-bar">
+                <span class="ab-title">Привязать {{ scanMatchTitle }} №{{ scanLinkBar.source_id }}<template v-if="scanLinkBar.record.name"> «{{ scanLinkBar.record.name }}»</template> к:</span>
+                <location-picker ref="sl-picker" class="ab-loc ab-pc" input-class="input" :value="null" :options="scanComputerOptions" empty-text="Нет ПК"
+                    placeholder="ПК: имя, ИНВ, IP, MAC или расположение" @pick="onScanLinkPick"></location-picker>
+                <button class="btn icon-only" @click="scanLinkBar = null" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <span v-if="scanLinkBar.error" class="ab-error">{{ scanLinkBar.error }}</span>
+            </div>
+
             <!-- Новая подсеть / изменить — строкой под панелью -->
-            <div v-if="subnetBar" class="add-bar subnet-bar" @keydown.enter="submitSubnetBar">
+            <div v-if="subnetBar && scanTab === 'settings'" class="add-bar subnet-bar" @keydown.enter="submitSubnetBar">
                 <span v-if="subnetBar.kind === 'new'" class="ab-title">Новая подсеть:</span>
                 <span v-else class="ab-title">Изменить {{ subnetBar.was }}:</span>
                 <input ref="sb-cidr" class="input ab-cidr" v-model="subnetBar.cidr" placeholder="192.168.89.0/24" spellcheck="false" autocomplete="off"
@@ -745,7 +763,7 @@
                 <span v-if="subnetBar.error" class="ab-error">{{ subnetBar.error }}</span>
             </div>
 
-            <div class="page scan-page" :class="{ 'accent-head': accentHeaders.scan }">
+            <div v-if="scanTab === 'settings'" class="page scan-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <div v-if="!scanKeyReady" class="scan-warn">
                     Пароли пока некуда сохранить: в файле <b>.env</b> нет ключа шифрования <b>ITDB_SECRET_KEY</b>.
                     Из корня проекта выполни команду ниже и перезапусти программу (в боевой копии ключ добавляет <b>deploy/update.sh</b>):
@@ -810,9 +828,17 @@
                                 <span class="ss-text">{{ scanStatus(s.kind).text }}</span>
                             </div>
                             <div v-if="scanForms[s.kind].error" class="scan-status bad"><span class="ss-text">{{ scanForms[s.kind].error }}</span></div>
+                            <div v-if="s.kind !== 'jabber' && scanRunInfo(s.kind)" class="scan-status scan-run" :class="{ bad: scanRunInfo(s.kind).bad }">
+                                <span class="ss-time">Сбор: {{ scanRunInfo(s.kind).time }}</span>
+                                <span class="ss-text">{{ scanRunInfo(s.kind).text }}</span>
+                                <span v-if="scanRunInfo(s.kind).note" class="ss-note">{{ scanRunInfo(s.kind).note }}</span>
+                                <a v-if="!scanRunInfo(s.kind).running && !scanRunInfo(s.kind).bad" href="#" class="ss-link" @click.prevent="scanMatch.source = s.kind; setScanTab('match')">Сопоставление →</a>
+                            </div>
                             <div class="scan-buttons">
                                 <button class="btn" :disabled="scanForms[s.kind].checking" @click="checkScanSource(s.kind)"
                                     :title="scanDirty(s.kind) ? 'Проверить подключение с тем, что сейчас в форме (без сохранения)' : 'Проверить подключение: войти в ' + s.title + ' с сохранёнными данными'">{{ scanForms[s.kind].checking ? "Проверяю…" : "Проверить" }}</button>
+                                <button v-if="s.kind !== 'jabber'" class="btn" :disabled="!!scanCollectBlock(s.kind)" @click="collectScan(s.kind)"
+                                    :title="scanCollectBlock(s.kind) || 'Собрать данные о ПК из ' + s.title + ': только свежие записи; в таблицу ничего не пишется'">{{ scanCollecting(s.kind) ? "Собираю…" : "Собрать" }}</button>
                                 <span class="sb-gap"></span>
                                 <button v-if="scanDirty(s.kind)" class="btn" @click="resetScanForm(s.kind)" title="Вернуть сохранённые значения">Отменить</button>
                                 <button class="btn btn-primary" :disabled="!scanDirty(s.kind) || scanForms[s.kind].saving" @click="saveScanSource(s.kind)">Сохранить</button>
@@ -865,6 +891,103 @@
                     </button>
                     <button class="btn" @click="addUncoveredSubnets" title="Добавить все эти подсети /24 с назначением «Всё подряд»">Добавить все ({{ scanUncovered.length }})</button>
                 </div>
+            </div>
+
+            <div v-else class="page scan-match-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <div v-if="!scanMatchSources.length" class="sm-empty">
+                    Сбор ещё не настроен: на вкладке «Подключения» укажи адрес GLPI или GSIT, отметь «Включён», сохрани и нажми «Собрать».
+                </div>
+                <template v-else>
+                    <div class="sm-head">
+                        <span v-if="scanMatchSources.length > 1" class="sm-sources">
+                            <button v-for="s in scanMatchSources" :key="s.kind" class="sm-chip" :class="{ on: scanMatch.source === s.kind }" @click="setScanMatchSource(s.kind)">{{ s.title }}</button>
+                        </span>
+                        <span v-else class="sm-title">{{ scanMatchTitle }}</span>
+                        <template v-if="scanRunInfo(scanMatch.source)">
+                            <span class="sm-run-time">{{ scanRunInfo(scanMatch.source).time }}</span>
+                            <span class="sm-run" :class="{ bad: scanRunInfo(scanMatch.source).bad }" :title="scanRunInfo(scanMatch.source).note || ''">{{ scanRunInfo(scanMatch.source).text }}</span>
+                        </template>
+                        <span v-else class="sm-run-time">Ещё не собирали</span>
+                        <button class="btn" :disabled="!!scanCollectBlock(scanMatch.source)" @click="collectScan(scanMatch.source)"
+                            :title="scanCollectBlock(scanMatch.source) || 'Собрать заново: только свежие записи; в таблицу ничего не пишется'">{{ scanCollecting(scanMatch.source) ? "Собираю…" : "Собрать" }}</button>
+                    </div>
+                    <div class="sm-filters">
+                        <button v-for="f in scanMatchFilters" :key="f.key" class="sm-chip" :class="{ on: scanMatch.filter === f.key }" :title="f.title" @click="scanMatch.filter = f.key">
+                            {{ f.label }}<span class="su-n">{{ scanMatchCounts[f.key] }}</span>
+                        </button>
+                    </div>
+                    <div v-if="scanMatch.error" class="sm-error">{{ scanMatch.error }}</div>
+                    <div class="users-wrap sm-wrap" @mouseleave="scanMatch.hover = null">
+                        <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
+                            <div class="history-scroll" @scroll="scanMatch.hover = null">
+                                <table class="history-table users-table sm-table" :class="{ 'accent-head': accentHeaders.scan }">
+                                    <thead>
+                                        <tr><th class="sm-id" :title="'Номер записи в ' + scanMatchTitle">№</th><th>Имя</th><th class="sm-c" :title="'Когда ' + scanMatchTitle + ' последний раз проверял ПК'">Проверен</th><th>IP</th><th>MAC</th><th>Серийный</th><th>Сопоставление</th><th>ПК в ITDB</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="!scanMatchRecords.length" class="h-empty"><td colspan="8">{{ scanMatch.loading ? "Загрузка…" : (scanMatchCounts.all ? "Ничего не найдено." : "Записей нет: нажми «Собрать».") }}</td></tr>
+                                        <template v-for="r in scanMatchRecords" :key="r.source_id">
+                                            <tr :class="{ 'is-hover': scanMatch.hover && scanMatch.hover.id === r.source_id, 'sm-open': scanMatch.open[r.source_id] }"
+                                                @mouseenter="setScanRecordHover(r, $event.currentTarget)" @click="toggleScanRecord(r)" :title="scanMatch.open[r.source_id] ? 'Свернуть' : 'Подробнее: значения рядом с ПК ITDB'">
+                                                <td class="sm-id"><a v-if="scanSourceLink(r)" :href="scanSourceLink(r)" target="_blank" rel="noopener" @click.stop :title="'Открыть в ' + scanMatchTitle">{{ r.source_id }}</a><template v-else>{{ r.source_id }}</template></td>
+                                                <td class="sm-name">{{ r.name || "—" }}</td>
+                                                <td class="sm-c sm-date">{{ formatTime(r.checked_at) }}</td>
+                                                <td class="sm-multi">{{ r.values.ip || "" }}</td>
+                                                <td class="sm-multi">{{ r.values.mac || "" }}</td>
+                                                <td>{{ r.values.serial || "" }}</td>
+                                                <td><span class="sm-state" :class="'st-' + r.state" :title="scanStateTitle(r)">{{ scanStateText(r) }}</span></td>
+                                                <td class="sm-pc">{{ scanHostsText(r) }}</td>
+                                            </tr>
+                                            <tr v-if="scanMatch.open[r.source_id]" class="sm-detail">
+                                                <td colspan="8">
+                                                    <div class="sm-detail-in">
+                                                        <div v-if="r.note" class="sm-note" :class="{ bad: r.state === 'conflict' }">{{ r.note }}</div>
+                                                        <table class="sm-compare">
+                                                            <tr>
+                                                                <th></th>
+                                                                <th>{{ scanMatchTitle }} №{{ r.source_id }}</th>
+                                                                <th class="smc-mark"></th>
+                                                                <th :title="scanRecordHosts(r)[0] ? scanRecordHosts(r)[0].place || '' : ''">{{ scanRecordHosts(r)[0] ? "ITDB: " + (scanRecordHosts(r)[0].hostname || "без имени") : "ITDB: нет ПК" }}</th>
+                                                            </tr>
+                                                            <tr v-for="c in scanCompareRows(r)" :key="c.field">
+                                                                <td class="smc-label">{{ c.label }}</td>
+                                                                <td class="smc-v">{{ c.source }}</td>
+                                                                <td class="smc-mark" :title="c.mark === '≠' ? 'Отличается' : (c.mark ? 'Совпадает' : '')">{{ c.mark }}</td>
+                                                                <td class="smc-v">{{ c.itdb }}</td>
+                                                            </tr>
+                                                        </table>
+                                                        <div class="sm-lines">
+                                                            <div v-if="r.antivirus.length">Антивирусы: {{ r.antivirus.map(scanAntivirusText).join("; ") }}</div>
+                                                            <div v-for="line in scanFullText(r)" :key="line">{{ line }}</div>
+                                                            <div v-for="d in r.decisions" :key="d.at + d.computer_id">Решение: {{ scanDecisionText(d) }}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div v-if="scanMatch.hover && scanHoverActions" class="tree-actions" :style="{ top: scanMatch.hover.top + 'px', height: scanMatch.hover.height + 'px' }">
+                            <span class="na-box">
+                                <template v-if="scanMatch.hover.record.state === 'name'">
+                                    <span class="icon-btn" :title="'Да, это ' + scanHostsText(scanMatch.hover.record)" @click.stop="scanDecide(scanMatch.hover.record, 'link', scanMatch.hover.record.computer_id)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                                    <span class="na-sep"></span>
+                                </template>
+                                <template v-if="scanMatch.hover.record.state === 'name' || scanMatch.hover.record.state === 'key'">
+                                    <span class="icon-btn danger" :title="'Нет, это не ' + scanHostsText(scanMatch.hover.record) + ' — больше не предлагать'" @click.stop="scanDecide(scanMatch.hover.record, 'reject', scanMatch.hover.record.computer_id)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                                    <span class="na-sep"></span>
+                                </template>
+                                <span v-if="scanMatch.hover.record.state !== 'dup'" class="icon-btn" title="Привязать к ПК… (выбрать вручную)" @click.stop="openScanLinkBar(scanMatch.hover.record)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><path d="M8 12h8"/></svg></span>
+                                <template v-if="scanMatch.hover.record.decisions.length">
+                                    <span v-if="scanMatch.hover.record.state !== 'dup'" class="na-sep"></span>
+                                    <span class="icon-btn" title="Забыть решения по этой записи: снова сопоставлять по признакам" @click.stop="scanDecide(scanMatch.hover.record, 'reset')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
+                                </template>
+                            </span>
+                        </div>
+                    </div>
+                </template>
             </div>
         </section>
 

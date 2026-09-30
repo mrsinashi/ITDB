@@ -77,6 +77,10 @@ window.addEventListener("keydown", function (event) {
             vm.subnetBar = null;
             return;
         }
+        if (vm.view === "scan" && vm.scanLinkBar) {
+            vm.scanLinkBar = null;
+            return;
+        }
     }
     // История: Ctrl+A — выделить все видимые записи, Esc — снять выделение
     if (vm.view === "history" && !vm.card && !event.defaultPrevented && !isTypingTarget(document.activeElement)) {

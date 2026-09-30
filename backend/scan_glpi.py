@@ -1,15 +1,21 @@
-"""GLPI и GSIT через REST API GLPI (apirest.php) — этап 24: проверка подключения.
+"""GLPI и GSIT через REST API GLPI (apirest.php): проверка подключения (этап 24)
+и сбор данных о ПК (этап 25).
 
 GSIT — тоже GLPI (старый, с FusionInventory), поэтому код общий. Вход — по
 токену пользователя (если задан) или по логину и паролю; токен приложения
 (App-Token) — если его требует клиент API в GLPI.
 
 Проверка подключения: вход → версия GLPI → число компьютеров → есть ли поле
-с датой последней проверки ПК (по нему этап 25 отберёт свежие записи) → выход.
+с датой последней проверки ПК (по нему сбор отбирает свежие записи) → выход.
+
+Сбор (collect): поиск всех ПК с датой проверки (одним-двумя запросами) → свежие
+(не старше N дней) → по каждому свежему ПК — запись с устройствами, сетевыми
+портами и программами; антивирусы — одним списком на все ПК.
 """
 import json
 import re
 import urllib.parse
+from datetime import datetime, timedelta
 
 from scan_http import SourceError, basic_auth, check_url, request
 
@@ -197,16 +203,27 @@ def find_fresh_field(options):
     return None
 
 
-def check(params):
-    """Проверка подключения; текст для пользователя или SourceError."""
-    with GlpiSession(
+def find_option(options, table, field):
+    for option_id, option in options.items():
+        if isinstance(option, dict) and option.get("table") == table and option.get("field") == field:
+            return option_id
+    return None
+
+
+def glpi_session(params):
+    return GlpiSession(
         params["url"],
         login=params.get("login"),
         password=params.get("password"),
         user_token=params.get("user_token"),
         app_token=params.get("app_token"),
         verify=params.get("verify_tls", True),
-    ) as glpi:
+    )
+
+
+def check(params):
+    """Проверка подключения; текст для пользователя или SourceError."""
+    with glpi_session(params) as glpi:
         parts = []
 
         try:
@@ -230,3 +247,303 @@ def check(params):
             parts.append("поле с датой проверки ПК не найдено — свежие записи отобрать не получится")
 
         return "Подключено: " + ", ".join(parts) + "."
+
+
+# ---------- Сбор (этап 25) ----------
+
+PAGE = 500
+DATE_FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d")
+
+# Необязательные столбцы поиска: тег агента, ОС
+TAG_FIELDS = [("glpi_agents", "tag"), ("glpi_plugin_fusioninventory_agents", "tag")]
+OS_FIELDS = {
+    "os_name": ("glpi_operatingsystems", "name"),
+    "os_version": ("glpi_operatingsystemversions", "name"),
+    "os_kernel": ("glpi_operatingsystemkernelversions", "name"),
+    "os_edition": ("glpi_operatingsystemeditions", "name"),
+}
+
+
+def parse_date(value):
+    """Дата из поиска GLPI (время сервера GLPI); у нескольких агентов — самая поздняя."""
+    values = value if isinstance(value, list) else [value]
+    best = None
+
+    for item in values:
+        text = str(item or "").strip()[:19]
+
+        for fmt in DATE_FORMATS:
+            try:
+                parsed = datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+            if best is None or parsed > best:
+                best = parsed
+            break
+
+    return best
+
+
+def first(value):
+    if isinstance(value, list):
+        value = next((v for v in value if v not in (None, "")), None)
+    return None if value in (None, "", 0, "0") else value
+
+
+def dropdown(value):
+    """Значение выпадающего списка с expand_dropdowns: 0 / "" — пусто."""
+    if value in (None, "", 0, "0") or isinstance(value, (int, float)):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def items_of(block):
+    """_devices[тип] бывает и словарём {id: запись}, и списком."""
+    if isinstance(block, dict):
+        return [item for item in block.values() if isinstance(item, dict)]
+    if isinstance(block, list):
+        return [item for item in block if isinstance(item, dict)]
+    return []
+
+
+def number(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def search_list(glpi, columns, progress=None):
+    """Все ПК из поиска GLPI (без удалённых и шаблонов): [{столбец: значение}]."""
+    params = {f"forcedisplay[{i}]": option_id for i, option_id in enumerate(columns)}
+    rows = []
+    start = 0
+
+    while True:
+        response = glpi.call("search/Computer", range=f"{start}-{start + PAGE - 1}", **params)
+
+        if response.status not in (200, 206):
+            if "ERROR_RANGE_EXCEED_TOTAL" in response.text():
+                break
+            raise SourceError(error_text(response))
+
+        try:
+            data = json.loads(response.body.decode("utf-8"))
+        except ValueError:
+            raise SourceError("GLPI вернул не JSON на поиск компьютеров.")
+
+        page = data.get("data") or []
+        rows.extend(page)
+        total = int(data.get("totalcount") or 0)
+        start += PAGE
+
+        if not page or start >= total:
+            break
+
+    return rows
+
+
+def antivirus_by_computer(glpi, warnings):
+    """Антивирусы всех ПК одним списком (ComputerAntivirus; в GLPI 11 он же
+    ItemAntivirus): {id ПК: [{name, active, uptodate, version}]}."""
+    result = {}
+
+    for itemtype in ("ComputerAntivirus", "ItemAntivirus"):
+        start = 0
+        ok = True
+
+        while True:
+            response = glpi.call(itemtype, range=f"{start}-{start + PAGE - 1}")
+
+            if response.status not in (200, 206):
+                if "ERROR_RANGE_EXCEED_TOTAL" in response.text():
+                    break
+                ok = False
+                break
+
+            try:
+                page = json.loads(response.body.decode("utf-8"))
+            except ValueError:
+                ok = False
+                break
+
+            if not isinstance(page, list) or not page:
+                break
+
+            for row in page:
+                if not isinstance(row, dict) or row.get("is_deleted"):
+                    continue
+                computer_id = row.get("computers_id")
+                if not computer_id and row.get("itemtype") == "Computer":
+                    computer_id = row.get("items_id")
+                try:
+                    computer_id = int(computer_id)
+                except (TypeError, ValueError):
+                    continue
+                result.setdefault(computer_id, []).append({
+                    "name": str(row.get("name") or "").strip() or "?",
+                    "active": bool(int(row.get("is_active") or 0)),
+                    "uptodate": bool(int(row.get("is_uptodate") or 0)),
+                    "version": row.get("antivirus_version") or None,
+                })
+
+            start += PAGE
+            if len(page) < PAGE:
+                break
+
+        if ok:
+            return result
+
+    warnings.append("Антивирусы не получены: у пользователя GLPI нет права их читать (или это старый GLPI без них).")
+    return {}
+
+
+def computer_details(glpi, computer_id):
+    """Одна запись ПК со всем нужным: устройства, сетевые порты, программы."""
+    response = glpi.call(
+        f"Computer/{computer_id}",
+        with_devices="true", with_networkports="true", with_softwares="true", expand_dropdowns="true",
+    )
+
+    if response.status == 404:
+        return None
+
+    if response.status not in (200, 206):
+        raise SourceError(error_text(response))
+
+    try:
+        item = json.loads(response.body.decode("utf-8"))
+    except ValueError:
+        raise SourceError(f"GLPI вернул не JSON о ПК {computer_id}.")
+
+    devices = item.get("_devices") or {}
+    if not isinstance(devices, dict):
+        devices = {}
+
+    cpus = [dropdown(d.get("deviceprocessors_id")) for d in items_of(devices.get("Item_DeviceProcessor"))]
+    memory = sum(number(d.get("size")) for d in items_of(devices.get("Item_DeviceMemory")))
+    disks = [
+        {"name": dropdown(d.get("deviceharddrives_id")), "mb": int(number(d.get("capacity")))}
+        for d in items_of(devices.get("Item_DeviceHardDrive"))
+    ]
+    gpus = [dropdown(d.get("devicegraphiccards_id")) for d in items_of(devices.get("Item_DeviceGraphicCard"))]
+
+    ports = []
+    networkports = item.get("_networkports") or {}
+    if isinstance(networkports, dict):
+        for port_type, block in networkports.items():
+            if "Local" in port_type:
+                continue
+            for port in items_of(block):
+                name_block = port.get("NetworkName") or {}
+                ips = []
+                if isinstance(name_block, dict):
+                    for address in name_block.get("IPAddress") or []:
+                        if isinstance(address, dict) and address.get("name"):
+                            ips.append(address["name"])
+                ports.append({"name": port.get("name"), "mac": port.get("mac"), "ips": ips})
+
+    # Портов нет (старые записи) — MAC сетевых карт из устройств
+    if not ports:
+        for card in items_of(devices.get("Item_DeviceNetworkCard")):
+            if card.get("mac"):
+                ports.append({"name": dropdown(card.get("devicenetworkcards_id")), "mac": card.get("mac"), "ips": []})
+
+    softwares = []
+    for software in item.get("_softwares") or []:
+        if isinstance(software, dict):
+            name = dropdown(software.get("softwares_id"))
+            if name:
+                softwares.append(name)
+
+    return {
+        "name": item.get("name"),
+        "serial": item.get("serial"),
+        "uuid": item.get("uuid"),
+        "manufacturer": dropdown(item.get("manufacturers_id")),
+        "model": dropdown(item.get("computermodels_id")),
+        "cpus": [c for c in cpus if c],
+        "memory_mb": int(memory),
+        "disks": disks,
+        "gpus": [g for g in gpus if g],
+        "ports": ports,
+        "softwares": softwares,
+    }
+
+
+def collect(params, fresh_days, progress=None):
+    """Сбор: все ПК из поиска → свежие по дате проверки → подробности каждого.
+
+    Ответ: {"items": [{"id", "checked_at", "raw"}], "stats": {...},
+    "warnings": [...], "version": "…"}; progress(done, total) — по ходу."""
+    warnings = []
+
+    with glpi_session(params) as glpi:
+        try:
+            version = (glpi.get("getGlpiConfig").get("cfg_glpi") or {}).get("version")
+        except (SourceError, AttributeError):
+            version = None
+
+        options = glpi.get("listSearchOptions/Computer")
+        fresh = find_fresh_field(options)
+
+        if not fresh:
+            raise SourceError(
+                "В GLPI не найдено поле с датой последней проверки ПК (нужен агент GLPI или "
+                "FusionInventory): без него не отличить свежие записи от старых, сбор не начат."
+            )
+
+        fresh_id = fresh[0]
+        tag_id = next((find_option(options, t, f) for t, f in TAG_FIELDS if find_option(options, t, f)), None)
+        os_ids = {key: find_option(options, *where) for key, where in OS_FIELDS.items()}
+        columns = ["2", "1", fresh_id] + [x for x in [tag_id, *os_ids.values()] if x]
+
+        rows = search_list(glpi, columns)
+        cutoff = datetime.now() - timedelta(days=fresh_days)
+        chosen = []
+        stats = {"total": 0, "fresh": 0, "stale": 0, "no_date": 0, "gone": 0}
+
+        for row in rows:
+            try:
+                computer_id = int(first(row.get("2")))
+            except (TypeError, ValueError):
+                continue
+
+            stats["total"] += 1
+            checked = parse_date(row.get(fresh_id))
+
+            if checked is None:
+                stats["no_date"] += 1
+            elif checked < cutoff:
+                stats["stale"] += 1
+            else:
+                entry = {"id": computer_id, "checked_at": checked, "tag": first(row.get(tag_id)) if tag_id else None}
+
+                for key, option_id in os_ids.items():
+                    entry[key] = first(row.get(option_id)) if option_id else None
+
+                chosen.append(entry)
+
+        antivirus = antivirus_by_computer(glpi, warnings) if chosen else {}
+        items = []
+
+        if progress:
+            progress(0, len(chosen))
+
+        for done, entry in enumerate(chosen, start=1):
+            raw = computer_details(glpi, entry["id"])
+
+            if raw is None:
+                stats["gone"] += 1
+            else:
+                raw.update({key: entry[key] for key in ("tag", *OS_FIELDS)})
+                raw["antivirus"] = antivirus.get(entry["id"], [])
+                items.append({"id": entry["id"], "checked_at": entry["checked_at"], "raw": raw})
+
+            if progress and (done % 10 == 0 or done == len(chosen)):
+                progress(done, len(chosen))
+
+        stats["fresh"] = len(items)
+
+    return {"items": items, "stats": stats, "warnings": warnings, "version": version, "fresh_label": fresh[1]}

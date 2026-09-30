@@ -13,7 +13,7 @@ from models import Computer, History, Location
 router = APIRouter(prefix="/api", tags=["history"])
 
 # Записи только для администратора: пользователи системы, настройки сканирования
-ADMIN_ENTITIES = ("users", "scan_sources", "scan_subnets")
+ADMIN_ENTITIES = ("users", "scan_sources", "scan_subnets", "scan_records")
 
 
 HISTORY_PAGE_MAX = 5000
