@@ -358,6 +358,10 @@ export default {
             if (this.savedFlash[row.id + ":" + col.field]) {
                 cls["cell-saved"] = true;
             }
+            const mark = this.scanCellMark(row, col);
+            if (mark && mark.frame) {
+                cls["scan-frame"] = true;
+            }
             return cls;
         },
 
@@ -384,11 +388,15 @@ export default {
             return Object.keys(style).length ? style : null;
         },
 
-        // Цвет заливки ячейки: дубль — красный, иначе фон значения из
-        // Справочников поверх фона столбца; null — без заливки
+        // Цвет заливки ячейки: дубль — красный, затем пометка сканера (этап 26б),
+        // иначе фон значения из Справочников поверх фона столбца; null — без заливки
         cellFillOf(row, col) {
             if (!row.archived && col.dup && hasDuplicateValue(row[col.field], col.field)) {
                 return "var(--dup-bg)";
+            }
+            const mark = this.scanCellMark(row, col);
+            if (mark && mark.bg_color) {
+                return mark.bg_color;
             }
             let fill = null;
             const colStyle = this.columnStyles[col.field];
@@ -438,6 +446,13 @@ export default {
             }
             if (col.bold) {
                 style.fontWeight = "700";
+            }
+            // Пометка сканера — поверх оформления из Справочников
+            const mark = this.scanCellMark(row, col);
+            if (mark) {
+                if (mark.bold) style.fontWeight = "700";
+                if (mark.italic) style.fontStyle = "italic";
+                if (mark.frame) style["--scan-frame"] = mark.frame;
             }
             if (col.sticky) {
                 style.left = this.stickyLeft(col) + "px";
@@ -497,6 +512,12 @@ export default {
             let base = this.cellTextStyle(row, col) || {};
             if (col.date && isOverdue(this.cellText(row, col))) {
                 base = Object.assign({}, base, OVERDUE_STYLE);
+            }
+            const mark = this.scanCellMark(row, col);
+            if (mark && (mark.color || mark.strike)) {
+                base = Object.assign({}, base);
+                if (mark.color) base.color = mark.color;
+                if (mark.strike) base.textDecoration = "line-through";
             }
             if (this.isEditing(row, col)) {
                 return Object.assign({}, base, { visibility: "hidden" });
@@ -588,7 +609,7 @@ export default {
                     this.openSuggest(el, col, (value) => {
                         this.editValue = value;
                         this.saveEdit(row, col);
-                    });
+                    }, row.id);
                 }
             });
         },

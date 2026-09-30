@@ -32,6 +32,9 @@ export default {
         },
 
         scanTopCountText() {
+            if (this.scanTab === "diffs") {
+                return this.diffCountText;
+            }
             return this.scanTab === "settings" ? this.scanCountText : this.scanMatchCountText;
         },
 

@@ -75,9 +75,18 @@ export default {
         },
 
         // У записи под курсором есть что делать (у дубля без решений — нечего)
-        scanHoverActions() {
-            const h = this.scanMatch.hover;
-            return !!h && (h.record.state !== "dup" || h.record.decisions.length > 0);
+        // Плашки действий: у раскрытой записи — всегда, у записи под курсором — пока она под курсором
+        scanPlates() {
+            const plates = [];
+            const open = this.scanMatch.openPlate;
+            const hover = this.scanMatch.hover;
+            if (open && this.scanRecordHasActions(open.record)) {
+                plates.push(open);
+            }
+            if (hover && !(open && open.id === hover.id) && this.scanRecordHasActions(hover.record)) {
+                plates.push(hover);
+            }
+            return this.valueEdit ? [] : plates;
         },
 
         scanCollectSources() {
@@ -172,6 +181,10 @@ export default {
             if (tab === "names") {
                 this.loadScanNames();
             }
+            if (tab === "diffs") {
+                this.diffs.hover = null;
+                this.loadDiffs();
+            }
             if (tab === "match") {
                 if (!this.scanMatchSources.some((s) => s.kind === this.scanMatch.source) && this.scanMatchSources.length) {
                     this.scanMatch.source = this.scanMatchSources[0].kind;
@@ -186,6 +199,7 @@ export default {
             }
             this.scanMatch.source = kind;
             this.scanMatch.open = {};
+            this.scanMatch.openPlate = null;
             this.scanLinkBar = null;
             this.loadScanRecords();
         },
@@ -203,6 +217,7 @@ export default {
                 if (kind === this.scanMatch.source) {
                     this.scanMatch.data = data;
                     this.scanFitCompare();
+                    this.$nextTick(() => this.placeScanOpenPlate());
                 }
             } catch (e) {
                 this.scanMatch.error = "Не удалось загрузить записи: " + (e.message || e);
@@ -417,16 +432,62 @@ export default {
             return data && data.web_url ? data.web_url + "/front/computer.form.php?id=" + r.source_id : null;
         },
 
+        // Раскрыта одна запись: открытие другой сворачивает прежнюю (этап 26б)
         toggleScanRecord(r) {
-            const open = Object.assign({}, this.scanMatch.open);
-            if (open[r.source_id]) {
-                delete open[r.source_id];
-            } else {
-                open[r.source_id] = true;
-            }
-            this.scanMatch.open = open;
+            this.scanMatch.open = this.scanMatch.open[r.source_id] ? {} : { [r.source_id]: true };
             this.scanMatch.hover = null;
+            this.valueEdit = null;
             this.scanFitCompare();
+            this.$nextTick(() => this.placeScanOpenPlate());
+        },
+
+        // Плашка действий у раскрытой записи видна всё время (этап 26б): место
+        // строки — от рамки таблицы; строка ушла из видимой части — плашки нет
+        placeScanOpenPlate() {
+            const id = Object.keys(this.scanMatch.open)[0];
+            const row = id ? document.querySelector('.sm-table tr[data-sid="' + id + '"]') : null;
+            const wrap = row && row.closest(".users-wrap");
+            const scroll = row && row.closest(".history-scroll");
+            if (!row || !wrap || !scroll) {
+                this.scanMatch.openPlate = null;
+                return;
+            }
+            const record = this.scanMatchRecords.find(function (x) { return String(x.source_id) === id; });
+            const w = wrap.getBoundingClientRect();
+            const s = scroll.getBoundingClientRect();
+            const rect = row.getBoundingClientRect();
+            const head = scroll.querySelector("thead");
+            const top = s.top + (head ? head.offsetHeight : 0);
+            if (!record || rect.bottom <= top + 2 || rect.top >= s.bottom - 2) {
+                this.scanMatch.openPlate = null;
+                return;
+            }
+            this.scanMatch.openPlate = { id: record.source_id, record: record, top: rect.top - w.top, height: rect.height };
+        },
+
+        onScanMatchScroll() {
+            this.scanMatch.hover = null;
+            this.placeScanOpenPlate();
+        },
+
+        // У записи есть что делать (у дубля без решений — нечего)
+        scanRecordHasActions(r) {
+            return r.state !== "dup" || r.decisions.length > 0;
+        },
+
+        // Правка значения ПК в табличке сравнения (столбец ITDB)
+        scanCompareEditable(r, c) {
+            const col = this.allColumns.find(function (x) { return x.field === c.field; });
+            return this.canEdit && !!r.computer_id && (r.state === "key" || r.state === "link") && !!col && !!col.editable;
+        },
+
+        startScanCompareEdit(r, c) {
+            if (!this.scanCompareEditable(r, c)) {
+                return;
+            }
+            const row = this.rows.find(function (x) { return x.id === r.computer_id; });
+            const value = row ? row[c.field] : c.itdb;
+            this.startValueEdit("m:" + r.source_id + ":" + c.field, r.computer_id, c.field, value === null || value === undefined ? "" : String(value));
         },
 
         // Строки «поле | источник | ITDB» для раскрытой записи. Сравнивает сервер
@@ -484,7 +545,7 @@ export default {
         scanFitCompare() {
             this.$nextTick(() => {
                 document.querySelectorAll(".sm-compare").forEach(function (table) {
-                    const box = table.parentElement;
+                    const box = table.closest("td") || table.parentElement;
                     table.classList.toggle("full", table.offsetWidth >= box.clientWidth - 1);
                 });
             });

@@ -51,12 +51,19 @@ export default {
     },
 
     methods: {
-        openSuggest(el, col, onPick) {
+        // rowId — ПК, чьё поле правится: значение сканера (этап 26б) — первым вариантом
+        openSuggest(el, col, onPick, rowId) {
             this.closeSuggest();
-            if (!el || !col || !col.suggest) {
+            if (!el || !col) {
                 return;
             }
-            const options = this.collectValues(col.field, false, false);
+            const scan = rowId ? this.scanSuggestFor(rowId, col.field) : [];
+            if (!col.suggest && !scan.length) {
+                return;
+            }
+            const values = col.suggest ? this.collectValues(col.field, false, false) : [];
+            const scanKeys = new Set(scan.map(function (o) { return o.value.toLowerCase(); }));
+            const options = scan.concat(values.filter(function (o) { return !scanKeys.has(String(o.value).toLowerCase()); }));
             if (!options.length) {
                 return;
             }

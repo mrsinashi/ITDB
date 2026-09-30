@@ -384,18 +384,27 @@ def model_short(manufacturer, model):
 
 
 VNC_KINDS = [
-    (r"tightvnc", "TightVNC"),
+    (r"tightvnc|tight\s*vnc", "TightVNC"),
     (r"ultra\s*vnc|ultr@vnc", "UltraVNC"),
     (r"tigervnc", "TigerVNC"),
-    (r"realvnc|vnc\s+(server|connect|viewer)", "RealVNC"),
-    (r"tight\s*vnc", "TightVNC"),
+    (r"realvnc|vnc\s+(server|connect)", "RealVNC"),
 ]
+# Только просмотрщик — не сервер: «UltraVNC Viewer», «VNC Viewer», «TightVNC Viewer»
+VNC_VIEWER = re.compile(r"viewer|просмотр", re.I)
 
 
 def vnc_short(software_names):
+    """VNC-серверы из установленных программ. Просмотрщики не в счёт. Серверов
+    может оказаться два (UltraVNC ставят и ради просмотрщика — по названию
+    программы это не отличить): тогда значение неточное (scan_values
+    считает «неточно», если строк несколько), точно покажет этап 28 — какой
+    сервер отвечает на порту 5900."""
     found = []
 
     for name in software_names:
+        if VNC_VIEWER.search(name or ""):
+            continue
+
         for pattern, kind in VNC_KINDS:
             if re.search(pattern, name or "", re.I) and kind not in found:
                 found.append(kind)

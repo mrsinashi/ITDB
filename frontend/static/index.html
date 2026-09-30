@@ -16,8 +16,8 @@
             <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">История</a>
             <a href="#" @click.prevent="setView('choices')" :class="{ active: view === 'choices' }">Справочники</a>
             <span class="menu-right">
-                <!-- Сканирование и Пользователи — вкладки-значки у настроек (только администратор) -->
-                <a v-if="isAdmin" href="#" class="nav-icon nav-tab" @click.prevent="setView('scan')" :class="{ active: view === 'scan' }" title="Сканирование: подключения к источникам, подсети">
+                <!-- Сканирование (редактору — только «Расхождения») и Пользователи — вкладки-значки у настроек -->
+                <a v-if="canEdit" href="#" class="nav-icon nav-tab" @click.prevent="setView('scan')" :class="{ active: view === 'scan' }" :title="isAdmin ? 'Сканирование: подключения к источникам, подсети, расхождения' : 'Сканирование: расхождения с таблицей'">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/></svg>
                 </a>
                 <a v-if="isAdmin" href="#" class="nav-icon nav-tab" @click.prevent="setView('users')" :class="{ active: view === 'users' }" title="Пользователи системы">
@@ -114,7 +114,7 @@
 
             <div class="toolbar">
                 <div class="tb-left">
-                    <span class="tb-count">{{ diffMode ? diffCountText : countText }}</span>
+                    <span class="tb-count">{{ countText }}</span>
                     <!-- Фильтры: по дереву и по столбцам. Не помещаются — сжимаются, полный текст в подсказке -->
                     <span v-if="locationFilter || activeColFilters.length" class="tb-chips">
                         <button v-if="locationFilter" class="chip" @click="clearLocationFilter"
@@ -192,9 +192,9 @@
                         </div>
                     </span>
                     <span class="tb-divider"></span>
-                    <!-- Расхождения (этап 26): где данные сканера отличаются от таблицы -->
-                    <button v-if="canEdit" class="btn icon-only" :class="{ active: diffMode, 'has-badge': diffs.count > 0 }" @click="toggleDiffMode"
-                        :title="diffMode ? 'Вернуться к таблице' : (diffs.count ? 'Расхождения: где GLPI / GSIT отличаются от таблицы — ' + diffs.count : 'Расхождения: где GLPI / GSIT отличаются от таблицы — нет')">
+                    <!-- Пометки сканера (этап 26б): где GLPI / GSIT предлагают другое — прямо в ячейках -->
+                    <button class="btn icon-only" :class="{ active: scanOverlay, 'has-badge': diffs.count > 0 }" @click="toggleScanOverlay"
+                        :title="(scanOverlay ? 'Скрыть пометки сканера' : 'Показать пометки сканера: где GLPI / GSIT предлагают другое значение') + ' — ' + (diffs.count || 'нет') + '. Вид пометок — в Справочниках'">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg><span v-if="diffs.count > 0" class="btn-badge">{{ diffCountBadge }}</span>
                     </button>
                     <!-- Архив: без выбранных строк — показать архив / вернуться к таблице,
@@ -271,7 +271,7 @@
                 <span v-if="actionBar.error" class="ab-error">{{ actionBar.error }}</span>
             </div>
 
-            <div v-show="!diffMode" class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
+            <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
                 <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'alt-copy': altDown }" ref="table" :style="{ width: totalWidth + 'px' }">
                     <colgroup>
                         <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
@@ -297,6 +297,7 @@
                                 @mousedown="onCellMouseDown($event, row)"
                                 @click="onCellClick($event, row, col)"
                                 @dblclick="startEdit(row, col)"
+                                :title="scanCellTitle(row, col)"
                                 @mouseenter="handleNoteEnter($event, row, col)"
                                 @mouseleave="hideNoteTooltip">
                                 <span :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)">{{ cellText(row, col) }}</span>
@@ -320,61 +321,6 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
-            <!-- ================= Расхождения (этап 26) ================= -->
-            <div v-if="diffMode" class="page scan-match-page diff-page">
-                <div class="sm-filters">
-                    <button class="sm-chip" :class="{ on: diffs.field === 'all' }" @click="setDiffField('all')">Все<span class="su-n">{{ diffBase.length }}</span></button>
-                    <button v-for="f in diffFields" :key="f.field" class="sm-chip" :class="{ on: diffs.field === f.field }" @click="setDiffField(f.field)">{{ f.label }}<span class="su-n">{{ f.count }}</span></button>
-                    <button v-if="diffs.pair" class="sm-chip on" @click="diffs.pair = null" title="Показана только эта пара значений. Нажми, чтобы показать все">{{ diffPairText(diffs.pair) }} ✕</button>
-                    <span class="sb-gap"></span>
-                    <button class="sm-chip" :class="{ on: diffs.showRejected }" @click="toggleDiffRejected" title="Отклонённые значения: не предлагаются, пока источник отдаёт то же. Можно вернуть">Отклонённые<span class="su-n">{{ diffs.rejected }}</span></button>
-                    <template v-if="diffShown.length">
-                        <button v-if="!diffs.showRejected" class="btn" @click="acceptShownDiffs" title="Записать в таблицу все показанные значения сканера">Принять показанные ({{ diffShown.length }})</button>
-                        <button class="btn" @click="rejectShownDiffs">{{ diffs.showRejected ? "Вернуть показанные" : "Отклонить показанные" }} ({{ diffShown.length }})</button>
-                    </template>
-                </div>
-                <div v-if="diffs.error" class="sm-error">{{ diffs.error }}</div>
-                <div class="users-wrap sm-wrap diff-wrap" @mouseleave="diffs.hover = null">
-                    <div class="history-frame">
-                        <div class="history-scroll" @scroll="diffs.hover = null">
-                            <table class="history-table users-table diff-table">
-                                <thead>
-                                    <tr><th>Поле</th><th>В таблице</th><th>Сканер предлагает</th><th>Откуда</th><th class="df-c" title="У скольких ещё ПК такая же пара значений">Ещё у</th></tr>
-                                </thead>
-                                <tbody v-if="!diffGroups.length">
-                                    <tr class="h-empty"><td colspan="5">{{ diffs.loading ? "Загрузка…" : (!diffs.sources.length ? "Источники не включены: страница «Сканирование» (администратор)." : (diffs.showRejected ? "Отклонённых нет." : "Расхождений нет.")) }}</td></tr>
-                                </tbody>
-                                <tbody v-for="g in diffGroups" :key="g.computer_id">
-                                    <tr class="h-day">
-                                        <td colspan="5"><a href="#" class="df-host" @click.prevent="openCardById(g.computer_id)" title="Открыть карточку ПК">{{ g.hostname || "без имени" }}</a><span class="df-place">{{ g.place || "" }}</span><span class="h-day-count">{{ g.items.length }}</span></td>
-                                    </tr>
-                                    <tr v-for="d in g.items" :key="d.id" :class="{ 'is-hover': diffs.hover && diffs.hover.item.id === d.id }" @mouseenter="setDiffHover(d, $event.currentTarget)">
-                                        <td class="df-field">{{ diffFieldLabel(d.field) }}</td>
-                                        <td class="df-v">{{ d.table }}<span v-if="!d.table" class="df-empty">пусто</span></td>
-                                        <td class="df-v df-new">{{ d.proposed }}<span v-if="d.raw !== d.proposed" class="df-raw"> ({{ d.raw.split("\n").join(", ") }})</span></td>
-                                        <td class="df-src" :title="diffSourceTitle(d)">{{ diffSourceText(d) }}<template v-if="d.rejected_by"> · отклонил {{ d.rejected_by }} {{ formatTime(d.rejected_at) }}</template></td>
-                                        <td class="df-c"><a v-if="d.same_pair" href="#" class="df-pair" @click.prevent="setDiffPair(d)" title="Показать только ПК с такой же парой значений — решить разом">{{ d.same_pair }} ПК</a></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div v-if="diffs.hover" class="tree-actions" :style="{ top: diffs.hover.top + 'px', height: diffs.hover.height + 'px' }">
-                        <span class="na-box">
-                            <template v-if="!diffs.hover.item.rejected_by">
-                                <span class="icon-btn" title="Принять: записать значение сканера в таблицу" @click="acceptDiffs([diffs.hover.item])"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
-                                <span class="na-sep"></span>
-                                <span class="icon-btn danger" title="Отклонить: не предлагать этому ПК, пока источник отдаёт то же" @click="rejectDiffs([diffs.hover.item])"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
-                                <template v-if="diffs.hover.item.name_field && diffs.hover.item.table">
-                                    <span class="na-sep"></span>
-                                    <span class="icon-btn" :title="'В таблице своё: «' + diffs.hover.item.table + '» при «' + diffs.hover.item.raw + '» — не расхождение у всех ПК с такой парой (но это не одно и то же: другим ПК «' + diffs.hover.item.table + '» не предлагается)'" @click="keepDiff(diffs.hover.item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4"/><path d="m10 6-6 6 6 6"/></svg></span>
-                                </template>
-                            </template>
-                            <span v-else class="icon-btn" title="Вернуть: снова предлагать" @click="rejectDiffs([diffs.hover.item], true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
-                        </span>
-                    </div>
-                </div>
             </div>
             <div v-if="copyHint" class="copy-hint" :class="{ done: copyHint.done }"
                 :style="{ top: copyHint.top + 'px', left: copyHint.left + 'px', width: copyHint.width + 'px', height: copyHint.height + 'px' }"></div>
@@ -562,6 +508,39 @@
                         <button class="btn btn-primary" @click="addFieldDef">Добавить поле</button>
                     </div>
                 </div>
+
+                <!-- Пометки сканера в Таблице (этап 26б): вид каждой ситуации и показывать ли без кнопки -->
+                <div v-if="scanMarks.length" class="fd-panel scan-marks-panel">
+                    <div class="fd-head">
+                        <span class="fd-title">Пометки сканера</span>
+                        <span class="fd-sub">ячейки Таблицы, где GLPI / GSIT предлагают другое значение</span>
+                    </div>
+                    <div class="scan-marks-body">
+                        <table class="scan-marks-table">
+                            <tr v-for="m in scanMarks" :key="m.kind">
+                                <td><span class="smk-sample" :class="{ off: !m.enabled }" :style="scanMarkSample(m)" :title="scanMarkHint(m.kind)">{{ m.label }}</span></td>
+                                <td>
+                                    <style-controls :value="m" :disabled="!canEdit" @change="updateScanMark(m.kind, $event)"></style-controls>
+                                    <span class="sc" :class="{ disabled: !canEdit }">
+                                        <button type="button" class="sc-btn" :class="{ on: m.strike }" :disabled="!canEdit" title="Зачёркнутый" @click="updateScanMark(m.kind, { strike: !m.strike })"><s>З</s></button>
+                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка ' + m.frame : 'Рамки нет'">
+                                            <span class="sc-swatch sc-frame" :style="{ borderColor: m.frame || null }"></span>
+                                            <input type="color" :value="m.frame || '#9db4cc'" :disabled="!canEdit" @change="updateScanMark(m.kind, { frame: $event.target.value })">
+                                        </label>
+                                    </span>
+                                    <span v-if="canEdit && scanMarkHasStyle(m)" class="st-reset" title="Убрать оформление (цвета, жирный, курсив, зачёркивание, рамку)" @click="updateScanMark(m.kind, { color: '', bg_color: '', frame: '', bold: false, italic: false, strike: false })">↺</span>
+                                </td>
+                                <td><label :title="'Помечать ячейки «' + m.label + '»'"><input type="checkbox" :checked="m.enabled" :disabled="!canEdit" @change="updateScanMark(m.kind, { enabled: $event.target.checked })"> Помечать</label></td>
+                                <td><label title="Показывать эту пометку всегда, не нажимая кнопку на панели Таблицы"><input type="checkbox" :checked="m.always" :disabled="!canEdit || !m.enabled" @change="updateScanMark(m.kind, { always: $event.target.checked })"> Без кнопки</label></td>
+                            </tr>
+                        </table>
+                        <div class="scan-marks-note">
+                            Пометки видны, когда нажата кнопка расхождений на панели Таблицы; с «Без кнопки» — всегда.
+                            При наведении на ячейку — что предлагает сканер; в карточке ПК — «принять» и «отклонить»;
+                            при правке ячейки значение сканера — первое в подсказках. Весь список — «Сканирование» → «Расхождения».
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </section>
@@ -659,7 +638,7 @@
                                             :title="canOpenValue(item.entity, field) ? 'Двойной клик — история значения' : null"
                                             @dblclick="openValueHistory(item.entity, item.entity_id, field, item.entity_key)">{{ fieldLabel(item.entity, field) }}</span>
                                         <span class="ch-val" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue(item.entity, field) }"
-                                            @dblclick="openValueHistory(item.entity, item.entity_id, field, item.entity_key)"><template v-if="field !== 'created'"><span class="old"><span v-if="isColorChange(item.entity, field) && change.old" class="h-swatch" :style="{ background: change.old }"></span>{{ historyValue(item.entity, field, change.old) }}</span><span class="arrow">→</span></template><span class="new"><span v-if="isColorChange(item.entity, field) && change.new" class="h-swatch" :style="{ background: change.new }"></span>{{ historyValue(item.entity, field, change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.scan" class="h-mark" :title="'Значение принято из сканера (режим «Расхождения»): ' + change.scan">из {{ change.scan }}</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
+                                            @dblclick="openValueHistory(item.entity, item.entity_id, field, item.entity_key)"><template v-if="field !== 'created'"><span class="old"><span v-if="isColorChange(item.entity, field) && change.old" class="h-swatch" :style="{ background: change.old }"></span>{{ historyValue(item.entity, field, change.old) }}</span><span class="arrow">→</span></template><span class="new"><span v-if="isColorChange(item.entity, field) && change.new" class="h-swatch" :style="{ background: change.new }"></span>{{ historyValue(item.entity, field, change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.scan" class="h-mark" :title="'Значение принято из сканера: ' + change.scan">из {{ change.scan }}</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
                                     </template>
                                 </div>
                             </td>
@@ -766,26 +745,29 @@
             </div>
         </section>
 
-        <!-- ================= Сканирование (только администратор, этап 24) ================= -->
-        <section v-if="user && isAdmin && view === 'scan'" class="view">
+        <!-- ================= Сканирование (этап 24; редактору — только «Расхождения», этап 26б) ================= -->
+        <section v-if="user && canEdit && view === 'scan'" class="view">
             <div class="toolbar">
                 <div class="tb-left">
                     <nav class="tb-tabs">
-                        <a href="#" :class="{ active: scanTab === 'settings' }" @click.prevent="setScanTab('settings')" title="Подключения к GLPI, GSIT, Jabber и подсети">Подключения</a>
-                        <a href="#" :class="{ active: scanTab === 'match' }" @click.prevent="setScanTab('match')" title="Записи GLPI и GSIT с последнего сбора: с какими ПК они сопоставлены">Сопоставление</a>
-                        <a href="#" :class="{ active: scanTab === 'names' }" @click.prevent="setScanTab('names')" title="Как значения GLPI и GSIT соответствуют названиям в таблице">Названия</a>
+                        <template v-if="isAdmin">
+                            <a href="#" :class="{ active: scanTab === 'settings' }" @click.prevent="setScanTab('settings')" title="Подключения к GLPI, GSIT, Jabber и подсети">Подключения</a>
+                            <a href="#" :class="{ active: scanTab === 'match' }" @click.prevent="setScanTab('match')" title="Записи GLPI и GSIT с последнего сбора: с какими ПК они сопоставлены">Сопоставление</a>
+                            <a href="#" :class="{ active: scanTab === 'names' }" @click.prevent="setScanTab('names')" title="Как значения GLPI и GSIT соответствуют названиям в таблице">Названия</a>
+                        </template>
+                        <a href="#" :class="{ active: scanTab === 'diffs' }" @click.prevent="setScanTab('diffs')" title="Где GLPI / GSIT предлагают другое значение, чем в таблице: принять, отклонить, исправить">Расхождения</a>
                     </nav>
                     <span class="tb-count">{{ scanTopCountText() }}</span>
                     <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
                 </div>
                 <span v-if="scanTab !== 'settings'" class="tb-search">
-                    <input v-model="scanMatchQuery" :placeholder="scanTab === 'names' ? 'Поиск по названиям: поле, значение' : 'Поиск по записям: имя, IP, MAC, серийный, ПК'" autocomplete="off"
+                    <input v-model="scanMatchQuery" :placeholder="scanTab === 'names' ? 'Поиск по названиям: поле, значение' : (scanTab === 'diffs' ? 'Поиск: ПК, расположение, значение' : 'Поиск по записям: имя, IP, MAC, серийный, ПК')" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'scanMatchQuery')">
                     <span v-if="scanMatchQuery" class="clear" title="Очистить (Esc)" @click="scanMatchQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
                     <button v-if="scanTab === 'settings'" class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
-                    <button v-else class="btn icon-only" @click="scanTab === 'names' ? loadScanNames() : loadScanRecords()" title="Обновить: сопоставить заново с текущими данными таблицы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+                    <button v-else class="btn icon-only" @click="scanTab === 'names' ? loadScanNames() : (scanTab === 'diffs' ? loadDiffs() : loadScanRecords())" title="Обновить: сопоставить заново с текущими данными таблицы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -981,7 +963,7 @@
                     <div v-if="scanMatch.error" class="sm-error">{{ scanMatch.error }}</div>
                     <div class="users-wrap sm-wrap" @mouseleave="scanMatch.hover = null">
                         <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
-                            <div class="history-scroll" @scroll="scanMatch.hover = null">
+                            <div class="history-scroll" @scroll="onScanMatchScroll">
                                 <table class="history-table users-table sm-table" :class="{ 'accent-head': accentHeaders.scan }">
                                     <thead>
                                         <tr><th class="sm-id" :title="'Номер записи в ' + scanMatchTitle">№</th><th>Имя</th><th class="sm-c" :title="'Когда ' + scanMatchTitle + ' последний раз проверял ПК'">Проверен</th><th>IP</th><th>MAC</th><th>Серийный</th><th class="sm-c">Сопоставление</th><th>ПК в ITDB</th></tr>
@@ -989,7 +971,7 @@
                                     <tbody>
                                         <tr v-if="!scanMatchRecords.length" class="h-empty"><td colspan="8">{{ scanMatch.loading ? "Загрузка…" : (scanMatchCounts.all ? "Ничего не найдено." : "Записей нет: нажми «Собрать».") }}</td></tr>
                                         <template v-for="r in scanMatchRecords" :key="r.source_id">
-                                            <tr :class="{ 'is-hover': scanMatch.hover && scanMatch.hover.id === r.source_id, 'sm-open': scanMatch.open[r.source_id] }"
+                                            <tr :data-sid="r.source_id" :class="{ 'is-hover': scanMatch.hover && scanMatch.hover.id === r.source_id, 'sm-open': scanMatch.open[r.source_id] }"
                                                 @mouseenter="setScanRecordHover(r, $event.currentTarget)" @click="toggleScanRecord(r)" :title="scanMatch.open[r.source_id] ? 'Свернуть' : 'Подробнее: значения рядом с ПК ITDB'">
                                                 <td class="sm-id"><a v-if="scanSourceLink(r)" :href="scanSourceLink(r)" target="_blank" rel="noopener" @click.stop :title="'Открыть в ' + scanMatchTitle">{{ r.source_id }}</a><template v-else>{{ r.source_id }}</template></td>
                                                 <td class="sm-name">{{ r.name || "—" }}</td>
@@ -1002,6 +984,7 @@
                                             </tr>
                                             <tr v-if="scanMatch.open[r.source_id]" class="sm-detail">
                                                 <td colspan="8">
+                                                    <div class="sm-detail-in">
                                                     <div class="smc-box">
                                                         <table class="sm-compare">
                                                             <tr>
@@ -1014,12 +997,14 @@
                                                                 <td class="smc-label">{{ c.label }}</td>
                                                                 <td class="smc-v">{{ c.source }}<span v-if="c.rawText" class="smc-raw"> ({{ c.rawText }})</span></td>
                                                                 <td class="smc-mark" :class="{ cycle: c.cycle, manual: c.manual }" :title="c.markTitle" @dblclick.stop="scanCycleMark(c)" @mousedown="c.cycle && $event.detail > 1 && $event.preventDefault()">{{ c.symbol }}</td>
-                                                                <td class="smc-v">{{ c.itdb }}</td>
+                                                                <td class="smc-v smc-itdb" :class="{ 'smc-can-edit': scanCompareEditable(r, c), 'smc-editing': valueEdit && valueEdit.key === 'm:' + r.source_id + ':' + c.field }"
+                                                                    :title="scanCompareEditable(r, c) ? 'Двойной клик — исправить в таблице' : null" @dblclick.stop="startScanCompareEdit(r, c)"><template v-if="valueEdit && valueEdit.key === 'm:' + r.source_id + ':' + c.field"><textarea v-if="valueEdit.multiline" v-model="valueEdit.value" class="value-edit" rows="2" @keydown="onValueEditKeydown" @blur="finishValueEdit" @click.stop></textarea><input v-else v-model="valueEdit.value" class="value-edit" @keydown="onValueEditKeydown" @blur="finishValueEdit" @click.stop></template><template v-else>{{ c.itdb }}</template></td>
                                                             </tr>
                                                         </table>
                                                     </div>
                                                     <div class="sm-lines">
                                                         <div v-for="(line, li) in scanDetailLines(r)" :key="li" :class="{ bad: line.bad }"><b>{{ line.label }}</b> {{ line.text }}</div>
+                                                    </div>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1028,33 +1013,33 @@
                                 </table>
                             </div>
                         </div>
-                        <div v-if="scanMatch.hover && scanHoverActions" class="tree-actions" :style="{ top: scanMatch.hover.top + 'px', height: scanMatch.hover.height + 'px' }">
+                        <div v-for="p in scanPlates" :key="'plate-' + p.id" class="tree-actions" :class="{ 'sm-open-plate': scanMatch.openPlate && scanMatch.openPlate.id === p.id }" :style="{ top: p.top + 'px', height: p.height + 'px' }">
                             <span class="na-box">
-                                <template v-if="scanMatch.hover.record.state === 'name'">
-                                    <span class="icon-btn" :title="'Да, это ' + scanHostsText(scanMatch.hover.record)" @click.stop="scanDecide(scanMatch.hover.record, 'link', scanMatch.hover.record.computer_id)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                                <template v-if="p.record.state === 'name'">
+                                    <span class="icon-btn" :title="'Да, это ' + scanHostsText(p.record)" @click.stop="scanDecide(p.record, 'link', p.record.computer_id)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
                                     <span class="na-sep"></span>
                                 </template>
-                                <template v-if="scanMatch.hover.record.state === 'name' || scanMatch.hover.record.state === 'key'">
-                                    <span class="icon-btn danger" :title="'Нет, это не ' + scanHostsText(scanMatch.hover.record) + ' — больше не предлагать'" @click.stop="scanDecide(scanMatch.hover.record, 'reject', scanMatch.hover.record.computer_id)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                                <template v-if="p.record.state === 'name' || p.record.state === 'key'">
+                                    <span class="icon-btn danger" :title="'Нет, это не ' + scanHostsText(p.record) + ' — больше не предлагать'" @click.stop="scanDecide(p.record, 'reject', p.record.computer_id)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
                                     <span class="na-sep"></span>
                                 </template>
-                                <span v-if="scanMatch.hover.record.state !== 'dup'" class="icon-btn" title="Привязать к ПК… (выбрать вручную)" @click.stop="openScanLinkBar(scanMatch.hover.record)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><path d="M8 12h8"/></svg></span>
-                                <template v-if="scanMatch.hover.record.decisions.length">
-                                    <span v-if="scanMatch.hover.record.state !== 'dup'" class="na-sep"></span>
-                                    <span class="icon-btn" title="Забыть решения по этой записи: снова сопоставлять по признакам" @click.stop="scanDecide(scanMatch.hover.record, 'reset')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
+                                <span v-if="p.record.state !== 'dup'" class="icon-btn" title="Привязать к ПК… (выбрать вручную)" @click.stop="openScanLinkBar(p.record)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><path d="M8 12h8"/></svg></span>
+                                <template v-if="p.record.decisions.length">
+                                    <span v-if="p.record.state !== 'dup'" class="na-sep"></span>
+                                    <span class="icon-btn" title="Забыть решения по этой записи: снова сопоставлять по признакам" @click.stop="scanDecide(p.record, 'reset')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
                                 </template>
                             </span>
                         </div>
                     </div>
                 </template>
             </div>
-            <div v-else class="page scan-match-page scan-names-page" :class="{ 'accent-head': accentHeaders.scan }">
+            <div v-else-if="scanTab === 'names'" class="page scan-match-page scan-names-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <div class="sm-intro">
                     Значения GLPI и GSIT сравниваются с таблицей по смыслу: «Win 10» и «Windows 10», «Pentium J3710» и «Intel Pentium J3710»,
                     «Lenovo ThinkCentre M600» и «M600» — одно и то же. Главное — как записано у тебя: значение источника показывается так,
                     как оно уже названо у сопоставленных ПК или в Справочнике. Вручную — двойной клик по отметке в подробностях записи
                     («Сопоставление»): <b>=</b> одно и то же (для всех ПК), <b>≠</b> разное, <b>⇐</b> в таблице своё — не расхождение, но и не
-                    одно и то же (как «ЕГИСЗ» при плате ASUS: другим ПК с такой платой «ЕГИСЗ» не предлагается). «⇐» ставит и режим «Расхождения».
+                    одно и то же (как «ЕГИСЗ» при плате ASUS: другим ПК с такой платой «ЕГИСЗ» не предлагается). «⇐» ставит и вкладка «Расхождения».
                 </div>
                 <div v-if="scanNames.error" class="sm-error">{{ scanNames.error }}</div>
                 <div class="users-wrap sm-wrap names-wrap" @mouseleave="scanNames.hover = null">
@@ -1082,6 +1067,76 @@
                         <span class="na-box">
                             <span v-if="scanNames.hover.name.origin === 'manual'" class="icon-btn danger" title="Удалить это соответствие" @click="deleteScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                             <span v-else class="icon-btn danger" title="Это разное: не считать одним и тем же" @click="differScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <!-- Расхождения (этап 26, на «Сканировании» — этап 26б) -->
+            <div v-else class="page scan-match-page diff-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <div class="sm-filters">
+                    <button class="sm-chip" :class="{ on: diffs.kind === 'all' }" @click="setDiffKind('all')">Все<span class="su-n">{{ diffKindCounts.diff + diffKindCounts.fill + diffKindCounts.unsure }}</span></button>
+                    <button class="sm-chip" :class="{ on: diffs.kind === 'diff' }" @click="setDiffKind('diff')" title="В таблице одно, сканер предлагает другое">Отличается<span class="su-n">{{ diffKindCounts.diff }}</span></button>
+                    <button class="sm-chip" :class="{ on: diffs.kind === 'fill' }" @click="setDiffKind('fill')" title="В таблице пусто, сканер знает значение">В таблице пусто<span class="su-n">{{ diffKindCounts.fill }}</span></button>
+                    <button class="sm-chip" :class="{ on: diffs.kind === 'unsure' }" @click="setDiffKind('unsure')" title="Сканер не уверен: источники расходятся или значений несколько — проверь сам">Неточно<span class="su-n">{{ diffKindCounts.unsure }}</span></button>
+                    <button v-if="diffs.pair" class="sm-chip on" @click="diffs.pair = null" title="Показана только эта пара значений. Нажми, чтобы показать все">{{ diffPairText(diffs.pair) }} ✕</button>
+                    <span class="sb-gap"></span>
+                    <button class="sm-chip" :class="{ on: diffs.showRejected }" @click="toggleDiffRejected" title="Отклонённые значения: не предлагаются, пока источник отдаёт то же. Можно вернуть">Отклонённые<span class="su-n">{{ diffs.rejected }}</span></button>
+                    <template v-if="diffShown.length">
+                        <button v-if="!diffs.showRejected" class="btn" @click="acceptShownDiffs" title="Записать в таблицу все показанные значения сканера">Принять показанные ({{ diffShown.length }})</button>
+                        <button class="btn" @click="rejectShownDiffs">{{ diffs.showRejected ? "Вернуть показанные" : "Отклонить показанные" }} ({{ diffShown.length }})</button>
+                    </template>
+                </div>
+                <div v-if="diffFields.length > 1" class="sm-filters df-fields">
+                    <button class="sm-chip" :class="{ on: diffs.field === 'all' }" @click="setDiffField('all')">Все поля</button>
+                    <button v-for="f in diffFields" :key="f.field" class="sm-chip" :class="{ on: diffs.field === f.field }" @click="setDiffField(f.field)">{{ f.label }}<span class="su-n">{{ f.count }}</span></button>
+                </div>
+                <div v-if="diffs.error" class="sm-error">{{ diffs.error }}</div>
+                <div class="users-wrap sm-wrap diff-wrap" @mouseleave="diffs.hover = null">
+                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
+                        <div class="history-scroll" @scroll="diffs.hover = null">
+                            <table class="history-table users-table diff-table" :class="{ 'accent-head': accentHeaders.scan }">
+                                <thead>
+                                    <tr><th>Поле</th><th title="Двойной клик — исправить значение в таблице (например, объединить со значением сканера)">В таблице</th><th>Сканер предлагает</th><th title="Откуда значение, как опознан ПК, согласны ли источники, когда проверен">Почему можно верить</th><th class="df-c" title="У скольких ещё ПК такая же пара значений">Ещё у</th></tr>
+                                </thead>
+                                <tbody v-if="!diffGroups.length">
+                                    <tr class="h-empty"><td colspan="5">{{ diffs.loading ? "Загрузка…" : (!diffs.sources.length ? "Источники не включены: «Сканирование» → «Подключения» (администратор)." : (diffs.showRejected ? "Отклонённых нет." : "Расхождений нет.")) }}</td></tr>
+                                </tbody>
+                                <tbody v-for="g in diffGroups" :key="g.computer_id">
+                                    <tr class="h-day">
+                                        <td colspan="5"><a href="#" class="df-host" @click.prevent="openCardById(g.computer_id)" title="Открыть карточку ПК">{{ g.hostname || "без имени" }}</a><span class="df-place">{{ g.place || "" }}</span><span class="h-day-count">{{ g.items.length }}</span></td>
+                                    </tr>
+                                    <tr v-for="d in g.items" :key="d.id" :class="{ 'is-hover': diffs.hover && diffs.hover.item.id === d.id }" @mouseenter="setDiffHover(d, $event.currentTarget)">
+                                        <td class="df-field">{{ diffFieldLabel(d.field) }}</td>
+                                        <td class="df-v df-table" :class="{ 'df-editing': valueEdit && valueEdit.key === 'd:' + d.id, 'df-can-edit': canEdit }"
+                                            :title="canEdit ? 'Двойной клик — исправить в таблице' : null" @dblclick="startValueEdit('d:' + d.id, d.computer_id, d.field, d.table)">
+                                            <template v-if="valueEdit && valueEdit.key === 'd:' + d.id">
+                                                <textarea v-if="valueEdit.multiline" v-model="valueEdit.value" class="value-edit" rows="2" @keydown="onValueEditKeydown" @blur="finishValueEdit"></textarea>
+                                                <input v-else v-model="valueEdit.value" class="value-edit" @keydown="onValueEditKeydown" @blur="finishValueEdit">
+                                            </template>
+                                            <template v-else><span class="df-mark" :style="scanMarkByKind[d.kind] && scanMarkByKind[d.kind].enabled ? scanMarkSample(scanMarkByKind[d.kind]) : null">{{ d.table }}<span v-if="!d.table" class="df-empty">пусто</span></span></template>
+                                        </td>
+                                        <td class="df-v df-new">{{ d.proposed }}<span v-if="d.raw !== d.proposed" class="df-raw"> ({{ d.raw.split("\n").join(", ") }})</span></td>
+                                        <td class="df-src" :title="diffSourceTitle(d)"><span class="df-from">{{ diffSourceShort(d) }}</span><span v-for="(t, ti) in diffTrust(d)" :key="ti" class="df-trust" :class="{ bad: t.bad }">{{ t.text }}</span><span v-if="d.rejected_by" class="df-trust">отклонил {{ d.rejected_by }} {{ formatTime(d.rejected_at) }}</span></td>
+                                        <td class="df-c"><a v-if="d.same_pair" href="#" class="df-pair" @click.prevent="setDiffPair(d)" title="Показать только ПК с такой же парой значений — решить разом">{{ d.same_pair }} ПК</a></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="diffs.hover && !valueEdit" class="tree-actions" :style="{ top: diffs.hover.top + 'px', height: diffs.hover.height + 'px' }">
+                        <span class="na-box">
+                            <template v-if="!diffs.hover.item.rejected_by">
+                                <span class="icon-btn" title="Принять: записать значение сканера в таблицу" @click="acceptDiffs([diffs.hover.item])"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                                <span class="na-sep"></span>
+                                <span class="icon-btn" title="Исправить значение в таблице самому (или двойной клик по «В таблице»)" @click="startValueEdit('d:' + diffs.hover.item.id, diffs.hover.item.computer_id, diffs.hover.item.field, diffs.hover.item.table)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg></span>
+                                <span class="na-sep"></span>
+                                <span class="icon-btn danger" title="Отклонить: не предлагать этому ПК, пока источник отдаёт то же" @click="rejectDiffs([diffs.hover.item])"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                                <template v-if="diffs.hover.item.name_field && diffs.hover.item.table">
+                                    <span class="na-sep"></span>
+                                    <span class="icon-btn" :title="'В таблице своё: «' + diffs.hover.item.table + '» при «' + diffs.hover.item.raw + '» — не расхождение у всех ПК с такой парой (но это не одно и то же: другим ПК «' + diffs.hover.item.table + '» не предлагается)'" @click="keepDiff(diffs.hover.item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4"/><path d="m10 6-6 6 6 6"/></svg></span>
+                                </template>
+                            </template>
+                            <span v-else class="icon-btn" title="Вернуть: снова предлагать" @click="rejectDiffs([diffs.hover.item], true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
                         </span>
                     </div>
                 </div>
@@ -1118,10 +1173,11 @@
             <div v-if="suggest && suggest.pos && suggestShown.length" ref="suggestList" class="loc-list sug-list" :class="{ up: suggest.pos.up }"
                 :style="suggestListStyle" @mousedown.prevent>
                 <div v-for="(o, i) in suggestShown" :key="o.key" class="ll-item"
-                    :class="{ active: i === suggest.active, current: o.key === suggest.current }"
+                    :class="{ active: i === suggest.active, current: o.key === suggest.current, 'sug-scan-item': o.scan }"
                     @mousemove="suggest.active = i" @click="pickSuggest(o)">
                     <span class="sug-value" :class="{ 'val-chip': !!(suggestItemStyle(o) || {}).backgroundColor }" :style="suggestItemStyle(o)">{{ o.value }}</span>
-                    <span class="sug-count" :title="o.count ? 'ПК с этим значением' : 'Есть в справочнике, у ПК пока нет'">{{ o.count }}</span>
+                    <span v-if="o.scan" class="sug-count sug-scan" title="Предлагает сканер">{{ o.count }}</span>
+                    <span v-else class="sug-count" :title="o.count ? 'ПК с этим значением' : 'Есть в справочнике, у ПК пока нет'">{{ o.count }}</span>
                 </div>
             </div>
         </teleport>
@@ -1163,6 +1219,16 @@
                                         <input v-else ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onCardEditKeydown($event, r)" @input="onSuggestInput($event.target.value)" @blur="saveCardEdit(r)">
                                     </template>
+                                    <!-- Что предлагает сканер (этап 26б) -->
+                                    <div v-else-if="cardScanDiff(r)" class="ct-scan" :class="'ct-scan-' + cardScanDiff(r).kind" :title="diffSourceTitle(cardScanDiff(r)) + '\n' + diffTrust(cardScanDiff(r)).map(t => t.text).join(' · ')" @dblclick.stop>
+                                        <span class="cs-src">{{ diffSourceShort(cardScanDiff(r)) }}:</span>
+                                        <span class="cs-val">{{ cardScanDiff(r).proposed.split("\n").join(", ") }}</span>
+                                        <span v-if="cardScanDiff(r).kind === 'unsure'" class="cs-unsure">неточно</span>
+                                        <template v-if="canEdit">
+                                            <a href="#" class="cs-act" title="Записать значение сканера в таблицу" @click.prevent="acceptDiffs([cardScanDiff(r)])">принять</a>
+                                            <a href="#" class="cs-act cs-no" title="Не предлагать этому ПК, пока источник отдаёт то же" @click.prevent="rejectDiffs([cardScanDiff(r)])">отклонить</a>
+                                        </template>
+                                    </div>
                                 </td>
                             </tr>
                         </template>
@@ -1198,7 +1264,7 @@
                                         :title="canOpenValue('computers', field) ? 'Двойной клик — история значения' : null"
                                         @dblclick="openValueHistory('computers', card.id, field)">{{ fieldLabel('computers', field) }}</span>
                                     <span class="ch-val" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue('computers', field) }"
-                                        @dblclick="openValueHistory('computers', card.id, field)"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.scan" class="h-mark" :title="'Значение принято из сканера (режим «Расхождения»): ' + change.scan">из {{ change.scan }}</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
+                                        @dblclick="openValueHistory('computers', card.id, field)"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.scan" class="h-mark" :title="'Значение принято из сканера: ' + change.scan">из {{ change.scan }}</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
                                 </template>
                             </div>
                         </div>

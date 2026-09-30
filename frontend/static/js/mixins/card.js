@@ -61,10 +61,12 @@ export default {
             // Пустые поля — только основные (always) или если развёрнуто
             // кнопкой в шапке карточки; пустое показывается серым «—»
             const showEmpty = this.cardShowEmpty;
+            // Сканер предлагает значение для пустого поля — строку показать (этап 26б)
+            const scanFields = this.diffIndex.get(c.id) || {};
             function filled(list) {
                 return list.filter(function (r) {
                     const empty = r.value === null || r.value === undefined || r.value === "";
-                    return !empty || r.always || showEmpty;
+                    return !empty || r.always || showEmpty || (r.field && scanFields[r.field] && scanFields[r.field].kind !== "partial");
                 }).map(function (r) {
                     const empty = r.value === null || r.value === undefined || r.value === "";
                     return empty ? Object.assign({}, r, { empty: true, copy: false }) : r;
@@ -143,7 +145,7 @@ export default {
                     this.openSuggest(input, col, (value) => {
                         this.cardEditValue = value;
                         this.saveCardEdit(r);
-                    });
+                    }, this.card.id);
                 }
             });
         },

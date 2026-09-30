@@ -15,8 +15,13 @@
   расхождение ни у одного ПК, но и не «одно и то же» (scan_aliases kind keep,
   через /api/scan/names).
 
-Правка — editor и admin (как правка таблицы).
+Смотреть (пометки в Таблице) — все; решения — editor и admin (как правка таблицы).
+Этап 26б: «неточно» (unsure) — источники предлагают разное или VNC-серверов
+несколько; «в таблице часть» (partial, «≈») — отдаётся для пометок, но не
+расхождение (не в счётчике); у источника — как сопоставлен (state, by) и что
+предлагает (value) — признаки, можно ли верить.
 """
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -29,9 +34,10 @@ from api_computers import (
     ChangeBatch, apply_fields, load_locations, location_path, save_changes, user_field_keys_of,
 )
 from api_scan import SOURCES
-from auth import require_editor
+from auth import get_current_user, require_editor
 from db import get_db
-from models import Computer, ScanRecord, ScanReject, ScanSource
+from history_log import log_change
+from models import Computer, ScanMark, ScanRecord, ScanReject, ScanSource
 from scan_values import COMPARE_FIELDS, NAME_FIELDS, key_of
 
 router = APIRouter(prefix="/api/scan/diffs", tags=["scan"])
@@ -44,6 +50,9 @@ class DiffSource(BaseModel):
     title: str
     source_id: int
     checked_at: Optional[datetime]
+    state: str = "key"          # key — по признаку, link — вручную
+    by: list[str] = []          # признаки: id, mac, serial
+    value: str = ""             # что предлагает этот источник (в названиях таблицы)
 
 
 class DiffOut(BaseModel):
@@ -55,7 +64,10 @@ class DiffOut(BaseModel):
     table: str            # как в таблице
     proposed: str         # как предлагает сканер (в названиях таблицы)
     raw: str              # как в источнике
-    kind: str             # diff — отличается, fill — в таблице пусто
+    kind: str             # diff — отличается, fill — в таблице пусто, unsure — неточно
+                          # (источники расходятся или VNC-серверов несколько),
+                          # partial — в таблице записана часть («≈», не расхождение)
+    unsure: str = ""      # почему неточно — для подсказки
     name_field: bool      # поле-название: можно «в таблице своё»
     sources: list[DiffSource]
     same_pair: int        # ещё у скольких ПК такая же пара «таблица — сканер»
@@ -78,7 +90,8 @@ def enabled_kinds(session):
 
 
 def compute(session, with_rejected=False):
-    """(расхождения, число отклонённых) по всем включённым источникам."""
+    """(расхождения, число отклонённых, источники) по всем включённым источникам.
+    Одно поле ПК — одна строка; если источники предлагают разное — «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
     names = scan_collect.load_names(session, computers)
@@ -87,8 +100,7 @@ def compute(session, with_rejected=False):
     for r in session.query(ScanReject):
         rejects[(r.computer_id, r.field, r.value_key)] = r
 
-    items = {}
-    rejected = 0
+    rows = {}   # (ПК, поле) → {row из compare, sources: [...]}
 
     for kind in kinds:
         matches, _ = scan_collect.match(session, kind)
@@ -107,47 +119,62 @@ def compute(session, with_rejected=False):
                 if not row["raw"]:
                     continue
 
-                if row["mark"] == "≠":
-                    diff_kind = "diff"
-                elif row["mark"] == "" and not row["itdb"]:
-                    diff_kind = "fill"
-                else:
-                    continue
-
-                field = row["field"]
-                reject = rejects.get((computer_id, field, key_of(row["raw"])))
-
-                if reject is not None:
-                    rejected += 1
-
-                    if not with_rejected:
-                        continue
-
-                item_id = f"{computer_id}:{field}:{key_of(row['source'])}"
-                entry = items.get(item_id)
-
-                if entry is None:
-                    entry = items[item_id] = {
-                        "id": item_id, "computer_id": computer_id, "field": field,
-                        "table": row["itdb"] or "", "proposed": row["source"], "raw": row["raw"],
-                        "kind": diff_kind, "name_field": field in NAME_FIELDS, "sources": [],
-                        "rejected_by": reject.user_name if reject else None,
-                        "rejected_at": reject.at if reject else None,
-                    }
-
+                entry = rows.setdefault((computer_id, row["field"]), {"rows": [], "sources": []})
+                entry["rows"].append(row)
                 entry["sources"].append({
                     "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id,
-                    "checked_at": record.checked_at,
+                    "checked_at": record.checked_at, "state": item["state"], "by": item["by"],
+                    "value": row["source"],
                 })
+
+    items = []
+    rejected = 0
+
+    for (computer_id, field), entry in rows.items():
+        proposals = {key_of(r["source"]) for r in entry["rows"]}
+        row = entry["rows"][0]
+        marks = {r["mark"] for r in entry["rows"]}
+        unsure = ""
+
+        if len(proposals) > 1:
+            unsure = "источники предлагают разное: " + "; ".join(f"{s['title']} — {s['value']}" for s in entry["sources"])
+        elif field == "vnc" and len(row["source"].splitlines()) > 1:
+            unsure = "установлено несколько VNC — какой из них сервер, по программам не понять"
+
+        if "≠" in marks or (unsure and not row["itdb"]):
+            diff_kind = "unsure" if unsure else "diff"
+        elif not row["itdb"] and "" in marks:
+            diff_kind = "unsure" if unsure else "fill"
+        elif "≈" in marks:
+            diff_kind = "partial"
+        else:
+            continue
+
+        reject = rejects.get((computer_id, field, key_of(row["raw"])))
+
+        if reject is not None and diff_kind != "partial":
+            rejected += 1
+
+            if not with_rejected:
+                continue
+
+        items.append({
+            "id": f"{computer_id}:{field}", "computer_id": computer_id, "field": field,
+            "table": row["itdb"] or "", "proposed": row["source"], "raw": row["raw"],
+            "kind": diff_kind, "unsure": unsure, "name_field": field in NAME_FIELDS,
+            "sources": entry["sources"],
+            "rejected_by": reject.user_name if reject else None,
+            "rejected_at": reject.at if reject else None,
+        })
 
     # «Ещё у N ПК»: та же пара «в таблице — у сканера» в том же поле
     pairs = {}
 
-    for entry in items.values():
+    for entry in items:
         pair = (entry["field"], key_of(entry["table"]), key_of(entry["raw"]))
         pairs[pair] = pairs.get(pair, 0) + 1
 
-    ids = {entry["computer_id"] for entry in items.values()}
+    ids = {entry["computer_id"] for entry in items}
     hosts = {}
 
     if ids:
@@ -159,7 +186,7 @@ def compute(session, with_rejected=False):
     order = {field: i for i, field in enumerate(COMPARE_FIELDS)}
     result = []
 
-    for entry in items.values():
+    for entry in items:
         pair = (entry["field"], key_of(entry["table"]), key_of(entry["raw"]))
         hostname, place = hosts.get(entry["computer_id"], (None, None))
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
@@ -171,13 +198,13 @@ def compute(session, with_rejected=False):
 @router.get("", response_model=DiffsOut)
 def list_diffs(
     rejected: bool = Query(False),
-    me=Depends(require_editor),
+    me=Depends(get_current_user),
     session=Depends(get_db),
 ):
     items, rejected_count, kinds = compute(session, with_rejected=rejected)
     return DiffsOut(
         items=items,
-        computers=len({d.computer_id for d in items if not d.rejected_by}),
+        computers=len({d.computer_id for d in items if not d.rejected_by and d.kind != "partial"}),
         rejected=rejected_count,
         sources=kinds,
     )
@@ -302,3 +329,79 @@ def unreject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_
 
     session.commit()
     return {"returned": removed}
+
+
+# ---------- Пометки в Таблице: вид и когда показывать (этап 26б) ----------
+
+marks_router = APIRouter(prefix="/api/scan/marks", tags=["scan"])
+
+MARK_LABELS = {
+    "diff": "Отличается",
+    "fill": "В таблице пусто",
+    "unsure": "Неточно",
+    "partial": "В таблице часть",
+}
+MARK_FIELDS = ("color", "bg_color", "bold", "italic", "strike", "frame", "enabled", "always")
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+class MarkOut(BaseModel):
+    kind: str
+    label: str
+    color: Optional[str]
+    bg_color: Optional[str]
+    bold: bool
+    italic: bool
+    strike: bool
+    frame: Optional[str]
+    enabled: bool
+    always: bool
+
+
+class MarkUpdate(BaseModel):
+    """None — не менять; у цветов "" — убрать."""
+    color: Optional[str] = None
+    bg_color: Optional[str] = None
+    bold: Optional[bool] = None
+    italic: Optional[bool] = None
+    strike: Optional[bool] = None
+    frame: Optional[str] = None
+    enabled: Optional[bool] = None
+    always: Optional[bool] = None
+
+
+def mark_out(mark):
+    return MarkOut(label=MARK_LABELS.get(mark.kind, mark.kind), **{
+        "kind": mark.kind, **{field: getattr(mark, field) for field in MARK_FIELDS}
+    })
+
+
+@marks_router.get("", response_model=list[MarkOut])
+def list_marks(me=Depends(get_current_user), session=Depends(get_db)):
+    return [mark_out(m) for m in session.query(ScanMark).order_by(ScanMark.sort, ScanMark.kind)]
+
+
+@marks_router.patch("/{kind}", response_model=MarkOut)
+def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), session=Depends(get_db)):
+    """Вид пометки — общий для всех, как оформление в Справочниках."""
+    mark = session.get(ScanMark, kind)
+
+    if mark is None:
+        raise HTTPException(status_code=404, detail="Нет такой пометки.")
+
+    data = payload.model_dump(exclude_none=True)
+    changes = {}
+
+    for field, value in data.items():
+        if field in ("color", "bg_color", "frame"):
+            value = (value or "").strip() or None
+
+            if value is not None and not COLOR_RE.match(value):
+                raise HTTPException(status_code=400, detail="Цвет — в виде #RRGGBB.")
+
+        changes[field] = {"old": getattr(mark, field), "new": value}
+        setattr(mark, field, value)
+
+    log_change(session, "scan_marks", 0, me["login"], changes, title=MARK_LABELS.get(kind, kind), entity_key=kind)
+    session.commit()
+    return mark_out(mark)

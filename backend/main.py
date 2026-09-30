@@ -23,6 +23,7 @@ from api_columns import router as columns_router
 from api_users import router as users_router
 from api_scan import router as scan_router
 from api_scan_records import router as scan_records_router
+from api_scan_diffs import marks_router as scan_marks_router
 from api_scan_diffs import router as scan_diffs_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
@@ -139,8 +140,10 @@ app.include_router(users_router)
 # только администратор
 app.include_router(scan_router)
 app.include_router(scan_records_router)
-# Расхождения (этап 26) — редактор и администратор
+# Расхождения (этап 26) и пометки сканера (этап 26б): смотреть — все,
+# решать и настраивать вид — редактор и администратор
 app.include_router(scan_diffs_router)
+app.include_router(scan_marks_router)
 
 @app.get("/api/health")
 def health():

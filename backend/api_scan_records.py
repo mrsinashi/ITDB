@@ -403,7 +403,7 @@ def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db
     же» — для всех ПК, одно на значение источника), differ («это разное»), keep
     («в таблице своё» — не расхождение, но и не одно и то же), auto (забыть
     решение по паре — как решит сравнение). Редактор тоже может: это решения
-    режима «Расхождения»."""
+    вкладки «Расхождения»."""
     field = payload.field
 
     if field not in NAME_FIELD_KEYS:

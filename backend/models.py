@@ -358,3 +358,23 @@ class ScanReject(Base):
     value_key = Column(Text, nullable=False)
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ScanMark(Base):
+    """Как помечать в Таблице ячейку, у которой сканер предлагает другое (этап 26б):
+    diff — отличается, fill — в таблице пусто, unsure — неточно, partial — в
+    таблице часть. enabled — помечать вообще; always — и без кнопки на панели
+    (в обычном просмотре). Вид — как оформление в Справочниках + зачёркивание и
+    рамка. Строки заводит миграция d1f5b8e2a4c6."""
+    __tablename__ = "scan_marks"
+
+    kind = Column(Text, primary_key=True)
+    sort = Column(Integer, nullable=False, server_default="0")
+    color = Column(Text, nullable=True)
+    bg_color = Column(Text, nullable=True)
+    bold = Column(Boolean, nullable=False, server_default="false")
+    italic = Column(Boolean, nullable=False, server_default="false")
+    strike = Column(Boolean, nullable=False, server_default="false")
+    frame = Column(Text, nullable=True)
+    enabled = Column(Boolean, nullable=False, server_default="true")
+    always = Column(Boolean, nullable=False, server_default="false")

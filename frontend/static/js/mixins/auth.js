@@ -136,7 +136,11 @@ export default {
             } else if (view === "users") {
                 this.loadUsers();
             } else if (view === "scan") {
-                this.loadScan();
+                if (this.isAdmin) {
+                    this.loadScan();
+                } else {
+                    this.setScanTab("diffs");   // редактору — только «Расхождения»
+                }
             }
         },
 

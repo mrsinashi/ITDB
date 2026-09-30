@@ -161,7 +161,8 @@ export const ENTITY_LABELS = {
     scan_sources: "Подключение",
     scan_subnets: "Подсеть",
     scan_records: "Запись",
-    scan_aliases: "Название"
+    scan_aliases: "Название",
+    scan_marks: "Пометка сканера"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -198,7 +199,11 @@ export const SIMPLE_FIELD_LABELS = {
     // Соответствия названий (этап 25б)
     same: "Одно и то же",
     differ: "Разное",
-    keep: "В таблице своё"
+    keep: "В таблице своё",
+    // Пометки сканера (этап 26б)
+    strike: "Зачёркнутый",
+    frame: "Рамка",
+    always: "Без кнопки"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

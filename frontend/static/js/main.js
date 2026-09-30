@@ -14,7 +14,7 @@
 //                        col-filters (фильтры по столбцам в шапке таблицы),
 //                        scan (Сканирование: подключения к источникам, подсети),
 //                        scan-match (сбор из GLPI / GSIT, вкладки «Сопоставление», «Названия»),
-//                        scan-diffs (режим «Расхождения» на странице «Таблица»)
+//                        scan-diffs (пометки сканера в Таблице, вкладка «Расхождения»)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -164,7 +164,7 @@ const app = Vue.createApp({
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
             subnetHover: null,   // подсеть под курсором — плашка действий
             // Этап 25: вкладки страницы, сбор и сопоставление
-            scanTab: "settings", // settings — подключения и подсети, match — сопоставление, names — названия
+            scanTab: "settings", // settings — подключения и подсети, match — сопоставление, names — названия, diffs — расхождения
             scanRuns: {},        // kind → запуск сбора, за которым следим
             scanPollTimer: null,
             scanMatch: {
@@ -173,13 +173,16 @@ const app = Vue.createApp({
                 loading: false,
                 error: "",
                 filter: "all",   // all / matched / name / conflict / none / dup
-                open: {},        // source_id → раскрыта подробность
+                open: {},        // source_id → раскрыта подробность (одна)
+                openPlate: null, // плашка действий у раскрытой записи
                 hover: null      // запись под курсором — плашка действий
             },
             scanMatchQuery: "",  // поиск на «Сопоставлении» и «Названиях»
             scanNames: { items: [], loading: false, error: "", hover: null },
-            // Этап 26: режим «Расхождения» на странице «Таблица»
-            diffMode: false,
+            // Этап 26б: пометки сканера в Таблице (кнопка на панели) и вкладка «Расхождения»
+            scanOverlay: false,
+            scanMarks: [],       // /api/scan/marks — вид пометок по ситуациям
+            valueEdit: null,     // правка значения ПК из списка расхождений / подробностей записи
             diffs: {
                 items: [],          // /api/scan/diffs (и отклонённые — с rejected_by)
                 count: 0,           // расхождений без отклонённых — на кнопке
@@ -188,6 +191,7 @@ const app = Vue.createApp({
                 loading: false,
                 error: "",
                 field: "all",       // фильтр по полю
+                kind: "all",        // all / diff / fill / unsure
                 pair: null,         // «ещё у N ПК»: { field, table, raw }
                 showRejected: false,
                 hover: null
@@ -239,10 +243,11 @@ const app = Vue.createApp({
             await this.$nextTick();
             this.snapNavUser();
             window.addEventListener("resize", () => this.snapNavUser());
-            window.addEventListener("resize", () => this.scanFitCompare());
+            window.addEventListener("resize", () => { this.scanFitCompare(); this.placeScanOpenPlate(); });
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();
             this.loadDiffs();
+            this.loadScanMarks();
         }
     }
 });

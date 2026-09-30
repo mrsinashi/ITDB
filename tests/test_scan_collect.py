@@ -538,7 +538,9 @@ def test_diffs_accept_reject_keep(admin, editor, reader, room, glpi_url):
     setup_source(admin, glpi_url)
     collect(admin)
 
-    assert reader.get("/api/scan/diffs").status_code == 403
+    # Смотреть пометки может и «только чтение», решать — нет
+    assert reader.get("/api/scan/diffs").status_code == 200
+    assert reader.post("/api/scan/diffs/reject", json={"items": []}).status_code == 403
     data = diffs_of(editor)
     items = {(d["computer_id"], d["field"]): d for d in data["items"]}
     assert data["computers"] == 2 and data["sources"] == ["glpi"]
@@ -546,6 +548,9 @@ def test_diffs_accept_reject_keep(admin, editor, reader, room, glpi_url):
     assert (model["table"], model["proposed"], model["kind"], model["same_pair"]) == ("ЕГИСЗ", "ASUS PRIME H370-PLUS", "diff", 1)
     assert items[(first, "ip")]["kind"] == "fill" and items[(first, "ram")]["proposed"] == "8"
     assert items[(first, "os")]["proposed"] == "Win 10"
+    # Признаки доверия: как сопоставлен и что предлагает источник
+    src = model["sources"][0]
+    assert (src["title"], src["state"], src["by"], src["value"]) == ("GLPI", "key", ["mac"], "ASUS PRIME H370-PLUS")
 
     # «В таблице своё» — у обоих ПК модель больше не расхождение
     ok(editor.post("/api/scan/names", json={"field": "model", "source": "ASUS PRIME H370-PLUS", "table": "ЕГИСЗ", "kind": "keep"}))
@@ -609,3 +614,42 @@ def test_canonical_keeps_model_numbers():
     assert names.canonical_line("model", "Lenovo ThinkCentre M600") == ("M600", "table")
     # У самого ПК менее подробное значение — не расхождение
     assert names.compare("model", "HP ProDesk 400 G6 MT", "HP ProDesk 400")["mark"] == "="
+
+
+
+def test_diffs_unsure_and_partial(admin, editor, room, glpi_url):
+    """Неточно: VNC-серверов несколько; в таблице часть (≈) — не в счёт."""
+    loc = room["room"]
+    pc1 = add_pc(editor, loc, "vnc-1", mac="04:D9:F5:00:01:01")
+    pc2 = add_pc(editor, loc, "vnc-2", mac="04:D9:F5:00:01:02", vnc="Tight")
+    Glpi.computers = {
+        1: pc("vnc-1", ports=[(ETH, "04:d9:f5:00:01:01", [])], soft=["TightVNC", "UltraVNC 1.4"]),
+        2: pc("vnc-2", ports=[(ETH, "04:d9:f5:00:01:02", [])], soft=["TightVNC", "UltraVNC 1.4"]),
+        3: pc("vnc-3", ports=[(ETH, "04:d9:f5:00:01:03", [])], soft=["TightVNC", "UltraVNC Viewer 1.4"]),
+    }
+    setup_source(admin, glpi_url)
+    collect(admin)
+    assert records(admin)[1][3]["values"]["vnc"] == "TightVNC"          # просмотрщик не сервер
+
+    data = diffs_of(editor)
+    items = {(d["computer_id"], d["field"]): d for d in data["items"]}
+    vnc1 = items[(pc1, "vnc")]
+    assert vnc1["kind"] == "unsure" and "VNC" in vnc1["unsure"]
+    assert items[(pc2, "vnc")]["kind"] == "partial"                     # «Tight» — один из двух
+    assert data["computers"] == 2                                       # partial не в счёт ПК
+
+
+def test_marks_settings(admin, editor, reader):
+    marks = ok(reader.get("/api/scan/marks"))
+    assert [m["kind"] for m in marks] == ["diff", "fill", "unsure", "partial"]
+    assert marks[0]["label"] == "Отличается" and marks[3]["enabled"] is False
+
+    assert reader.patch("/api/scan/marks/diff", json={"bold": True}).status_code == 403
+    assert editor.patch("/api/scan/marks/diff", json={"color": "red"}).status_code == 400
+    saved = ok(editor.patch("/api/scan/marks/diff", json={"strike": True, "frame": "#cc0000", "always": True}))
+    assert (saved["strike"], saved["frame"], saved["always"]) == (True, "#cc0000", True)
+    items = ok(admin.get("/api/history", params={"entity": "scan_marks"}))["items"]
+    assert items[0]["title"] == "Отличается" and set(items[0]["changes"]) == {"strike", "frame", "always"}
+
+    # Вернуть как было — таблица пометок между тестами не очищается
+    ok(editor.patch("/api/scan/marks/diff", json={"strike": False, "frame": "", "always": False}))

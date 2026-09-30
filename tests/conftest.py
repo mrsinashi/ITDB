@@ -77,7 +77,7 @@ from models import User  # noqa: E402
 PASSWORDS = {"admin": "admin-pass", "editor": "editor-pass", "reader": "reader-pass"}
 
 # Эти таблицы между тестами не чистятся: пользователи и их сессии живут всю сессию
-KEEP_TABLES = {"alembic_version", "users", "sessions"}
+KEEP_TABLES = {"alembic_version", "users", "sessions", "scan_marks"}
 
 
 def create_schema():

@@ -200,7 +200,7 @@ export default {
 
         // Цвет из оформления — рядом со значением образец
         isColorChange(entity, field) {
-            return (entity === "choices" || entity === "column_styles") && (field === "color" || field === "bg_color");
+            return (entity === "choices" || entity === "column_styles" || entity === "scan_marks") && (field === "color" || field === "bg_color" || field === "frame");
         },
 
         displayValue(value) {
