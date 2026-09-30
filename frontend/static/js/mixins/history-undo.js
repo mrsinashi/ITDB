@@ -16,8 +16,13 @@ const ENTITY_FILTERS = {
     choices: "Справочники",
     field_defs: "Польз. поля",
     column_styles: "Оформление столбцов",
-    users: "Пользователи системы"
+    users: "Пользователи системы",
+    scan_sources: "Сканирование: подключения",
+    scan_subnets: "Сканирование: подсети"
 };
+// Только администратор видит эти записи; отмены у них нет (только просмотр)
+const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets"];
+const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets"];
 
 // Выделение в списке по клику: Ctrl — добавить/убрать, Shift — диапазон от
 // прошлой строки, Ctrl+Shift — добавить диапазон. single — обычный клик
@@ -46,7 +51,7 @@ export default {
         historyEntityFilters() {
             const result = Object.assign({}, ENTITY_FILTERS);
             if (!this.isAdmin) {
-                delete result.users;
+                ADMIN_ENTITIES.forEach(function (key) { delete result[key]; });
             }
             return result;
         },
@@ -58,11 +63,11 @@ export default {
         },
 
         historySelectedCanCancel() {
-            return this.historySelectedItems.some((item) => this.hasFields(item.changes, false));
+            return this.historySelectedItems.some((item) => NO_UNDO_ENTITIES.indexOf(item.entity) === -1 && this.hasFields(item.changes, false));
         },
 
         historySelectedCanRestore() {
-            return this.historySelectedItems.some((item) => this.hasFields(item.changes, true));
+            return this.historySelectedItems.some((item) => NO_UNDO_ENTITIES.indexOf(item.entity) === -1 && this.hasFields(item.changes, true));
         },
 
         historyFiltered() {
@@ -174,7 +179,7 @@ export default {
 
         // Двойной клик открывает «Историю значения» (у создания, удаления и пароля — нет)
         canOpenValue(entity, field) {
-            return !!ENTITY_FILTERS[entity] && FIXED_HISTORY_FIELDS.indexOf(field) === -1;
+            return !!ENTITY_FILTERS[entity] && NO_UNDO_ENTITIES.indexOf(entity) === -1 && FIXED_HISTORY_FIELDS.indexOf(field) === -1;
         },
 
         toggleShowCancelled() {
@@ -294,7 +299,9 @@ export default {
         },
 
         async cancelSelectedHistory(cancel) {
-            const items = this.historySelectedItems.map(function (item) { return { id: item.id }; });
+            const items = this.historySelectedItems
+                .filter(function (item) { return NO_UNDO_ENTITIES.indexOf(item.entity) === -1; })
+                .map(function (item) { return { id: item.id }; });
             this.closeMenus();
             if (items.length && await this.cancelHistory(items, cancel)) {
                 this.clearHistorySelection();

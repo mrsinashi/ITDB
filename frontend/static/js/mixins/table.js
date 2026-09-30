@@ -646,6 +646,7 @@ export default {
                 selection: this.$refs.selectionWrap,
                 columns: this.$refs.columnsWrap,
                 treeAdd: this.$refs.treeAddWrap,
+                treeAddSide: this.$refs.treeAddSideWrap,
                 add: this.$refs.addWrap,
                 export: this.$refs.exportWrap,
                 settings: this.$refs.settingsWrap,

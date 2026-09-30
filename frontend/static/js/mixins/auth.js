@@ -61,7 +61,7 @@ export default {
                 }
                 this.theme = applyTheme(prefs.theme || "red");
                 this.accentBorders = !!prefs.accent_borders;
-                this.accentHeaders = Object.assign({ tree: true, history: true, choices: true, users: true }, prefs.accent_headers || {});
+                this.accentHeaders = Object.assign({ tree: true, history: true, choices: true, users: true, scan: true }, prefs.accent_headers || {});
             } catch (e) {
                 this.user = null;
             }
@@ -133,6 +133,8 @@ export default {
                 this.loadFieldDefs();
             } else if (view === "users") {
                 this.loadUsers();
+            } else if (view === "scan") {
+                this.loadScan();
             }
         },
 

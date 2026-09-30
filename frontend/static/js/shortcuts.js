@@ -53,7 +53,7 @@ window.addEventListener("keydown", function (event) {
         return;
     }
     // Esc закрывает строку добавления (Таблица), форму узла (Дерево) и строку
-    // «Новый пользователь / Изменить» (Пользователи),
+    // «Новый пользователь / Изменить» (Пользователи), «Новая подсеть» (Сканирование),
     // где бы ни был фокус; открытый список выбора расположения закрывается
     // своим Esc раньше (он не пропускает событие дальше)
     if (event.key === "Escape" && !event.defaultPrevented && !vm.card) {
@@ -71,6 +71,10 @@ window.addEventListener("keydown", function (event) {
         }
         if (vm.view === "users" && vm.userBar) {
             vm.closeUserBar();
+            return;
+        }
+        if (vm.view === "scan" && vm.subnetBar) {
+            vm.subnetBar = null;
             return;
         }
     }

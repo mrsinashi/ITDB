@@ -218,3 +218,43 @@ class ColumnStyle(Base):
     bg_color = Column(Text, nullable=True)
     bold = Column(Boolean, nullable=False, server_default="false")
     italic = Column(Boolean, nullable=False, server_default="false")
+
+
+class ScanSource(Base):
+    """Подключение к источнику данных для сканирования (этап 24): GLPI, GSIT,
+    Jabber. Строка появляется при первом сохранении настроек (до этого —
+    значения по умолчанию из api_scan.SOURCES). Пароли и токены — в secrets,
+    зашифрованными ключом ITDB_SECRET_KEY из .env (secret_box.py)."""
+    __tablename__ = "scan_sources"
+
+    kind = Column(Text, primary_key=True)
+    enabled = Column(Boolean, nullable=False, server_default="false")
+    url = Column(Text, nullable=True)
+    domain = Column(Text, nullable=True)
+    login = Column(Text, nullable=True)
+    secrets = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    verify_tls = Column(Boolean, nullable=False, server_default="true")
+    options = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+
+    # Последняя проверка подключения
+    checked_at = Column(DateTime(timezone=True), nullable=True)
+    check_ok = Column(Boolean, nullable=True)
+    check_message = Column(Text, nullable=True)
+
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ScanSubnet(Base):
+    """Подсеть для сетевого сканирования и её назначение (этап 24)."""
+    __tablename__ = "scan_subnets"
+    __table_args__ = (
+        UniqueConstraint("cidr", name="uq_scan_subnets_cidr"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cidr = Column(Text, nullable=False)
+    purpose = Column(Text, nullable=False, server_default="mixed")
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    scan = Column(Boolean, nullable=False, server_default="true")
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

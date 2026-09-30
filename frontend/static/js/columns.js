@@ -157,7 +157,9 @@ export const ENTITY_LABELS = {
     choices: "Справочник",
     field_defs: "Поле",
     column_styles: "Оформление",
-    users: "Пользователь"
+    users: "Пользователь",
+    scan_sources: "Подключение",
+    scan_subnets: "Подсеть"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -173,7 +175,20 @@ export const SIMPLE_FIELD_LABELS = {
     deleted: "Удалено",
     login: "Логин",
     full_name: "ФИО",
-    position: "Должность"
+    position: "Должность",
+    // Сканирование (этап 24)
+    enabled: "Включён",
+    url: "Адрес сервера",
+    domain: "Домен XMPP",
+    user_token: "Токен пользователя",
+    app_token: "Токен приложения",
+    verify_tls: "Проверять сертификат",
+    fresh_days: "Актуальны, дней",
+    cidr: "Подсеть",
+    purpose: "Назначение",
+    building: "Адрес",
+    scan: "Сканировать",
+    note: "Примечание"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

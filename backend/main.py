@@ -21,6 +21,7 @@ from api_field_defs import router as field_defs_router
 from api_column_styles import router as column_styles_router
 from api_columns import router as columns_router
 from api_users import router as users_router
+from api_scan import router as scan_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
 
@@ -131,6 +132,9 @@ app.include_router(
 
 # Пользователи — только администратор (require_admin в каждом эндпоинте)
 app.include_router(users_router)
+
+# Сканирование: подключения к источникам, подсети — только администратор
+app.include_router(scan_router)
 
 @app.get("/api/health")
 def health():

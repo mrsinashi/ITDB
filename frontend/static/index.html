@@ -15,8 +15,14 @@
             <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">Дерево</a>
             <a href="#" @click.prevent="setView('history')" :class="{ active: view === 'history' }">История</a>
             <a href="#" @click.prevent="setView('choices')" :class="{ active: view === 'choices' }">Справочники</a>
-            <a v-if="isAdmin" href="#" @click.prevent="setView('users')" :class="{ active: view === 'users' }">Пользователи</a>
             <span class="menu-right">
+                <!-- Сканирование и Пользователи — вкладки-значки у настроек (только администратор) -->
+                <a v-if="isAdmin" href="#" class="nav-icon nav-tab" @click.prevent="setView('scan')" :class="{ active: view === 'scan' }" title="Сканирование: подключения к источникам, подсети">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/></svg>
+                </a>
+                <a v-if="isAdmin" href="#" class="nav-icon nav-tab" @click.prevent="setView('users')" :class="{ active: view === 'users' }" title="Пользователи системы">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </a>
                 <span class="dropdown-wrap nav-pop" ref="settingsWrap">
                     <a href="#" class="nav-icon" :class="{ open: openMenu === 'settings' }" @click.prevent="toggleMenu('settings')" title="Настройки">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -386,6 +392,15 @@
                             </template>
                         </span>
                     </div>
+                    <!-- «Добавить» — и справа от шапки таблицы (то же, что на панели) -->
+                    <div v-if="canEdit" class="side-add">
+                        <span class="dropdown-wrap" ref="treeAddSideWrap">
+                            <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'treeAddSide', active: treeForm && treeForm.top }" @click="toggleMenu('treeAddSide')" title="Добавить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="caret">▼</span></button>
+                            <div v-if="openMenu === 'treeAddSide'" class="dropdown attached">
+                                <button v-for="k in ['building', 'department', 'floor', 'room']" :key="k" @click="closeMenus(); openAddForm(null, k)">{{ kindLabel(k) }}</button>
+                            </div>
+                        </span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -684,6 +699,171 @@
                             </template>
                         </span>
                     </div>
+                    <div class="side-add">
+                        <button class="btn icon-only" :class="{ active: userBar && userBar.kind === 'new' }" @click="openNewUser" title="Новый пользователь"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= Сканирование (только администратор, этап 24) ================= -->
+        <section v-if="user && isAdmin && view === 'scan'" class="view">
+            <div class="toolbar">
+                <div class="tb-left">
+                    <span class="tb-count">{{ scanCountText }}</span>
+                    <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
+                </div>
+                <div class="tb-right">
+                    <button class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
+                    <span class="tb-divider"></span>
+                    <span class="dropdown-wrap" ref="pageSetWrap">
+                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                        <div v-if="openMenu === 'page'" class="dropdown right attached">
+                            <label><input type="checkbox" :checked="accentHeaders.scan" @change="toggleAccentHeader('scan')"> Акцентная шапка</label>
+                        </div>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Новая подсеть / изменить — строкой под панелью -->
+            <div v-if="subnetBar" class="add-bar subnet-bar" @keydown.enter="submitSubnetBar">
+                <span v-if="subnetBar.kind === 'new'" class="ab-title">Новая подсеть:</span>
+                <span v-else class="ab-title">Изменить {{ subnetBar.was }}:</span>
+                <input ref="sb-cidr" class="input ab-cidr" v-model="subnetBar.cidr" placeholder="192.168.89.0/24" spellcheck="false" autocomplete="off"
+                    title="Подсеть: адрес и маска, например 192.168.89.0/24. Без маски — /24">
+                <select class="input ab-purpose" v-model="subnetBar.purpose" title="Что в этой подсети: от этого зависит, что сканер ждёт по адресам">
+                    <option v-for="p in scanPurposeOptions" :key="p.key" :value="p.key">{{ p.label }}</option>
+                </select>
+                <select class="input ab-building" v-model="subnetBar.location_id" title="Адрес (здание), если подсеть только там">
+                    <option value="">Адрес: любой</option>
+                    <option v-for="b in scanBuildings" :key="b.id" :value="b.id">{{ b.name }}</option>
+                </select>
+                <label class="ab-check" title="Сканировать эту подсеть"><input type="checkbox" v-model="subnetBar.scan"> Сканировать</label>
+                <input ref="sb-note" class="input ab-note" v-model="subnetBar.note" placeholder="Примечание" autocomplete="off">
+                <button class="btn btn-primary icon-only" :disabled="subnetBar.saving" @click="submitSubnetBar" :title="subnetBar.kind === 'new' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn icon-only" @click="subnetBar = null" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <span v-if="subnetBar.error" class="ab-error">{{ subnetBar.error }}</span>
+            </div>
+
+            <div class="page scan-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <div v-if="!scanKeyReady" class="scan-warn">
+                    Пароли пока некуда сохранить: в файле <b>.env</b> нет ключа шифрования <b>ITDB_SECRET_KEY</b>.
+                    Из корня проекта выполни команду ниже и перезапусти программу (в боевой копии ключ добавляет <b>deploy/update.sh</b>):
+                    <code>echo "ITDB_SECRET_KEY=$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" &gt;&gt; .env</code>
+                </div>
+
+                <div class="scan-caption">Подключения<span class="scan-sub">откуда брать данные о компьютерах и пользователях; пароли хранятся зашифрованными</span></div>
+                <div class="scan-sources">
+                    <template v-for="s in scanSources" :key="s.kind">
+                        <div v-if="scanForms[s.kind]" class="st-block scan-src" @keydown.enter="saveScanSource(s.kind)">
+                            <div class="st-head">
+                                <span class="st-title">{{ s.title }}</span>
+                                <span class="st-tag scan-tag" :class="scanTag(s.kind).cls">{{ scanTag(s.kind).text }}</span>
+                                <label class="scan-on" :title="s.kind === 'jabber' ? 'Брать из Jabber, кто в VACUUM и с какого IP' : 'Брать данные о компьютерах из ' + s.title">
+                                    <input type="checkbox" v-model="scanForms[s.kind].enabled"> Включён
+                                </label>
+                            </div>
+                            <table class="scan-form">
+                                <tr>
+                                    <td class="sf-label">{{ s.kind === 'jabber' ? 'Веб-админка' : 'Адрес' }}</td>
+                                    <td><input class="input" v-model="scanForms[s.kind].url" spellcheck="false" autocomplete="off"
+                                        :placeholder="s.kind === 'jabber' ? 'http://jabber.lan:5280' : 'https://glpi.lan'"
+                                        :title="s.kind === 'jabber' ? 'Адрес веб-админки ejabberd. Можно вставить адрес любой её страницы — домен возьмётся из него' : 'Адрес ' + s.title + ', как в браузере (можно и …/apirest.php)'"></td>
+                                </tr>
+                                <tr v-if="s.kind === 'jabber'">
+                                    <td class="sf-label">Домен XMPP</td>
+                                    <td><input class="input" v-model="scanForms[s.kind].domain" spellcheck="false" autocomplete="off" placeholder="jabber.lan"
+                                        title="Домен сервера Jabber (часть логина после @). Пусто — имя из адреса"></td>
+                                </tr>
+                                <tr>
+                                    <td class="sf-label">Логин</td>
+                                    <td><input class="input" v-model="scanForms[s.kind].login" spellcheck="false" autocomplete="off"
+                                        :placeholder="s.kind === 'jabber' ? 'admin@jabber.lan' : 'itdb'"
+                                        :title="s.kind === 'jabber' ? 'Администратор Jabber; без @ — допишется домен' : 'Пользователь ' + s.title + ', лучше отдельный и только для чтения'"></td>
+                                </tr>
+                                <tr v-for="name in (s.kind === 'jabber' ? ['password'] : ['password', 'user_token', 'app_token'])" :key="name">
+                                    <td class="sf-label">{{ name === 'password' ? 'Пароль' : (name === 'user_token' ? 'Токен польз.' : 'Токен прилож.') }}</td>
+                                    <td><div class="sf-secret">
+                                        <input class="input" :type="scanForms[s.kind].show ? 'text' : 'password'" v-model="scanForms[s.kind][name]" spellcheck="false" autocomplete="new-password"
+                                            :placeholder="scanSecretPlaceholder(s.kind, name, name === 'password' ? '' : 'не нужен')"
+                                            :title="name === 'user_token' ? 'Токен API пользователя GLPI: если задан, вход по нему, логин и пароль не нужны' : (name === 'app_token' ? 'App-Token клиента API — если GLPI его требует' : 'Пароль (хранится зашифрованным)')"
+                                            @input="scanForms[s.kind].clear[name] = false">
+                                        <span v-if="s.secrets[name]" class="sf-clear" :class="{ on: scanForms[s.kind].clear[name] }"
+                                            :title="scanForms[s.kind].clear[name] ? 'Не удалять' : 'Удалить сохранённый при сохранении'" @click="toggleSecretClear(s.kind, name)">✕</span>
+                                        <span v-if="name === 'password'" class="sf-eye" :class="{ on: scanForms[s.kind].show }" :title="scanForms[s.kind].show ? 'Скрыть' : 'Показать введённое'" @click="scanForms[s.kind].show = !scanForms[s.kind].show">
+                                            <svg v-if="scanForms[s.kind].show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+                                        </span>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td class="sf-label">Сертификат</td>
+                                    <td><label class="sf-check" title="Проверять сертификат https-сервера. Снимать, только если у сервера самоподписанный сертификат"><input type="checkbox" v-model="scanForms[s.kind].verify_tls"> проверять (для https)</label></td>
+                                </tr>
+                                <tr v-if="s.fresh_days !== null">
+                                    <td class="sf-label">Актуальны</td>
+                                    <td><label class="sf-check" :title="'Записи о ПК, которые ' + s.title + ' не проверял дольше, считаются устаревшими и не берутся'">не старше <input class="input sf-days" type="number" min="1" max="60" v-model.number="scanForms[s.kind].fresh_days"> дн.</label></td>
+                                </tr>
+                            </table>
+                            <div v-if="scanStatus(s.kind)" class="scan-status" :class="{ bad: !scanStatus(s.kind).ok }">
+                                <span class="ss-time">{{ formatTime(scanStatus(s.kind).at) }}<template v-if="scanStatus(s.kind).unsaved"> · несохранённые данные</template></span>
+                                <span class="ss-text">{{ scanStatus(s.kind).text }}</span>
+                            </div>
+                            <div v-if="scanForms[s.kind].error" class="scan-status bad"><span class="ss-text">{{ scanForms[s.kind].error }}</span></div>
+                            <div class="scan-buttons">
+                                <button class="btn" :disabled="scanForms[s.kind].checking" @click="checkScanSource(s.kind)"
+                                    :title="scanDirty(s.kind) ? 'Проверить подключение с тем, что сейчас в форме (без сохранения)' : 'Проверить подключение: войти в ' + s.title + ' с сохранёнными данными'">{{ scanForms[s.kind].checking ? "Проверяю…" : "Проверить" }}</button>
+                                <span class="sb-gap"></span>
+                                <button v-if="scanDirty(s.kind)" class="btn" @click="resetScanForm(s.kind)" title="Вернуть сохранённые значения">Отменить</button>
+                                <button class="btn btn-primary" :disabled="!scanDirty(s.kind) || scanForms[s.kind].saving" @click="saveScanSource(s.kind)">Сохранить</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="scan-caption">Подсети<span class="scan-sub">что сканировать по сети и что там ожидать; вложенные подсети можно — действует самая узкая</span></div>
+                <div class="users-wrap subnets-wrap" @mouseleave="subnetHover = null">
+                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
+                        <div class="history-scroll" @scroll="subnetHover = null">
+                            <table class="history-table users-table subnets-table" :class="{ 'accent-head': accentHeaders.scan }">
+                                <thead>
+                                    <tr><th>Подсеть</th><th>Назначение</th><th>Адрес</th><th class="sn-c">Сканировать</th><th class="sn-c" title="ПК из базы, у которых IP в этой подсети">ПК</th><th>Примечание</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="!scanSubnets.length" class="h-empty"><td colspan="6">Подсетей пока нет — добавь значком «Новая подсеть» на панели или из подсказки ниже.</td></tr>
+                                    <tr v-for="sn in scanSubnets" :key="sn.id" :class="{ 'is-hover': subnetHover && subnetHover.id === sn.id }"
+                                        @mouseenter="setSubnetHover(sn, $event.currentTarget)" @dblclick="openEditSubnet(sn)">
+                                        <td class="sn-cidr" :title="subnetSizeText(sn)">{{ sn.cidr }}</td>
+                                        <td>{{ purposeName(sn.purpose) }}</td>
+                                        <td>{{ buildingName(sn.location_id) }}</td>
+                                        <td class="sn-c" :class="{ 'sn-off': !sn.scan }">{{ sn.scan ? "да" : "нет" }}</td>
+                                        <td class="sn-c sn-n">{{ sn.computers || "" }}</td>
+                                        <td class="sn-note">{{ sn.note || "" }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="subnetHover" class="tree-actions" :style="{ top: subnetHover.top + 'px', height: subnetHover.height + 'px' }">
+                        <span class="na-box">
+                            <span class="icon-btn" title="Изменить (или двойной клик по строке)" @click="openEditSubnet(subnetHover.subnet)">✎</span>
+                            <span class="na-sep"></span>
+                            <span v-if="subnetHover.subnet.scan" class="icon-btn" title="Не сканировать эту подсеть" @click="setSubnetScan(subnetHover.subnet, false)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span>
+                            <span v-else class="icon-btn" title="Сканировать эту подсеть" @click="setSubnetScan(subnetHover.subnet, true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                            <span class="na-sep"></span>
+                            <span class="icon-btn danger" title="Удалить подсеть" @click="deleteSubnet(subnetHover.subnet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+                        </span>
+                    </div>
+                    <div class="side-add">
+                        <button class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
+                    </div>
+                </div>
+                <div v-if="scanUncovered.length" class="scan-uncovered">
+                    <span class="su-title">IP из базы вне этих подсетей:</span>
+                    <button v-for="u in scanUncovered" :key="u.cidr" class="su-chip" @click="openNewSubnet(u.cidr)" :title="'Добавить подсеть ' + u.cidr + ' (ПК из базы: ' + u.computers + ')'">
+                        {{ u.cidr }}<span class="su-n">{{ u.computers }}</span>
+                    </button>
+                    <button class="btn" @click="addUncoveredSubnets" title="Добавить все эти подсети /24 с назначением «Всё подряд»">Добавить все ({{ scanUncovered.length }})</button>
                 </div>
             </div>
         </section>

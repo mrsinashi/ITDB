@@ -117,7 +117,7 @@ def me_out(db_user, user):
 
 # Допустимые личные настройки интерфейса
 THEMES = {"red", "green", "blue", "graphite", "teal"}
-ACCENT_PAGES = {"tree", "history", "choices", "users"}
+ACCENT_PAGES = {"tree", "history", "choices", "users", "scan"}
 
 
 @router.get("/me")

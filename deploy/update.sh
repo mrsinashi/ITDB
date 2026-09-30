@@ -12,6 +12,13 @@ git pull --ff-only
 echo "== Библиотеки"
 .venv/bin/pip install -q -r requirements.txt
 
+# Ключ шифрования паролей подключений (этап 24) — создаётся один раз.
+# Его нельзя терять и менять: без него сохранённые пароли не прочитать.
+if ! grep -q '^ITDB_SECRET_KEY=' .env; then
+    echo "== Ключ шифрования паролей → .env"
+    echo "ITDB_SECRET_KEY=$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> .env
+fi
+
 echo "== Миграции базы"
 .venv/bin/alembic upgrade head
 

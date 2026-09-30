@@ -12,6 +12,9 @@ from models import Computer, History, Location
 
 router = APIRouter(prefix="/api", tags=["history"])
 
+# Записи только для администратора: пользователи системы, настройки сканирования
+ADMIN_ENTITIES = ("users", "scan_sources", "scan_subnets")
+
 
 HISTORY_PAGE_MAX = 5000
 
@@ -53,7 +56,7 @@ def history(
     filters = []
 
     if me["role"] != "admin":
-        filters.append(History.entity != "users")
+        filters.append(History.entity.notin_(ADMIN_ENTITIES))
 
     if user:
         filters.append(History.user_name == user)
@@ -154,6 +157,9 @@ def history(
             title = location_name_by_id.get(item.entity_id)
         elif item.entity in SIMPLE:
             title = simple_titles.get(Ref(item.entity, item.entity_id, item.entity_key)) or item.title
+        else:
+            # Настройки сканирования: название на момент записи
+            title = item.title
 
         result.append(
             {
@@ -187,7 +193,7 @@ def history_of_value(
     session=Depends(get_db),
 ):
     """Все изменения одного поля объекта (и отменённые) — окно «История значения»."""
-    if entity == "users" and me["role"] != "admin":
+    if entity in ADMIN_ENTITIES and me["role"] != "admin":
         raise HTTPException(status_code=403, detail="Это доступно только администратору.")
 
     return value_history(session, Ref(entity, entity_id, entity_key), field)
