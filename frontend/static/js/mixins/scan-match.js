@@ -12,8 +12,19 @@ import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
 const POLL_MS = 1500;
 const COLLECT_KINDS = ["glpi", "gsit"];
 const KEY_LABELS = { id: "GLPI ID", mac: "MAC", serial: "серийному" };
-// Поля записи рядом с ПК ITDB — подписи как в шапке таблицы
-const COMPARE_FIELDS = ["hostname", "ip", "mac", "serial", "model", "os", "cpu", "ram", "drive", "gpu", "vnc"];
+// Поля, у которых названия сопоставляются по смыслу и словарю (этап 25б)
+const NAME_FIELDS = ["model", "os", "cpu", "gpu", "vnc", "drive"];
+const MARK_TITLES = {
+    "=": "Совпадает",
+    "≈": "В таблице записана часть того, что видит источник",
+    "≠": "Отличается"
+};
+const HOW_TITLES = {
+    manual: "так названо вручную (вкладка «Названия»)",
+    learned: "так это названо у других ПК в таблице",
+    table: "так это называется в Справочнике или в таблице",
+    same: "одно и то же, названо по-разному"
+};
 export const MATCH_FILTERS = [
     { key: "all", label: "Все", title: "Все записи последнего сбора" },
     { key: "matched", label: "Сопоставлены", title: "Сопоставлены с ПК по признаку (GLPI ID, MAC, серийный) или вручную" },
@@ -45,13 +56,6 @@ function durationText(run) {
     }
     const s = Math.max(0, Math.round((new Date(run.finished_at) - new Date(run.started_at)) / 1000));
     return s < 60 ? s + " с" : Math.floor(s / 60) + " мин " + (s % 60) + " с";
-}
-
-function sameValue(a, b) {
-    const norm = function (v) {
-        return String(v || "").split("\n").map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean).sort().join("\n");
-    };
-    return norm(a) === norm(b);
 }
 
 export default {
@@ -108,7 +112,19 @@ export default {
             return counts;
         },
 
+        scanNamesShown() {
+            const words = searchWords(this.scanMatchQuery);
+            return this.scanNames.items.filter((n) => {
+                return !words.length || matchesAllWords(searchNorm([this.scanFieldLabel(n.field), n.source, n.table].join(" ")), words);
+            });
+        },
+
         scanMatchCountText() {
+            if (this.scanTab === "names") {
+                const all = this.scanNames.items.length;
+                const shown = this.scanNamesShown.length;
+                return shown === all ? "Соответствий: " + all : "Показано: " + shown + " из " + all;
+            }
             const all = this.scanMatchCounts.all;
             const shown = this.scanMatchRecords.length;
             return shown === all ? "Записей: " + all : "Показано: " + shown + " из " + all;
@@ -140,6 +156,9 @@ export default {
         setScanTab(tab) {
             this.scanTab = tab;
             this.scanLinkBar = null;
+            if (tab === "names") {
+                this.loadScanNames();
+            }
             if (tab === "match") {
                 if (!this.scanMatchSources.some((s) => s.kind === this.scanMatch.source) && this.scanMatchSources.length) {
                     this.scanMatch.source = this.scanMatchSources[0].kind;
@@ -394,22 +413,102 @@ export default {
             this.scanMatch.hover = null;
         },
 
-        // Строки «поле | источник | ITDB» для раскрытой записи
+        // Строки «поле | источник | ITDB» для раскрытой записи. Сравнивает сервер
+        // (scan_values.py): значение источника — уже в названиях таблицы, raw — как в источнике
         scanCompareRows(r) {
-            const computer = this.scanRecordHosts(r)[0] || null;
-            return COMPARE_FIELDS.map((field) => {
-                const col = this.builtinColumns.find(function (c) { return c.field === field; });
-                const mine = r.values[field] || "";
-                const theirs = computer ? (computer.values[field] || "") : "";
-                return {
-                    field: field,
-                    label: col ? col.headerName : field,
-                    source: mine,
-                    itdb: theirs,
-                    // Сравнивается, только когда значение есть и там, и там
-                    mark: !mine || !theirs ? "" : (sameValue(mine, theirs) ? "=" : "≠")
-                };
+            const title = this.scanMatchTitle;
+            return (r.compare || []).map((c) => {
+                const col = this.builtinColumns.find(function (x) { return x.field === c.field; });
+                const single = !String(c.raw || "").includes("\n") && !String(c.itdb || "").includes("\n");
+                const renamed = c.raw && c.source !== c.raw;
+                const hows = (c.how || "").split(",").filter(Boolean).map(function (h) { return HOW_TITLES[h]; });
+                return Object.assign({}, c, {
+                    label: col ? col.headerName : c.field,
+                    rawText: renamed ? "в " + title + ": " + c.raw.split("\n").join(", ") : "",
+                    markTitle: (MARK_TITLES[c.mark] || "") + (hows.length ? " — " + hows.join("; ") : ""),
+                    // «Одно и то же» — отличается, но это одно значение, названное иначе
+                    canSame: NAME_FIELDS.includes(c.field) && single && c.mark === "≠",
+                    // «Это разное» — сочтено одинаковым, хотя написано иначе
+                    canDiffer: NAME_FIELDS.includes(c.field) && single && c.mark === "=" && c.raw.toLowerCase() !== c.itdb.toLowerCase()
+                });
             });
+        },
+
+        async scanSetName(c, kind) {
+            try {
+                const response = await apiFetch("/api/scan/names", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ field: c.field, source: c.raw, table: c.itdb, kind: kind })
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                this.toast(c.label + ": «" + c.raw + "» — " + (kind === "same" ? "то же, что «" : "не то же, что «") + c.itdb + "»", "success");
+                await this.loadScanRecords();
+            } catch (e) {
+                this.toastError(e.message || e);
+            }
+        },
+
+        // ---------- Вкладка «Названия» ----------
+
+        async loadScanNames() {
+            this.scanNames.loading = true;
+            this.scanNames.error = "";
+            try {
+                const response = await apiFetch("/api/scan/names");
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                this.scanNames.items = await response.json();
+            } catch (e) {
+                this.scanNames.error = "Не удалось загрузить названия: " + (e.message || e);
+            } finally {
+                this.scanNames.loading = false;
+            }
+        },
+
+        scanFieldLabel(field) {
+            const col = this.builtinColumns.find(function (x) { return x.field === field; });
+            return col ? col.headerName : field;
+        },
+
+        scanNameOrigin(n) {
+            if (n.origin === "learned") {
+                return "по таблице · " + n.count + " ПК";
+            }
+            return "вручную · " + (n.user_name || "") + " · " + this.formatTime(n.at);
+        },
+
+        async deleteScanName(n) {
+            this.scanNames.hover = null;
+            try {
+                const response = await apiFetch("/api/scan/names/" + n.id, { method: "DELETE" });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                this.toast(this.scanFieldLabel(n.field) + ": соответствие «" + n.source + "» удалено", "success");
+                await this.loadScanNames();
+            } catch (e) {
+                this.toastError(e.message || e);
+            }
+        },
+
+        async differScanName(n) {
+            this.scanNames.hover = null;
+            await this.scanSetName({ field: n.field, raw: n.source, itdb: n.table, label: this.scanFieldLabel(n.field) }, "differ");
+            await this.loadScanNames();
+        },
+
+        setScanNameHover(n, rowEl) {
+            const wrap = rowEl.closest(".users-wrap");
+            if (!wrap) {
+                return;
+            }
+            const w = wrap.getBoundingClientRect();
+            const rect = rowEl.getBoundingClientRect();
+            this.scanNames.hover = { name: n, top: rect.top - w.top, height: rect.height };
         },
 
         scanAntivirusText(a) {

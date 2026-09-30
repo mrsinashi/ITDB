@@ -320,3 +320,23 @@ class ScanLink(Base):
     title = Column(Text, nullable=True)    # имя записи на момент решения
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ScanAlias(Base):
+    """Соответствие названий (этап 25б): значение источника source в поле field —
+    то же, что table_value в таблице (kind same), или точно не то же (differ).
+    Ключи — без регистра и лишних пробелов (scan_values.key_of)."""
+    __tablename__ = "scan_aliases"
+    __table_args__ = (
+        UniqueConstraint("field", "source_key", "table_key", name="uq_scan_aliases"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    field = Column(Text, nullable=False)
+    source = Column(Text, nullable=False)
+    source_key = Column(Text, nullable=False)
+    table_value = Column(Text, nullable=False)
+    table_key = Column(Text, nullable=False)
+    kind = Column(Text, nullable=False, server_default="same")  # same / differ
+    user_name = Column(Text, nullable=True)
+    at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

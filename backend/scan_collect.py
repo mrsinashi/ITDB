@@ -10,15 +10,17 @@
 """
 import logging
 import threading
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 from api_scan import INTERRUPTED, SOURCES, connection_params, fresh_days_of, interrupted, load_source
 from db import SessionLocal
-from models import Computer, ScanLink, ScanRecord, ScanRun
+from models import Choice, Computer, ScanAlias, ScanLink, ScanRecord, ScanRun
 from scan_glpi import collect as glpi_collect
 from scan_http import SourceError
 from scan_match import drop_shared_keys, find_duplicates, match_all
 from scan_normalize import build
+from scan_values import COMPARE_FIELDS, MULTI_NAME_FIELDS, NAME_FIELDS, NUMBER_FIELDS, Names, lines_of
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -209,3 +211,68 @@ def match(session, kind, records=None):
         for l in links_of(session, kind)
     ]
     return match_all(records, computers_for_match(session), links, kind)
+
+
+# ---------- Названия (этап 25б) ----------
+
+
+def active_values(session):
+    """{id ПК: {поле: значение}} рабочих ПК — для сравнения с записями."""
+    columns = [getattr(Computer, field) for field in COMPARE_FIELDS]
+    rows = session.query(Computer.id, *columns).filter(Computer.archived == False)  # noqa: E712
+    return {row[0]: dict(zip(COMPARE_FIELDS, row[1:])) for row in rows}
+
+
+def load_names(session, computers=None):
+    """Словарь названий: ручные соответствия, значения столбцов и Справочников,
+    пары «источник — таблица» у сопоставленных ПК обоих источников."""
+    computers = computers if computers is not None else active_values(session)
+    aliases = [
+        {"field": a.field, "source": a.source, "table": a.table_value, "kind": a.kind}
+        for a in session.query(ScanAlias)
+    ]
+    fields = NAME_FIELDS + NUMBER_FIELDS
+    table_values = {field: Counter() for field in fields}
+
+    for values in computers.values():
+        for field in fields:
+            for line in (lines_of(values[field]) if field in MULTI_NAME_FIELDS else [values[field]]):
+                if line and str(line).strip():
+                    table_values[field][str(line).strip()] += 1
+
+    choices = defaultdict(list)
+
+    for field, value in session.query(Choice.field, Choice.value).filter(Choice.field.in_(fields)):
+        choices[field].append(value)
+
+    pairs = []
+
+    for kind in COLLECTORS:
+        matches, _ = match(session, kind)
+        records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
+
+        for source_id, item in matches.items():
+            if item["state"] not in ("key", "link") or item["computer_id"] not in computers:
+                continue
+
+            values = (records[source_id].data or {}).get("values") or {}
+            computer = computers[item["computer_id"]]
+
+            for field in fields:
+                if values.get(field) and computer.get(field):
+                    pairs.append((field, values[field], computer[field]))
+
+    return Names(aliases, table_values, choices, pairs)
+
+
+def compare_record(names, values, computer):
+    """Строки сравнения записи с ПК (или без ПК — как было бы названо)."""
+    result = []
+
+    for field in COMPARE_FIELDS:
+        item = names.compare(field, values.get(field), (computer or {}).get(field))
+        item["field"] = field
+        item["itdb"] = (computer or {}).get(field) or ""
+        result.append(item)
+
+    return result

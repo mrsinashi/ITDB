@@ -19,11 +19,12 @@ const ENTITY_FILTERS = {
     users: "Пользователи системы",
     scan_sources: "Сканирование: подключения",
     scan_subnets: "Сканирование: подсети",
-    scan_records: "Сканирование: сопоставление"
+    scan_records: "Сканирование: сопоставление",
+    scan_aliases: "Сканирование: названия"
 };
 // Только администратор видит эти записи; отмены у них нет (только просмотр)
-const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records"];
-const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_records"];
+const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases"];
+const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_records", "scan_aliases"];
 
 // Выделение в списке по клику: Ctrl — добавить/убрать, Shift — диапазон от
 // прошлой строки, Ctrl+Shift — добавить диапазон. single — обычный клик

@@ -7,7 +7,9 @@
   с ПК ITDB (считается сейчас, по текущим данным таблицы);
 - POST /api/scan/records/{kind}/{source_id}/link {computer_id} — «это этот ПК»;
 - POST /api/scan/records/{kind}/{source_id}/reject {computer_id} — «не этот ПК»;
-- DELETE /api/scan/records/{kind}/{source_id}/decisions — забыть решения.
+- DELETE /api/scan/records/{kind}/{source_id}/decisions — забыть решения;
+- GET /api/scan/names, POST /api/scan/names, DELETE /api/scan/names/{id} —
+  соответствия названий источника и таблицы (этап 25б, scan_values.py).
 
 Решения пишутся в Историю (видит администратор, отмены нет).
 """
@@ -23,8 +25,10 @@ from api_scan import SOURCES, RunOut, load_source, run_out
 from auth import require_admin
 from db import get_db
 from history_log import log_change
-from models import Computer, ScanLink, ScanRecord, ScanRun
+from api_columns import COLUMNS_BY_KEY
+from models import Computer, ScanAlias, ScanLink, ScanRecord, ScanRun
 from scan_glpi import api_base
+from scan_values import NAME_FIELDS, clean_text, key_of
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
@@ -103,6 +107,7 @@ class RecordOut(BaseModel):
     note: Optional[str]
     dup_of: Optional[int]
     decisions: list[Decision]
+    compare: list[dict]   # поле, значение источника в названиях таблицы, как в источнике, ITDB, = ≈ ≠
 
 
 class ComputerBrief(BaseModel):
@@ -184,11 +189,14 @@ def list_records(source: str, me=Depends(require_admin), session=Depends(get_db)
             for link in sorted(decisions.get(source_id, []), key=lambda l: l.at)
         ]
 
+    active = scan_collect.active_values(session)
+    names = scan_collect.load_names(session, active)
     result = []
 
     for record in records:
         item = matches.get(record.source_id) or {"state": "none", "computer_id": None, "candidates": [], "by": [], "note": None}
         data = record.data or {}
+        target = item["computer_id"] or (item["candidates"][0] if item["candidates"] else None)
         result.append(RecordOut(
             source_id=record.source_id,
             name=record.name,
@@ -203,6 +211,7 @@ def list_records(source: str, me=Depends(require_admin), session=Depends(get_db)
             note=item["note"],
             dup_of=record.dup_of,
             decisions=decisions_of(record.source_id),
+            compare=scan_collect.compare_record(names, data.get("values") or {}, active.get(target)),
         ))
 
     return RecordsOut(
@@ -327,5 +336,120 @@ def reset_record(kind: str, source_id: int, me=Depends(require_admin), session=D
         session.delete(link)
 
     log_decision(session, kind, record, me, {"reset": {"old": ", ".join(described), "new": None}})
+    session.commit()
+    return {"ok": True}
+
+
+# ---------- Названия: соответствия значений (этап 25б) ----------
+
+NAME_FIELD_KEYS = set(NAME_FIELDS)
+ALIAS_KINDS = {"same": "одно и то же", "differ": "разное"}
+
+
+class NameIn(BaseModel):
+    field: str
+    source: str
+    table: str
+    kind: str = "same"
+
+
+class NameOut(BaseModel):
+    id: Optional[int]
+    field: str
+    source: str
+    table: str
+    kind: str
+    origin: str            # manual — вручную, learned — по таблице
+    count: int = 0         # у скольких сопоставленных ПК так (learned)
+    user_name: Optional[str] = None
+    at: Optional[datetime] = None
+
+
+def field_title(field):
+    column = COLUMNS_BY_KEY.get(field)
+    return column.short if column else field
+
+
+@router.get("/names", response_model=list[NameOut])
+def list_names(me=Depends(require_admin), session=Depends(get_db)):
+    """Соответствия, заданные вручную, и выученные по таблице (как значения
+    источников уже названы у сопоставленных ПК)."""
+    result = [
+        NameOut(
+            id=a.id, field=a.field, source=a.source, table=a.table_value, kind=a.kind,
+            origin="manual", user_name=a.user_name, at=a.at,
+        )
+        for a in session.query(ScanAlias).order_by(ScanAlias.field, ScanAlias.source_key)
+    ]
+    names = scan_collect.load_names(session)
+
+    for (field, key), counter in sorted(names.learned.items()):
+        if (field, key) in names.same:
+            continue
+        table, count = counter.most_common(1)[0]
+        result.append(NameOut(
+            id=None, field=field, source=names.learned_source.get((field, key), key), table=table,
+            kind="same", origin="learned", count=count,
+        ))
+
+    order = {field: i for i, field in enumerate(NAME_FIELDS)}
+    result.sort(key=lambda n: (order.get(n.field, 99), n.origin != "manual", key_of(n.source)))
+    return result
+
+
+@router.post("/names")
+def add_name(payload: NameIn, me=Depends(require_admin), session=Depends(get_db)):
+    """«Одно и то же» (same) или «это разное» (differ) для значения источника и
+    значения таблицы. У одного значения источника «одно и то же» — одно."""
+    field = payload.field
+
+    if field not in NAME_FIELD_KEYS:
+        raise HTTPException(status_code=400, detail="Для этого поля соответствия не задаются.")
+
+    if payload.kind not in ALIAS_KINDS:
+        raise HTTPException(status_code=400, detail="Неизвестный вид соответствия.")
+
+    source, table = clean_text(payload.source), clean_text(payload.table)
+
+    if not source or not table:
+        raise HTTPException(status_code=400, detail="Нужны оба значения.")
+
+    if len(source) > 500 or len(table) > 500:
+        raise HTTPException(status_code=400, detail="Слишком длинное значение.")
+
+    source_key, table_key = key_of(source), key_of(table)
+    query = session.query(ScanAlias).filter(ScanAlias.field == field, ScanAlias.source_key == source_key)
+
+    # Новое решение по той же паре заменяет старое; «одно и то же» — одно на значение
+    for old in query:
+        if old.table_key == table_key or (payload.kind == "same" and old.kind == "same"):
+            session.delete(old)
+
+    session.flush()
+    session.add(ScanAlias(
+        field=field, source=source, source_key=source_key, table_value=table, table_key=table_key,
+        kind=payload.kind, user_name=me["login"],
+    ))
+    log_change(
+        session, "scan_aliases", 0, me["login"], {payload.kind: {"old": None, "new": table}},
+        title=f"{field_title(field)}: {source}", entity_key=field,
+    )
+    session.commit()
+    return {"ok": True}
+
+
+@router.delete("/names/{alias_id}")
+def delete_name(alias_id: int, me=Depends(require_admin), session=Depends(get_db)):
+    alias = session.get(ScanAlias, alias_id)
+
+    if alias is None:
+        raise HTTPException(status_code=404, detail="Соответствие не найдено.")
+
+    log_change(
+        session, "scan_aliases", 0, me["login"],
+        {"deleted": {"old": f"{ALIAS_KINDS[alias.kind]}: {alias.table_value}", "new": None}},
+        title=f"{field_title(alias.field)}: {alias.source}", entity_key=alias.field,
+    )
+    session.delete(alias)
     session.commit()
     return {"ok": True}

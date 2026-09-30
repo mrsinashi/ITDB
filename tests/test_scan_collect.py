@@ -406,3 +406,99 @@ def test_collect_errors_keep_old_records(admin, glpi_url):
     assert source["last_run"]["id"] == run["id"]
     runs = ok(admin.get("/api/scan/runs", params={"source": "glpi"}))
     assert [r["status"] for r in runs] == ["error", "error", "ok"]
+
+
+# ---------- Названия (этап 25б) ----------
+
+import scan_values as sv  # noqa: E402
+
+
+def test_same_by_meaning():
+    assert sv.same_line("os", "Win 10", "Windows 10")
+    assert not sv.same_line("os", "Win 10", "Windows 11")
+    assert sv.same_line("os", "Майкрософт Windows 10 Pro", "Windows 10")
+    assert sv.same_line("cpu", "Pentium J3710", "Intel Pentium J3710")
+    assert not sv.same_line("cpu", "i5-10400", "i5-10500")
+    assert sv.same_line("model", "Lenovo ThinkCentre M600", "M600")
+    assert not sv.same_line("model", "HP ProDesk 400 G7", "HP ProDesk 400 G6")
+    assert sv.same_line("vnc", "TightVNC", "Tight")
+    assert not sv.same_line("vnc", "UltraVNC", "Tight")
+    assert sv.same_line("drive", "SSD 256", "SSD 250")        # один диск: 256 ≈ 250
+    assert not sv.same_line("drive", "SSD 240", "SSD 250")    # разные диски
+    assert sv.same_line("drive", "HDD 500", "500")
+    assert sv.same_line("ram", "4", "4 ГБ")
+
+    names = sv.Names()
+    mac = names.compare("mac", "6C:4B:90:58:66:26\n00:19:D2:F8:32:89", "6c:4b:90:58:66:26")
+    assert mac["mark"] == "≈"                                  # в таблице записана часть
+    os_ = names.compare("os", "Win 10", "Windows 10")
+    assert (os_["source"], os_["raw"], os_["mark"]) == ("Windows 10", "Win 10", "=")
+    assert names.compare("hostname", "glaz-kdp3-3", "glaz-kdp3-1")["mark"] == "≠"
+    assert names.compare("vnc", "TightVNC", "")["mark"] == ""
+
+
+def test_names_learned_and_manual():
+    pairs = [
+        ("cpu", "Pentium J3710", "Intel Pentium J3710"),
+        ("cpu", "Pentium J3710", "Intel Pentium J3710"),
+        ("drive", "HDD 500", "HDD 500"),
+        ("drive", "HDD 500", "HDD 500"),
+        ("drive", "HDD 500", "500"),              # небрежно у одного — не учится
+    ]
+    names = sv.Names(
+        aliases=[{"field": "os", "source": "Win 10", "table": "Десятка", "kind": "same"},
+                 {"field": "model", "source": "HP 400", "table": "HP", "kind": "differ"}],
+        table_values={"model": {"M600": 5}},
+        choices={"gpu": ["GeForce GT 1030"]},
+        pairs=pairs,
+    )
+    assert names.canonical_line("cpu", "Pentium J3710") == ("Intel Pentium J3710", "learned")
+    assert names.canonical_line("drive", "HDD 500") == ("HDD 500", "")
+    assert names.canonical_line("os", "Win 10") == ("Десятка", "manual")
+    assert names.compare("os", "Win 10", "Десятка")["mark"] == "="
+    assert names.canonical_line("model", "Lenovo ThinkCentre M600") == ("M600", "table")
+    assert names.canonical_line("gpu", "GT 1030") == ("GeForce GT 1030", "table")
+    assert names.compare("model", "HP 400", "HP")["mark"] == "≠"          # «это разное»
+
+
+def test_names_api(admin, editor, room, glpi_url):
+    add_pc(editor, room["room"], "pc-1", mac="D8:BB:C1:00:00:01", os="Windows 10", cpu="Intel Pentium J3710", model="M600")
+    Glpi.computers = {
+        1: pc("pc-1", ports=[(ETH, "d8:bb:c1:00:00:01", [])], cpu="Intel(R) Pentium(R) CPU J3710 @ 1.60GHz",
+              maker="LENOVO", model="ThinkCentre M600"),
+        2: pc("pc-2", ports=[(ETH, "d8:bb:c1:00:00:02", [])], cpu="Intel(R) Pentium(R) CPU J3710 @ 1.60GHz"),
+    }
+    setup_source(admin, glpi_url)
+    collect(admin)
+    recs = records(admin)[1]
+    rows = {c["field"]: c for c in recs[1]["compare"]}
+    assert (rows["os"]["source"], rows["os"]["raw"], rows["os"]["mark"]) == ("Windows 10", "Win 10", "=")
+    assert (rows["cpu"]["source"], rows["cpu"]["mark"]) == ("Intel Pentium J3710", "=")
+    assert (rows["model"]["source"], rows["model"]["mark"]) == ("M600", "=")
+    # У другого ПК (нет в ITDB) — те же названия, как в таблице
+    other = {c["field"]: c for c in recs[2]["compare"]}
+    assert (other["cpu"]["source"], other["cpu"]["how"]) == ("Intel Pentium J3710", "learned")
+    assert other["os"]["source"] == "Windows 10"
+
+    learned = ok(admin.get("/api/scan/names"))
+    assert {(n["field"], n["source"], n["table"], n["origin"]) for n in learned} >= {
+        ("os", "Win 10", "Windows 10", "learned"), ("cpu", "Pentium J3710", "Intel Pentium J3710", "learned"),
+    }
+
+    # Вручную: «одно и то же» — главнее, «это разное» — не считать одинаковыми
+    ok(admin.post("/api/scan/names", json={"field": "os", "source": "Win 10", "table": "Win10 Pro"}))
+    ok(admin.post("/api/scan/names", json={"field": "cpu", "source": "Pentium J3710", "table": "Intel Pentium J3710", "kind": "differ"}))
+    recs = records(admin)[1]
+    rows = {c["field"]: c for c in recs[1]["compare"]}
+    assert rows["cpu"]["mark"] == "≠"
+    assert {c["field"]: c for c in recs[2]["compare"]}["os"]["source"] == "Win10 Pro"
+
+    manual = [n for n in ok(admin.get("/api/scan/names")) if n["origin"] == "manual"]
+    assert len(manual) == 2
+    assert admin.post("/api/scan/names", json={"field": "hostname", "source": "a", "table": "b"}).status_code == 400
+    assert editor.post("/api/scan/names", json={"field": "os", "source": "a", "table": "b"}).status_code == 403
+    for n in manual:
+        ok(admin.delete(f"/api/scan/names/{n['id']}"))
+    assert not [n for n in ok(admin.get("/api/scan/names")) if n["origin"] == "manual"]
+    items = ok(admin.get("/api/history", params={"entity": "scan_aliases"}))["items"]
+    assert len(items) == 4 and items[0]["title"].startswith(("OS: ", "CPU: "))

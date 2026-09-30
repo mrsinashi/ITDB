@@ -32,7 +32,7 @@ export default {
         },
 
         scanTopCountText() {
-            return this.scanTab === "match" ? this.scanMatchCountText : this.scanCountText;
+            return this.scanTab === "settings" ? this.scanCountText : this.scanMatchCountText;
         },
 
         async loadScanSources() {
@@ -50,8 +50,8 @@ export default {
                 data.sources.forEach((s) => { forms[s.kind] = this.scanFormFrom(s); });
                 this.scanForms = forms;
                 this.resumeScanRuns();
-                if (this.scanTab === "match") {
-                    this.setScanTab("match");
+                if (this.scanTab !== "settings") {
+                    this.setScanTab(this.scanTab);
                 }
             } catch (e) {
                 this.scanError = "Не удалось загрузить настройки: " + (e.message || e);

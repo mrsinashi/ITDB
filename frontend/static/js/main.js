@@ -162,7 +162,7 @@ const app = Vue.createApp({
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
             subnetHover: null,   // подсеть под курсором — плашка действий
             // Этап 25: вкладки страницы, сбор и сопоставление
-            scanTab: "settings", // settings — подключения и подсети, match — сопоставление
+            scanTab: "settings", // settings — подключения и подсети, match — сопоставление, names — названия
             scanRuns: {},        // kind → запуск сбора, за которым следим
             scanPollTimer: null,
             scanMatch: {
@@ -174,7 +174,8 @@ const app = Vue.createApp({
                 open: {},        // source_id → раскрыта подробность
                 hover: null      // запись под курсором — плашка действий
             },
-            scanMatchQuery: "",
+            scanMatchQuery: "",  // поиск на «Сопоставлении» и «Названиях»
+            scanNames: { items: [], loading: false, error: "", hover: null },
             scanLinkBar: null,   // «Привязать запись к ПК:» — строка под панелью
 
             // Карточка

@@ -3860,3 +3860,57 @@ body.login-page {
 .add-bar.scan-link-bar .ab-loc .input {
     width: 440px;
 }
+
+/* Названия (этап 25б): значение источника в названиях таблицы и как было */
+.sm-compare .smc-raw {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.sm-compare th.smc-act,
+.sm-compare td.smc-act {
+    border: none;
+    padding: 2px 4px;
+    background: #fff;
+}
+.smc-btn {
+    padding: 0 5px;
+    border: 1px solid var(--gray-line);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 11px;
+    line-height: 16px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.smc-btn:hover {
+    background: var(--row-hover-bg);
+    color: var(--text-strong);
+}
+.sm-intro {
+    max-width: 900px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-secondary);
+}
+.names-table td.nm-kind {
+    width: 1%;
+    color: var(--text-strong);
+}
+.names-table td.nm-kind.differ {
+    color: var(--danger);
+}
+.names-table td.nm-table {
+    font-weight: 600;
+}
+.names-table td.nm-origin {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.sm-table.names-table tbody tr:not(.sm-detail):not(.h-empty) {
+    cursor: default;
+}

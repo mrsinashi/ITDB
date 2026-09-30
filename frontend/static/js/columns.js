@@ -160,7 +160,8 @@ export const ENTITY_LABELS = {
     users: "Пользователь",
     scan_sources: "Подключение",
     scan_subnets: "Подсеть",
-    scan_records: "Запись"
+    scan_records: "Запись",
+    scan_aliases: "Название"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -193,7 +194,10 @@ export const SIMPLE_FIELD_LABELS = {
     // Сопоставление записей GLPI / GSIT с ПК (этап 25)
     link: "Это ПК",
     reject: "Не этот ПК",
-    reset: "Решения забыты"
+    reset: "Решения забыты",
+    // Соответствия названий (этап 25б)
+    same: "Одно и то же",
+    differ: "Разное"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

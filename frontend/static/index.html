@@ -711,19 +711,19 @@
             <div class="toolbar">
                 <div class="tb-left">
                     <span class="scan-tabs">
-                        <button class="btn" :class="{ active: scanTab === 'settings' }" @click="setScanTab('settings')" title="Подключения к GLPI, GSIT, Jabber и подсети">Подключения</button><button class="btn" :class="{ active: scanTab === 'match' }" @click="setScanTab('match')" title="Записи GLPI и GSIT с последнего сбора: с какими ПК они сопоставлены">Сопоставление</button>
+                        <button class="btn" :class="{ active: scanTab === 'settings' }" @click="setScanTab('settings')" title="Подключения к GLPI, GSIT, Jabber и подсети">Подключения</button><button class="btn" :class="{ active: scanTab === 'match' }" @click="setScanTab('match')" title="Записи GLPI и GSIT с последнего сбора: с какими ПК они сопоставлены">Сопоставление</button><button class="btn" :class="{ active: scanTab === 'names' }" @click="setScanTab('names')" title="Как значения GLPI и GSIT соответствуют названиям в таблице">Названия</button>
                     </span>
                     <span class="tb-count">{{ scanTopCountText() }}</span>
                     <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
                 </div>
-                <span v-if="scanTab === 'match'" class="tb-search">
-                    <input v-model="scanMatchQuery" placeholder="Поиск по записям: имя, IP, MAC, серийный, ПК" autocomplete="off"
+                <span v-if="scanTab !== 'settings'" class="tb-search">
+                    <input v-model="scanMatchQuery" :placeholder="scanTab === 'names' ? 'Поиск по названиям: поле, значение' : 'Поиск по записям: имя, IP, MAC, серийный, ПК'" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'scanMatchQuery')">
                     <span v-if="scanMatchQuery" class="clear" title="Очистить (Esc)" @click="scanMatchQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
                     <button v-if="scanTab === 'settings'" class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
-                    <button v-else class="btn icon-only" @click="loadScanRecords" title="Обновить: сопоставить заново с текущими данными таблицы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+                    <button v-else class="btn icon-only" @click="scanTab === 'names' ? loadScanNames() : loadScanRecords()" title="Обновить: сопоставить заново с текущими данными таблицы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -893,7 +893,7 @@
                 </div>
             </div>
 
-            <div v-else class="page scan-match-page" :class="{ 'accent-head': accentHeaders.scan }">
+            <div v-else-if="scanTab === 'match'" class="page scan-match-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <div v-if="!scanMatchSources.length" class="sm-empty">
                     Сбор ещё не настроен: на вкладке «Подключения» укажи адрес GLPI или GSIT, отметь «Включён», сохрани и нажми «Собрать».
                 </div>
@@ -948,12 +948,17 @@
                                                                 <th>{{ scanMatchTitle }} №{{ r.source_id }}</th>
                                                                 <th class="smc-mark"></th>
                                                                 <th :title="scanRecordHosts(r)[0] ? scanRecordHosts(r)[0].place || '' : ''">{{ scanRecordHosts(r)[0] ? "ITDB: " + (scanRecordHosts(r)[0].hostname || "без имени") : "ITDB: нет ПК" }}</th>
+                                                                <th class="smc-act"></th>
                                                             </tr>
                                                             <tr v-for="c in scanCompareRows(r)" :key="c.field">
                                                                 <td class="smc-label">{{ c.label }}</td>
-                                                                <td class="smc-v">{{ c.source }}</td>
-                                                                <td class="smc-mark" :title="c.mark === '≠' ? 'Отличается' : (c.mark ? 'Совпадает' : '')">{{ c.mark }}</td>
+                                                                <td class="smc-v">{{ c.source }}<span v-if="c.rawText" class="smc-raw">{{ c.rawText }}</span></td>
+                                                                <td class="smc-mark" :title="c.markTitle">{{ c.mark }}</td>
                                                                 <td class="smc-v">{{ c.itdb }}</td>
+                                                                <td class="smc-act">
+                                                                    <button v-if="c.canSame" class="smc-btn" @click.stop="scanSetName(c, 'same')" :title="'Запомнить: «' + c.raw + '» в ' + scanMatchTitle + ' — это «' + c.itdb + '» в таблице (для всех ПК)'">одно и то же</button>
+                                                                    <button v-if="c.canDiffer" class="smc-btn" @click.stop="scanSetName(c, 'differ')" :title="'Запомнить: «' + c.raw + '» в ' + scanMatchTitle + ' — не то же, что «' + c.itdb + '»'">это разное</button>
+                                                                </td>
                                                             </tr>
                                                         </table>
                                                         <div class="sm-lines">
@@ -988,6 +993,43 @@
                         </div>
                     </div>
                 </template>
+            </div>
+            <div v-else class="page scan-match-page scan-names-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <div class="sm-intro">
+                    Значения GLPI и GSIT сравниваются с таблицей по смыслу: «Win 10» и «Windows 10», «Pentium J3710» и «Intel Pentium J3710»,
+                    «Lenovo ThinkCentre M600» и «M600» — одно и то же. Главное — как записано у тебя: значение источника показывается так,
+                    как оно уже названо у сопоставленных ПК или в Справочнике. Здесь — эти соответствия; вручную их задаёт кнопка
+                    «одно и то же» в подробностях записи на вкладке «Сопоставление».
+                </div>
+                <div v-if="scanNames.error" class="sm-error">{{ scanNames.error }}</div>
+                <div class="users-wrap sm-wrap names-wrap" @mouseleave="scanNames.hover = null">
+                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
+                        <div class="history-scroll" @scroll="scanNames.hover = null">
+                            <table class="history-table users-table sm-table names-table" :class="{ 'accent-head': accentHeaders.scan }">
+                                <thead>
+                                    <tr><th>Поле</th><th>В GLPI / GSIT</th><th class="sm-c"></th><th>В таблице</th><th>Откуда</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="!scanNamesShown.length" class="h-empty"><td colspan="5">{{ scanNames.loading ? "Загрузка…" : (scanNames.items.length ? "Ничего не найдено." : "Соответствий пока нет: соберите данные и сопоставьте записи с ПК.") }}</td></tr>
+                                    <tr v-for="n in scanNamesShown" :key="n.field + '|' + n.source + '|' + n.table + '|' + n.kind"
+                                        :class="{ 'is-hover': scanNames.hover && scanNames.hover.name === n }" @mouseenter="setScanNameHover(n, $event.currentTarget)">
+                                        <td>{{ scanFieldLabel(n.field) }}</td>
+                                        <td>{{ n.source }}</td>
+                                        <td class="sm-c nm-kind" :class="{ differ: n.kind === 'differ' }" :title="n.kind === 'differ' ? 'Разное: не считать одним и тем же' : 'Одно и то же'">{{ n.kind === "differ" ? "≠" : "=" }}</td>
+                                        <td class="nm-table">{{ n.table }}</td>
+                                        <td class="nm-origin" :class="{ learned: n.origin === 'learned' }">{{ scanNameOrigin(n) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="scanNames.hover" class="tree-actions" :style="{ top: scanNames.hover.top + 'px', height: scanNames.hover.height + 'px' }">
+                        <span class="na-box">
+                            <span v-if="scanNames.hover.name.origin === 'manual'" class="icon-btn danger" title="Удалить это соответствие" @click="deleteScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+                            <span v-else class="icon-btn danger" title="Это разное: не считать одним и тем же" @click="differScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                        </span>
+                    </div>
+                </div>
             </div>
         </section>
 
