@@ -18,6 +18,7 @@
     --gray-line: #d8d8d8;           /* линии шапок и групп, рамки блоков */
     --group-line: #c8c8c8;          /* линии над и под строкой-группой (адрес в дереве) */
     --sm-detail-line: #a9a9a9;      /* нижняя линия раскрытых подробностей записи */
+    --sm-open-bg: #dcdcdc;          /* раскрытая строка «Проверки» */
     --row-hover-chip: #efd3ae;      /* блочок с числом в строке под курсором — в тон бежевой подсветки */
     --radius: 3px;                  /* единое скругление: как у кнопок и поиска на панели */
     --copy-ico: #b98a4e;            /* значок копирования — в тон бежевой подсветки строки */
@@ -3815,8 +3816,8 @@ body.login-page {
 /* Раскрытая запись — серая, пока открыта; под ней — заметный разделитель (этап 26в) */
 .history-table.sm-table tbody tr.sm-open td,
 .history-table.sm-table tbody tr.sm-open:hover td {
-    background: var(--gray-group);
-    border-right-color: var(--group-line);
+    background: var(--sm-open-bg);
+    border-right-color: #c4c4c4;
     border-bottom: 2px solid var(--sm-detail-line);
 }
 .history-table.sm-table tbody tr.sm-open td:last-child {
@@ -3924,11 +3925,6 @@ body.login-page {
 .history-table .sm-compare td.smc-mark.cycle:hover {
     background: var(--row-hover-bg);
 }
-/* Решение задано вручную — отметка подчёркнута */
-.history-table .sm-compare td.smc-mark.manual {
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
-}
 /* Не до низа подробностей — своя нижняя линия и скруглённый угол; до низа —
    нижней линии нет: её роль играет разделитель под подробностями */
 .history-table .sm-compare.short tr:last-child td:last-child {
@@ -4011,7 +4007,7 @@ body.login-page {
 }
 
 /* ============================================================
-   Режим «Расхождения» (этап 26)
+   Фильтры с кнопками (этап 26)
    ============================================================ */
 .sm-filters .sb-gap {
     flex: 1;
@@ -4021,82 +4017,29 @@ body.login-page {
     padding: 0 9px;
     font-size: 12px;
 }
-.diff-wrap {
-    min-width: 720px;
-}
-.diff-table td {
-    vertical-align: top;
-}
-.diff-table tr.h-day td .df-host {
-    color: var(--text-strong);
-    font-weight: 600;
-    text-decoration: none;
-}
-.diff-table tr.h-day td .df-host:hover {
-    text-decoration: underline;
-}
-.diff-table tr.h-day td .df-place {
-    margin-left: 10px;
-    font-weight: 400;
-    color: var(--text-secondary);
-}
-.diff-table td.df-field {
-    color: var(--text-strong);
-}
-.diff-table td.df-v {
-    white-space: pre-line;
-    font-variant-numeric: tabular-nums;
-}
-.diff-table td.df-new {
-    font-weight: 600;
-}
-.diff-table .df-raw,
-.diff-table .df-empty {
-    font-weight: 400;
-    color: var(--text-muted);
-}
-.diff-table td.df-src {
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-.diff-table th.df-c,
-.diff-table td.df-c {
-    width: 1%;
-    text-align: center;
-    padding-left: 10px;
-    padding-right: 10px;
-}
-.diff-table .df-pair {
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-.diff-table .df-pair:hover {
-    color: var(--text-strong);
-}
 .sm-intro b {
     font-weight: 600;
     color: var(--text-strong);
 }
 
 /* ============================================================
-   Пометки сканера и вкладка «Расхождения» (этап 26б)
+   Значения сканера (этапы 26б–26г)
    ============================================================ */
-/* Значение сканера — блочок со скруглением (этап 26в): в ячейке после значения
-   таблицы, в карточке ПК, в списке расхождений, в подсказке у кнопки. Цвет — по
-   ситуации из Справочников; по умолчанию фон с рамкой в тон */
+/* Значение сканера — блочок как значение с фоном в Справочниках: в ячейке под
+   значениями таблицы, в карточке ПК, в «Проверке», в подсказке у кнопки. Цвет —
+   по ситуации из Справочников */
 .scan-chip {
     display: inline-block;
     box-sizing: border-box;
     margin: 0;
-    padding: 0 6px;
-    border: 1px solid #d0d0d0;
-    border-radius: 8px;
-    background: #f3f3f3;
+    padding: 0 5px;
+    border: none;
+    border-radius: var(--radius);
+    background: #ececec;
     color: var(--text-strong);
     font: inherit;
-    font-size: 12px;
     font-weight: 400;
-    line-height: 15px;
+    line-height: 17px;
     white-space: pre-line;
     text-align: left;
     vertical-align: baseline;
@@ -4104,28 +4047,32 @@ body.login-page {
 button.scan-chip {
     cursor: pointer;
 }
+/* В ячейке Таблицы — под всеми значениями, по ширине текста (этап 26г) */
 .data-table td .scan-chip {
-    margin-left: 5px;
-    vertical-align: top;
+    display: block;
+    width: fit-content;
     max-width: 100%;
+    margin: 1px 0 0;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     position: relative;
     z-index: 2;
 }
-.data-table td .scan-chip:first-child,
-.data-table td span:empty + .scan-chip {
-    margin-left: 0;
+.data-table td.center .scan-chip {
+    margin-left: auto;
+    margin-right: auto;
 }
-.data-table td button.scan-chip:hover,
+.data-table td span:empty + .scan-chip {
+    margin-top: 0;
+}
+.data-table td button.scan-chip:hover {
+    filter: brightness(0.94);
+}
 .data-table td button.scan-chip.open {
-    box-shadow: 0 0 0 1px currentColor;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
 .scan-chip.off {
     opacity: 0.45;
-}
-.df-strike {
-    text-decoration: line-through;
 }
 
 /* Подсказка у включённой кнопки: что значат цвета */
@@ -4309,20 +4256,6 @@ button.scan-chip {
     height: auto;
     resize: vertical;
 }
-.diff-page .df-fields {
-    margin-top: -2px;
-}
-.diff-table td.df-table.df-can-edit {
-    cursor: text;
-}
-.diff-table td.df-table.df-editing {
-    padding: 0;
-}
-.diff-table .df-mark {
-    padding: 0 3px;
-    margin: 0 -3px;
-    border-radius: 2px;
-}
 .value-edit {
     display: block;
     width: 100%;
@@ -4339,56 +4272,43 @@ button.scan-chip {
     background: #fff;
     resize: vertical;
 }
-.diff-table .value-edit {
-    font-size: 13px;
-    padding: 3px 8px;
-}
-.diff-table td.df-src {
-    max-width: 340px;
-    white-space: normal;
-}
-.diff-table .df-from {
-    color: var(--text-strong);
-    margin-right: 6px;
-}
-.diff-table .df-trust + .df-trust::before,
-.diff-table .df-from + .df-trust::before {
-    content: "· ";
-}
-.diff-table .df-from + .df-trust::before {
-    content: "";
-}
-.diff-table .df-trust {
-    margin-right: 4px;
-}
-.diff-table .df-trust.bad {
-    color: var(--danger);
-}
-/* Что предлагает сканер — строкой под значением в карточке */
+/* Что предлагает сканер — под значением в карточке: блочок, источник серым и значки
+   ✓ ✕ в манере значка копирования (видны при наведении на строку), этап 26г */
 .card-table .ct-scan {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: 0 6px;
     margin-top: 2px;
     font-size: 12px;
-    line-height: 16px;
+    line-height: 17px;
     color: var(--text-secondary);
     white-space: normal;
 }
 .card-table .ct-scan .cs-unsure {
     color: var(--danger);
 }
-.card-table .ct-scan .cs-act {
-    color: var(--text-secondary);
-    text-decoration: underline dotted;
-    text-underline-offset: 2px;
+/* Значки действий ✓ ✕ — как значок копирования: 13px, цвет --copy-ico, при наведении */
+.act-ico {
+    display: inline-block;
+    flex: none;
+    width: 13px;
+    height: 13px;
+    color: var(--copy-ico);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.1s;
 }
-.card-table .ct-scan .cs-act:hover {
+.act-ico:hover {
     color: var(--text-strong);
 }
-.card-table .ct-scan .cs-act.cs-no:hover {
+.act-ico.act-no:hover {
     color: var(--danger);
+}
+.card-table tr:hover .act-ico,
+.cmp-prop:hover .act-ico,
+.history-table tr:hover > td .act-ico {
+    opacity: 1;
 }
 /* Значение сканера в подсказках — первым, с подписью источника */
 .sug-list .sug-scan-item .sug-value {
@@ -4470,4 +4390,153 @@ button.scan-chip {
     background: transparent;
     border: 2px solid #ccc;
     box-sizing: border-box;
+}
+
+/* ============================================================
+   «Сканирование» → «Проверка» (этап 26г)
+   ============================================================ */
+.ck-sources {
+    gap: 18px;
+}
+.ck-sources .ck-src {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.ck-sources .sm-run-time.bad {
+    color: var(--danger);
+}
+.ck-wrap {
+    min-width: 760px;
+}
+.ck-table tbody tr.ck-row {
+    cursor: pointer;
+    user-select: none;
+}
+.ck-table td.ck-pc {
+    white-space: nowrap;
+}
+.ck-table .ck-host {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.ck-table .ck-host.ck-noname {
+    font-weight: 400;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+.ck-table .ck-place {
+    margin-left: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.ck-table td.ck-src-cell,
+.ck-table th.ck-src-cell {
+    white-space: nowrap;
+}
+.ck-table .ck-id {
+    margin-right: 6px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+}
+.ck-table a.ck-id:hover {
+    color: var(--text-strong);
+    text-decoration: underline;
+}
+.ck-table td.ck-sum {
+    max-width: 420px;
+}
+.ck-table td.ck-sum.ck-muted {
+    color: var(--text-muted);
+}
+.ck-table td.ck-sum.ck-ask {
+    color: var(--text-strong);
+}
+.ck-table td.ck-sum.ck-bad {
+    color: var(--danger);
+}
+/* Выделенные строки — синий слой, как в Таблице и Истории */
+.history-table.ck-table tbody tr.row-selected > td {
+    background-image: linear-gradient(var(--row-sel-tint), var(--row-sel-tint));
+    border-right-color: var(--row-sel-line);
+}
+.history-table.ck-table tbody tr.row-selected:hover > td,
+.history-table.ck-table tbody tr.row-selected.is-hover > td {
+    background-image: linear-gradient(var(--row-sel-tint-hover), var(--row-sel-tint-hover));
+}
+/* Подробности: значение источника и отметка = ≈ ≠ справа в той же ячейке;
+   совпадающее с таблицей — серым, чтобы видно было только отличия */
+.ck-compare .ck-cmp-in {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.ck-compare .ck-cmp-v {
+    flex: 1;
+    min-width: 0;
+}
+.history-table .ck-compare td.ck-same .ck-cmp-v {
+    color: var(--text-muted);
+}
+.ck-compare .ck-mark {
+    flex: none;
+    min-width: 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.ck-compare .ck-mark.ne {
+    color: var(--danger);
+    font-weight: 600;
+}
+.ck-compare .ck-mark.cycle {
+    cursor: pointer;
+    border-radius: 2px;
+}
+.ck-compare .ck-mark.cycle:hover {
+    background: var(--row-hover-bg);
+}
+/* Решение задано вручную — отметка полужирная, цветом схемы */
+.ck-compare .ck-mark.manual {
+    color: var(--brand);
+    font-weight: 700;
+}
+.ck-compare td.cmp-prop {
+    min-width: 150px;
+}
+.ck-compare .ck-prop {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+}
+.ck-compare .ck-note {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.ck-compare .ck-note.bad {
+    color: var(--danger);
+}
+.ck-compare .ck-pair {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.ck-compare .ck-pair:hover {
+    color: var(--text-strong);
+}
+.sm-lines .ck-lines-head {
+    margin-top: 4px;
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.sm-lines .ck-lines-head:first-child {
+    margin-top: 0;
+}
+.sm-lines .ck-lines-time {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+.ck-plate-open {
+    display: none;
 }

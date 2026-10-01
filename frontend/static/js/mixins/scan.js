@@ -32,10 +32,10 @@ export default {
         },
 
         scanTopCountText() {
-            if (this.scanTab === "diffs") {
-                return this.diffCountText;
+            if (this.scanTab === "check") {
+                return this.checkCountText;
             }
-            return this.scanTab === "settings" ? this.scanCountText : this.scanMatchCountText;
+            return this.scanTab === "settings" ? this.scanCountText : this.scanNamesCountText;
         },
 
         async loadScanSources() {

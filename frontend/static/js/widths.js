@@ -62,20 +62,15 @@ export function cellOverhead() {
 // значок не должен наезжать на подпись и при наведении (этап 22)
 export const FILTER_ICON_SPACE = 14;
 
-// Блочок значения сканера после значения ячейки (этап 26в): отступ 5px, поля 6px
-// и рамка 1px с каждой стороны, шрифт 12px
-const CHIP_GAP = 5;
-const CHIP_PAD = 14;
+// Блочок значения сканера под значением ячейки (этап 26г): шрифт ячейки, поля 5px
+const CHIP_PAD = 10;
 
 function chipWidth(probe, text) {
-    const saved = probe.style.fontSize;
-    probe.style.fontSize = "12px";
     probe.style.fontWeight = "400";
     let max = 0;
     String(text).split("\n").forEach(function (line) {
         max = Math.max(max, measureTextWidth(line));
     });
-    probe.style.fontSize = saved;
     return max + CHIP_PAD;
 }
 
@@ -112,18 +107,16 @@ export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMa
                 return;
             }
             const fieldStyles = styleMap[col.field];
-            let last = 0;
             String(value).split("\n").forEach(function (line) {
                 const s = fieldStyles ? fieldStyles[styleKey(col.field, line)] : null;
                 probe.style.fontWeight = (colBold || (s && s.bold)) ? "700" : "400";
                 const w = measureTextWidth(line);
-                last = w;
                 if (w > max) {
                     max = w;
                 }
             });
             if (chip) {
-                max = Math.max(max, last + CHIP_GAP + chipWidth(probe, chip));
+                max = Math.max(max, chipWidth(probe, chip));
             }
         });
         let width = Math.ceil(max) + overhead + WIDTH_EXTRA;

@@ -92,6 +92,16 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
+    // «Проверка» (Сканирование): Ctrl+A — выделить все показанные строки, Esc — снять
+    if (vm.view === "scan" && vm.scanTab === "check" && !vm.card && !event.defaultPrevented && !isTypingTarget(document.activeElement)) {
+        if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyA") {
+            event.preventDefault();
+            vm.selectAllCheck();
+        } else if (event.key === "Escape" && vm.check.selected.length) {
+            vm.clearCheckSelection();
+        }
+        return;
+    }
     if (vm.view !== "table" || vm.card || event.defaultPrevented || isTypingTarget(document.activeElement)) {
         return;
     }

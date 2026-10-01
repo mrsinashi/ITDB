@@ -7,7 +7,7 @@
 // Отменённые по умолчанию скрыты и не считаются — глаз в шапке таблицы Истории.
 // Окно «История значения» — двойной клик по полю в записи (Истории и карточки).
 
-import { apiFetch } from "../util.js";
+import { apiFetch, clickSelect } from "../util.js";
 import { FIXED_HISTORY_FIELDS } from "../columns.js";
 
 const ENTITY_FILTERS = {
@@ -26,27 +26,6 @@ const ENTITY_FILTERS = {
 // Только администратор видит эти записи; отмены у них нет (только просмотр)
 const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases"];
 const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_marks"];
-
-// Выделение в списке по клику: Ctrl — добавить/убрать, Shift — диапазон от
-// прошлой строки, Ctrl+Shift — добавить диапазон. single — обычный клик
-// выбирает одну строку (в окне), иначе только запоминает её (как в таблице).
-function clickSelect(selected, ids, anchor, id, event, single) {
-    const ctrl = event.ctrlKey || event.metaKey;
-    const from = anchor === null ? -1 : ids.indexOf(anchor);
-    if (event.shiftKey && from !== -1) {
-        const to = ids.indexOf(id);
-        const range = ids.slice(Math.min(from, to), Math.max(from, to) + 1);
-        if (ctrl) {
-            return { selected: selected.concat(range.filter(function (x) { return selected.indexOf(x) === -1; })), anchor: anchor };
-        }
-        return { selected: range, anchor: anchor };
-    }
-    if (ctrl) {
-        const has = selected.indexOf(id) !== -1;
-        return { selected: has ? selected.filter(function (x) { return x !== id; }) : selected.concat([id]), anchor: id };
-    }
-    return { selected: single ? [id] : selected, anchor: id };
-}
 
 export default {
     computed: {

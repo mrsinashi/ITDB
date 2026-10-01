@@ -143,7 +143,7 @@ export default {
                     this.scanMatchQuery = "";
                     this.loadScan();
                 } else {
-                    this.setScanTab("diffs");   // редактору — только «Расхождения»
+                    this.setScanTab("check");   // редактору — только «Проверка»
                 }
             }
         },

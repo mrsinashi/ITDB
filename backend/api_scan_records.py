@@ -151,7 +151,9 @@ def computer_brief(computer, locations):
 
 
 @router.get("/records", response_model=RecordsOut)
-def list_records(source: str, me=Depends(require_admin), session=Depends(get_db)):
+def list_records(source: str, me=Depends(require_editor), session=Depends(get_db)):
+    """Записи последнего сбора и их сопоставление. Смотреть — редактор и
+    администратор (вкладка «Проверка», этап 26г); решать о сопоставлении — admin."""
     check_collect_kind(source)
     records = session.query(ScanRecord).filter(ScanRecord.source == source).order_by(ScanRecord.name, ScanRecord.source_id).all()
     matches, _ = scan_collect.match(session, source)

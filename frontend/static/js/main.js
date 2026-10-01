@@ -13,8 +13,9 @@
 //                        history-undo (отмена и возврат из Истории, фильтры Истории),
 //                        col-filters (фильтры по столбцам в шапке таблицы),
 //                        scan (Сканирование: подключения к источникам, подсети),
-//                        scan-match (сбор из GLPI / GSIT, вкладки «Сопоставление», «Названия»),
-//                        scan-diffs (пометки сканера в Таблице, вкладка «Расхождения»)
+//                        scan-match (сбор из GLPI / GSIT, вкладка «Названия», общее для записей),
+//                        scan-check (вкладка «Проверка»: сопоставление и предложения сканера),
+//                        scan-diffs (значения сканера в Таблице, решения по ним)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -40,6 +41,7 @@ import colFilters from "./mixins/col-filters.js";
 import scan from "./mixins/scan.js";
 import scanMatch from "./mixins/scan-match.js";
 import scanDiffs from "./mixins/scan-diffs.js";
+import scanCheck from "./mixins/scan-check.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -47,7 +49,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -164,27 +166,29 @@ const app = Vue.createApp({
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
             subnetHover: null,   // подсеть под курсором — плашка действий
             // Этап 25: вкладки страницы, сбор и сопоставление
-            scanTab: "settings", // settings — подключения и подсети, match — сопоставление, names — названия, diffs — расхождения
+            scanTab: "settings", // settings — подключения и подсети, check — проверка, names — названия
             scanRuns: {},        // kind → запуск сбора, за которым следим
             scanPollTimer: null,
-            scanMatch: {
-                source: "glpi",
-                data: null,      // ответ /api/scan/records
+            // Этап 26г: «Проверка» — записи GLPI и GSIT по ПК и предложения сканера
+            check: {
+                data: null,      // { glpi, gsit } — ответы /api/scan/records
                 loading: false,
                 error: "",
-                filter: "all",   // all / matched / name / conflict / none / dup
-                open: {},        // source_id → раскрыта подробность (одна)
-                openPlate: null, // плашка действий у раскрытой записи
-                hover: null      // запись под курсором — плашка действий
+                filter: "todo",  // todo / unknown / diff / ok / none / rejected / all
+                pair: null,      // «ещё у N ПК»: { field, table, raw }
+                open: null,      // ключ раскрытой строки (одна)
+                hover: null,     // строка под курсором — плашка действий
+                selected: [],    // ключи выделенных строк
+                anchor: null     // строка, от которой идёт Shift+клик
             },
-            scanMatchQuery: "",  // поиск на «Сопоставлении» и «Названиях»
+            scanMatchQuery: "",  // поиск на «Проверке» и «Названиях»
             scanNames: { items: [], loading: false, error: "", hover: null },
-            // Этап 26б: пометки сканера в Таблице (кнопка на панели) и вкладка «Расхождения»
+            // Этапы 26б–26г: значения сканера в Таблице (кнопка на панели)
             scanOverlay: false,
             scanLegend: false,   // подсказка «что значат цвета» у включённой кнопки
             scanPop: null,       // карточка действий у блочка значения сканера
             scanMarks: [],       // /api/scan/marks — вид пометок по ситуациям
-            valueEdit: null,     // правка значения ПК из списка расхождений / подробностей записи
+            valueEdit: null,     // правка значения ПК в подробностях «Проверки»
             diffs: {
                 items: [],          // /api/scan/diffs (и отклонённые — с rejected_by)
                 count: 0,           // расхождений без отклонённых — на кнопке
@@ -192,11 +196,6 @@ const app = Vue.createApp({
                 sources: [],
                 loading: false,
                 error: "",
-                field: "all",       // фильтр по полю
-                kind: "all",        // all / diff / fill / unsure
-                pair: null,         // «ещё у N ПК»: { field, table, raw }
-                showRejected: false,
-                hover: null
             },
             scanLinkBar: null,   // «Привязать запись к ПК:» — строка под панелью
 
@@ -245,7 +244,7 @@ const app = Vue.createApp({
             await this.$nextTick();
             this.snapNavUser();
             window.addEventListener("resize", () => this.snapNavUser());
-            window.addEventListener("resize", () => { this.scanFitCompare(); this.placeScanOpenPlate(); });
+            window.addEventListener("resize", () => { this.scanFitCompare(); this.placeCheckPlate(); });
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();
             this.loadDiffs();

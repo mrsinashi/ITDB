@@ -1,11 +1,12 @@
-// Сканирование, этап 25: сбор из GLPI / GSIT и вкладка «Сопоставление».
+// Сканирование, этап 25: сбор из GLPI / GSIT, вкладка «Названия» и общее для
+// записей источников (с этапа 26г записи показывает вкладка «Проверка», scan-check.js).
 //
 // Сбор идёт на сервере в фоне; страница спрашивает запуск раз в 1,5 с, пока он
-// идёт, и по окончании обновляет итог в блоке источника и записи на вкладке.
-// В таблицу ПК сбор ничего не пишет. Вкладка «Сопоставление» — записи последнего
-// сбора и с каким ПК ITDB каждая сопоставлена (считается на сервере сейчас, по
-// текущим данным таблицы): по признаку, вручную, «привязать?», конфликт, нет в
-// ITDB, дубль. Решения администратора: «это этот ПК», «не этот ПК», «забыть».
+// идёт, и по окончании обновляет итог в блоке источника и «Проверку».
+// В таблицу ПК сбор ничего не пишет. Сопоставление записи с ПК считается на
+// сервере по текущим данным таблицы: по признаку, вручную, «привязать?»,
+// конфликт, нет в ITDB, дубль. Решения администратора: «это этот ПК», «не этот
+// ПК», «забыть».
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
 
@@ -35,19 +36,6 @@ const HOW_TITLES = {
     table: "так это называется в Справочнике или в таблице",
     same: "одно и то же, названо по-разному"
 };
-export const MATCH_FILTERS = [
-    { key: "all", label: "Все", title: "Все записи последнего сбора" },
-    { key: "matched", label: "Сопоставлены", title: "Сопоставлены с ПК по признаку (GLPI ID, MAC, серийный) или вручную" },
-    { key: "name", label: "Привязать?", title: "Совпало только имя (или только GLPI ID): подтверди, что это тот ПК" },
-    { key: "conflict", label: "Конфликты", title: "Признаки противоречат: значения этой записи не предлагаются, пока не решишь вручную" },
-    { key: "none", label: "Нет в ITDB", title: "Такого ПК в таблице не нашлось" },
-    { key: "dup", label: "Дубли", title: "Дубль другой записи того же источника (то же железо): не используется" }
-];
-
-function stateGroup(state) {
-    return state === "key" || state === "link" ? "matched" : state;
-}
-
 function plural(n, one, few, many) {
     const m10 = n % 10;
     const m100 = n % 100;
@@ -70,65 +58,8 @@ function durationText(run) {
 
 export default {
     computed: {
-        scanMatchFilters() {
-            return MATCH_FILTERS;
-        },
-
-        // У записи под курсором есть что делать (у дубля без решений — нечего)
-        // Плашки действий: у раскрытой записи — всегда, у записи под курсором — пока она под курсором
-        scanPlates() {
-            const plates = [];
-            const open = this.scanMatch.openPlate;
-            const hover = this.scanMatch.hover;
-            if (open && this.scanRecordHasActions(open.record)) {
-                plates.push(open);
-            }
-            if (hover && !(open && open.id === hover.id) && this.scanRecordHasActions(hover.record)) {
-                plates.push(hover);
-            }
-            return this.valueEdit ? [] : plates;
-        },
-
         scanCollectSources() {
             return this.scanSources.filter(function (s) { return COLLECT_KINDS.includes(s.kind); });
-        },
-
-        // Источники на вкладке «Сопоставление»: настроенные или с прошлым сбором
-        scanMatchSources() {
-            return this.scanCollectSources.filter(function (s) { return s.url || s.last_run; });
-        },
-
-        scanMatchRecords() {
-            const data = this.scanMatch.data;
-            if (!data || data.source !== this.scanMatch.source) {
-                return [];
-            }
-            const filter = this.scanMatch.filter;
-            const words = searchWords(this.scanMatchQuery);
-            return data.records.filter((r) => {
-                if (filter !== "all" && stateGroup(r.state) !== filter) {
-                    return false;
-                }
-                if (!words.length) {
-                    return true;
-                }
-                const hosts = this.scanRecordHosts(r).map(function (h) { return h.hostname; });
-                return matchesAllWords(searchNorm([
-                    r.source_id, r.name, r.values.ip, r.values.mac, r.values.serial, hosts.join(" ")
-                ].filter(Boolean).join(" ")), words);
-            });
-        },
-
-        scanMatchCounts() {
-            const counts = { all: 0, matched: 0, name: 0, conflict: 0, none: 0, dup: 0 };
-            const data = this.scanMatch.data;
-            if (data && data.source === this.scanMatch.source) {
-                data.records.forEach(function (r) {
-                    counts.all += 1;
-                    counts[stateGroup(r.state)] += 1;
-                });
-            }
-            return counts;
         },
 
         scanNamesShown() {
@@ -138,20 +69,10 @@ export default {
             });
         },
 
-        scanMatchCountText() {
-            if (this.scanTab === "names") {
-                const all = this.scanNames.items.length;
-                const shown = this.scanNamesShown.length;
-                return shown === all ? "Соответствий: " + all : "Показано: " + shown + " из " + all;
-            }
-            const all = this.scanMatchCounts.all;
-            const shown = this.scanMatchRecords.length;
-            return shown === all ? "Записей: " + all : "Показано: " + shown + " из " + all;
-        },
-
-        scanMatchTitle() {
-            const s = this.scanSource(this.scanMatch.source);
-            return s ? s.title : "";
+        scanNamesCountText() {
+            const all = this.scanNames.items.length;
+            const shown = this.scanNamesShown.length;
+            return shown === all ? "Соответствий: " + all : "Показано: " + shown + " из " + all;
         },
 
         // ПК для «Привязать к…»: имя — расположение, № места (как в «Заменить…»)
@@ -181,48 +102,9 @@ export default {
             if (tab === "names") {
                 this.loadScanNames();
             }
-            if (tab === "diffs") {
-                this.diffs.hover = null;
-                this.loadDiffs();
-            }
-            if (tab === "match") {
-                if (!this.scanMatchSources.some((s) => s.kind === this.scanMatch.source) && this.scanMatchSources.length) {
-                    this.scanMatch.source = this.scanMatchSources[0].kind;
-                }
-                this.loadScanRecords();
-            }
-        },
-
-        setScanMatchSource(kind) {
-            if (this.scanMatch.source === kind) {
-                return;
-            }
-            this.scanMatch.source = kind;
-            this.scanMatch.open = {};
-            this.scanMatch.openPlate = null;
-            this.scanLinkBar = null;
-            this.loadScanRecords();
-        },
-
-        async loadScanRecords() {
-            const kind = this.scanMatch.source;
-            this.scanMatch.loading = true;
-            this.scanMatch.error = "";
-            try {
-                const response = await apiFetch("/api/scan/records?source=" + encodeURIComponent(kind));
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
-                const data = await response.json();
-                if (kind === this.scanMatch.source) {
-                    this.scanMatch.data = data;
-                    this.scanFitCompare();
-                    this.$nextTick(() => this.placeScanOpenPlate());
-                }
-            } catch (e) {
-                this.scanMatch.error = "Не удалось загрузить записи: " + (e.message || e);
-            } finally {
-                this.scanMatch.loading = false;
+            if (tab === "check") {
+                this.check.hover = null;
+                this.loadCheck();
             }
         },
 
@@ -317,10 +199,11 @@ export default {
             } else {
                 this.toastError(title + ": " + (run.message || "сбор не удался"));
             }
-            if (this.scanTab === "match" && this.scanMatch.source === run.source) {
-                this.loadScanRecords();
+            if (this.view === "scan" && this.scanTab === "check") {
+                this.loadCheck();
+            } else {
+                this.loadDiffs();
             }
-            this.loadDiffs();
         },
 
         // После загрузки настроек: идущие запуски — следить
@@ -370,8 +253,7 @@ export default {
         // ---------- Записи ----------
 
         scanComputer(id) {
-            const data = this.scanMatch.data;
-            return data && data.computers ? data.computers[id] : null;
+            return this.checkComputers[id] || null;
         },
 
         // ПК ITDB у записи: сопоставленный или предлагаемые
@@ -427,69 +309,6 @@ export default {
             return "Такого ПК в таблице не нашлось";
         },
 
-        scanSourceLink(r) {
-            const data = this.scanMatch.data;
-            return data && data.web_url ? data.web_url + "/front/computer.form.php?id=" + r.source_id : null;
-        },
-
-        // Раскрыта одна запись: открытие другой сворачивает прежнюю (этап 26б)
-        toggleScanRecord(r) {
-            this.scanMatch.open = this.scanMatch.open[r.source_id] ? {} : { [r.source_id]: true };
-            this.scanMatch.hover = null;
-            this.valueEdit = null;
-            this.scanFitCompare();
-            this.$nextTick(() => this.placeScanOpenPlate());
-        },
-
-        // Плашка действий у раскрытой записи видна всё время (этап 26б): место
-        // строки — от рамки таблицы; строка ушла из видимой части — плашки нет
-        placeScanOpenPlate() {
-            const id = Object.keys(this.scanMatch.open)[0];
-            const row = id ? document.querySelector('.sm-table tr[data-sid="' + id + '"]') : null;
-            const wrap = row && row.closest(".users-wrap");
-            const scroll = row && row.closest(".history-scroll");
-            if (!row || !wrap || !scroll) {
-                this.scanMatch.openPlate = null;
-                return;
-            }
-            const record = this.scanMatchRecords.find(function (x) { return String(x.source_id) === id; });
-            const w = wrap.getBoundingClientRect();
-            const s = scroll.getBoundingClientRect();
-            const rect = row.getBoundingClientRect();
-            const head = scroll.querySelector("thead");
-            const top = s.top + (head ? head.offsetHeight : 0);
-            if (!record || rect.bottom <= top + 2 || rect.top >= s.bottom - 2) {
-                this.scanMatch.openPlate = null;
-                return;
-            }
-            this.scanMatch.openPlate = { id: record.source_id, record: record, top: rect.top - w.top, height: rect.height };
-        },
-
-        onScanMatchScroll() {
-            this.scanMatch.hover = null;
-            this.placeScanOpenPlate();
-        },
-
-        // У записи есть что делать (у дубля без решений — нечего)
-        scanRecordHasActions(r) {
-            return r.state !== "dup" || r.decisions.length > 0;
-        },
-
-        // Правка значения ПК в табличке сравнения (столбец ITDB)
-        scanCompareEditable(r, c) {
-            const col = this.allColumns.find(function (x) { return x.field === c.field; });
-            return this.canEdit && !!r.computer_id && (r.state === "key" || r.state === "link") && !!col && !!col.editable;
-        },
-
-        startScanCompareEdit(r, c) {
-            if (!this.scanCompareEditable(r, c)) {
-                return;
-            }
-            const row = this.rows.find(function (x) { return x.id === r.computer_id; });
-            const value = row ? row[c.field] : c.itdb;
-            this.startValueEdit("m:" + r.source_id + ":" + c.field, r.computer_id, c.field, value === null || value === undefined ? "" : String(value));
-        },
-
         // Строки «поле | источник | ITDB» для раскрытой записи. Сравнивает сервер
         // (scan_values.py): значение источника — уже в названиях таблицы, raw — как в источнике
         scanCompareRows(r) {
@@ -534,8 +353,8 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.toast(c.label + ": «" + c.raw + "» и «" + c.itdb + "» — " + (c.next ? MANUAL_NEXT[c.next] : "как решит сравнение"), "success");
-                await this.loadScanRecords();
+                this.toast(c.label + ": «" + c.raw.split("\n").join(", ") + "» и «" + c.itdb + "» — " + (c.next ? MANUAL_NEXT[c.next] : "как решит сравнение"), "success");
+                await this.loadCheck();
             } catch (e) {
                 this.toastError(e.message || e);
             }
@@ -672,24 +491,14 @@ export default {
             return this.formatTime(d.at) + " · " + (d.user_name || "") + " · " + (d.action === "link" ? "это " : "не ") + (d.hostname || "ПК №" + d.computer_id);
         },
 
-        setScanRecordHover(r, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const rect = rowEl.getBoundingClientRect();
-            this.scanMatch.hover = { id: r.source_id, record: r, top: rect.top - w.top, height: rect.height };
-        },
-
         // ---------- Решения ----------
 
         async scanDecide(r, action, computerId) {
-            const url = "/api/scan/records/" + this.scanMatch.source + "/" + r.source_id + "/" + (action === "reset" ? "decisions" : action);
+            const url = "/api/scan/records/" + r.kind + "/" + r.source_id + "/" + (action === "reset" ? "decisions" : action);
             const options = action === "reset"
                 ? { method: "DELETE" }
                 : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ computer_id: computerId }) };
-            this.scanMatch.hover = null;
+            this.check.hover = null;
             try {
                 const response = await apiFetch(url, options);
                 if (!response.ok) {
@@ -697,7 +506,7 @@ export default {
                 }
                 const pc = computerId ? this.scanComputer(computerId) : null;
                 const host = pc ? pc.hostname : (this.scanLinkBar && this.scanLinkBar.pickedName) || "";
-                const name = this.scanMatchTitle + " №" + r.source_id;
+                const name = r.title + " №" + r.source_id;
                 if (action === "link") {
                     this.toast(name + " — это " + host, "success");
                 } else if (action === "reject") {
@@ -706,7 +515,7 @@ export default {
                     this.toast(name + ": решения забыты", "success");
                 }
                 this.scanLinkBar = null;
-                await this.loadScanRecords();
+                await this.loadCheck();
             } catch (e) {
                 if (this.scanLinkBar) {
                     this.scanLinkBar.error = e.message || String(e);
@@ -717,7 +526,7 @@ export default {
         },
 
         openScanLinkBar(r) {
-            this.scanMatch.hover = null;
+            this.check.hover = null;
             this.scanLinkBar = { source_id: r.source_id, record: r, error: "", pickedName: "" };
             this.$nextTick(() => {
                 const picker = this.$refs["sl-picker"];

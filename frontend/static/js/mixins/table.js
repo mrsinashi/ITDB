@@ -663,6 +663,7 @@ export default {
                 user: this.$refs.userWrap,
                 page: this.$refs.pageSetWrap,
                 historySel: this.$refs.historySelWrap,
+                checkSel: this.$refs.checkSelWrap,
                 historyFilter: this.$refs.historyFilterWrap,
                 colFilter: this.$refs.colFilterPanel,
                 colFilterList: this.$refs.colFilterListWrap

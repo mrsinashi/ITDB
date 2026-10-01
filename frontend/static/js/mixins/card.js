@@ -63,10 +63,11 @@ export default {
             const showEmpty = this.cardShowEmpty;
             // Сканер предлагает значение для пустого поля — строку показать (этап 26б)
             const scanFields = this.diffIndex.get(c.id) || {};
+            const shownKinds = this.scanShownKinds;
             function filled(list) {
                 return list.filter(function (r) {
                     const empty = r.value === null || r.value === undefined || r.value === "";
-                    return !empty || r.always || showEmpty || (r.field && scanFields[r.field] && scanFields[r.field].kind !== "partial");
+                    return !empty || r.always || showEmpty || (r.field && scanFields[r.field] && scanFields[r.field].kind !== "partial" && shownKinds.has(scanFields[r.field].kind));
                 }).map(function (r) {
                     const empty = r.value === null || r.value === undefined || r.value === "";
                     return empty ? Object.assign({}, r, { empty: true, copy: false }) : r;

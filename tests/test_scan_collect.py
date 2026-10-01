@@ -340,6 +340,7 @@ def test_decisions(admin, editor, reader, room, glpi_url):
     # Только администратор
     assert editor.post("/api/scan/records/glpi/1/link", json={"computer_id": first}).status_code == 403
     assert reader.get("/api/scan/records", params={"source": "glpi"}).status_code == 403
+    assert editor.get("/api/scan/records", params={"source": "glpi"}).status_code == 200   # «Проверка» (26г)
 
     # «Не этот ПК» — больше не предлагается
     ok(admin.post("/api/scan/records/glpi/1/reject", json={"computer_id": first}))

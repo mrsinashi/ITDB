@@ -109,3 +109,24 @@ export function highlightParts(text, words) {
 export function isTypingTarget(el) {
     return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 }
+
+// Выделение в списке по клику: Ctrl — добавить/убрать, Shift — диапазон от
+// прошлой строки, Ctrl+Shift — добавить диапазон. single — обычный клик
+// выбирает одну строку (в окне), иначе только запоминает её (как в таблице).
+export function clickSelect(selected, ids, anchor, id, event, single) {
+    const ctrl = event.ctrlKey || event.metaKey;
+    const from = anchor === null ? -1 : ids.indexOf(anchor);
+    if (event.shiftKey && from !== -1) {
+        const to = ids.indexOf(id);
+        const range = ids.slice(Math.min(from, to), Math.max(from, to) + 1);
+        if (ctrl) {
+            return { selected: selected.concat(range.filter(function (x) { return selected.indexOf(x) === -1; })), anchor: anchor };
+        }
+        return { selected: range, anchor: anchor };
+    }
+    if (ctrl) {
+        const has = selected.indexOf(id) !== -1;
+        return { selected: has ? selected.filter(function (x) { return x !== id; }) : selected.concat([id]), anchor: id };
+    }
+    return { selected: single ? [id] : selected, anchor: id };
+}

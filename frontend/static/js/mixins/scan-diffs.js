@@ -12,16 +12,12 @@
 // вписать своё; карточку можно двигать и закрыть. В карточке ПК — строкой с
 // «принять / отклонить»; при правке ячейки — первой подсказкой.
 //
-// Список расхождений — вкладка «Расхождения» на «Сканировании»: ПК группами,
-// «Почему можно верить» (как сопоставлен, согласны ли источники, когда
-// проверен), правка «В таблице» двойным кликом, «Принять», «Отклонить»,
-// «⇐ в таблице своё», «ещё у N ПК».
+// Решения по значениям сканера (взять, оставить, «в таблице своё») — общие для
+// Таблицы, карточки ПК и вкладки «Проверка» (scan-check.js).
 
-import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
-import { frameColorFor } from "../columns.js";
+import { apiFetch } from "../util.js";
 
 const KEY_TEXT = { id: "GLPI ID", mac: "MAC", serial: "серийному" };
-const LIST_KINDS = ["diff", "fill", "unsure"];
 
 export default {
     watch: {
@@ -74,70 +70,17 @@ export default {
             return kinds;
         },
 
-        // ---------- Список на вкладке «Расхождения» ----------
-
-        diffFields() {
-            const counts = {};
-            this.diffBase.forEach(function (d) { counts[d.field] = (counts[d.field] || 0) + 1; });
-            return this.builtinColumns
-                .filter(function (c) { return counts[c.field]; })
-                .map(function (c) { return { field: c.field, label: c.headerName, count: counts[c.field] }; });
-        },
-
-        diffKindCounts() {
-            const counts = { diff: 0, fill: 0, unsure: 0 };
+        // Все расхождения по ПК, и отклонённые: id ПК → { поле → расхождение }
+        diffAllIndex() {
+            const map = new Map();
             this.diffs.items.forEach(function (d) {
-                if (!d.rejected_by && counts[d.kind] !== undefined) {
-                    counts[d.kind] += 1;
+                let entry = map.get(d.computer_id);
+                if (!entry) {
+                    map.set(d.computer_id, entry = {});
                 }
+                entry[d.field] = d;
             });
-            return counts;
-        },
-
-        // Отклонённые или нет, вид, пара «ещё у N ПК», поиск — без фильтра по полю
-        diffBase() {
-            const f = this.diffs;
-            const words = searchWords(this.scanMatchQuery);
-            return f.items.filter((d) => {
-                if (!LIST_KINDS.includes(d.kind) || !!d.rejected_by !== f.showRejected) {
-                    return false;
-                }
-                if (f.kind !== "all" && d.kind !== f.kind) {
-                    return false;
-                }
-                if (f.pair && !(d.field === f.pair.field && d.table.toLowerCase() === f.pair.table.toLowerCase() && d.raw.toLowerCase() === f.pair.raw.toLowerCase())) {
-                    return false;
-                }
-                return !words.length || matchesAllWords(searchNorm([d.hostname, d.place, d.table, d.proposed, d.raw].filter(Boolean).join(" ")), words);
-            });
-        },
-
-        diffShown() {
-            const field = this.diffs.field;
-            return field === "all" ? this.diffBase : this.diffBase.filter(function (d) { return d.field === field; });
-        },
-
-        // ПК строками-группами, как дни в Истории
-        diffGroups() {
-            const groups = [];
-            const byId = {};
-            this.diffShown.forEach(function (d) {
-                let g = byId[d.computer_id];
-                if (!g) {
-                    g = byId[d.computer_id] = { computer_id: d.computer_id, hostname: d.hostname, place: d.place, items: [] };
-                    groups.push(g);
-                }
-                g.items.push(d);
-            });
-            return groups;
-        },
-
-        // На панели рядом с вкладками места мало: число расхождений — на «Все», здесь — ПК
-        diffCountText() {
-            if (this.diffs.showRejected) {
-                return "Отклонено: " + this.diffShown.length;
-            }
-            return "ПК: " + this.diffGroups.length;
+            return map;
         }
     },
 
@@ -220,14 +163,14 @@ export default {
         },
 
         // Блочок со значением сканера в ячейке (этап 26в): вид — по ситуации из Справочников
+        // Блочок как значение с фоном в Справочниках: фон, цвет, Ж, К; рамка — тонкой линией внутри
         scanChipStyle(mark) {
             const style = {};
             if (mark.bg_color) {
                 style.backgroundColor = mark.bg_color;
-                style.borderColor = frameColorFor(mark.bg_color);
             }
             if (mark.frame) {
-                style.borderColor = mark.frame;
+                style.boxShadow = "inset 0 0 0 1px " + mark.frame;
             }
             if (mark.color) {
                 style.color = mark.color;
@@ -273,7 +216,7 @@ export default {
             };
             this.$nextTick(() => this.placeScanPop());
             if (!this._scanPopKey) {
-                // Esc закрывает карточку, где бы ни был фокус
+                // Esc и клик мимо закрывают карточку (клик по другому блочку — откроет его)
                 this._scanPopKey = (e) => {
                     if (e.key === "Escape" && this.scanPop) {
                         e.preventDefault();
@@ -281,7 +224,15 @@ export default {
                         this.closeScanPop();
                     }
                 };
+                this._scanPopDown = (e) => {
+                    const el = this.$refs.scanPop;
+                    if (!this.scanPop || (el && el.contains(e.target)) || (e.target.closest && e.target.closest("button.scan-chip"))) {
+                        return;
+                    }
+                    this.closeScanPop();
+                };
                 window.addEventListener("keydown", this._scanPopKey, true);
+                window.addEventListener("mousedown", this._scanPopDown, true);
             }
         },
 
@@ -313,7 +264,9 @@ export default {
             this.scanPop = null;
             if (this._scanPopKey) {
                 window.removeEventListener("keydown", this._scanPopKey, true);
+                window.removeEventListener("mousedown", this._scanPopDown, true);
                 this._scanPopKey = null;
+                this._scanPopDown = null;
             }
         },
 
@@ -323,18 +276,29 @@ export default {
             if (!pop || event.button !== 0) {
                 return;
             }
+            // Двигаем сам элемент, не данные Vue: иначе на каждое движение мыши
+            // перерисовывалась бы вся страница с таблицей — медленно и рывками.
+            // Итог записывается в данные один раз, при отпускании.
+            const el = this.$refs.scanPop;
             const dx = event.clientX - pop.left;
             const dy = event.clientY - pop.top;
+            let left = pop.left;
+            let top = pop.top;
             const move = (e) => {
-                if (!this.scanPop) {
-                    return;
+                left = Math.min(Math.max(0, e.clientX - dx), window.innerWidth - 60);
+                top = Math.min(Math.max(0, e.clientY - dy), window.innerHeight - 30);
+                if (el) {
+                    el.style.left = left + "px";
+                    el.style.top = top + "px";
                 }
-                this.scanPop.left = Math.min(Math.max(0, e.clientX - dx), window.innerWidth - 60);
-                this.scanPop.top = Math.min(Math.max(0, e.clientY - dy), window.innerHeight - 30);
             };
             const up = () => {
                 window.removeEventListener("mousemove", move);
                 window.removeEventListener("mouseup", up);
+                if (this.scanPop === pop) {
+                    pop.left = left;
+                    pop.top = top;
+                }
             };
             window.addEventListener("mousemove", move);
             window.addEventListener("mouseup", up);
@@ -410,7 +374,8 @@ export default {
             }
             const entry = this.diffIndex.get(this.card.id);
             const d = entry ? entry[r.field] : null;
-            return d && d.kind !== "partial" ? d : null;
+            // Как в Таблице: только когда значения сканера показаны (кнопка или «Без кнопки»)
+            return d && d.kind !== "partial" && this.scanShownKinds.has(d.kind) ? d : null;
         },
 
         // ---------- Почему можно верить ----------
@@ -455,31 +420,6 @@ export default {
             return d.sources.map((s) => s.title + " №" + s.source_id + " — проверен " + this.formatTime(s.checked_at) + ", предлагает: " + s.value.split("\n").join(", ")).join("\n");
         },
 
-        diffPairText(p) {
-            return this.diffFieldLabel(p.field) + ": " + (p.table || "пусто") + " ← " + p.raw;
-        },
-
-        setDiffPair(d) {
-            this.diffs.pair = { field: d.field, table: d.table, raw: d.raw };
-            this.diffs.field = "all";
-        },
-
-        setDiffField(field) {
-            this.diffs.field = field;
-        },
-
-        setDiffKind(kind) {
-            this.diffs.kind = kind;
-            this.diffs.field = "all";
-        },
-
-        toggleDiffRejected() {
-            this.diffs.showRejected = !this.diffs.showRejected;
-            this.diffs.pair = null;
-            this.diffs.field = "all";
-            this.diffs.hover = null;
-        },
-
         // ---------- Решения ----------
 
         async diffPost(url, body) {
@@ -497,10 +437,17 @@ export default {
         async afterDiffChange() {
             await Promise.all([this.loadDiffs(), this.loadTable()]);
             this.refreshCardRow();
+            this.reloadCheckIfShown();
+        },
+
+        // Вкладка «Проверка» открыта — обновить и её (сравнение зависит от таблицы и названий)
+        reloadCheckIfShown() {
+            if (this.view === "scan" && this.scanTab === "check") {
+                this.loadCheck();
+            }
         },
 
         async acceptDiffs(list) {
-            this.diffs.hover = null;
             try {
                 const result = await this.diffPost("/api/scan/diffs/accept", {
                     items: list.map((d) => ({
@@ -520,7 +467,6 @@ export default {
         },
 
         async rejectDiffs(list, back) {
-            this.diffs.hover = null;
             try {
                 const result = await this.diffPost("/api/scan/diffs/" + (back ? "unreject" : "reject"), {
                     items: list.map(function (d) { return { computer_id: d.computer_id, field: d.field, raw: d.raw }; })
@@ -534,44 +480,14 @@ export default {
 
         // «В таблице своё»: эта пара значений — не расхождение ни у одного ПК
         async keepDiff(d) {
-            this.diffs.hover = null;
             try {
                 await this.diffPost("/api/scan/names", { field: d.field, source: d.raw, table: d.table, kind: "keep" });
                 this.toast(this.diffFieldLabel(d.field) + ": «" + d.table + "» при «" + d.raw + "» — оставлено как в таблице", "success");
                 await this.loadDiffs();
+                this.reloadCheckIfShown();
             } catch (e) {
                 this.toastError(e.message || e);
             }
-        },
-
-        async acceptShownDiffs() {
-            const list = this.diffShown.slice();
-            const ok = await this.confirmDialog("Принять значения сканера: " + list.length + " у " + this.diffGroups.length + " ПК? Они запишутся в таблицу (с отметкой в Истории).", { okText: "Принять" });
-            if (ok) {
-                await this.acceptDiffs(list);
-            }
-        },
-
-        async rejectShownDiffs() {
-            const list = this.diffShown.slice();
-            const back = this.diffs.showRejected;
-            const ok = await this.confirmDialog(
-                back ? "Вернуть отклонённые: " + list.length + "?" : "Отклонить: " + list.length + " у " + this.diffGroups.length + " ПК? Пока источник отдаёт те же значения, они не предлагаются.",
-                { okText: back ? "Вернуть" : "Отклонить" }
-            );
-            if (ok) {
-                await this.rejectDiffs(list, back);
-            }
-        },
-
-        setDiffHover(d, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const rect = rowEl.getBoundingClientRect();
-            this.diffs.hover = { item: d, top: rect.top - w.top, height: rect.height };
         },
 
         // ---------- Правка значения таблицы прямо из списка / подробностей записи ----------
@@ -627,9 +543,7 @@ export default {
                 this.valueEdit = null;
                 if (changed) {
                     await this.loadDiffs();
-                    if (this.view === "scan" && this.scanTab === "match") {
-                        await this.loadScanRecords();
-                    }
+                    this.reloadCheckIfShown();
                 }
             } finally {
                 if (this.valueEdit === edit) {
