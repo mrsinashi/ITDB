@@ -47,9 +47,8 @@
     --tb-input-text: #fff;
     --tb-placeholder: #d9a8a8;
     --tb-divider: rgba(255, 255, 255, 0.18);
-    --tb-tab-bg: rgba(40, 40, 40, 0.16);        /* невыбранная вкладка на второй панели */
-    --tb-tab-hover-bg: rgba(40, 40, 40, 0.26);
-    --tb-tab-line: rgba(40, 40, 40, 0.22);
+    --tb-tab-bg: rgba(60, 60, 60, 0.08);        /* невыбранная вкладка на второй панели */
+    --tb-tab-hover-bg: rgba(60, 60, 60, 0.16);
 
     /* Выпадающие меню из панели */
     --menu-bg: #8a2828;
@@ -3622,14 +3621,13 @@ body.login-page {
     height: 35px;
     margin: -5px 6px -5px -10px;
 }
-/* Невыбранные вкладки — с лёгкой серой подложкой и разделителями, чтобы не
-   сливались с текстом после них (этап 26б) */
+/* Невыбранные вкладки — на лёгкой серой подложке, без линий по бокам, чтобы не
+   сливались с текстом после них (этапы 26б, 26в) */
 .toolbar .tb-tabs a {
     display: flex;
     align-items: center;
     padding: 0 14px;
     background: var(--tb-tab-bg);
-    box-shadow: inset -1px 0 0 var(--tb-tab-line);
     color: var(--tb-text);
     text-decoration: none;
     font-size: 13px;
@@ -3814,10 +3812,12 @@ body.login-page {
 .sm-state.st-dup {
     color: var(--text-muted);
 }
-/* Раскрытая запись остаётся подсвеченной, пока открыта */
-.history-table.sm-table tbody tr.sm-open td {
-    background: var(--row-hover-bg);
-    border-right-color: var(--row-hover-line);
+/* Раскрытая запись — серая, пока открыта; под ней — заметный разделитель (этап 26в) */
+.history-table.sm-table tbody tr.sm-open td,
+.history-table.sm-table tbody tr.sm-open:hover td {
+    background: var(--gray-group);
+    border-right-color: var(--group-line);
+    border-bottom: 2px solid var(--sm-detail-line);
 }
 .history-table.sm-table tbody tr.sm-open td:last-child {
     border-right-color: transparent;
@@ -3890,8 +3890,7 @@ body.login-page {
     line-height: 1.4;
 }
 /* Шапка — серая, как строка адреса в Дереве */
-.history-table .sm-compare th,
-.history-table.accent-head .sm-compare th {
+.history-table .sm-compare th {
     background: var(--gray-group);
     color: var(--text-strong);
     font-size: 12px;
@@ -3930,8 +3929,24 @@ body.login-page {
     text-decoration: underline dotted;
     text-underline-offset: 3px;
 }
-.history-table .sm-compare:not(.full) tr:last-child td:last-child {
+/* Не до низа подробностей — своя нижняя линия и скруглённый угол; до низа —
+   нижней линии нет: её роль играет разделитель под подробностями */
+.history-table .sm-compare.short tr:last-child td:last-child {
     border-bottom-right-radius: var(--radius);
+}
+.history-table.sm-table tbody tr.sm-detail .sm-compare:not(.short) tr:last-child td {
+    border-bottom: none;
+}
+/* Акцентная шапка страницы — и у таблички: цвет схемы, линии как у большой шапки */
+.history-table.accent-head .sm-compare th,
+.history-table.sm-table.accent-head tbody tr.sm-detail .sm-compare th {
+    background: var(--brand);
+    color: #fff;
+    border-right: 1px solid rgba(255, 255, 255, 0.22);
+    border-bottom: 1px solid var(--brand-dark);
+}
+.history-table.sm-table.accent-head tbody tr.sm-detail .sm-compare th:last-child {
+    border-right-color: var(--brand-dark);
 }
 /* Подсветка строк большой таблицы под курсором и «у последней строки нет нижней
    линии» (.history-table tbody:last-child tr:last-child td) в табличку не попадают */
@@ -4066,17 +4081,233 @@ body.login-page {
 /* ============================================================
    Пометки сканера и вкладка «Расхождения» (этап 26б)
    ============================================================ */
-/* Рамка пометки — внутри ячейки, не трогая линии сетки и рамку под курсором */
-.data-table tbody td.scan-frame::before {
-    content: "";
+/* Значение сканера — блочок со скруглением (этап 26в): в ячейке после значения
+   таблицы, в карточке ПК, в списке расхождений, в подсказке у кнопки. Цвет — по
+   ситуации из Справочников; по умолчанию фон с рамкой в тон */
+.scan-chip {
+    display: inline-block;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 6px;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    background: #f3f3f3;
+    color: var(--text-strong);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 15px;
+    white-space: pre-line;
+    text-align: left;
+    vertical-align: baseline;
+}
+button.scan-chip {
+    cursor: pointer;
+}
+.data-table td .scan-chip {
+    margin-left: 5px;
+    vertical-align: top;
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    position: relative;
+    z-index: 2;
+}
+.data-table td .scan-chip:first-child,
+.data-table td span:empty + .scan-chip {
+    margin-left: 0;
+}
+.data-table td button.scan-chip:hover,
+.data-table td button.scan-chip.open {
+    box-shadow: 0 0 0 1px currentColor;
+}
+.scan-chip.off {
+    opacity: 0.45;
+}
+.df-strike {
+    text-decoration: line-through;
+}
+
+/* Подсказка у включённой кнопки: что значат цвета */
+.scan-btn-wrap {
+    position: relative;
+    display: inline-flex;
+}
+.scan-legend {
     position: absolute;
-    top: 1px;
-    left: 1px;
-    right: 2px;
-    bottom: 2px;
-    border: 1px solid var(--scan-frame);
-    border-radius: 2px;
-    pointer-events: none;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 60;
+    width: 330px;
+    padding: 8px 10px 9px;
+    background: #fff;
+    border: 1px solid #cfcfcf;
+    border-radius: var(--radius);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 17px;
+    white-space: normal;
+    text-align: left;
+    cursor: default;
+}
+.scan-legend .sl-title {
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.scan-legend .sl-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.scan-legend .sl-row .scan-chip {
+    flex: none;
+    min-width: 62px;
+    text-align: center;
+}
+.scan-legend .sl-note {
+    margin-top: 6px;
+    color: var(--text-secondary);
+}
+
+/* Карточка «что сделать» у блочка: рядом с ним, двигается за шапку */
+.scan-pop {
+    position: fixed;
+    z-index: 150;
+    width: 330px;
+    background: #fff;
+    border: 1px solid #c4c4c4;
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    font-size: 13px;
+    color: var(--text);
+    visibility: hidden;
+    outline: none;
+}
+.scan-pop.placed {
+    visibility: visible;
+}
+.scan-pop .sp-head {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 6px 0 10px;
+    background: var(--grid-head-bg);
+    border-bottom: 1px solid var(--grid-head-line-h);
+    border-radius: var(--radius) var(--radius) 0 0;
+    cursor: move;
+    user-select: none;
+}
+.scan-pop .sp-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.scan-pop .sp-host {
+    margin-left: 8px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+.scan-pop .sp-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.scan-pop .sp-close:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--text-strong);
+}
+.scan-pop .sp-values {
+    width: 100%;
+    margin: 6px 0 2px;
+    border-collapse: collapse;
+}
+.scan-pop .sp-values td {
+    padding: 2px 10px;
+    vertical-align: top;
+    line-height: 17px;
+}
+.scan-pop .sp-label {
+    width: 1%;
+    padding-right: 4px;
+    white-space: nowrap;
+    color: var(--text-secondary);
+}
+.scan-pop .sp-v {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+.scan-pop .sp-empty {
+    color: var(--text-muted);
+}
+.scan-pop .sp-raw {
+    display: block;
+    margin-top: 1px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.scan-pop .sp-why {
+    padding: 2px 10px 8px;
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--text-secondary);
+}
+.scan-pop .sp-why .sp-from {
+    color: var(--text-strong);
+}
+.scan-pop .sp-why .bad {
+    color: var(--danger);
+}
+.scan-pop .sp-actions {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px 0;
+    border-top: 1px solid var(--grid-line);
+}
+.scan-pop .sp-actions .btn {
+    flex: 1;
+    justify-content: center;
+}
+.scan-pop .sp-all {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.scan-pop .sp-own {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 10px 10px;
+}
+.scan-pop .sp-own-label {
+    flex: none;
+    line-height: 24px;
+    color: var(--text-secondary);
+}
+.scan-pop .sp-input {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    box-sizing: border-box;
+    font-size: 13px;
+}
+.scan-pop textarea.sp-input {
+    height: auto;
+    resize: vertical;
 }
 .diff-page .df-fields {
     margin-top: -2px;
@@ -4145,11 +4376,6 @@ body.login-page {
     color: var(--text-secondary);
     white-space: normal;
 }
-.card-table .ct-scan .cs-val {
-    color: var(--text-strong);
-    font-weight: 600;
-    white-space: pre-line;
-}
 .card-table .ct-scan .cs-unsure {
     color: var(--danger);
 }
@@ -4209,8 +4435,22 @@ body.login-page {
     color: var(--text-secondary);
 }
 .scan-marks-panel {
+    width: fit-content;
+    max-width: 100%;
     margin-top: 14px;
-    max-width: 760px;
+}
+.scan-marks-table td.smk-label {
+    min-width: 200px;
+    max-width: 300px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+.scan-marks-table td {
+    white-space: nowrap;
+}
+.scan-marks-table td.smk-label {
+    white-space: normal;
 }
 .scan-marks-body {
     padding: 6px 8px 8px;

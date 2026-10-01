@@ -181,6 +181,8 @@ const app = Vue.createApp({
             scanNames: { items: [], loading: false, error: "", hover: null },
             // Этап 26б: пометки сканера в Таблице (кнопка на панели) и вкладка «Расхождения»
             scanOverlay: false,
+            scanLegend: false,   // подсказка «что значат цвета» у включённой кнопки
+            scanPop: null,       // карточка действий у блочка значения сканера
             scanMarks: [],       // /api/scan/marks — вид пометок по ситуациям
             valueEdit: null,     // правка значения ПК из списка расхождений / подробностей записи
             diffs: {

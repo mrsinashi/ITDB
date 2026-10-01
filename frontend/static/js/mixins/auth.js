@@ -123,6 +123,7 @@ export default {
 
         setView(view) {
             this.view = view;
+            this.scanPop = null;
             if (view === "table") {
                 this.loadDiffs();
             } else if (view === "tree") {
@@ -137,6 +138,9 @@ export default {
                 this.loadUsers();
             } else if (view === "scan") {
                 if (this.isAdmin) {
+                    this.scanTab = "settings";      // «Сканирование» всегда открывается на «Подключениях»
+                    this.scanLinkBar = null;
+                    this.scanMatchQuery = "";
                     this.loadScan();
                 } else {
                     this.setScanTab("diffs");   // редактору — только «Расхождения»

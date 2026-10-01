@@ -393,11 +393,15 @@ VNC_KINDS = [
 VNC_VIEWER = re.compile(r"viewer|просмотр", re.I)
 
 
+# Если найдено несколько, сервер — TightVNC: UltraVNC рядом с ним ставят ради
+# просмотрщика (решение пользователя 01.10: «99,9% сервер — TightVNC»)
+VNC_MAIN = "TightVNC"
+
+
 def vnc_short(software_names):
-    """VNC-серверы из установленных программ. Просмотрщики не в счёт. Серверов
-    может оказаться два (UltraVNC ставят и ради просмотрщика — по названию
-    программы это не отличить): тогда значение неточное (scan_values
-    считает «неточно», если строк несколько), точно покажет этап 28 — какой
+    """VNC-сервер из установленных программ. Просмотрщики не в счёт. Найдено
+    несколько и среди них TightVNC — это TightVNC. Несколько других — все
+    строками (в расхождениях — «неточно»); точно покажет этап 28 — какой
     сервер отвечает на порту 5900."""
     found = []
 
@@ -408,6 +412,9 @@ def vnc_short(software_names):
         for pattern, kind in VNC_KINDS:
             if re.search(pattern, name or "", re.I) and kind not in found:
                 found.append(kind)
+
+    if len(found) > 1 and VNC_MAIN in found:
+        return VNC_MAIN
 
     return "\n".join(found) or None
 

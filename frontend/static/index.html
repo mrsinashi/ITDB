@@ -192,11 +192,21 @@
                         </div>
                     </span>
                     <span class="tb-divider"></span>
-                    <!-- Пометки сканера (этап 26б): где GLPI / GSIT предлагают другое — прямо в ячейках -->
+                    <!-- Значения сканера (этапы 26б, 26в): кнопка дописывает в ячейки блочки с тем,
+                         что предлагают GLPI / GSIT; у включённой при наведении — что значат цвета -->
+                    <span class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
                     <button class="btn icon-only" :class="{ active: scanOverlay, 'has-badge': diffs.count > 0 }" @click="toggleScanOverlay"
-                        :title="(scanOverlay ? 'Скрыть пометки сканера' : 'Показать пометки сканера: где GLPI / GSIT предлагают другое значение') + ' — ' + (diffs.count || 'нет') + '. Вид пометок — в Справочниках'">
+                        :title="scanOverlay ? null : 'Показать в таблице, что предлагают GLPI / GSIT — ' + (diffs.count || 'нет')">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg><span v-if="diffs.count > 0" class="btn-badge">{{ diffCountBadge }}</span>
                     </button>
+                    <div v-if="scanLegend && scanOverlay" class="scan-legend">
+                        <div class="sl-title">Что предлагает сканер</div>
+                        <template v-for="m in scanMarks" :key="m.kind">
+                            <div v-if="m.enabled" class="sl-row"><span class="scan-chip" :style="scanChipStyle(m)">{{ scanLegendSample(m.kind) }}</span><span class="sl-text">{{ scanMarkHint(m.kind) }}</span></div>
+                        </template>
+                        <div class="sl-note">Нажми на блочок в ячейке — взять значение, оставить как есть или вписать своё. Цвета — в Справочниках. Нажми кнопку ещё раз — скрыть.</div>
+                    </div>
+                    </span>
                     <!-- Архив: без выбранных строк — показать архив / вернуться к таблице,
                          с выбранными — убрать их в архив (в архиве — вернуть) -->
                     <button class="btn icon-only" :class="{ active: showArchive }" :disabled="archiveSaving" @click="onArchiveButton" :title="archiveButtonTitle">
@@ -297,10 +307,13 @@
                                 @mousedown="onCellMouseDown($event, row)"
                                 @click="onCellClick($event, row, col)"
                                 @dblclick="startEdit(row, col)"
-                                :title="scanCellTitle(row, col)"
                                 @mouseenter="handleNoteEnter($event, row, col)"
                                 @mouseleave="hideNoteTooltip">
                                 <span :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)">{{ cellText(row, col) }}</span>
+                                <button v-if="scanCellMark(row, col) && !isEditing(row, col)" type="button" class="scan-chip"
+                                    :class="{ open: scanPop && scanPop.row.id === row.id && scanPop.col.field === col.field }"
+                                    :style="scanChipStyle(scanCellMark(row, col))" :title="scanChipTitle(scanCellDiff(row, col))"
+                                    @mousedown.stop @dblclick.stop @click.stop="openScanPop(row, col, $event)">{{ scanChipText(scanCellDiff(row, col)) }}</button>
                                 <template v-if="isEditing(row, col)">
                                     <location-picker v-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
                                         placeholder="Расположение…" @pick="onCellLocationPick(row, $event)" @cancel="cancelEdit"></location-picker>
@@ -509,35 +522,36 @@
                     </div>
                 </div>
 
-                <!-- Пометки сканера в Таблице (этап 26б): вид каждой ситуации и показывать ли без кнопки -->
+                <!-- Значения сканера в Таблице (этапы 26б, 26в): цвет блочка по ситуации, показывать ли без кнопки -->
                 <div v-if="scanMarks.length" class="fd-panel scan-marks-panel">
                     <div class="fd-head">
-                        <span class="fd-title">Пометки сканера</span>
-                        <span class="fd-sub">ячейки Таблицы, где GLPI / GSIT предлагают другое значение</span>
+                        <span class="fd-title">Значения сканера</span>
+                        <span class="fd-sub">блочки в ячейках Таблицы с тем, что предлагают GLPI / GSIT</span>
                     </div>
                     <div class="scan-marks-body">
                         <table class="scan-marks-table">
                             <tr v-for="m in scanMarks" :key="m.kind">
-                                <td><span class="smk-sample" :class="{ off: !m.enabled }" :style="scanMarkSample(m)" :title="scanMarkHint(m.kind)">{{ m.label }}</span></td>
+                                <td class="smk-sample-td"><span class="scan-chip" :class="{ off: !m.enabled }" :style="scanChipStyle(m)">{{ scanLegendSample(m.kind) }}</span></td>
+                                <td class="smk-label">{{ scanMarkHint(m.kind) }}</td>
                                 <td>
                                     <style-controls :value="m" :disabled="!canEdit" @change="updateScanMark(m.kind, $event)"></style-controls>
                                     <span class="sc" :class="{ disabled: !canEdit }">
-                                        <button type="button" class="sc-btn" :class="{ on: m.strike }" :disabled="!canEdit" title="Зачёркнутый" @click="updateScanMark(m.kind, { strike: !m.strike })"><s>З</s></button>
-                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка ' + m.frame : 'Рамки нет'">
+                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка блочка ' + m.frame : 'Рамка блочка — в тон фона'">
                                             <span class="sc-swatch sc-frame" :style="{ borderColor: m.frame || null }"></span>
                                             <input type="color" :value="m.frame || '#9db4cc'" :disabled="!canEdit" @change="updateScanMark(m.kind, { frame: $event.target.value })">
                                         </label>
+                                        <button type="button" class="sc-btn" :class="{ on: m.strike }" :disabled="!canEdit" title="Зачёркивать значение таблицы рядом с блочком" @click="updateScanMark(m.kind, { strike: !m.strike })"><s>З</s></button>
                                     </span>
-                                    <span v-if="canEdit && scanMarkHasStyle(m)" class="st-reset" title="Убрать оформление (цвета, жирный, курсив, зачёркивание, рамку)" @click="updateScanMark(m.kind, { color: '', bg_color: '', frame: '', bold: false, italic: false, strike: false })">↺</span>
+                                    <span v-if="canEdit && scanMarkHasStyle(m)" class="st-reset" title="Убрать оформление" @click="updateScanMark(m.kind, { color: '', bg_color: '', frame: '', bold: false, italic: false, strike: false })">↺</span>
                                 </td>
-                                <td><label :title="'Помечать ячейки «' + m.label + '»'"><input type="checkbox" :checked="m.enabled" :disabled="!canEdit" @change="updateScanMark(m.kind, { enabled: $event.target.checked })"> Помечать</label></td>
-                                <td><label title="Показывать эту пометку всегда, не нажимая кнопку на панели Таблицы"><input type="checkbox" :checked="m.always" :disabled="!canEdit || !m.enabled" @change="updateScanMark(m.kind, { always: $event.target.checked })"> Без кнопки</label></td>
+                                <td><label title="Показывать такие значения сканера"><input type="checkbox" :checked="m.enabled" :disabled="!canEdit" @change="updateScanMark(m.kind, { enabled: $event.target.checked })"> Показывать</label></td>
+                                <td><label title="Показывать всегда, не нажимая кнопку на панели Таблицы"><input type="checkbox" :checked="m.always" :disabled="!canEdit || !m.enabled" @change="updateScanMark(m.kind, { always: $event.target.checked })"> Без кнопки</label></td>
                             </tr>
                         </table>
                         <div class="scan-marks-note">
-                            Пометки видны, когда нажата кнопка расхождений на панели Таблицы; с «Без кнопки» — всегда.
-                            При наведении на ячейку — что предлагает сканер; в карточке ПК — «принять» и «отклонить»;
-                            при правке ячейки значение сканера — первое в подсказках. Весь список — «Сканирование» → «Расхождения».
+                            Блочки появляются в ячейках, когда нажата кнопка сканера на панели Таблицы (с «Без кнопки» — всегда).
+                            Нажми на блочок — взять значение, оставить как есть или вписать своё. «З» — зачеркнуть значение
+                            таблицы рядом с блочком. Весь список — «Сканирование» → «Расхождения».
                         </div>
                     </div>
                 </div>
@@ -753,9 +767,9 @@
                         <template v-if="isAdmin">
                             <a href="#" :class="{ active: scanTab === 'settings' }" @click.prevent="setScanTab('settings')" title="Подключения к GLPI, GSIT, Jabber и подсети">Подключения</a>
                             <a href="#" :class="{ active: scanTab === 'match' }" @click.prevent="setScanTab('match')" title="Записи GLPI и GSIT с последнего сбора: с какими ПК они сопоставлены">Сопоставление</a>
-                            <a href="#" :class="{ active: scanTab === 'names' }" @click.prevent="setScanTab('names')" title="Как значения GLPI и GSIT соответствуют названиям в таблице">Названия</a>
                         </template>
                         <a href="#" :class="{ active: scanTab === 'diffs' }" @click.prevent="setScanTab('diffs')" title="Где GLPI / GSIT предлагают другое значение, чем в таблице: принять, отклонить, исправить">Расхождения</a>
+                        <a v-if="isAdmin" href="#" :class="{ active: scanTab === 'names' }" @click.prevent="setScanTab('names')" title="Как значения GLPI и GSIT соответствуют названиям в таблице">Названия</a>
                     </nav>
                     <span class="tb-count">{{ scanTopCountText() }}</span>
                     <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
@@ -1113,9 +1127,9 @@
                                                 <textarea v-if="valueEdit.multiline" v-model="valueEdit.value" class="value-edit" rows="2" @keydown="onValueEditKeydown" @blur="finishValueEdit"></textarea>
                                                 <input v-else v-model="valueEdit.value" class="value-edit" @keydown="onValueEditKeydown" @blur="finishValueEdit">
                                             </template>
-                                            <template v-else><span class="df-mark" :style="scanMarkByKind[d.kind] && scanMarkByKind[d.kind].enabled ? scanMarkSample(scanMarkByKind[d.kind]) : null">{{ d.table }}<span v-if="!d.table" class="df-empty">пусто</span></span></template>
+                                            <template v-else><span :class="{ 'df-strike': scanMarkByKind[d.kind] && scanMarkByKind[d.kind].strike }">{{ d.table }}</span><span v-if="!d.table" class="df-empty">пусто</span></template>
                                         </td>
-                                        <td class="df-v df-new">{{ d.proposed }}<span v-if="d.raw !== d.proposed" class="df-raw"> ({{ d.raw.split("\n").join(", ") }})</span></td>
+                                        <td class="df-v df-new"><span class="scan-chip" :style="scanChipStyle(scanMarkByKind[d.kind] || {})">{{ d.proposed }}</span><span v-if="d.raw !== d.proposed" class="df-raw"> ({{ d.raw.split("\n").join(", ") }})</span></td>
                                         <td class="df-src" :title="diffSourceTitle(d)"><span class="df-from">{{ diffSourceShort(d) }}</span><span v-for="(t, ti) in diffTrust(d)" :key="ti" class="df-trust" :class="{ bad: t.bad }">{{ t.text }}</span><span v-if="d.rejected_by" class="df-trust">отклонил {{ d.rejected_by }} {{ formatTime(d.rejected_at) }}</span></td>
                                         <td class="df-c"><a v-if="d.same_pair" href="#" class="df-pair" @click.prevent="setDiffPair(d)" title="Показать только ПК с такой же парой значений — решить разом">{{ d.same_pair }} ПК</a></td>
                                     </tr>
@@ -1182,6 +1196,37 @@
             </div>
         </teleport>
 
+        <!-- ================= Значение сканера: что сделать (этап 26в) ================= -->
+        <teleport to="body">
+            <div v-if="scanPop" ref="scanPop" class="scan-pop" :class="{ placed: scanPop.placed }" :style="{ left: scanPop.left + 'px', top: scanPop.top + 'px' }"
+>
+                <div class="sp-head" @mousedown.prevent="startScanPopDrag" title="Перетащи, чтобы подвинуть">
+                    <span class="sp-title">{{ scanPop.col.headerName }}<span class="sp-host">{{ scanPop.row.hostname || "" }}</span></span>
+                    <span class="sp-close" title="Закрыть (Esc)" @mousedown.stop @click="closeScanPop">✕</span>
+                </div>
+                <table class="sp-values">
+                    <tr><td class="sp-label">В таблице</td><td class="sp-v"><span v-if="scanPop.d.table">{{ scanPop.d.table }}</span><span v-else class="sp-empty">пусто</span></td></tr>
+                    <tr><td class="sp-label">Сканер</td><td class="sp-v"><span class="scan-chip" :style="scanChipStyle(scanMarkByKind[scanPop.d.kind] || {})">{{ scanChipText(scanPop.d) }}</span><span v-if="scanPop.d.raw !== scanPop.d.proposed" class="sp-raw">как в источнике: {{ scanPop.d.raw.split("\n").join(", ") }}</span></td></tr>
+                </table>
+                <div class="sp-why"><span class="sp-from">{{ diffSourceShort(scanPop.d) }}</span><span v-for="(t, ti) in diffTrust(scanPop.d)" :key="ti" :class="{ bad: t.bad }"> · {{ t.text }}</span></div>
+                <template v-if="canEdit">
+                    <div class="sp-actions">
+                        <button class="btn btn-primary" @click="scanPopTake" :title="'Записать в таблицу: ' + scanChipText(scanPop.d)">Взять из сканера</button>
+                        <button class="btn" @click="scanPopLeave" :title="scanPop.forAll ? 'Не предлагать ни одному ПК с такой парой значений' : 'Не предлагать этому ПК, пока сканер видит то же'">{{ scanPop.d.table ? "Оставить как есть" : "Не заполнять" }}</button>
+                    </div>
+                    <label v-if="scanPopCanAll(scanPop)" class="sp-all" :title="'«' + scanPop.d.table + '» при «' + scanPop.d.raw.split('\n').join(', ') + '» — так и должно быть, у всех ПК (например, «ЕГИСЗ» вместо платы). Другим ПК «' + scanPop.d.table + '» это не предложит'">
+                        <input type="checkbox" v-model="scanPop.forAll"> и у всех ПК с такой парой<template v-if="scanPop.d.same_pair"> (ещё {{ scanPop.d.same_pair }})</template>
+                    </label>
+                    <div class="sp-own">
+                        <span class="sp-own-label">Своё:</span>
+                        <textarea v-if="scanPop.col.multiline" v-model="scanPop.own" class="input sp-input" rows="2" @keydown="onScanPopOwnKeydown"></textarea>
+                        <input v-else v-model="scanPop.own" class="input sp-input" @keydown="onScanPopOwnKeydown" spellcheck="false" autocomplete="off">
+                        <button class="btn" :disabled="scanPop.busy" @click="scanPopSaveOwn" title="Записать в таблицу своё значение (Enter)">Записать</button>
+                    </div>
+                </template>
+            </div>
+        </teleport>
+
         <!-- ================= Карточка ПК ================= -->
         <div v-if="card" class="card-overlay" @click.self="onCardOverlayClick">
             <div class="card">
@@ -1222,7 +1267,7 @@
                                     <!-- Что предлагает сканер (этап 26б) -->
                                     <div v-else-if="cardScanDiff(r)" class="ct-scan" :class="'ct-scan-' + cardScanDiff(r).kind" :title="diffSourceTitle(cardScanDiff(r)) + '\n' + diffTrust(cardScanDiff(r)).map(t => t.text).join(' · ')" @dblclick.stop>
                                         <span class="cs-src">{{ diffSourceShort(cardScanDiff(r)) }}:</span>
-                                        <span class="cs-val">{{ cardScanDiff(r).proposed.split("\n").join(", ") }}</span>
+                                        <span class="scan-chip" :style="scanChipStyle(scanMarkByKind[cardScanDiff(r).kind] || {})">{{ cardScanDiff(r).proposed.split("\n").join(", ") }}</span>
                                         <span v-if="cardScanDiff(r).kind === 'unsure'" class="cs-unsure">неточно</span>
                                         <template v-if="canEdit">
                                             <a href="#" class="cs-act" title="Записать значение сканера в таблицу" @click.prevent="acceptDiffs([cardScanDiff(r)])">принять</a>

@@ -1,14 +1,16 @@
-// Пометки сканера в Таблице и список расхождений (этапы 26, 26б).
+// Значения сканера в Таблице и список расхождений (этапы 26, 26б, 26в).
 //
 // Сервер (/api/scan/diffs) считает для ПК, сопоставленных с записями включённых
 // источников, поля, где сканер предлагает другое: diff — отличается, fill — в
 // таблице пусто, unsure — неточно (источники расходятся, VNC-серверов
-// несколько), partial — в таблице часть (не расхождение). В Таблице такие
-// ячейки помечаются: вид и «показывать и без кнопки» — у каждой ситуации свои
-// (/api/scan/marks, блок «Пометки сканера» в Справочниках); кнопка на панели
-// Таблицы включает пометки, у которых «без кнопки» не отмечено. При наведении —
-// что предлагает сканер; при правке ячейки — первой подсказкой; в карточке —
-// строкой с «Принять / Отклонить».
+// несколько), partial — в таблице часть (не расхождение).
+//
+// Таблица: кнопка на панели (наведение — что значат цвета) дописывает в ячейки
+// значения сканера блочками; цвет блочка — по ситуации (/api/scan/marks, блок
+// «Значения сканера» в Справочниках, там же «показывать и без кнопки»). Клик по
+// блочку — карточка рядом: взять, оставить (этому ПК или всем с такой парой),
+// вписать своё; карточку можно двигать и закрыть. В карточке ПК — строкой с
+// «принять / отклонить»; при правке ячейки — первой подсказкой.
 //
 // Список расхождений — вкладка «Расхождения» на «Сканировании»: ПК группами,
 // «Почему можно верить» (как сопоставлен, согласны ли источники, когда
@@ -16,12 +18,25 @@
 // «⇐ в таблице своё», «ещё у N ПК».
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
+import { frameColorFor } from "../columns.js";
 
 const KEY_TEXT = { id: "GLPI ID", mac: "MAC", serial: "серийному" };
 const LIST_KINDS = ["diff", "fill", "unsure"];
 
 export default {
+    watch: {
+        // Показались или скрылись блочки — пересчитать ширину столбцов
+        scanChipVersion() {
+            this.recalcWidths();
+        }
+    },
+
     computed: {
+        scanChipVersion() {
+            return Array.from(this.scanShownKinds).sort().join(",") + "|" +
+                this.diffs.items.map(function (d) { return d.id + (d.rejected_by ? "-" : ":") + d.proposed; }).join("|");
+        },
+
         diffCountBadge() {
             return this.diffs.count > 99 ? "99" : String(this.diffs.count);
         },
@@ -163,6 +178,8 @@ export default {
 
         toggleScanOverlay() {
             this.scanOverlay = !this.scanOverlay;
+            this.scanLegend = this.scanOverlay;
+            this.closeScanPop();
             if (this.scanOverlay) {
                 this.loadDiffs();
             }
@@ -174,6 +191,16 @@ export default {
         },
 
         // ---------- Пометки в ячейках Таблицы ----------
+
+        // Расхождение, блочок которого сейчас виден в ячейке (по полю)
+        scanChipShown(row, field) {
+            if (row.archived) {
+                return null;
+            }
+            const entry = this.diffIndex.get(row.id);
+            const d = entry ? entry[field] : null;
+            return d && this.scanShownKinds.has(d.kind) ? d : null;
+        },
 
         scanCellDiff(row, col) {
             const entry = this.diffIndex.get(row.id);
@@ -192,19 +219,178 @@ export default {
             return this.scanMarkByKind[d.kind] || null;
         },
 
-        scanCellTitle(row, col) {
-            if (!this.scanCellMark(row, col)) {
-                return null;
+        // Блочок со значением сканера в ячейке (этап 26в): вид — по ситуации из Справочников
+        scanChipStyle(mark) {
+            const style = {};
+            if (mark.bg_color) {
+                style.backgroundColor = mark.bg_color;
+                style.borderColor = frameColorFor(mark.bg_color);
             }
-            const d = this.scanCellDiff(row, col);
+            if (mark.frame) {
+                style.borderColor = mark.frame;
+            }
+            if (mark.color) {
+                style.color = mark.color;
+            }
+            if (mark.bold) {
+                style.fontWeight = "700";
+            }
+            if (mark.italic) {
+                style.fontStyle = "italic";
+            }
+            return style;
+        },
+
+        scanChipText(d) {
+            return d.proposed;
+        },
+
+        scanChipTitle(d) {
             const mark = this.scanMarkByKind[d.kind];
-            const lines = [(mark ? mark.label : "Сканер") + ": " + this.diffSourceShort(d) + " — " + d.proposed.split("\n").join(", ") +
-                (d.raw !== d.proposed ? " (" + d.raw.split("\n").join(", ") + ")" : "")];
-            lines.push(this.diffTrust(d).map(function (t) { return t.text; }).join(" · "));
-            if (this.canEdit && d.kind !== "partial") {
-                lines.push("Двойной клик — значение сканера первым в подсказках; принять или отклонить — в карточке ПК");
+            return (mark ? mark.label + ". " : "") + this.diffSourceShort(d) + " предлагает: " + this.scanChipText(d) +
+                "\nНажми — взять, оставить как есть или вписать своё";
+        },
+
+        // ---------- Карточка действий у блочка ----------
+
+        openScanPop(row, col, event) {
+            const d = this.scanCellDiff(row, col);
+            if (!d) {
+                return;
             }
-            return lines.join("\n");
+            const chip = event.currentTarget.getBoundingClientRect();
+            this.scanPop = {
+                d: d,
+                row: row,
+                col: col,
+                anchor: { left: chip.left, right: chip.right, top: chip.top, bottom: chip.bottom },
+                left: chip.right + 6,
+                top: chip.top,
+                placed: false,
+                own: row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]),
+                forAll: false,
+                busy: false
+            };
+            this.$nextTick(() => this.placeScanPop());
+            if (!this._scanPopKey) {
+                // Esc закрывает карточку, где бы ни был фокус
+                this._scanPopKey = (e) => {
+                    if (e.key === "Escape" && this.scanPop) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.closeScanPop();
+                    }
+                };
+                window.addEventListener("keydown", this._scanPopKey, true);
+            }
+        },
+
+        // Справа от блочка, не помещается — слева; по верхнему краю блочка, внизу не
+        // помещается — по нижнему
+        placeScanPop() {
+            const pop = this.scanPop;
+            const el = this.$refs.scanPop;
+            if (!pop || !el) {
+                return;
+            }
+            const w = el.offsetWidth;
+            const h = el.offsetHeight;
+            const a = pop.anchor;
+            let left = a.right + 6;
+            if (left + w > window.innerWidth - 8) {
+                left = Math.max(8, a.left - w - 6);
+            }
+            let top = a.top - 4;
+            if (top + h > window.innerHeight - 8) {
+                top = Math.max(8, a.bottom + 4 - h);
+            }
+            pop.left = left;
+            pop.top = top;
+            pop.placed = true;
+        },
+
+        closeScanPop() {
+            this.scanPop = null;
+            if (this._scanPopKey) {
+                window.removeEventListener("keydown", this._scanPopKey, true);
+                this._scanPopKey = null;
+            }
+        },
+
+        // Перетаскивание за шапку
+        startScanPopDrag(event) {
+            const pop = this.scanPop;
+            if (!pop || event.button !== 0) {
+                return;
+            }
+            const dx = event.clientX - pop.left;
+            const dy = event.clientY - pop.top;
+            const move = (e) => {
+                if (!this.scanPop) {
+                    return;
+                }
+                this.scanPop.left = Math.min(Math.max(0, e.clientX - dx), window.innerWidth - 60);
+                this.scanPop.top = Math.min(Math.max(0, e.clientY - dy), window.innerHeight - 30);
+            };
+            const up = () => {
+                window.removeEventListener("mousemove", move);
+                window.removeEventListener("mouseup", up);
+            };
+            window.addEventListener("mousemove", move);
+            window.addEventListener("mouseup", up);
+        },
+
+        // Пара «в таблице — у сканера» у других ПК (для «оставить у всех»)
+        scanPopCanAll(pop) {
+            return pop.d.name_field && !!pop.d.table && pop.d.kind !== "fill";
+        },
+
+        async scanPopTake() {
+            const pop = this.scanPop;
+            pop.busy = true;
+            this.closeScanPop();
+            await this.acceptDiffs([pop.d]);
+        },
+
+        async scanPopLeave() {
+            const pop = this.scanPop;
+            pop.busy = true;
+            this.closeScanPop();
+            if (pop.forAll && this.scanPopCanAll(pop)) {
+                await this.keepDiff(pop.d);
+            } else {
+                await this.rejectDiffs([pop.d]);
+            }
+        },
+
+        async scanPopSaveOwn() {
+            const pop = this.scanPop;
+            if (!pop || pop.busy) {
+                return;
+            }
+            pop.busy = true;
+            try {
+                const changed = await this.saveComputerValue(pop.d.computer_id, pop.d.field, pop.own.trim());
+                this.closeScanPop();
+                if (changed) {
+                    await this.loadDiffs();
+                }
+            } finally {
+                pop.busy = false;
+            }
+        },
+
+        onScanPopOwnKeydown(event) {
+            if (event.key === "Enter" && !(event.shiftKey && this.scanPop && this.scanPop.col.multiline)) {
+                event.preventDefault();
+                this.scanPopSaveOwn();
+            }
+        },
+
+        // ---------- Подсказка у включённой кнопки: что значат цвета ----------
+
+        showScanLegend(on) {
+            this.scanLegend = on && this.scanOverlay;
         },
 
         // Подсказка при правке ячейки / строки карточки: значение сканера первым
@@ -471,36 +657,16 @@ export default {
             }
         },
 
-        // Образец пометки: как ячейка будет выглядеть
-        scanMarkSample(m) {
-            const style = {};
-            if (m.color) {
-                style.color = m.color;
-            }
-            if (m.bg_color) {
-                style.backgroundColor = m.bg_color;
-            }
-            if (m.bold) {
-                style.fontWeight = "700";
-            }
-            if (m.italic) {
-                style.fontStyle = "italic";
-            }
-            if (m.strike) {
-                style.textDecoration = "line-through";
-            }
-            if (m.frame) {
-                style.boxShadow = "inset 0 0 0 1px " + m.frame;
-            }
-            return style;
+        scanLegendSample(kind) {
+            return { diff: "8", fill: "Win 10", unsure: "TightVNC", partial: "10.0.9.5" }[kind] || "…";
         },
 
         scanMarkHint(kind) {
             return {
-                diff: "В таблице одно, сканер предлагает другое",
-                fill: "В таблице пусто, сканер знает значение",
-                unsure: "Сканер не уверен: источники предлагают разное или значений несколько (например, два VNC)",
-                partial: "В таблице только часть того, что знает сканер (например, один IP из двух) — не расхождение"
+                diff: "в таблице другое значение",
+                fill: "в таблице пусто",
+                unsure: "сканер не уверен: GLPI и GSIT говорят разное или значений несколько — проверь сам",
+                partial: "в таблице только часть (например, один IP из двух)"
             }[kind] || "";
         },
 

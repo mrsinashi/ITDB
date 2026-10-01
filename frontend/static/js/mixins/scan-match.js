@@ -541,12 +541,13 @@ export default {
             }
         },
 
-        // Табличка сравнения во всю ширину — без скругления угла
+        // Табличка сравнения не до низа подробностей (пояснения справа выше её) — у неё
+        // своя нижняя линия и скруглённый угол; до низа — линию даёт разделитель строки
         scanFitCompare() {
             this.$nextTick(() => {
                 document.querySelectorAll(".sm-compare").forEach(function (table) {
                     const box = table.closest("td") || table.parentElement;
-                    table.classList.toggle("full", table.offsetWidth >= box.clientWidth - 1);
+                    table.classList.toggle("short", table.offsetHeight < box.clientHeight - 1);
                 });
             });
         },

@@ -296,10 +296,42 @@ class Names:
 
         if field in MULTI_NAME_FIELDS:
             src_lines, tab_lines = lines_of(raw), lines_of(table)
+
+            # Многострочное значение: ручное решение по паре целиком (двойной клик
+            # по отметке) — «две программы в источнике, одна в таблице — одно и то же»
+            if len(src_lines) > 1 or len(tab_lines) > 1:
+                whole = self.manual(field, raw, table) if src_lines and tab_lines else None
+
+                if whole in ("same", "keep"):
+                    return {"source": table, "raw": raw, "mark": "=", "how": whole,
+                            "manual": whole, "auto_equal": False}
+
+                result = self._compare_lines(field, raw, src_lines, tab_lines)
+                auto_equal = result["mark"] == "="
+
+                if whole == "differ":
+                    result["mark"] = "≠"
+
+                if src_lines and tab_lines:
+                    result["manual"] = whole
+                    result["auto_equal"] = auto_equal
+
+                return result
         else:
             src_lines = [clean_text(raw)] if clean_text(raw) else []
             tab_lines = [clean_text(table)] if clean_text(table) else []
 
+        result = self._compare_lines(field, raw, src_lines, tab_lines)
+
+        # Ручное решение по паре (однострочные): его показывает и меняет отметка
+        if len(src_lines) == 1 and len(tab_lines) == 1:
+            result["manual"] = self.manual(field, src_lines[0], tab_lines[0])
+            result["auto_equal"] = same_line(field, src_lines[0], tab_lines[0])
+
+        return result
+
+    def _compare_lines(self, field, raw, src_lines, tab_lines):
+        """Строки источника против строк таблицы: что показать и отметка."""
         shown = []
         hows = set()
         matched_tab = set()
@@ -336,11 +368,4 @@ class Names:
         else:
             mark = "≠"
 
-        result = {"source": "\n".join(shown), "raw": raw, "mark": mark, "how": ",".join(sorted(hows))}
-
-        # Ручное решение по паре (для однострочных): его показывает и меняет отметка
-        if len(src_lines) == 1 and len(tab_lines) == 1:
-            result["manual"] = self.manual(field, src_lines[0], tab_lines[0])
-            result["auto_equal"] = same_line(field, src_lines[0], tab_lines[0])
-
-        return result
+        return {"source": "\n".join(shown), "raw": raw, "mark": mark, "how": ",".join(sorted(hows))}

@@ -618,25 +618,42 @@ def test_canonical_keeps_model_numbers():
 
 
 def test_diffs_unsure_and_partial(admin, editor, room, glpi_url):
-    """Неточно: VNC-серверов несколько; в таблице часть (≈) — не в счёт."""
+    """VNC: просмотрщик не сервер, TightVNC рядом с другим — TightVNC; два других —
+    неточно. В таблице часть (≈) — не в счёт; ручное «=» у многострочного значения."""
+    assert sn.vnc_short(["TightVNC", "UltraVNC 1.4"]) == "TightVNC"     # решение пользователя 01.10
+    assert sn.vnc_short(["UltraVNC 1.4", "RealVNC Server"]) == "UltraVNC\nRealVNC"
+
     loc = room["room"]
     pc1 = add_pc(editor, loc, "vnc-1", mac="04:D9:F5:00:01:01")
-    pc2 = add_pc(editor, loc, "vnc-2", mac="04:D9:F5:00:01:02", vnc="Tight")
+    pc2 = add_pc(editor, loc, "vnc-2", mac="04:D9:F5:00:01:02", vnc="UltraVNC")
+    pc3 = add_pc(editor, loc, "vnc-3", mac="04:D9:F5:00:01:03", vnc="Tight")
     Glpi.computers = {
-        1: pc("vnc-1", ports=[(ETH, "04:d9:f5:00:01:01", [])], soft=["TightVNC", "UltraVNC 1.4"]),
-        2: pc("vnc-2", ports=[(ETH, "04:d9:f5:00:01:02", [])], soft=["TightVNC", "UltraVNC 1.4"]),
-        3: pc("vnc-3", ports=[(ETH, "04:d9:f5:00:01:03", [])], soft=["TightVNC", "UltraVNC Viewer 1.4"]),
+        1: pc("vnc-1", ports=[(ETH, "04:d9:f5:00:01:01", [])], soft=["UltraVNC 1.4", "RealVNC Server"]),
+        2: pc("vnc-2", ports=[(ETH, "04:d9:f5:00:01:02", [])], soft=["UltraVNC 1.4", "RealVNC Server"]),
+        3: pc("vnc-3", ports=[(ETH, "04:d9:f5:00:01:03", [])], soft=["TightVNC", "UltraVNC Viewer 1.4", "UltraVNC 1.4"]),
     }
     setup_source(admin, glpi_url)
     collect(admin)
-    assert records(admin)[1][3]["values"]["vnc"] == "TightVNC"          # просмотрщик не сервер
+    assert records(admin)[1][3]["values"]["vnc"] == "TightVNC"
 
     data = diffs_of(editor)
     items = {(d["computer_id"], d["field"]): d for d in data["items"]}
     vnc1 = items[(pc1, "vnc")]
     assert vnc1["kind"] == "unsure" and "VNC" in vnc1["unsure"]
-    assert items[(pc2, "vnc")]["kind"] == "partial"                     # «Tight» — один из двух
-    assert data["computers"] == 2                                       # partial не в счёт ПК
+    assert items[(pc2, "vnc")]["kind"] == "partial"                     # «UltraVNC» — один из двух
+    assert (pc3, "vnc") not in items                                    # Tight = TightVNC
+    counted = {d["computer_id"] for d in data["items"] if d["kind"] != "partial" and not d.get("rejected_by")}
+    assert data["computers"] == len(counted)                            # partial не в счёт ПК
+
+    # Двойной клик по «≈» у многострочного: «одно и то же» целиком — отметка «=»
+    rec = records(admin)[1][2]
+    vnc = next(c for c in rec["compare"] if c["field"] == "vnc")
+    assert vnc["mark"] == "≈" and vnc["manual"] is None and vnc["auto_equal"] is False
+    ok(editor.post("/api/scan/names", json={"field": "vnc", "source": vnc["raw"], "table": "UltraVNC", "kind": "same"}))
+    rec = records(admin)[1][2]
+    vnc = next(c for c in rec["compare"] if c["field"] == "vnc")
+    assert vnc["mark"] == "=" and vnc["manual"] == "same"
+    assert (pc2, "vnc") not in {(d["computer_id"], d["field"]) for d in diffs_of(editor)["items"]}
 
 
 def test_marks_settings(admin, editor, reader):
