@@ -1,9 +1,10 @@
-"""Сбор из GLPI / GSIT и сопоставление с ПК (этап 25). Только администратор.
+"""Сбор из GLPI / GSIT (и Jabber — этап 26д) и сопоставление с ПК (этап 25).
+Только администратор.
 
-- POST /api/scan/sources/{kind}/collect — начать сбор (в фоне); ответ — запуск;
+- POST /api/scan/sources/{kind}/collect — начать сбор (в фоне; glpi, gsit, jabber); ответ — запуск;
 - GET  /api/scan/runs/{id} — запуск (пока идёт — «сделано из»);
 - GET  /api/scan/runs?source=… — журнал запусков;
-- GET  /api/scan/records?source=… — записи последнего сбора и их сопоставление
+- GET  /api/scan/records?source=… — записи последнего сбора GLPI / GSIT и их сопоставление
   с ПК ITDB (считается сейчас, по текущим данным таблицы);
 - POST /api/scan/records/{kind}/{source_id}/link {computer_id} — «это этот ПК»;
 - POST /api/scan/records/{kind}/{source_id}/reject {computer_id} — «не этот ПК»;
@@ -39,6 +40,12 @@ RUNS_LIMIT = 50
 
 def check_collect_kind(kind):
     if kind not in scan_collect.COLLECTORS:
+        raise HTTPException(status_code=404, detail="Нет такого источника.")
+
+
+def check_record_kind(kind):
+    """Записи о ПК — только у GLPI и GSIT (у Jabber — пользователи, /api/scan/jabber)."""
+    if kind not in scan_collect.RECORD_KINDS:
         raise HTTPException(status_code=404, detail="Нет такого источника.")
 
 
@@ -154,7 +161,7 @@ def computer_brief(computer, locations):
 def list_records(source: str, me=Depends(require_editor), session=Depends(get_db)):
     """Записи последнего сбора и их сопоставление. Смотреть — редактор и
     администратор (вкладка «Проверка», этап 26г); решать о сопоставлении — admin."""
-    check_collect_kind(source)
+    check_record_kind(source)
     records = session.query(ScanRecord).filter(ScanRecord.source == source).order_by(ScanRecord.name, ScanRecord.source_id).all()
     matches, _ = scan_collect.match(session, source)
     decisions = {}
@@ -234,7 +241,7 @@ class DecisionIn(BaseModel):
 
 
 def load_record(session, kind, source_id):
-    check_collect_kind(kind)
+    check_record_kind(kind)
     record = session.query(ScanRecord).filter(ScanRecord.source == kind, ScanRecord.source_id == source_id).first()
 
     if record is None:

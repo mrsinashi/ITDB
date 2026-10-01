@@ -2802,20 +2802,94 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .users-table tbody tr.is-hover td:last-child {
     border-right-color: transparent;
 }
-.add-bar .ab-login {
-    width: 130px;
+/* Столбцы постоянной ширины: строка добавления / правки их не раздвигает (этап 26д) */
+.users-table.users-list {
+    width: 786px;
+    table-layout: fixed;
 }
-.add-bar .ab-fio {
-    width: 220px;
+.users-list col.uc-login { width: 150px; }
+.users-list col.uc-fio { width: 240px; }
+.users-list col.uc-position { width: 170px; }
+.users-list col.uc-role { width: 130px; }
+.users-list col.uc-created { width: 96px; }
+.users-list td {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.add-bar .ab-position {
-    width: 150px;
+.users-list td.u-login,
+.users-list td.u-fio,
+.users-list td.u-position {
+    padding-right: 8px;
 }
-.add-bar .ab-role {
-    padding: 2px 4px;
+.users-list th.u-created,
+.users-list td.u-created {
+    width: auto;
+    padding-left: 8px;
+    padding-right: 8px;
 }
-.add-bar .ab-password {
-    width: 150px;
+
+/* Строка добавления / правки прямо в таблице (пользователи, подсети, этап 26д):
+   поля — во всю ячейку, текст в поле — там же, где текст в обычной строке;
+   поля, которых нет в столбцах (пароль и повтор), — ниже под первым столбцом */
+.history-table tbody tr.er-row td,
+.history-table tbody tr.er-row:hover td {
+    padding: 1px 2px;
+    vertical-align: middle;
+    background: var(--surface-alt);
+    border-right-color: var(--grid-line);
+}
+.history-table tbody tr.er-row td:last-child {
+    border-right-color: transparent;
+}
+.history-table tr.er-row td.u-created,
+.history-table tr.er-row td.sn-c {
+    padding: 1px 8px;
+}
+.er-input {
+    display: block;
+    width: 100%;
+    height: 21px;
+    box-sizing: border-box;
+    padding: 0 6px;
+    font-size: 13px;
+}
+select.er-input {
+    padding: 0 2px;
+}
+.history-table tr.er-row td.er-rest {
+    padding: 1px 6px;
+}
+.er-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+.er-tools .icon-btn {
+    width: 22px;
+    height: 20px;
+}
+.er-tools .icon-btn svg {
+    width: 14px;
+    height: 14px;
+}
+.er-tools .icon-btn.on {
+    color: var(--text-strong);
+    background: var(--menu-hover-bg);
+}
+.er-error {
+    color: var(--danger);
+    font-size: 12px;
+    white-space: normal;
+}
+.history-table tbody tr.er-row.er-msg td {
+    padding: 3px 8px;
+}
+.tree-actions.er-plate .er-ok {
+    color: var(--success);
+}
+.tree-actions.er-plate .icon-btn.off {
+    opacity: .5;
+    pointer-events: none;
 }
 
 /* ============================================================
@@ -3365,11 +3439,6 @@ body.login-page {
     font-weight: 600;
     color: var(--text-strong);
 }
-.scan-caption .scan-sub {
-    margin-left: 8px;
-    font-weight: 400;
-    color: var(--text-muted);
-}
 .scan-sources {
     display: flex;
     flex-wrap: wrap;
@@ -3379,6 +3448,9 @@ body.login-page {
 }
 .scan-src {
     width: 384px;
+}
+.scan-src .st-count {
+    font-weight: 400;
 }
 .scan-src .scan-on {
     display: inline-flex;
@@ -3475,11 +3547,6 @@ body.login-page {
     border-bottom: 1px solid var(--grid-line);
     overflow-wrap: anywhere;
 }
-.scan-status .ss-time {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-}
 .scan-status.bad .ss-text {
     color: var(--danger);
 }
@@ -3492,6 +3559,14 @@ body.login-page {
 }
 .scan-buttons .sb-gap {
     flex: 1;
+}
+/* «Проверить подключение» — значком (этап 26д); высота — как у кнопок с текстом */
+.scan-buttons .btn.icon-only {
+    padding: 3px 6px;
+}
+.scan-buttons .btn.icon-only .ico {
+    width: 15px;
+    height: 15px;
 }
 /* Нет ключа шифрования в .env */
 .scan-warn {
@@ -3539,52 +3614,32 @@ body.login-page {
 }
 .subnets-table td.sn-note {
     white-space: normal;
-    min-width: 160px;
-    max-width: 360px;
 }
-.add-bar .ab-cidr {
-    width: 130px;
+/* Столбцы постоянной ширины: строка добавления их не раздвигает (этап 26д) */
+.subnets-table {
+    width: 850px;
+    table-layout: fixed;
 }
-.add-bar .ab-note {
-    width: 220px;
+.subnets-table col.sc-cidr { width: 140px; }
+.subnets-table col.sc-purpose { width: 150px; }
+.subnets-table col.sc-building { width: 170px; }
+.subnets-table col.sc-scan { width: 100px; }
+.subnets-table col.sc-pc { width: 50px; }
+.subnets-table col.sc-note { width: 240px; }
+.subnets-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-/* Подсказка: IP из базы вне подсетей — кнопками «подсеть · число ПК» */
-.scan-uncovered {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 5px;
-    margin-top: 8px;
-    font-size: 12px;
+.subnets-table th.sn-c,
+.subnets-table td.sn-c {
+    width: auto;
+    padding-left: 6px;
+    padding-right: 6px;
 }
-.scan-uncovered .su-title {
-    color: var(--text-secondary);
+.subnets-table tr.er-row input[type="checkbox"] {
+    margin: 0;
+    vertical-align: middle;
 }
-.scan-uncovered .su-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    height: 22px;
-    padding: 0 3px 0 7px;
-    border: 1px solid var(--gray-line);
-    border-radius: var(--radius);
-    background: #fff;
-    color: var(--text);
-    font: inherit;
-    font-variant-numeric: tabular-nums;
-    cursor: pointer;
-}
-.scan-uncovered .su-chip:hover {
-    background: var(--row-hover-bg);
-}
-.scan-uncovered .su-n {
-    padding: 0 4px;
-    border-radius: var(--radius);
-    background: #e6e6e6;
-    font-size: 11px;
-    line-height: 15px;
-}
-
 /* Кнопка «Добавить» справа от шапки таблицы (Дерево, Пользователи, подсети) —
    дубль кнопки на панели (просьба пользователя 30.09); стоит там же, где
    плашка действий строк, но на высоте шапки — они не пересекаются */
@@ -3643,21 +3698,6 @@ body.login-page {
     font-weight: 600;
 }
 
-/* Итог сбора в блоке источника: как строка проверки, со ссылкой на вкладку */
-.scan-status .ss-note {
-    color: var(--text-secondary);
-    font-size: 11px;
-    white-space: pre-line;
-}
-.scan-status .ss-link {
-    align-self: flex-start;
-    font-size: 11px;
-    color: var(--text-secondary);
-}
-.scan-status .ss-link:hover {
-    color: var(--text-strong);
-}
-
 .scan-match-page {
     flex: 1;
     min-height: 0;
@@ -3667,37 +3707,6 @@ body.login-page {
 }
 .sm-empty {
     color: var(--text-secondary);
-    font-size: 12px;
-}
-.sm-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-    font-size: 12px;
-}
-.sm-head .sm-title {
-    font-weight: 600;
-    color: var(--text-strong);
-}
-.sm-head .sm-sources {
-    display: inline-flex;
-    gap: 5px;
-}
-.sm-head .sm-run-time {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-}
-.sm-head .sm-run {
-    color: var(--text);
-}
-.sm-head .sm-run.bad {
-    color: var(--danger);
-}
-.sm-head .btn {
-    padding: 2px 9px;
     font-size: 12px;
 }
 .sm-filters {
@@ -3980,13 +3989,6 @@ body.login-page {
 }
 
 /* Названия (этап 25б) */
-.sm-intro {
-    max-width: 900px;
-    margin-bottom: 8px;
-    font-size: 12px;
-    line-height: 18px;
-    color: var(--text-secondary);
-}
 .names-table td.nm-kind {
     width: 1%;
     color: var(--text-strong);
@@ -4016,10 +4018,6 @@ body.login-page {
     height: 22px;
     padding: 0 9px;
     font-size: 12px;
-}
-.sm-intro b {
-    font-weight: 600;
-    color: var(--text-strong);
 }
 
 /* ============================================================
@@ -4395,16 +4393,9 @@ button.scan-chip {
 /* ============================================================
    «Сканирование» → «Проверка» (этап 26г)
    ============================================================ */
-.ck-sources {
-    gap: 18px;
-}
-.ck-sources .ck-src {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-.ck-sources .sm-run-time.bad {
-    color: var(--danger);
+/* Один «Собрать» — перед фильтрами (этап 26д) */
+.sm-filters .ck-collect {
+    margin-right: 6px;
 }
 .ck-wrap {
     min-width: 760px;
@@ -4465,37 +4456,33 @@ button.scan-chip {
 .history-table.ck-table tbody tr.row-selected.is-hover > td {
     background-image: linear-gradient(var(--row-sel-tint-hover), var(--row-sel-tint-hover));
 }
-/* Подробности: значение источника и отметка = ≈ ≠ справа в той же ячейке;
-   совпадающее с таблицей — серым, чтобы видно было только отличия */
-.ck-compare .ck-cmp-in {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-}
-.ck-compare .ck-cmp-v {
-    flex: 1;
+/* Подробности: отметка = ≈ ≠ ⇐ — своим узким столбцом по центру между значением
+   таблицы и источника (этап 26д, просьба пользователя); совпадающее с таблицей —
+   серым, чтобы видно было только отличия */
+.history-table.sm-table tbody tr.sm-detail .ck-compare td.ck-mark-td {
+    width: 12px;
     min-width: 0;
+    padding: 2px 5px;
+    text-align: center;
+    white-space: nowrap;
+    border-right: none;
+    user-select: none;
 }
-.history-table .ck-compare td.ck-same .ck-cmp-v {
+.history-table.sm-table tbody tr.sm-detail .ck-compare td.ck-mark-td.cycle {
+    cursor: pointer;
+}
+.history-table.sm-table tbody tr.sm-detail .ck-compare td.ck-mark-td.cycle:hover {
+    background: var(--row-hover-bg);
+}
+.history-table .ck-compare td.ck-same {
     color: var(--text-muted);
 }
 .ck-compare .ck-mark {
-    flex: none;
-    min-width: 12px;
-    text-align: center;
     color: var(--text-secondary);
-    user-select: none;
 }
 .ck-compare .ck-mark.ne {
     color: var(--danger);
     font-weight: 600;
-}
-.ck-compare .ck-mark.cycle {
-    cursor: pointer;
-    border-radius: 2px;
-}
-.ck-compare .ck-mark.cycle:hover {
-    background: var(--row-hover-bg);
 }
 /* Решение задано вручную — отметка полужирная, цветом схемы */
 .ck-compare .ck-mark.manual {
@@ -4533,10 +4520,162 @@ button.scan-chip {
 .sm-lines .ck-lines-head:first-child {
     margin-top: 0;
 }
-.sm-lines .ck-lines-time {
-    font-weight: 400;
-    color: var(--text-muted);
-}
 .ck-plate-open {
     display: none;
+}
+
+/* ============================================================
+   Этап 26д: вкладка «Vacuum», пояснение «Названий», значок-вкладка
+   ============================================================ */
+
+/* Вкладка-значок на второй панели (лампочка Vacuum) — как вкладки-подписи */
+.toolbar .tb-tabs a.tb-tab-icon {
+    padding: 0 12px;
+}
+.toolbar .tb-tabs a.tb-tab-icon svg {
+    width: 16px;
+    height: 16px;
+}
+/* «Названия»: пояснение — белой плашкой под кнопкой «?», как подсказка о цветах */
+.toolbar .dropdown.names-help {
+    display: block;
+    width: 420px;
+    padding: 8px 12px 6px;
+    background: #fff;
+    border-color: #cfcfcf;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 17px;
+    white-space: normal;
+    cursor: default;
+}
+.names-help p {
+    margin: 0 0 6px;
+}
+.names-help b {
+    color: var(--text-strong);
+}
+/* Кнопка, которая сейчас работает (идёт сбор), — полупрозрачная, как недоступная */
+.btn.busy {
+    cursor: progress;
+}
+
+/* Vacuum: таблица в рамке «Проверки», ширина по содержимому */
+.vacuum-wrap {
+    min-width: 600px;
+}
+.vacuum-table td {
+    white-space: nowrap;
+}
+.vacuum-table td.vc-login {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.vacuum-table td.vc-groups {
+    white-space: normal;
+    max-width: 320px;
+}
+.vacuum-table td.vc-ip {
+    font-variant-numeric: tabular-nums;
+}
+.vacuum-table .vc-host {
+    color: var(--text);
+    text-decoration: none;
+}
+.vacuum-table a.vc-host:hover {
+    text-decoration: underline;
+}
+.vacuum-table .vc-host.vc-src {
+    font-style: italic;
+    color: var(--text-secondary);
+}
+.vacuum-table .vc-none {
+    color: var(--text-muted);
+}
+.vacuum-table th.vc-c,
+.vacuum-table td.vc-c {
+    text-align: center;
+}
+.vacuum-table td.vc-status {
+    color: var(--text-secondary);
+}
+.vacuum-table td.vc-status.on {
+    color: var(--text-strong);
+}
+.vacuum-table .vc-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: #c4c4c4;
+    vertical-align: 1px;
+}
+.vacuum-table td.vc-status.on .vc-dot {
+    background: var(--success);
+}
+
+/* Столбец «Антивирусы» (этап 26д): каждый строкой, цвет — по состоянию; с фоном —
+   блочком, как значение с фоном в Справочниках */
+.av-cell {
+    display: block;
+}
+.av-line {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.av-line.av-chip {
+    padding: 0 5px;
+    border-radius: var(--radius);
+    line-height: 17px;
+}
+.av-line.av-chip + .av-line.av-chip {
+    margin-top: 1px;
+}
+/* Справочники: подзаголовки «Состояние» / «Названия», глаз — показывать или нет */
+.st-row.st-sub {
+    height: 20px;
+    background: #f7f7f7;
+    border-bottom-color: var(--gray-line);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+}
+.st-row.st-sub:hover {
+    background: #f7f7f7;
+}
+.st-eye {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.st-eye svg {
+    width: 13px;
+    height: 13px;
+}
+.st-eye:hover {
+    color: var(--text-strong);
+}
+.st-eye.off {
+    color: var(--danger);
+}
+.st-eye.disabled {
+    cursor: default;
+}
+.st-row.av-off .st-val {
+    opacity: .45;
+    text-decoration: line-through;
+}
+/* В карточке название антивируса переносится — карточка узкая */
+.card-table .av-line {
+    white-space: normal;
 }

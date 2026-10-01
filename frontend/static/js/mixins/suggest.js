@@ -64,13 +64,20 @@ export default {
             const values = col.suggest ? this.collectValues(col.field, false, false) : [];
             const scanKeys = new Set(scan.map(function (o) { return o.value.toLowerCase(); }));
             const options = scan.concat(values.filter(function (o) { return !scanKeys.has(String(o.value).toLowerCase()); }));
-            if (!options.length) {
+            this.openSuggestList(el, col.field, options, onPick);
+        },
+
+        // Тот же список со своими вариантами [{ key, value, count }] (например, подсети,
+        // которых нет в списке, — при добавлении подсети, этап 26д)
+        openSuggestList(el, field, options, onPick) {
+            this.closeSuggest();
+            if (!el || !options.length) {
                 return;
             }
             const current = String(el.value || "").trim().toLowerCase();
             this.suggest = {
                 el: el,
-                field: col.field,
+                field: field,
                 options: options,
                 current: current,
                 query: el.value || "",

@@ -622,6 +622,8 @@ def column_values(computer, parts, user_name, vacuum):
             values[column.key] = vacuum
         elif column.kind == "date":
             values[column.key] = format_date(getattr(computer, column.key))
+        elif column.kind == "scan":
+            continue    # только из сканера: фронт берёт из /api/scan/diffs, выгрузка — сама
         else:
             values[column.key] = getattr(computer, column.key)
 

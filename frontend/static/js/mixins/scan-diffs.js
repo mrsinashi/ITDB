@@ -14,16 +14,28 @@
 //
 // Решения по значениям сканера (взять, оставить, «в таблице своё») — общие для
 // Таблицы, карточки ПК и вкладки «Проверка» (scan-check.js).
+//
+// Столбец «Антивирусы» (этап 26д): антивирусы ПК приходят вместе с расхождениями
+// (/api/scan/diffs → antivirus) и дописываются в строки таблицы (row.antivirus —
+// названия через перенос: так работают ширина, сортировка, фильтр и поиск); цвет
+// каждого — по состоянию, что показывать — блок «Антивирусы» в Справочниках
+// (/api/scan/antivirus).
 
 import { apiFetch } from "../util.js";
 
 const KEY_TEXT = { id: "GLPI ID", mac: "MAC", serial: "серийному" };
+const AV_TEXT = { on: "работает, базы актуальны", old: "работает, базы устарели", off: "выключен" };
 
 export default {
     watch: {
         // Показались или скрылись блочки — пересчитать ширину столбцов
         scanChipVersion() {
             this.recalcWidths();
+        },
+
+        // Пришли антивирусы или поменялось, что показывать, — дописать в строки
+        avIndex() {
+            this.applyAntivirus();
         }
     },
 
@@ -70,6 +82,65 @@ export default {
             return kinds;
         },
 
+        // Антивирусы, которые показываются в столбце: id ПК → [{ name, status, version, source }]
+        avIndex() {
+            const map = new Map();
+            const settings = this.avSettings;
+            if (!settings) {
+                return map;
+            }
+            const shown = new Set(settings.statuses.filter(function (st) { return st.show; }).map(function (st) { return st.kind; }));
+            const hidden = new Set(settings.hidden.map(function (n) { return n.trim().toLowerCase(); }));
+            const data = this.diffs.antivirus || {};
+            Object.keys(data).forEach(function (id) {
+                const list = data[id].filter(function (a) { return shown.has(a.status) && !hidden.has(a.name.trim().toLowerCase()); });
+                if (list.length) {
+                    map.set(Number(id), list);
+                }
+            });
+            return map;
+        },
+
+        avStatusMap() {
+            const map = {};
+            (this.avSettings ? this.avSettings.statuses : []).forEach(function (st) { map[st.kind] = st; });
+            return map;
+        },
+
+        // Справочники: сколько антивирусов в каждом состоянии и все названия (и скрытые)
+        avStatusCounts() {
+            const counts = { on: 0, old: 0, off: 0 };
+            const data = this.diffs.antivirus || {};
+            Object.keys(data).forEach(function (id) {
+                data[id].forEach(function (a) { counts[a.status] = (counts[a.status] || 0) + 1; });
+            });
+            return counts;
+        },
+
+        avNames() {
+            const byKey = new Map();
+            const data = this.diffs.antivirus || {};
+            Object.keys(data).forEach(function (id) {
+                data[id].forEach(function (a) {
+                    const key = a.name.trim().toLowerCase();
+                    const item = byKey.get(key) || { key: key, name: a.name, count: 0 };
+                    item.count += 1;
+                    byKey.set(key, item);
+                });
+            });
+            const hidden = this.avSettings ? this.avSettings.hidden : [];
+            hidden.forEach(function (name) {
+                const key = name.trim().toLowerCase();
+                if (!byKey.has(key)) {
+                    byKey.set(key, { key: key, name: name, count: 0 });
+                }
+            });
+            const hiddenKeys = new Set(hidden.map(function (n) { return n.trim().toLowerCase(); }));
+            return Array.from(byKey.values()).map(function (item) {
+                return Object.assign(item, { hidden: hiddenKeys.has(item.key) });
+            }).sort(function (a, b) { return (b.count - a.count) || a.name.localeCompare(b.name, "ru"); });
+        },
+
         // Все расхождения по ПК, и отклонённые: id ПК → { поле → расхождение }
         diffAllIndex() {
             const map = new Map();
@@ -101,6 +172,7 @@ export default {
                 this.diffs.count = data.items.filter(function (d) { return !d.rejected_by && d.kind !== "partial"; }).length;
                 this.diffs.rejected = data.rejected;
                 this.diffs.sources = data.sources;
+                this.diffs.antivirus = data.antivirus || {};
             } catch (e) {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
@@ -117,6 +189,85 @@ export default {
             } catch (e) {
                 // без пометок таблица работает как раньше
             }
+        },
+
+        // ---------- Столбец «Антивирусы» (этап 26д) ----------
+
+        async loadAvSettings() {
+            try {
+                const response = await apiFetch("/api/scan/antivirus");
+                if (response.ok) {
+                    this.avSettings = await response.json();
+                }
+            } catch (e) {
+                // без настроек столбец просто пустой
+            }
+        },
+
+        async updateAvSettings(patch) {
+            try {
+                const response = await apiFetch("/api/scan/antivirus", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(patch)
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                this.avSettings = await response.json();
+            } catch (e) {
+                this.toastError("Не удалось сохранить: " + (e.message || e));
+            }
+        },
+
+        toggleAvHidden(item) {
+            const hidden = this.avSettings.hidden.filter(function (n) { return n.trim().toLowerCase() !== item.key; });
+            if (!item.hidden) {
+                hidden.push(item.name);
+            }
+            this.updateAvSettings({ hidden: hidden });
+        },
+
+        // Строкам таблицы — названия показываемых антивирусов (через перенос)
+        applyAntivirus() {
+            const index = this.avIndex;
+            let changed = false;
+            this.rows.forEach(function (row) {
+                const list = index.get(row.id);
+                const text = list ? list.map(function (a) { return a.name; }).join("\n") : null;
+                if (row.antivirus !== text) {
+                    row.antivirus = text;
+                    changed = true;
+                }
+            });
+            if (changed) {
+                this.recalcWidths();
+            }
+        },
+
+        avItems(row) {
+            return this.avIndex.get(row.id) || [];
+        },
+
+        // Вид антивируса — по состоянию (как оформление значения в Справочниках)
+        avStatusStyle(st) {
+            if (!st) {
+                return null;
+            }
+            return {
+                color: st.color || null,
+                backgroundColor: st.bg_color || null,
+                fontWeight: st.bold ? "700" : null,
+                fontStyle: st.italic ? "italic" : null
+            };
+        },
+
+        avStyle(a) {
+            return this.avStatusStyle(this.avStatusMap[a.status]);
+        },
+
+        avTitle(a) {
+            return a.name + ": " + AV_TEXT[a.status] + (a.version ? ", версия " + a.version : "") + "\nИз " + a.source;
         },
 
         toggleScanOverlay() {

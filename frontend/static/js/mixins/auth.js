@@ -134,6 +134,7 @@ export default {
                 this.loadChoices();
                 this.loadColumnStyles();
                 this.loadFieldDefs();
+                this.loadAvSettings();
             } else if (view === "users") {
                 this.loadUsers();
             } else if (view === "scan") {

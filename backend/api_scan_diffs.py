@@ -22,7 +22,7 @@
 предлагает (value) — признаки, можно ли верить.
 """
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -37,7 +37,7 @@ from api_scan import SOURCES
 from auth import get_current_user, require_editor
 from db import get_db
 from history_log import log_change
-from models import Computer, ScanMark, ScanRecord, ScanReject, ScanSource
+from models import AppSetting, Computer, ScanMark, ScanRecord, ScanReject, ScanSource
 from scan_values import COMPARE_FIELDS, NAME_FIELDS, key_of
 
 router = APIRouter(prefix="/api/scan/diffs", tags=["scan"])
@@ -75,23 +75,91 @@ class DiffOut(BaseModel):
     rejected_at: Optional[datetime] = None
 
 
+class AntivirusOut(BaseModel):
+    name: str
+    status: str           # on — работает, old — базы устарели, off — выключен
+    version: Optional[str] = None
+    source: str           # «GLPI №12»
+
+
 class DiffsOut(BaseModel):
     items: list[DiffOut]
     computers: int
     rejected: int
     sources: list[str]    # включённые источники, из которых считались
+    antivirus: dict[int, list[AntivirusOut]] = {}   # столбец «Антивирусы» (этап 26д)
 
 
 def enabled_kinds(session):
+    """Включённые источники записей о ПК — в порядке главенства (GLPI, потом GSIT)."""
+    enabled = {s.kind for s in session.query(ScanSource).filter(ScanSource.enabled == True)}  # noqa: E712
+    return [kind for kind in scan_collect.RECORD_KINDS if kind in enabled]
+
+
+def matched_records(session, kinds, computers):
+    """Записи включённых источников, сопоставленные с рабочими ПК по признаку
+    или вручную: (kind, source_id, итог сопоставления, запись)."""
+    for kind in kinds:
+        matches, _ = scan_collect.match(session, kind)
+        records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
+
+        for source_id, item in matches.items():
+            if item["state"] in ("key", "link") and item["computer_id"] in computers:
+                yield kind, source_id, item, records[source_id]
+
+
+# ---------- Антивирусы (этап 26д) ----------
+
+AV_STATUSES = {"on": "Работает", "old": "Базы устарели", "off": "Выключен"}
+
+
+def av_status(item):
+    if not item.get("active"):
+        return "off"
+    return "on" if item.get("uptodate") else "old"
+
+
+def av_entries(kind, record):
+    """Антивирусы записи: [{name, status, version, source}]."""
+    title = f"{SOURCES[kind]['title']} №{record.source_id}"
     return [
-        s.kind for s in session.query(ScanSource).filter(ScanSource.enabled == True)  # noqa: E712
-        if s.kind in scan_collect.COLLECTORS
+        {"name": a.get("name") or "?", "status": av_status(a), "version": a.get("version"), "source": title}
+        for a in ((record.data or {}).get("antivirus") or [])
     ]
 
 
+def pick_antivirus(found):
+    """found: {ПК: {источник: [антивирусы]}} → {ПК: [антивирусы]}: из первого по
+    главенству источника, где они есть (GLPI, потом GSIT)."""
+    result = {}
+
+    for computer_id, by_kind in found.items():
+        for kind in scan_collect.RECORD_KINDS:
+            if by_kind.get(kind):
+                result[computer_id] = by_kind[kind]
+                break
+
+    return result
+
+
+def computer_antivirus(session):
+    """{id ПК: [антивирусы]} у рабочих ПК, сопоставленных с записями включённых
+    источников (для выгрузки; Таблица получает то же в /api/scan/diffs)."""
+    computers = {
+        row.id for row in session.query(Computer.id).filter(Computer.archived == False)  # noqa: E712
+    }
+    found = {}
+
+    for kind, _source_id, item, record in matched_records(session, enabled_kinds(session), computers):
+        found.setdefault(item["computer_id"], {}).setdefault(kind, []).extend(av_entries(kind, record))
+
+    return pick_antivirus(found)
+
+
 def compute(session, with_rejected=False):
-    """(расхождения, число отклонённых, источники) по всем включённым источникам.
-    Одно поле ПК — одна строка; если источники предлагают разное — «неточно»."""
+    """(расхождения, число отклонённых, источники, антивирусы ПК) по всем
+    включённым источникам. Одно поле ПК — одна строка; если источники
+    предлагают разное — «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
     names = scan_collect.load_names(session, computers)
@@ -101,31 +169,24 @@ def compute(session, with_rejected=False):
         rejects[(r.computer_id, r.field, r.value_key)] = r
 
     rows = {}   # (ПК, поле) → {row из compare, sources: [...]}
+    antivirus = {}
 
-    for kind in kinds:
-        matches, _ = scan_collect.match(session, kind)
-        records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
+    for kind, source_id, item, record in matched_records(session, kinds, computers):
+        computer_id = item["computer_id"]
+        values = (record.data or {}).get("values") or {}
+        antivirus.setdefault(computer_id, {}).setdefault(kind, []).extend(av_entries(kind, record))
 
-        for source_id, item in matches.items():
-            computer_id = item["computer_id"]
-
-            if item["state"] not in ("key", "link") or computer_id not in computers:
+        for row in scan_collect.compare_record(names, values, computers[computer_id]):
+            if not row["raw"]:
                 continue
 
-            record = records[source_id]
-            values = (record.data or {}).get("values") or {}
-
-            for row in scan_collect.compare_record(names, values, computers[computer_id]):
-                if not row["raw"]:
-                    continue
-
-                entry = rows.setdefault((computer_id, row["field"]), {"rows": [], "sources": []})
-                entry["rows"].append(row)
-                entry["sources"].append({
-                    "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id,
-                    "checked_at": record.checked_at, "state": item["state"], "by": item["by"],
-                    "value": row["source"],
-                })
+            entry = rows.setdefault((computer_id, row["field"]), {"rows": [], "sources": []})
+            entry["rows"].append(row)
+            entry["sources"].append({
+                "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id,
+                "checked_at": record.checked_at, "state": item["state"], "by": item["by"],
+                "value": row["source"],
+            })
 
     items = []
     rejected = 0
@@ -192,7 +253,7 @@ def compute(session, with_rejected=False):
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
 
     result.sort(key=lambda d: ((d.hostname or "").lower(), d.computer_id, order.get(d.field, 99)))
-    return result[:MAX_ITEMS], rejected, kinds
+    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus)
 
 
 @router.get("", response_model=DiffsOut)
@@ -201,12 +262,13 @@ def list_diffs(
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    items, rejected_count, kinds = compute(session, with_rejected=rejected)
+    items, rejected_count, kinds, antivirus = compute(session, with_rejected=rejected)
     return DiffsOut(
         items=items,
         computers=len({d.computer_id for d in items if not d.rejected_by and d.kind != "partial"}),
         rejected=rejected_count,
         sources=kinds,
+        antivirus=antivirus,
     )
 
 
@@ -405,3 +467,136 @@ def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), sess
     log_change(session, "scan_marks", 0, me["login"], changes, title=MARK_LABELS.get(kind, kind), entity_key=kind)
     session.commit()
     return mark_out(mark)
+
+
+# ---------- Столбец «Антивирусы»: вид и что показывать (этап 26д) ----------
+
+av_router = APIRouter(prefix="/api/scan/antivirus", tags=["scan"])
+
+AV_KEY = "antivirus"
+AV_STYLE_FIELDS = ("color", "bg_color", "bold", "italic", "show")
+# Начальный вид: текст цветом по состоянию — зелёный, оранжевый, красный
+AV_DEFAULTS = {
+    "on": {"color": "#2e7d32", "bg_color": None, "bold": False, "italic": False, "show": True},
+    "old": {"color": "#b35c00", "bg_color": None, "bold": False, "italic": False, "show": True},
+    "off": {"color": "#cc0000", "bg_color": None, "bold": False, "italic": False, "show": True},
+}
+AV_HIDDEN_MAX = 100
+
+
+class AvStatusOut(BaseModel):
+    kind: str
+    label: str
+    color: Optional[str]
+    bg_color: Optional[str]
+    bold: bool
+    italic: bool
+    show: bool
+
+
+class AvSettingsOut(BaseModel):
+    statuses: list[AvStatusOut]
+    hidden: list[str]       # названия, которые не показывать (без учёта регистра)
+
+
+class AvUpdate(BaseModel):
+    """Вид состояния kind (None — не менять; у цветов "" — убрать) или список hidden."""
+    kind: Optional[str] = None
+    color: Optional[str] = None
+    bg_color: Optional[str] = None
+    bold: Optional[bool] = None
+    italic: Optional[bool] = None
+    show: Optional[bool] = None
+    hidden: Optional[list[str]] = None
+
+
+def av_settings(session):
+    """Настройки столбца: сохранённые поверх значений по умолчанию."""
+    row = session.get(AppSetting, AV_KEY)
+    saved = (row.value if row else None) or {}
+    statuses = {}
+
+    for kind, default in AV_DEFAULTS.items():
+        own = (saved.get("statuses") or {}).get(kind) or {}
+        statuses[kind] = {field: own.get(field, value) for field, value in default.items()}
+
+    hidden = [name for name in saved.get("hidden") or [] if isinstance(name, str)]
+    return {"statuses": statuses, "hidden": hidden}
+
+
+def av_settings_out(settings):
+    return AvSettingsOut(
+        statuses=[
+            AvStatusOut(kind=kind, label=AV_STATUSES[kind], **settings["statuses"][kind])
+            for kind in AV_DEFAULTS
+        ],
+        hidden=settings["hidden"],
+    )
+
+
+def av_visible(settings, item):
+    """Показывать ли антивирус в столбце: состояние включено и название не скрыто."""
+    hidden = {name.strip().lower() for name in settings["hidden"]}
+    return settings["statuses"][item["status"]]["show"] and item["name"].strip().lower() not in hidden
+
+
+@av_router.get("", response_model=AvSettingsOut)
+def get_av_settings(me=Depends(get_current_user), session=Depends(get_db)):
+    return av_settings_out(av_settings(session))
+
+
+@av_router.patch("", response_model=AvSettingsOut)
+def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=Depends(get_db)):
+    """Вид столбца — общий для всех, как оформление в Справочниках."""
+    settings = av_settings(session)
+    data = payload.model_dump(exclude_none=True)
+    kind = data.pop("kind", None)
+    hidden = data.pop("hidden", None)
+    changes = {}
+
+    if data:
+        if kind not in AV_DEFAULTS:
+            raise HTTPException(status_code=400, detail="Нет такого состояния антивируса.")
+
+        status = settings["statuses"][kind]
+
+        for field, value in data.items():
+            if field in ("color", "bg_color"):
+                value = (value or "").strip() or None
+
+                if value is not None and not COLOR_RE.match(value):
+                    raise HTTPException(status_code=400, detail="Цвет — в виде #RRGGBB.")
+
+            changes[field] = {"old": status[field], "new": value}
+            status[field] = value
+
+        title = AV_STATUSES[kind]
+    else:
+        title = "Не показывать"
+
+    if hidden is not None:
+        names = []
+
+        for name in hidden:
+            name = (name or "").strip()
+
+            if name and len(name) <= 200 and name.lower() not in {n.lower() for n in names}:
+                names.append(name)
+
+        if len(names) > AV_HIDDEN_MAX:
+            raise HTTPException(status_code=400, detail="Слишком много скрытых названий.")
+
+        changes["hidden"] = {"old": ", ".join(settings["hidden"]) or None, "new": ", ".join(names) or None}
+        settings["hidden"] = names
+
+    row = session.get(AppSetting, AV_KEY)
+
+    if row is None:
+        row = AppSetting(key=AV_KEY)
+        session.add(row)
+
+    row.value = {"statuses": settings["statuses"], "hidden": settings["hidden"]}
+    row.updated_at = datetime.now(timezone.utc)
+    log_change(session, "scan_antivirus", 0, me["login"], changes, title=title, entity_key=kind or "hidden")
+    session.commit()
+    return av_settings_out(settings)

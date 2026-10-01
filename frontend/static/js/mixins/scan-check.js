@@ -256,9 +256,18 @@ export default {
 
         // ---------- Строка: клик, выделение, подробности ----------
 
-        onCheckRowMouseDown(event) {
-            if (event.ctrlKey || event.metaKey || event.shiftKey) {
-                event.preventDefault();   // без выделения текста
+        // Нажатие мыши: с Ctrl / Shift — без выделения текста; Ctrl — выделение
+        // протягиванием, как в Таблице (этап 26д): первая строка решает, добавлять или снимать
+        onCheckRowMouseDown(event, row) {
+            if (event.button !== 0 || event.target.closest("a, .act-ico, .value-edit")) {
+                return;
+            }
+            const ctrl = event.ctrlKey || event.metaKey;
+            if (ctrl || event.shiftKey) {
+                event.preventDefault();
+            }
+            if (ctrl && !event.shiftKey) {
+                this.startCheckDrag(row);
             }
         },
 
@@ -266,18 +275,119 @@ export default {
             if (event.target.closest("a, .act-ico, .value-edit")) {
                 return;
             }
-            if (event.ctrlKey || event.metaKey || event.shiftKey) {
+            if (event.shiftKey) {
                 const keys = this.checkShown.map(function (r) { return r.key; });
                 const r = clickSelect(this.check.selected, keys, this.check.anchor, row.key, event, false);
                 this.check.selected = r.selected;
                 this.check.anchor = r.anchor;
                 return;
             }
+            if (event.ctrlKey || event.metaKey) {
+                return;   // Ctrl+клик уже обработан при нажатии (startCheckDrag)
+            }
             this.check.anchor = row.key;
             this.check.open = this.check.open === row.key ? null : row.key;
             this.check.hover = null;
             this.valueEdit = null;
             this.afterCheckRender();
+        },
+
+        startCheckDrag(row) {
+            const drag = {
+                start: row.key,
+                add: !this.checkSelectedSet.has(row.key),
+                base: this.check.selected.slice(),
+                keys: this.checkShown.map(function (r) { return r.key; }),
+                x: 0,
+                y: 0,
+                raf: null
+            };
+            this._checkDrag = drag;
+            this.check.anchor = row.key;
+            this.applyCheckDrag(row.key);
+            const onMove = (e) => {
+                drag.x = e.clientX;
+                drag.y = e.clientY;
+                this.checkDragAtPointer();
+                this.checkDragAutoScroll();
+            };
+            const onUp = () => {
+                document.removeEventListener("mousemove", onMove, true);
+                document.removeEventListener("mouseup", onUp, true);
+                if (drag.raf) {
+                    cancelAnimationFrame(drag.raf);
+                }
+                this._checkDrag = null;
+            };
+            document.addEventListener("mousemove", onMove, true);
+            document.addEventListener("mouseup", onUp, true);
+        },
+
+        applyCheckDrag(key) {
+            const drag = this._checkDrag;
+            const a = drag.keys.indexOf(drag.start);
+            const b = drag.keys.indexOf(key);
+            if (a === -1 || b === -1) {
+                return;
+            }
+            const range = new Set(drag.keys.slice(Math.min(a, b), Math.max(a, b) + 1));
+            const base = new Set(drag.base);
+            const next = drag.add
+                ? drag.base.concat(Array.from(range).filter(function (k) { return !base.has(k); }))
+                : drag.base.filter(function (k) { return !range.has(k); });
+            if (next.length !== this.check.selected.length || next.some((k, i) => k !== this.check.selected[i])) {
+                this.check.selected = next;
+            }
+        },
+
+        // Строка под курсором во время протягивания — по высоте, даже если курсор
+        // ушёл левее или правее таблицы (строки подробностей пропускаются)
+        checkDragAtPointer() {
+            const drag = this._checkDrag;
+            const scroll = document.querySelector(".ck-wrap .history-scroll");
+            if (!drag || !scroll) {
+                return;
+            }
+            const box = scroll.getBoundingClientRect();
+            const table = scroll.querySelector("table");
+            const right = table ? Math.min(box.right, table.getBoundingClientRect().right) : box.right;
+            const x = Math.min(Math.max(drag.x, box.left + 2), right - 4);
+            const y = Math.min(Math.max(drag.y, box.top + 1), box.bottom - 2);
+            const el = document.elementFromPoint(x, y);
+            const tr = el ? el.closest(".ck-table tr.ck-row") : null;
+            if (tr && tr.dataset.key) {
+                this.applyCheckDrag(tr.dataset.key);
+            }
+        },
+
+        // У верхнего / нижнего края списка — прокрутка, пока держат мышь
+        checkDragAutoScroll() {
+            const drag = this._checkDrag;
+            const scroll = document.querySelector(".ck-wrap .history-scroll");
+            if (!drag || !scroll || drag.raf) {
+                return;
+            }
+            const step = () => {
+                drag.raf = null;
+                if (this._checkDrag !== drag) {
+                    return;
+                }
+                const box = scroll.getBoundingClientRect();
+                const head = scroll.querySelector("thead");
+                const top = box.top + (head ? head.offsetHeight : 0);
+                let dy = 0;
+                if (drag.y < top + 20) {
+                    dy = -Math.min(30, Math.ceil((top + 20 - drag.y) / 3));
+                } else if (drag.y > box.bottom - 20) {
+                    dy = Math.min(30, Math.ceil((drag.y - box.bottom + 20) / 3));
+                }
+                if (dy) {
+                    scroll.scrollTop += dy;
+                    this.checkDragAtPointer();
+                    drag.raf = requestAnimationFrame(step);
+                }
+            };
+            step();
         },
 
         selectAllCheck() {
@@ -423,6 +533,12 @@ export default {
         checkSourceHead(row, kind) {
             const r = row.recs[kind];
             return r ? r.title + " №" + r.source_id : "";
+        },
+
+        // Когда источник проверял ПК — в подсказке у шапки (серые подписи убраны, 01.10)
+        checkSourceHeadTitle(row, kind) {
+            const r = row.recs[kind];
+            return r && r.checked_at ? r.title + " проверял этот ПК " + this.formatTime(r.checked_at) : null;
         },
 
         checkSourceLink(r) {

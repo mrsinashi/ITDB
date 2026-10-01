@@ -23,7 +23,9 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #   user      — основной пользователь (связь с people)
 #   vacuum    — логины VACUUM (связь с vacuum_accounts)
 #   location  — часть пути расположения; меняется выбором узла (location_id)
-Kind = Literal["text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location"]
+#   scan      — только из сканера, в computers не хранится и не правится
+#               (антивирусы — из записей GLPI / GSIT, этап 26д)
+Kind = Literal["text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan"]
 
 
 class Column(BaseModel):
@@ -81,6 +83,7 @@ COLUMNS = [
     col("gpu", "GPU", "Видеокарта (ГП / GPU)", center=True, card_copy=True, export_width=16),
     col("mac", "MAC", "MAC адрес", kind="mac", multiline=True, values="no", card_copy=True, dup=True, bulk=False, export_width=20),
     col("vnc", "VNC", "Тип VNC", center=True, hidden=True, export_width=8),
+    col("antivirus", "Антивирус", "Антивирусы", kind="scan", multiline=True, values="no", bulk=False, export_width=30),
     col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=16),
     col("glpi_id", "GLPI", "GLPI ID", center=True, values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=8),
@@ -101,7 +104,7 @@ CARD_GROUPS = [
     (None, ["status", "temp_until"]),
     ("Размещение", ["building", "department", "floor", "room_code", "seat_no"]),
     ("Сеть", ["ip", "mac", "vnc"]),
-    ("Оборудование", ["type", "model", "os", "cpu", "ram", "drive", "gpu"]),
+    ("Оборудование", ["type", "model", "os", "cpu", "ram", "drive", "gpu", "antivirus"]),
     ("Учёт", ["inv_no", "serial", "glpi_id", "gsit", "state", "label"]),
     ("Прочее", ["user_fields", "note"]),
 ]
@@ -123,7 +126,7 @@ def keys_of(*kinds):
 
 
 # Поля, которые правятся в PATCH (кроме location_id и пользовательских)
-EDITABLE_KEYS = {column.key for column in COLUMNS if column.kind != "location"}
+EDITABLE_KEYS = {column.key for column in COLUMNS if column.kind not in ("location", "scan")}
 
 # Нельзя менять всем выбранным сразу: расположение и № места — через
 # «Переместить», значения, которые у каждого ПК свои, — по одному

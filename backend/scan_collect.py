@@ -1,4 +1,5 @@
-"""Сбор из GLPI / GSIT (этап 25): запуск в фоне, запись результата, отчёт.
+"""Сбор из GLPI / GSIT (этап 25) и Jabber (этап 26д): запуск в фоне, запись
+результата, отчёт.
 
 Сбор идёт в отдельном потоке программы (служба — один процесс uvicorn),
 со своей сессией базы. Пока идёт, в запуске (scan_runs.stats.progress)
@@ -6,7 +7,9 @@
 Результат записывается целиком в конце: записи источника заменяются новыми
 одной транзакцией. Сбой на середине ничего не портит — остаются прежние.
 
-В таблицу ПК сбор ничего не пишет (правило 1): только scan_records.
+В таблицу ПК сбор ничего не пишет (правило 1): только scan_records (GLPI, GSIT)
+и scan_jabber_users (Jabber — пользователи не заменяются, а обновляются: у
+ушедших из сети остаются последний IP и время).
 """
 import logging
 import threading
@@ -15,8 +18,9 @@ from datetime import datetime, timedelta, timezone
 
 from api_scan import INTERRUPTED, SOURCES, connection_params, fresh_days_of, interrupted, load_source
 from db import SessionLocal
-from models import Choice, Computer, ScanAlias, ScanLink, ScanRecord, ScanRun
+from models import Choice, Computer, ScanAlias, ScanJabberUser, ScanLink, ScanRecord, ScanRun
 from scan_glpi import collect as glpi_collect
+from scan_jabber import collect as jabber_collect
 from scan_http import SourceError
 from scan_match import drop_shared_keys, find_duplicates, match_all
 from scan_normalize import build
@@ -24,7 +28,9 @@ from scan_values import COMPARE_FIELDS, MULTI_NAME_FIELDS, NAME_FIELDS, NUMBER_F
 
 logger = logging.getLogger("uvicorn.error")
 
-COLLECTORS = {"glpi": glpi_collect, "gsit": glpi_collect}
+COLLECTORS = {"glpi": glpi_collect, "gsit": glpi_collect, "jabber": jabber_collect}
+# Источники записей о ПК (scan_records): сопоставление, названия, расхождения
+RECORD_KINDS = ("glpi", "gsit")
 # Запуск, который «идёт» дольше, — оборвался (программу перезапускали)
 RUN_TIMEOUT = timedelta(hours=2)
 STATES = ("key", "link", "name", "conflict", "none", "dup")
@@ -137,7 +143,12 @@ def collect_into(session, run):
 
     result = COLLECTORS[kind](params, fresh_days, progress)
     stats = dict(result["stats"], fresh_days=fresh_days, version=result.get("version"))
-    save_records(session, kind, run, result["items"], stats)
+
+    if kind in RECORD_KINDS:
+        save_records(session, kind, run, result["items"], stats)
+    else:
+        save_jabber(session, run, result["items"], keep_groups=not result.get("groups_ok", True))
+
     finish(session, run, "ok", "\n".join(result["warnings"]) or None, stats)
 
 
@@ -178,6 +189,54 @@ def save_records(session, kind, run, items, stats):
         counts[item["state"]] += 1
 
     stats.update(counts)
+
+
+def save_jabber(session, run, items, keep_groups=False):
+    """Пользователи Jabber: обновить, кто в сети и откуда; последний IP и время
+    в сети остаются у тех, кто сейчас не в сети. keep_groups — группы получить
+    не удалось: прежние группы не трогать."""
+    seen_at = now()
+    existing = {row.login.lower(): row for row in session.query(ScanJabberUser)}
+    found = set()
+
+    for item in items:
+        key = item["login"].lower()
+        row = existing.get(key)
+
+        if row is None:
+            row = ScanJabberUser(login=item["login"])
+            session.add(row)
+            existing[key] = row
+
+        row.login = item["login"]
+
+        if not keep_groups:
+            row.groups = item["groups"]
+
+        row.online = item["online"]
+        row.resources = item["resources"] if item["online"] else []
+
+        if item["online"]:
+            row.last_seen_at = seen_at
+            first = next((r for r in item["resources"] if r.get("ip")), None)
+
+            if first:
+                row.last_ip = first["ip"]
+                row.last_client = first.get("client")
+
+        row.run_id = run.id
+        row.updated_at = seen_at
+        found.add(key)
+
+    for key, row in existing.items():
+        if key not in found and (row.online or row.resources or (row.groups and not keep_groups)):
+            row.online = False
+            row.resources = []
+
+            if not keep_groups:
+                row.groups = []
+
+            row.updated_at = seen_at
 
 
 # ---------- Сопоставление на лету ----------
@@ -247,7 +306,7 @@ def load_names(session, computers=None):
 
     pairs = []
 
-    for kind in COLLECTORS:
+    for kind in RECORD_KINDS:
         matches, _ = match(session, kind)
         records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
 

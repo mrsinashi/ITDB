@@ -381,7 +381,9 @@ def test_collect_refused(admin, editor, glpi_url):
     setup_source(admin, glpi_url, enabled=False)
     response = admin.post("/api/scan/sources/glpi/collect")
     assert response.status_code == 400 and "выключен" in response.json()["detail"]
-    assert admin.post("/api/scan/sources/jabber/collect").status_code == 404
+    assert admin.post("/api/scan/sources/jabber/collect").status_code == 400        # Jabber — тоже (этап 26д)
+    assert admin.post("/api/scan/sources/nope/collect").status_code == 404
+    assert admin.get("/api/scan/records", params={"source": "jabber"}).status_code == 404
     assert editor.post("/api/scan/sources/glpi/collect").status_code == 403
 
 
@@ -671,3 +673,78 @@ def test_marks_settings(admin, editor, reader):
 
     # Вернуть как было — таблица пометок между тестами не очищается
     ok(editor.patch("/api/scan/marks/diff", json={"strike": False, "frame": "", "always": False}))
+
+
+# ---------- Столбец «Антивирусы» (этап 26д) ----------
+
+
+def test_antivirus_column(admin, editor, reader, room, glpi_url):
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from api_scan_diffs import pick_antivirus
+
+    loc = room["room"]
+    first = add_pc(editor, loc, "pc-1", mac="D8:BB:C1:00:00:01")
+    second = add_pc(editor, loc, "pc-2", mac="D8:BB:C1:00:00:02")
+    Glpi.computers = {
+        1: pc("pc-1", ports=[(ETH, "d8:bb:c1:00:00:01", [])]),
+        2: pc("pc-2", ports=[(ETH, "d8:bb:c1:00:00:02", [])]),
+    }
+    Glpi.antivirus = [
+        {"id": 1, "computers_id": 1, "name": "Kaspersky Endpoint Security", "is_active": 1, "is_uptodate": 1, "antivirus_version": "11.11"},
+        {"id": 2, "computers_id": 1, "name": "Windows Defender", "is_active": 0, "is_uptodate": 1},
+        {"id": 3, "computers_id": 2, "name": "Kaspersky Endpoint Security", "is_active": 1, "is_uptodate": 0},
+    ]
+    setup_source(admin, glpi_url)
+    assert collect(admin)["status"] == "ok"
+
+    # Антивирусы ПК — вместе с расхождениями (видят все), состояние словом
+    av = ok(reader.get("/api/scan/diffs"))["antivirus"]
+    assert [(a["name"], a["status"]) for a in av[str(first)]] == [("Kaspersky Endpoint Security", "on"), ("Windows Defender", "off")]
+    assert av[str(first)][0]["version"] == "11.11" and av[str(first)][0]["source"] == "GLPI №1"
+    assert [a["status"] for a in av[str(second)]] == ["old"]
+
+    # Главнее GLPI; нет у него антивирусов — берутся из GSIT
+    x, y = {"name": "x"}, {"name": "y"}
+    assert pick_antivirus({5: {"glpi": [y], "gsit": [x]}}) == {5: [y]}
+    assert pick_antivirus({5: {"glpi": [], "gsit": [x]}}) == {5: [x]}
+
+    # В строке ПК столбца нет, править его нельзя
+    row = get_row(editor, first)
+    assert "antivirus" not in row
+    assert editor.patch(f"/api/computers/{first}", json={"antivirus": "x", "_version": row["version"]}).status_code == 400
+
+    # Вид столбца: по умолчанию показываются все состояния, скрытых нет
+    settings = ok(reader.get("/api/scan/antivirus"))
+    assert [s["kind"] for s in settings["statuses"]] == ["on", "old", "off"]
+    assert all(s["show"] for s in settings["statuses"]) and settings["hidden"] == []
+    assert reader.patch("/api/scan/antivirus", json={"kind": "on", "bold": True}).status_code == 403
+    assert editor.patch("/api/scan/antivirus", json={"kind": "on", "color": "green"}).status_code == 400
+    assert editor.patch("/api/scan/antivirus", json={"kind": "nope", "bold": True}).status_code == 400
+    settings = ok(editor.patch("/api/scan/antivirus", json={"kind": "old", "show": False, "bold": True}))
+    old = next(s for s in settings["statuses"] if s["kind"] == "old")
+    assert (old["show"], old["bold"]) == (False, True)
+    settings = ok(editor.patch("/api/scan/antivirus", json={"hidden": ["Windows Defender", "windows defender", " "]}))
+    assert settings["hidden"] == ["Windows Defender"]
+    assert ok(reader.get("/api/scan/antivirus"))["hidden"] == ["Windows Defender"]
+    items = ok(reader.get("/api/history", params={"entity": "scan_antivirus"}))["items"]
+    assert {i["title"] for i in items} == {"Базы устарели", "Не показывать"}
+
+    # Выгрузка: показываемые антивирусы строками (Defender скрыт, «базы устарели» не показываются)
+    response = reader.get("/api/export/computers.xlsx")
+    ws = load_workbook(BytesIO(response.content))["Компьютеры"]
+    headers = [cell.value for cell in ws[1]]
+    values = {row[headers.index("HOSTNAME")].value: row[headers.index("Антивирус")].value for row in ws.iter_rows(min_row=2)}
+    assert values == {"pc-1": "Kaspersky Endpoint Security", "pc-2": None}
+
+    ok(editor.patch("/api/scan/antivirus", json={"kind": "old", "show": True}))
+    ok(editor.patch("/api/scan/antivirus", json={"hidden": []}))
+    response = reader.get("/api/export/computers.xlsx")
+    ws = load_workbook(BytesIO(response.content))["Компьютеры"]
+    values = {row[headers.index("HOSTNAME")].value: row[headers.index("Антивирус")].value for row in ws.iter_rows(min_row=2)}
+    assert values == {
+        "pc-1": "Kaspersky Endpoint Security\nWindows Defender — выключен",
+        "pc-2": "Kaspersky Endpoint Security — базы устарели",
+    }

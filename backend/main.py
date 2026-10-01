@@ -22,7 +22,9 @@ from api_column_styles import router as column_styles_router
 from api_columns import router as columns_router
 from api_users import router as users_router
 from api_scan import router as scan_router
+from api_scan_jabber import router as scan_jabber_router
 from api_scan_records import router as scan_records_router
+from api_scan_diffs import av_router as scan_av_router
 from api_scan_diffs import marks_router as scan_marks_router
 from api_scan_diffs import router as scan_diffs_router
 
@@ -140,10 +142,13 @@ app.include_router(users_router)
 # только администратор
 app.include_router(scan_router)
 app.include_router(scan_records_router)
-# Расхождения (этап 26) и пометки сканера (этап 26б): смотреть — все,
-# решать и настраивать вид — редактор и администратор
+# Расхождения (этап 26), пометки сканера (этап 26б), вид столбца «Антивирусы»
+# (этап 26д): смотреть — все, решать и настраивать вид — редактор и администратор
 app.include_router(scan_diffs_router)
 app.include_router(scan_marks_router)
+app.include_router(scan_av_router)
+# Пользователи Jabber (этап 26д): смотреть — редактор и администратор
+app.include_router(scan_jabber_router)
 
 @app.get("/api/health")
 def health():

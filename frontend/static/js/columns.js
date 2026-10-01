@@ -90,7 +90,9 @@ export function toColumnDef(c) {
         multiline: c.multiline,
         // location: правка — выбор узла дерева (двойной клик)
         location: c.kind === "location",
-        editable: c.kind !== "location",
+        // scan: только из сканера (антивирусы, этап 26д) — не правится
+        editable: c.kind !== "location" && c.kind !== "scan",
+        scanOnly: c.kind === "scan",
         hiddenByDefault: c.hidden,
         dup: c.dup,
         bulk: c.bulk,
@@ -162,7 +164,8 @@ export const ENTITY_LABELS = {
     scan_subnets: "Подсеть",
     scan_records: "Запись",
     scan_aliases: "Название",
-    scan_marks: "Пометка сканера"
+    scan_marks: "Пометка сканера",
+    scan_antivirus: "Антивирусы"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -203,7 +206,10 @@ export const SIMPLE_FIELD_LABELS = {
     // Пометки сканера (этап 26б)
     strike: "Зачёркнутый",
     frame: "Рамка",
-    always: "Без кнопки"
+    always: "Без кнопки",
+    // Столбец «Антивирусы» (этап 26д)
+    show: "Показывать",
+    hidden: "Не показывать"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

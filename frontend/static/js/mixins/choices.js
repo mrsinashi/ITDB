@@ -86,6 +86,8 @@ export default {
                     label: columnTitle(col),
                     extra: !!col.extra,
                     subnet: col.values === "subnet",
+                    // «Антивирусы» (этап 26д): цвет по состоянию и что не показывать
+                    av: col.field === "antivirus",
                     valuesOn: valuesOn,
                     values: valuesOn ? collect(col.field, !!col.multiline, col.values === "subnet") : []
                 };

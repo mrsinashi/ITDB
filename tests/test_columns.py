@@ -47,7 +47,8 @@ def test_row_has_every_column(editor, room):
     row = get_row(editor, computer_id)
 
     for column in COLUMNS:
-        assert column.key in row, column.key
+        # Столбцы из сканера (антивирусы) в строке ПК не хранятся — их дописывает фронт
+        assert column.key in row or column.kind == "scan", column.key
 
 
 def test_new_fields_edit_and_history(editor, room):

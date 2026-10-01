@@ -15,7 +15,8 @@
 //                        scan (Сканирование: подключения к источникам, подсети),
 //                        scan-match (сбор из GLPI / GSIT, вкладка «Названия», общее для записей),
 //                        scan-check (вкладка «Проверка»: сопоставление и предложения сканера),
-//                        scan-diffs (значения сканера в Таблице, решения по ним)
+//                        scan-diffs (значения сканера в Таблице, решения по ним, столбец «Антивирусы»),
+//                        scan-vacuum (вкладка «Vacuum»: пользователи Jabber)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -42,6 +43,7 @@ import scan from "./mixins/scan.js";
 import scanMatch from "./mixins/scan-match.js";
 import scanDiffs from "./mixins/scan-diffs.js";
 import scanCheck from "./mixins/scan-check.js";
+import scanVacuum from "./mixins/scan-vacuum.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -49,7 +51,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -166,7 +168,7 @@ const app = Vue.createApp({
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
             subnetHover: null,   // подсеть под курсором — плашка действий
             // Этап 25: вкладки страницы, сбор и сопоставление
-            scanTab: "settings", // settings — подключения и подсети, check — проверка, names — названия
+            scanTab: "settings", // settings — подключения и подсети, check — проверка, names — названия, vacuum — Jabber
             scanRuns: {},        // kind → запуск сбора, за которым следим
             scanPollTimer: null,
             // Этап 26г: «Проверка» — записи GLPI и GSIT по ПК и предложения сканера
@@ -181,7 +183,9 @@ const app = Vue.createApp({
                 selected: [],    // ключи выделенных строк
                 anchor: null     // строка, от которой идёт Shift+клик
             },
-            scanMatchQuery: "",  // поиск на «Проверке» и «Названиях»
+            scanMatchQuery: "",  // поиск на «Проверке», «Названиях» и «Vacuum»
+            // Этап 26д: «Vacuum» — пользователи Jabber (/api/scan/jabber)
+            vacuum: { data: null, loading: false, error: "", filter: "all" },
             scanNames: { items: [], loading: false, error: "", hover: null },
             // Этапы 26б–26г: значения сканера в Таблице (кнопка на панели)
             scanOverlay: false,
@@ -194,9 +198,11 @@ const app = Vue.createApp({
                 count: 0,           // расхождений без отклонённых — на кнопке
                 rejected: 0,
                 sources: [],
+                antivirus: {},      // столбец «Антивирусы»: id ПК → [{ name, status, version, source }]
                 loading: false,
                 error: "",
             },
+            avSettings: null,    // /api/scan/antivirus — вид и что показывать в столбце «Антивирусы»
             scanLinkBar: null,   // «Привязать запись к ПК:» — строка под панелью
 
             // Карточка
@@ -249,6 +255,7 @@ const app = Vue.createApp({
             await this.loadTable();
             this.loadDiffs();
             this.loadScanMarks();
+            this.loadAvSettings();
         }
     }
 });

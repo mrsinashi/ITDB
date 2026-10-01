@@ -5,7 +5,8 @@
 // изменённое, «Проверить подключение» проверяет то, что сейчас в форме (даже
 // несохранённое). Пароли и токены с сервера не приходят — только «сохранён»;
 // пустое поле — не менять, «✕» у сохранённого — удалить при сохранении.
-// Подсети — таблица; новая и «Изменить» — строкой под панелью, как у пользователей.
+// Подсети — таблица; новая и «Изменить» — строкой прямо в таблице (этап 26д), как у
+// пользователей; при вводе подсети — список подсетей /24 с ПК из базы, которых нет в списке.
 
 import { apiFetch } from "../util.js";
 
@@ -17,6 +18,18 @@ export default {
         scanCountText() {
             const on = this.scanSources.filter(function (s) { return s.enabled; }).length;
             return "Источников включено: " + on + " из " + this.scanSources.length + " · Подсетей: " + this.scanSubnets.length;
+        },
+
+        // Строки таблицы подсетей: правка — на месте строки, новая — последней строкой
+        subnetsView() {
+            const bar = this.subnetBar;
+            const rows = this.scanSubnets.map(function (sn) {
+                return { key: "s" + sn.id, subnet: sn, edit: !!bar && bar.kind === "edit" && bar.id === sn.id };
+            });
+            if (bar && bar.kind === "new") {
+                rows.push({ key: "new", subnet: null, edit: true });
+            }
+            return rows;
         },
 
         scanPurposeOptions() {
@@ -34,6 +47,9 @@ export default {
         scanTopCountText() {
             if (this.scanTab === "check") {
                 return this.checkCountText;
+            }
+            if (this.scanTab === "vacuum") {
+                return this.vacuumCountText;
             }
             return this.scanTab === "settings" ? this.scanCountText : this.scanNamesCountText;
         },
@@ -129,13 +145,17 @@ export default {
             return Object.keys(this.scanChanges(kind)).length > 0;
         },
 
-        scanSecretPlaceholder(kind, name, empty) {
+        // Сохранённый пароль / токен: поле пустое, подсказка короткая (просьба 01.10)
+        scanSecretPlaceholder(kind, name) {
             const s = this.scanSource(kind);
             const f = this.scanForms[kind];
             if (s && s.secrets[name]) {
-                return f.clear[name] ? "будет удалён при сохранении" : "сохранён · пусто — не менять";
+                if (f.clear[name]) {
+                    return "будет удалён";
+                }
+                return name === "password" ? "сменить пароль" : "сменить токен";
             }
-            return empty;
+            return name === "password" ? "" : "не указан";
         },
 
         toggleSecretClear(kind, name) {
@@ -207,6 +227,10 @@ export default {
                 } else {
                     f.result = result;
                 }
+                // Удачная проверка — сообщением (под формой — только ошибки)
+                if (result.ok) {
+                    this.toast(this.scanSource(kind).title + ": " + result.message, "success");
+                }
             } catch (e) {
                 f.error = e.message || String(e);
             } finally {
@@ -225,6 +249,26 @@ export default {
                 return { ok: s.check_ok, text: s.check_message, at: s.checked_at, unsaved: false };
             }
             return null;
+        },
+
+        // Подсказка у блочка «подключено / ошибка»: когда проверяли и что ответил источник
+        scanTagTitle(kind) {
+            const st = this.scanStatus(kind);
+            if (!st) {
+                return "Подключение ещё не проверяли: значок с вилкой внизу";
+            }
+            return "Проверено " + this.formatTime(st.at) + (st.unsaved ? " (несохранённые данные)" : "") + "\n" + st.text;
+        },
+
+        // Число в шапке: ПК в GLPI / GSIT, пользователи Jabber — по последнему сбору
+        scanSourceCount(kind) {
+            const run = this.scanRunOf(kind);
+            const st = run && run.status === "ok" ? run.stats || {} : null;
+            if (!st || st.total === undefined || st.total === null) {
+                return null;
+            }
+            const info = this.scanRunInfo(kind);
+            return { n: st.total, title: info ? info.text : "" };
         },
 
         scanTag(kind) {
@@ -253,6 +297,7 @@ export default {
                 this.scanError = "Не удалось загрузить подсети: " + (e.message || e);
             } finally {
                 this.finishLoading();
+                this.placeEditPlate("subnetBar");
             }
         },
 
@@ -269,22 +314,42 @@ export default {
             return "Адресов: " + s.size;
         },
 
-        openNewSubnet(cidr) {
-            if (this.subnetBar && this.subnetBar.kind === "new" && cidr === undefined) {
+        openNewSubnet() {
+            if (this.subnetBar && this.subnetBar.kind === "new") {
                 this.subnetBar = null;
                 return;
             }
-            this.subnetBar = { kind: "new", cidr: cidr || "", purpose: "mixed", location_id: "", scan: true, note: "", error: "", saving: false };
-            this.$nextTick(() => this.focusRef(cidr ? "sb-note" : "sb-cidr"));
+            this.subnetBar = { kind: "new", cidr: "", purpose: "mixed", location_id: "", scan: true, note: "", error: "", saving: false, plate: null };
+            this.showEditRow("subnetBar", "sb-cidr");
         },
 
         openEditSubnet(s) {
             this.subnetHover = null;
             this.subnetBar = {
                 kind: "edit", id: s.id, was: s.cidr, cidr: s.cidr, purpose: s.purpose,
-                location_id: s.location_id || "", scan: s.scan, note: s.note || "", error: "", saving: false
+                location_id: s.location_id || "", scan: s.scan, note: s.note || "", error: "", saving: false, plate: null
             };
-            this.$nextTick(() => this.focusRef("sb-note"));
+            this.showEditRow("subnetBar", "sb-note");
+        },
+
+        // Подсказка у поля подсети: подсети /24, где есть ПК из базы, а в списке их нет
+        openCidrSuggest(el) {
+            const options = this.scanUncovered.map(function (u) { return { key: u.cidr, value: u.cidr, count: u.computers }; });
+            this.openSuggestList(el, "cidr", options, (value) => {
+                if (this.subnetBar) {
+                    this.subnetBar.cidr = value;
+                    this.$nextTick(() => this.focusRef("sb-note"));
+                }
+            });
+        },
+
+        onCidrKeydown(event) {
+            if (this.suggest && event.key === "Escape") {
+                event.preventDefault();   // Esc закрывает только список, строка остаётся
+                this.closeSuggest();
+                return;
+            }
+            this.suggestKeydown(event);
         },
 
         async submitSubnetBar() {
@@ -345,8 +410,8 @@ export default {
                 if (bar.kind === "new") {
                     this.toast("Добавлена подсеть: " + saved.cidr, "success");
                     // Строка остаётся открытой для следующей; назначение и адрес — те же
-                    this.subnetBar = { kind: "new", cidr: "", purpose: bar.purpose, location_id: bar.location_id, scan: bar.scan, note: "", error: "", saving: false };
-                    this.$nextTick(() => this.focusRef("sb-cidr"));
+                    this.subnetBar = { kind: "new", cidr: "", purpose: bar.purpose, location_id: bar.location_id, scan: bar.scan, note: "", error: "", saving: false, plate: null };
+                    this.showEditRow("subnetBar", "sb-cidr");
                 } else {
                     this.toast("Подсеть изменена: " + saved.cidr, "success");
                     this.subnetBar = null;
@@ -398,41 +463,6 @@ export default {
                 this.toast("Удалена подсеть: " + s.cidr, "success");
             } catch (e) {
                 this.toastError(e.message || e);
-            }
-        },
-
-        // Все подсети /24, где есть ПК из базы, но которых нет в списке, — одним
-        // нажатием, с назначением «Всё подряд» (поправить можно потом)
-        async addUncoveredSubnets() {
-            const list = this.scanUncovered.slice();
-            if (!list.length) {
-                return;
-            }
-            const ok = await this.confirmDialog(
-                "Добавить подсети: " + list.length + " (" + list.map(function (u) { return u.cidr; }).join(", ") + ") с назначением «Всё подряд»?",
-                { okText: "Добавить" }
-            );
-            if (!ok) {
-                return;
-            }
-            let added = 0;
-            try {
-                for (const u of list) {
-                    const response = await apiFetch("/api/scan/subnets", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ cidr: u.cidr, purpose: "mixed" })
-                    });
-                    if (!response.ok) {
-                        throw new Error(u.cidr + ": " + (await this.errorText(response)));
-                    }
-                    added += 1;
-                }
-                this.toast("Добавлено подсетей: " + added, "success");
-            } catch (e) {
-                this.toastError((added ? "Добавлено: " + added + ". " : "") + (e.message || e));
-            } finally {
-                await this.loadScanSubnets();
             }
         },
 

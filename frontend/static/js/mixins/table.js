@@ -241,6 +241,7 @@ export default {
                 }
                 const data = await response.json();
                 this.rows = data.rows || [];
+                this.applyAntivirus();
                 refreshDuplicates(this.rows, this.builtinColumns);
                 this.dupVersion++;
                 this.recalcWidths();
@@ -664,6 +665,7 @@ export default {
                 page: this.$refs.pageSetWrap,
                 historySel: this.$refs.historySelWrap,
                 checkSel: this.$refs.checkSelWrap,
+                namesHelp: this.$refs.namesHelpWrap,
                 historyFilter: this.$refs.historyFilterWrap,
                 colFilter: this.$refs.colFilterPanel,
                 colFilterList: this.$refs.colFilterListWrap

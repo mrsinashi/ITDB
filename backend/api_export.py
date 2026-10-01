@@ -8,6 +8,7 @@ from openpyxl.styles import Alignment, Font
 
 from api_columns import COLUMNS as BUILTIN_COLUMNS
 from api_computers import computer_rows, is_reserved_field_key
+from api_scan_diffs import av_settings, av_visible, computer_antivirus
 from db import get_db
 from models import FieldDef
 
@@ -77,6 +78,21 @@ def fill_sheet(ws, rows, columns):
     ws.freeze_panes = "A2"
 
 
+# Антивирусы в выгрузке — строками, состояние словами (в Таблице — цветом)
+AV_SUFFIX = {"on": "", "old": " — базы устарели", "off": " — выключен"}
+
+
+def fill_antivirus(session, rows):
+    """Столбец «Антивирусы» берётся из сканера (этап 26д): как в Таблице —
+    только показываемые состояния и названия."""
+    antivirus = computer_antivirus(session)
+    settings = av_settings(session)
+
+    for row in rows:
+        items = [a for a in antivirus.get(row["id"], []) if av_visible(settings, a)]
+        row["antivirus"] = "\n".join(a["name"] + AV_SUFFIX[a["status"]] for a in items) or None
+
+
 @router.get("/computers.xlsx")
 def export_computers(archive: bool = False, session=Depends(get_db)):
     """Рабочие ПК; archive=true — ещё лист «Архив» с ПК из архива."""
@@ -85,7 +101,9 @@ def export_computers(archive: bool = False, session=Depends(get_db)):
     wb = Workbook()
     ws = wb.active
     ws.title = "Компьютеры"
-    fill_sheet(ws, computer_rows(session, "no")["rows"], columns)
+    rows = computer_rows(session, "no")["rows"]
+    fill_antivirus(session, rows)
+    fill_sheet(ws, rows, columns)
 
     if archive:
         fill_sheet(wb.create_sheet("Архив"), computer_rows(session, "yes")["rows"], columns)

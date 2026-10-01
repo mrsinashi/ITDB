@@ -2,7 +2,8 @@
 // пароля (меню пользователя справа вверху — у любой роли).
 //
 // Новый пользователь и «Изменить» (логин, ФИО, должность, роль, новый пароль) —
-// строкой под панелью, как «Новый компьютер». Отключение — архив: удаления нет.
+// строкой прямо в таблице (этап 26д): поля — под своими столбцами, пароль и повтор —
+// ниже, под «Логином»; ✓ ✕ — плашкой справа у строки. Отключение — архив: удаления нет.
 // Свою роль и отключение себя сервер не даёт (в системе всегда есть
 // администратор). Свои логин, ФИО и должность любой меняет в меню пользователя.
 
@@ -35,6 +36,18 @@ export default {
             });
         },
 
+        // Строки таблицы: пользователи, правка — на месте строки, новый — последней строкой
+        usersView() {
+            const bar = this.userBar;
+            const rows = this.users.map(function (u) {
+                return { key: "u" + u.id, user: u, edit: !!bar && bar.kind === "edit" && bar.id === u.id };
+            });
+            if (bar && bar.kind === "new") {
+                rows.push({ key: "new", user: null, edit: true });
+            }
+            return rows;
+        },
+
         usersCountText() {
             const off = this.users.filter(function (u) { return u.archived; }).length;
             const text = "Пользователей: " + (this.users.length - off);
@@ -62,6 +75,7 @@ export default {
             } finally {
                 this.usersLoading = false;
                 this.finishLoading();
+                this.placeEditPlate("userBar");
             }
         },
 
@@ -86,7 +100,7 @@ export default {
             }
         },
 
-        // ---------- Строка под панелью: новый / изменить ----------
+        // ---------- Строка в таблице: новый / изменить ----------
 
         openNewUser() {
             if (this.userBar && this.userBar.kind === "new") {
@@ -94,20 +108,20 @@ export default {
                 return;
             }
             this.userBar = this.emptyUserBar("reader", false);
-            this.$nextTick(() => this.focusRef("ub-login"));
+            this.showEditRow("userBar", "ub-login");
         },
 
         emptyUserBar(role, show) {
-            return { kind: "new", login: "", full_name: "", position: "", role: role, password: "", repeat: "", show: show, error: "", saving: false };
+            return { kind: "new", login: "", full_name: "", position: "", role: role, password: "", repeat: "", show: show, error: "", saving: false, plate: null };
         },
 
         openEditUser(u) {
             this.usersHover = null;
             this.userBar = {
                 kind: "edit", id: u.id, was: u.login, login: u.login, full_name: u.full_name || "", position: u.position || "",
-                self: u.is_self, role: u.role, password: "", repeat: "", show: false, error: "", saving: false
+                self: u.is_self, role: u.role, password: "", repeat: "", show: false, error: "", saving: false, plate: null
             };
-            this.$nextTick(() => this.focusRef("ub-fio"));
+            this.showEditRow("userBar", "ub-fio");
         },
 
         closeUserBar() {
@@ -115,10 +129,59 @@ export default {
         },
 
         focusRef(name) {
-            const el = this.$refs[name];
+            // В строке таблицы (v-for) ссылка — список элементов
+            const ref = this.$refs[name];
+            const el = Array.isArray(ref) ? ref[0] : ref;
             if (el) {
                 el.focus();
             }
+        },
+
+        // Строка добавления / правки в таблице (пользователи, подсети): показать её,
+        // поставить плашку ✓ ✕ рядом и фокус — в нужное поле
+        showEditRow(name, focus) {
+            this.$nextTick(() => {
+                const tr = document.querySelector(".users-wrap tr.er-row");
+                if (tr) {
+                    tr.scrollIntoView({ block: "nearest" });
+                }
+                this.placeEditPlate(name);
+                if (focus) {
+                    this.focusRef(focus);
+                }
+            });
+        },
+
+        // Плашка ✓ ✕ — у первой строки правки, снаружи рамки; ушла строка из вида — нет плашки
+        placeEditPlate(name) {
+            const bar = this[name];
+            if (!bar) {
+                return;
+            }
+            this.$nextTick(() => {
+                if (this[name] !== bar) {
+                    return;
+                }
+                const tr = document.querySelector(".users-wrap tr.er-row");
+                const wrap = tr && tr.closest(".users-wrap");
+                const scroll = tr && tr.closest(".history-scroll");
+                if (!tr || !wrap || !scroll) {
+                    bar.plate = null;
+                    return;
+                }
+                const w = wrap.getBoundingClientRect();
+                const s = scroll.getBoundingClientRect();
+                const head = scroll.querySelector("thead");
+                const r = tr.getBoundingClientRect();
+                const visible = r.top >= s.top + (head ? head.offsetHeight : 0) - 1 && r.bottom <= s.bottom + 1;
+                const top = Math.round(r.top - w.top);
+                const height = Math.round(r.height);
+                if (!visible) {
+                    bar.plate = null;
+                } else if (!bar.plate || bar.plate.top !== top || bar.plate.height !== height) {
+                    bar.plate = { top: top, height: height };
+                }
+            });
         },
 
         async submitUserBar() {
@@ -178,7 +241,7 @@ export default {
                     // Строка остаётся открытой — можно завести следующего
                     this.toast("Добавлен пользователь: " + saved.login, "success");
                     this.userBar = this.emptyUserBar(bar.role, bar.show);
-                    this.$nextTick(() => this.focusRef("ub-login"));
+                    this.showEditRow("userBar", "ub-login");
                 } else {
                     const parts = [];
                     if (body.login || body.full_name !== undefined || body.position !== undefined) {

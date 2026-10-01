@@ -378,3 +378,35 @@ class ScanMark(Base):
     frame = Column(Text, nullable=True)
     enabled = Column(Boolean, nullable=False, server_default="true")
     always = Column(Boolean, nullable=False, server_default="false")
+
+
+class ScanJabberUser(Base):
+    """Пользователь Jabber (VACUUM) из веб-админки ejabberd (этап 26д): группы
+    общего ростера, в сети ли при последнем сборе и с каких адресов (ресурсы —
+    клиент и IP). Строка не удаляется при пересборе: last_ip / last_seen_at —
+    последний адрес и когда пользователь был в сети (по сборам ITDB)."""
+    __tablename__ = "scan_jabber_users"
+    __table_args__ = (
+        UniqueConstraint("login", name="uq_scan_jabber_users_login"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    login = Column(Text, nullable=False)
+    groups = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    online = Column(Boolean, nullable=False, server_default="false")
+    resources = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    last_ip = Column(Text, nullable=True)
+    last_client = Column(Text, nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    run_id = Column(Integer, nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AppSetting(Base):
+    """Общая настройка программы (этап 26д): key → value (JSON). Сейчас —
+    «antivirus»: вид столбца «Антивирусы». Нет строки — значения по умолчанию."""
+    __tablename__ = "app_settings"
+
+    key = Column(Text, primary_key=True)
+    value = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
