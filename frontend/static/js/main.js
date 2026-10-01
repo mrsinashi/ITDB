@@ -203,6 +203,7 @@ const app = Vue.createApp({
                 error: "",
             },
             avSettings: null,    // /api/scan/antivirus — вид и что показывать в столбце «Антивирусы»
+            avRename: null,      // правка своего названия антивируса в Справочниках: { key, source, value }
             scanLinkBar: null,   // «Привязать запись к ПК:» — строка под панелью
 
             // Карточка

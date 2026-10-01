@@ -8,7 +8,7 @@ from openpyxl.styles import Alignment, Font
 
 from api_columns import COLUMNS as BUILTIN_COLUMNS
 from api_computers import computer_rows, is_reserved_field_key
-from api_scan_diffs import av_settings, av_visible, computer_antivirus
+from api_scan_diffs import av_name, av_settings, av_visible, computer_antivirus
 from db import get_db
 from models import FieldDef
 
@@ -90,7 +90,7 @@ def fill_antivirus(session, rows):
 
     for row in rows:
         items = [a for a in antivirus.get(row["id"], []) if av_visible(settings, a)]
-        row["antivirus"] = "\n".join(a["name"] + AV_SUFFIX[a["status"]] for a in items) or None
+        row["antivirus"] = "\n".join(av_name(settings, a["name"]) + AV_SUFFIX[a["status"]] for a in items) or None
 
 
 @router.get("/computers.xlsx")

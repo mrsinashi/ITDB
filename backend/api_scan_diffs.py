@@ -16,13 +16,19 @@
   через /api/scan/names).
 
 Смотреть (пометки в Таблице) — все; решения — editor и admin (как правка таблицы).
+Этап 26е: HOSTNAME в таблице — каким имя должно быть, поэтому другое имя у
+источника только сообщается (can_take = False: взять нельзя, можно «оставить»;
+в таблице пусто — взять можно). Jabber предлагает VACUUM (кто в сети с IP этого
+ПК) и IP (с какого адреса в сети человек из VACUUM ПК) — см. jabber_rows.
 Этап 26б: «неточно» (unsure) — источники предлагают разное или VNC-серверов
 несколько; «в таблице часть» (partial, «≈») — отдаётся для пометок, но не
 расхождение (не в счётчике); у источника — как сопоставлен (state, by) и что
 предлагает (value) — признаки, можно ли верить.
 """
+import ipaddress
 import re
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -31,27 +37,39 @@ from pydantic import BaseModel
 import scan_collect
 from api_columns import COLUMNS_BY_KEY
 from api_computers import (
-    ChangeBatch, apply_fields, load_locations, location_path, save_changes, user_field_keys_of,
+    ChangeBatch, apply_fields, get_vacuum_logins, load_locations, location_path, save_changes,
+    user_field_keys_of, vacuum_text,
 )
-from api_scan import SOURCES
+from api_scan import SOURCES, load_source
 from auth import get_current_user, require_editor
 from db import get_db
 from history_log import log_change
-from models import AppSetting, Computer, ScanMark, ScanRecord, ScanReject, ScanSource
+from models import (
+    AppSetting, Computer, ScanJabberUser, ScanMark, ScanRecord, ScanReject, ScanSource, VacuumAccount,
+    VacuumAccountComputer,
+)
 from scan_values import COMPARE_FIELDS, NAME_FIELDS, key_of
 
 router = APIRouter(prefix="/api/scan/diffs", tags=["scan"])
 
 MAX_ITEMS = 5000
+# Поля, которые сканер может предложить: из GLPI / GSIT и VACUUM из Jabber
+DIFF_FIELDS = COMPARE_FIELDS + ["vacuum"]
+# Только сообщить, не брать: HOSTNAME в таблице — каким имя должно быть (26е)
+INFO_FIELDS = ("hostname",)
+# Jabber: пользователь не в сети — его последний адрес годится столько дней
+JABBER_FRESH = timedelta(days=3)
+# Больше людей с одного адреса — сервер или терминал: VACUUM по нему не предлагать
+JABBER_MAX_LOGINS = 3
 
 
 class DiffSource(BaseModel):
     source: str
     title: str
-    source_id: int
+    source_id: Optional[int] = None   # у Jabber номера записи нет
     checked_at: Optional[datetime]
     state: str = "key"          # key — по признаку, link — вручную
-    by: list[str] = []          # признаки: id, mac, serial
+    by: list[str] = []          # признаки: id, mac, serial; у Jabber — ip / vacuum
     value: str = ""             # что предлагает этот источник (в названиях таблицы)
 
 
@@ -69,6 +87,7 @@ class DiffOut(BaseModel):
                           # partial — в таблице записана часть («≈», не расхождение)
     unsure: str = ""      # почему неточно — для подсказки
     name_field: bool      # поле-название: можно «в таблице своё»
+    can_take: bool = True  # можно «взять из сканера» (HOSTNAME — только сообщить)
     sources: list[DiffSource]
     same_pair: int        # ещё у скольких ПК такая же пара «таблица — сканер»
     rejected_by: Optional[str] = None
@@ -156,6 +175,181 @@ def computer_antivirus(session):
     return pick_antivirus(found)
 
 
+def ipv4_set(text):
+    result = set()
+
+    for line in str(text or "").splitlines():
+        try:
+            address = ipaddress.ip_address(line.strip())
+        except ValueError:
+            continue
+
+        if address.version == 4:
+            result.add(str(address))
+
+    return result
+
+
+def jabber_enabled(session):
+    source = load_source(session, "jabber")
+    return bool(source and source.enabled and source.url)
+
+
+def jabber_presence(session):
+    """Где сейчас пользователи Jabber: ({IP: {логины}}, {логин: ([IP], когда)}).
+    В сети — адреса ресурсов; не в сети — последний адрес, если был в сети не
+    раньше JABBER_FRESH назад (адреса по DHCP меняются)."""
+    since = datetime.now(timezone.utc) - JABBER_FRESH
+    by_ip = defaultdict(set)
+    by_login = {}
+
+    for user in session.query(ScanJabberUser):
+        if user.online:
+            ips = [r.get("ip") for r in user.resources or [] if r.get("ip")]
+        elif user.last_ip and user.last_seen_at and user.last_seen_at >= since:
+            ips = [user.last_ip]
+        else:
+            ips = []
+
+        ips = sorted({ip for ip in ips if ipv4_set(ip)})
+
+        if not ips:
+            continue
+
+        login = user.login.strip().lower()
+        by_login[login] = (ips, user.last_seen_at)
+
+        for ip in ips:
+            by_ip[ip].add(login)
+
+    return by_ip, by_login
+
+
+def computer_vacuum(session, computers):
+    """{id ПК: {логины VACUUM}} у рабочих ПК."""
+    result = defaultdict(set)
+    rows = (
+        session.query(VacuumAccountComputer.computer_id, VacuumAccount.login)
+        .join(VacuumAccount, VacuumAccount.id == VacuumAccountComputer.account_id)
+    )
+
+    for computer_id, login in rows:
+        if computer_id in computers:
+            result[computer_id].add(login.lower())
+
+    return result
+
+
+def jabber_rows(session, computers, record_ips, taken):
+    """Предложения из Jabber (этап 26е): [(ПК, поле, таблица, предлагается, как в
+    источнике, вид, почему неточно, источник)].
+
+    ПК по адресу — тот, у кого этот IP в таблице или в записи GLPI / GSIT,
+    сопоставленной с ним; адрес у двух ПК — не понять, чей, — пропуск.
+    - VACUUM: кто в Jabber с адреса ПК, а в VACUUM ПК его нет → предлагается
+      VACUUM таблицы плюс эти логины (из таблицы никого не убирает). Логин уже
+      записан у другого ПК — «неточно» (человек мог зайти с чужого ПК).
+    - IP: человек из VACUUM ПК (только у этого ПК) в сети с адреса, которого нет
+      у других ПК, а в таблице у ПК его нет → этот адрес. Если про IP говорят
+      GLPI / GSIT (taken) — они главнее, Jabber молчит. В таблице уже другой IP —
+      «неточно»: человек мог сидеть за другим ПК."""
+    by_ip, by_login = jabber_presence(session)
+
+    if not by_ip:
+        return []
+
+    vacuum = computer_vacuum(session, computers)
+    owners = defaultdict(set)   # IP → ПК (таблица и записи GLPI / GSIT)
+
+    for computer_id, values in computers.items():
+        for ip in ipv4_set(values.get("ip")):
+            owners[ip].add(computer_id)
+
+    for ip, ids in record_ips.items():
+        owners[ip] |= ids
+
+    login_pcs = defaultdict(set)
+
+    for computer_id, logins in vacuum.items():
+        for login in logins:
+            login_pcs[login].add(computer_id)
+
+    hosts = {cid: values.get("hostname") or f"ПК №{cid}" for cid, values in computers.items()}
+    result = []
+
+    def source(by, logins):
+        seen = [by_login[l][1] for l in logins if l in by_login and by_login[l][1]]
+        return {
+            "source": "jabber", "title": SOURCES["jabber"]["title"], "source_id": None,
+            "checked_at": max(seen) if seen else None, "state": "key", "by": [by], "value": "",
+        }
+
+    # VACUUM по адресу ПК
+    at_pc = defaultdict(set)
+
+    for ip, logins in by_ip.items():
+        if len(logins) <= JABBER_MAX_LOGINS and len(owners.get(ip, ())) == 1:
+            at_pc[next(iter(owners[ip]))] |= logins
+
+    for computer_id, logins in at_pc.items():
+        table = vacuum.get(computer_id, set())
+        new = logins - table
+
+        if not new:
+            continue
+
+        elsewhere = [
+            f"{login} записан в VACUUM у {', '.join(sorted(hosts[c] for c in login_pcs[login] if c != computer_id))}"
+            for login in sorted(new) if login_pcs[login] - {computer_id}
+        ]
+        unsure = "; ".join(elsewhere)
+        kind = "unsure" if unsure else ("diff" if table else "fill")
+        table_text = vacuum_text(sorted(table)) or ""
+        result.append((
+            computer_id, "vacuum", table_text, vacuum_text(sorted(table | logins)),
+            "\n".join(sorted(logins)), kind, unsure, source("ip", logins),
+        ))
+
+    # IP по VACUUM ПК
+    for computer_id, logins in vacuum.items():
+        if (computer_id, "ip") in taken:
+            continue
+
+        found = set()
+        who = set()
+
+        for login in logins:
+            if login not in by_login or len(login_pcs[login]) != 1:
+                continue
+
+            for ip in by_login[login][0]:
+                if len(by_ip[ip]) <= JABBER_MAX_LOGINS and not (owners.get(ip, set()) - {computer_id}):
+                    found.add(ip)
+                    who.add(login)
+
+        table = ipv4_set(computers[computer_id].get("ip"))
+
+        if not found or found <= table:
+            continue
+
+        names = ", ".join(sorted(who))
+
+        if len(found) > 1:
+            unsure = f"по Jabber у {names} несколько адресов"
+        elif table:
+            unsure = f"по Jabber {names} в сети с этого адреса — возможно, за другим ПК"
+        else:
+            unsure = ""
+
+        raw = "\n".join(sorted(found))
+        result.append((
+            computer_id, "ip", computers[computer_id].get("ip") or "", raw, raw,
+            "unsure" if unsure else "fill", unsure, source("vacuum", who),
+        ))
+
+    return result
+
+
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК) по всем
     включённым источникам. Одно поле ПК — одна строка; если источники
@@ -170,11 +364,15 @@ def compute(session, with_rejected=False):
 
     rows = {}   # (ПК, поле) → {row из compare, sources: [...]}
     antivirus = {}
+    record_ips = defaultdict(set)   # IP → ПК, с которыми сопоставлены записи с этим IP
 
     for kind, source_id, item, record in matched_records(session, kinds, computers):
         computer_id = item["computer_id"]
         values = (record.data or {}).get("values") or {}
         antivirus.setdefault(computer_id, {}).setdefault(kind, []).extend(av_entries(kind, record))
+
+        for ip in ipv4_set(values.get("ip")):
+            record_ips[ip].add(computer_id)
 
         for row in scan_collect.compare_record(names, values, computers[computer_id]):
             if not row["raw"]:
@@ -190,6 +388,26 @@ def compute(session, with_rejected=False):
 
     items = []
     rejected = 0
+
+    def add(computer_id, field, table, proposed, raw, diff_kind, unsure, sources):
+        nonlocal rejected
+        reject = rejects.get((computer_id, field, key_of(raw)))
+
+        if reject is not None and diff_kind != "partial":
+            rejected += 1
+
+            if not with_rejected:
+                return
+
+        items.append({
+            "id": f"{computer_id}:{field}", "computer_id": computer_id, "field": field,
+            "table": table or "", "proposed": proposed, "raw": raw,
+            "kind": diff_kind, "unsure": unsure, "name_field": field in NAME_FIELDS,
+            "can_take": field not in INFO_FIELDS or not table,
+            "sources": sources,
+            "rejected_by": reject.user_name if reject else None,
+            "rejected_at": reject.at if reject else None,
+        })
 
     for (computer_id, field), entry in rows.items():
         proposals = {key_of(r["source"]) for r in entry["rows"]}
@@ -211,22 +429,16 @@ def compute(session, with_rejected=False):
         else:
             continue
 
-        reject = rejects.get((computer_id, field, key_of(row["raw"])))
+        add(computer_id, field, row["itdb"], row["source"], row["raw"], diff_kind, unsure, entry["sources"])
 
-        if reject is not None and diff_kind != "partial":
-            rejected += 1
+    if jabber_enabled(session):
+        for computer_id, field, table, proposed, raw, diff_kind, unsure, src in jabber_rows(
+            session, computers, record_ips, set(rows),
+        ):
+            src["value"] = proposed
+            add(computer_id, field, table, proposed, raw, diff_kind, unsure, [src])
 
-            if not with_rejected:
-                continue
-
-        items.append({
-            "id": f"{computer_id}:{field}", "computer_id": computer_id, "field": field,
-            "table": row["itdb"] or "", "proposed": row["source"], "raw": row["raw"],
-            "kind": diff_kind, "unsure": unsure, "name_field": field in NAME_FIELDS,
-            "sources": entry["sources"],
-            "rejected_by": reject.user_name if reject else None,
-            "rejected_at": reject.at if reject else None,
-        })
+        kinds = kinds + ["jabber"]
 
     # «Ещё у N ПК»: та же пара «в таблице — у сканера» в том же поле
     pairs = {}
@@ -244,7 +456,7 @@ def compute(session, with_rejected=False):
         for c in session.query(Computer.id, Computer.hostname, Computer.location_id).filter(Computer.id.in_(ids)):
             hosts[c.id] = (c.hostname, location_path(c.location_id, locations))
 
-    order = {field: i for i, field in enumerate(COMPARE_FIELDS)}
+    order = {field: i for i, field in enumerate(DIFF_FIELDS)}
     result = []
 
     for entry in items:
@@ -298,7 +510,7 @@ class RejectIn(BaseModel):
 
 
 def check_field(field):
-    if field not in COMPARE_FIELDS:
+    if field not in DIFF_FIELDS:
         raise HTTPException(status_code=400, detail=f"Это поле из сканера не принимается: {field}")
 
 
@@ -326,9 +538,13 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
         changes = {}
 
         for item in items:
-            now_value = getattr(computer, item.field) or ""
+            if item.field == "vacuum":
+                now_value = vacuum_text(get_vacuum_logins(session, computer.id)) or ""
+            else:
+                now_value = getattr(computer, item.field) or ""
 
-            if key_of(now_value) != key_of(item.table):
+            # Другое имя у источника только сообщается: в таблице — каким оно должно быть
+            if key_of(now_value) != key_of(item.table) or (item.field in INFO_FIELDS and now_value.strip()):
                 skipped.append(f"{computer.hostname or computer.id}: {COLUMNS_BY_KEY[item.field].short}")
                 continue
 
@@ -475,13 +691,16 @@ av_router = APIRouter(prefix="/api/scan/antivirus", tags=["scan"])
 
 AV_KEY = "antivirus"
 AV_STYLE_FIELDS = ("color", "bg_color", "bold", "italic", "show")
-# Начальный вид: текст цветом по состоянию — зелёный, оранжевый, красный
+# Начальный вид (26е): блочком с фоном по состоянию, как значения в Справочниках —
+# зелёный, оранжевый, красный (миграция a3d7c1e5f9b2 переводит и прежний вид 26д)
 AV_DEFAULTS = {
-    "on": {"color": "#2e7d32", "bg_color": None, "bold": False, "italic": False, "show": True},
-    "old": {"color": "#b35c00", "bg_color": None, "bold": False, "italic": False, "show": True},
-    "off": {"color": "#cc0000", "bg_color": None, "bold": False, "italic": False, "show": True},
+    "on": {"color": None, "bg_color": "#cdebd0", "bold": False, "italic": False, "show": True},
+    "old": {"color": None, "bg_color": "#fde0b8", "bold": False, "italic": False, "show": True},
+    "off": {"color": None, "bg_color": "#f7c6c6", "bold": False, "italic": False, "show": True},
 }
 AV_HIDDEN_MAX = 100
+AV_NAMES_MAX = 300
+AV_NAME_LEN = 60
 
 
 class AvStatusOut(BaseModel):
@@ -497,6 +716,12 @@ class AvStatusOut(BaseModel):
 class AvSettingsOut(BaseModel):
     statuses: list[AvStatusOut]
     hidden: list[str]       # названия, которые не показывать (без учёта регистра)
+    names: dict[str, str] = {}   # своё название: название в источнике (строчными) → как показывать
+
+
+class AvRename(BaseModel):
+    source: str             # название, как в GLPI / GSIT
+    name: str = ""          # как показывать; "" — как в источнике
 
 
 class AvUpdate(BaseModel):
@@ -508,6 +733,11 @@ class AvUpdate(BaseModel):
     italic: Optional[bool] = None
     show: Optional[bool] = None
     hidden: Optional[list[str]] = None
+    rename: Optional[AvRename] = None
+
+
+def av_key(name):
+    return " ".join(str(name or "").split()).lower()
 
 
 def av_settings(session):
@@ -521,7 +751,16 @@ def av_settings(session):
         statuses[kind] = {field: own.get(field, value) for field, value in default.items()}
 
     hidden = [name for name in saved.get("hidden") or [] if isinstance(name, str)]
-    return {"statuses": statuses, "hidden": hidden}
+    names = {
+        key: name for key, name in (saved.get("names") or {}).items()
+        if isinstance(key, str) and isinstance(name, str) and name.strip()
+    }
+    return {"statuses": statuses, "hidden": hidden, "names": names}
+
+
+def av_name(settings, name):
+    """Как показывать антивирус: своё название (Справочники) или как в источнике."""
+    return settings["names"].get(av_key(name)) or name
 
 
 def av_settings_out(settings):
@@ -531,6 +770,7 @@ def av_settings_out(settings):
             for kind in AV_DEFAULTS
         ],
         hidden=settings["hidden"],
+        names=settings["names"],
     )
 
 
@@ -552,6 +792,7 @@ def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=De
     data = payload.model_dump(exclude_none=True)
     kind = data.pop("kind", None)
     hidden = data.pop("hidden", None)
+    rename = data.pop("rename", None)
     changes = {}
 
     if data:
@@ -571,8 +812,37 @@ def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=De
             status[field] = value
 
         title = AV_STATUSES[kind]
+    elif rename is not None:
+        title = "Название"
     else:
         title = "Не показывать"
+
+    if rename is not None:
+        source = " ".join(rename["source"].split())
+        name = " ".join(rename["name"].split())
+        key = av_key(source)
+
+        if not key or len(source) > 200:
+            raise HTTPException(status_code=400, detail="Не указано название антивируса.")
+
+        if len(name) > AV_NAME_LEN:
+            raise HTTPException(status_code=400, detail=f"Название — не длиннее {AV_NAME_LEN} знаков.")
+
+        old = settings["names"].get(key)
+        names = dict(settings["names"])
+
+        if name and av_key(name) != key:
+            names[key] = name
+        else:
+            names.pop(key, None)
+
+        if len(names) > AV_NAMES_MAX:
+            raise HTTPException(status_code=400, detail="Слишком много своих названий.")
+
+        changes["name"] = {"old": old or source, "new": names.get(key) or source}
+        settings["names"] = names
+        kind = None
+        title = source
 
     if hidden is not None:
         names = []
@@ -595,8 +865,9 @@ def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=De
         row = AppSetting(key=AV_KEY)
         session.add(row)
 
-    row.value = {"statuses": settings["statuses"], "hidden": settings["hidden"]}
+    row.value = {"statuses": settings["statuses"], "hidden": settings["hidden"], "names": settings["names"]}
     row.updated_at = datetime.now(timezone.utc)
-    log_change(session, "scan_antivirus", 0, me["login"], changes, title=title, entity_key=kind or "hidden")
+    entity_key = kind or ("name" if rename is not None else "hidden")
+    log_change(session, "scan_antivirus", 0, me["login"], changes, title=title, entity_key=entity_key)
     session.commit()
     return av_settings_out(settings)

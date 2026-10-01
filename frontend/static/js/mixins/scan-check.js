@@ -10,11 +10,13 @@
 // в Таблице (Ctrl / Shift + клик, Ctrl+A, Esc), «Выбрано: N ▾» — действия над
 // выбранными. Плашка действий у открытой строки идёт за строкой при прокрутке,
 // не заходя под шапку таблицы (двигается напрямую, без перерисовки Vue).
+// Этап 26е: ПК, о которых говорит только Jabber (VACUUM, IP), — тоже строки;
+// HOSTNAME из источника только сообщается — «взять» его нельзя (d.can_take).
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords, clickSelect } from "../util.js";
 
 export const CHECK_SOURCES = ["glpi", "gsit"];
-const COMPARE_FIELDS = ["hostname", "ip", "mac", "serial", "model", "os", "cpu", "ram", "drive", "gpu", "vnc"];
+const COMPARE_FIELDS = ["hostname", "ip", "vacuum", "mac", "serial", "model", "os", "cpu", "ram", "drive", "gpu", "vnc"];
 const STATE_ORDER = { name: 0, conflict: 0, diff: 1, ok: 2, none: 3 };
 // Значки плашки (Lucide): галочка, крестик, звено, «вернуть»
 const ICONS = {
@@ -112,8 +114,17 @@ export default {
                     rows.push({ key: kind + ":" + r.source_id, pcId: pcId, recs: { [kind]: r }, state: r.state, record: r });
                 });
             });
+            // ПК, о которых знает только Jabber (VACUUM, IP по адресу)
+            this.diffAllIndex.forEach(function (fields, pcId) {
+                if (!byPc.has(pcId)) {
+                    const d = Object.values(fields)[0];
+                    const row = { key: "pc:" + pcId, pcId: pcId, recs: {}, state: "ok", record: null, brief: { hostname: d.hostname, place: d.place } };
+                    byPc.set(pcId, row);
+                    rows.push(row);
+                }
+            });
             rows.forEach((row) => {
-                const pc = row.pcId ? this.checkComputers[row.pcId] : null;
+                const pc = row.pcId ? this.checkComputers[row.pcId] || row.brief || null : null;
                 const fields = row.record ? {} : (this.diffAllIndex.get(row.pcId) || {});
                 row.pc = pc;
                 row.diffs = [];
@@ -128,7 +139,7 @@ export default {
                     row.state = "diff";
                 }
                 const recs = Object.values(row.recs);
-                row.name = pc ? pc.hostname || "без имени" : (recs[0].name || "без имени");
+                row.name = pc ? pc.hostname || "без имени" : ((recs[0] && recs[0].name) || "без имени");
                 row.search = searchNorm([
                     pc ? pc.hostname : "", pc ? pc.place : "",
                     recs.map(function (r) { return [r.name, r.source_id, r.values.ip, r.values.mac, r.values.serial].join(" "); }).join(" "),
@@ -191,6 +202,11 @@ export default {
                 });
             });
             return list;
+        },
+
+        // «Взять» — без имён ПК (их сканер только сообщает)
+        checkSelTakeable() {
+            return this.checkSelDiffs.filter(function (d) { return d.can_take; });
         },
 
         checkSelNames() {
@@ -488,7 +504,12 @@ export default {
             if (!row.diffs.length) {
                 return { text: row.rejected.length ? "всё решено" : "всё совпадает", cls: "ck-muted" };
             }
-            return { text: row.diffs.map((d) => this.diffFieldLabel(d.field)).join(", "), cls: "" };
+            // Предложения Jabber (VACUUM, IP) — с пометкой: в столбцах GLPI / GSIT их не видно
+            return {
+                text: row.diffs.map((d) => this.diffFieldLabel(d.field) +
+                    (d.sources.every(function (s) { return s.source === "jabber"; }) ? " (Jabber)" : "")).join(", "),
+                cls: ""
+            };
         },
 
         checkPlace(row) {
@@ -579,7 +600,7 @@ export default {
         },
 
         async checkTakeSelected() {
-            const list = this.checkSelDiffs.slice();
+            const list = this.checkSelTakeable.slice();
             this.closeMenus();
             const ok = await this.confirmDialog("Взять из сканера " + list.length + " " + this.scanPlural(list.length, "значение", "значения", "значений") +
                 " у " + this.checkSelectedRows.length + " ПК? Они запишутся в таблицу (с отметкой в Истории).", { okText: "Взять" });
@@ -628,8 +649,11 @@ export default {
         checkActions(row) {
             const list = [];
             const host = row.name;
+            const takeable = row.diffs.filter(function (d) { return d.can_take; });
+            if (takeable.length && this.canEdit) {
+                list.push({ key: "take", title: "Взять из сканера всё предложенное (" + takeable.length + ")", icon: ICONS.ok, run: () => this.checkTake(takeable) });
+            }
             if (row.diffs.length && this.canEdit) {
-                list.push({ key: "take", title: "Взять из сканера всё предложенное (" + row.diffs.length + ")", icon: ICONS.ok, run: () => this.checkTake(row.diffs) });
                 list.push({ key: "leave", title: "Оставить всё как есть — не предлагать, пока сканер видит то же", icon: ICONS.no, danger: true, run: () => this.checkLeave(row.diffs) });
             }
             if (this.isAdmin && row.record) {

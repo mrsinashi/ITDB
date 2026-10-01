@@ -19,11 +19,25 @@
 // (/api/scan/diffs → antivirus) и дописываются в строки таблицы (row.antivirus —
 // названия через перенос: так работают ширина, сортировка, фильтр и поиск); цвет
 // каждого — по состоянию, что показывать — блок «Антивирусы» в Справочниках
-// (/api/scan/antivirus).
+// (/api/scan/antivirus), там же — своё короткое название вместо длинного из
+// источника (этап 26е: names — название в источнике строчными → как показывать).
+//
+// Этап 26е: HOSTNAME в таблице — каким имя должно быть, поэтому другое имя у
+// источника только сообщается (d.can_take = false: «взять» нет). Jabber
+// предлагает VACUUM и IP (у источника нет номера записи — source_id null).
 
 import { apiFetch } from "../util.js";
 
-const KEY_TEXT = { id: "GLPI ID", mac: "MAC", serial: "серийному" };
+// Источник значения: «GLPI №12»; у Jabber номера записи нет
+function sourceName(s) {
+    return s.source_id === null || s.source_id === undefined ? s.title : s.title + " №" + s.source_id;
+}
+
+function avKey(name) {
+    return String(name || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+}
+
+const KEY_TEXT = { id: "GLPI ID", mac: "MAC", serial: "серийному", ip: "IP", vacuum: "VACUUM" };
 const AV_TEXT = { on: "работает, базы актуальны", old: "работает, базы устарели", off: "выключен" };
 
 export default {
@@ -91,9 +105,11 @@ export default {
             }
             const shown = new Set(settings.statuses.filter(function (st) { return st.show; }).map(function (st) { return st.kind; }));
             const hidden = new Set(settings.hidden.map(function (n) { return n.trim().toLowerCase(); }));
+            const names = settings.names || {};
             const data = this.diffs.antivirus || {};
             Object.keys(data).forEach(function (id) {
-                const list = data[id].filter(function (a) { return shown.has(a.status) && !hidden.has(a.name.trim().toLowerCase()); });
+                const list = data[id].filter(function (a) { return shown.has(a.status) && !hidden.has(a.name.trim().toLowerCase()); })
+                    .map(function (a) { return Object.assign({}, a, { title: names[avKey(a.name)] || a.name }); });
                 if (list.length) {
                     map.set(Number(id), list);
                 }
@@ -136,8 +152,9 @@ export default {
                 }
             });
             const hiddenKeys = new Set(hidden.map(function (n) { return n.trim().toLowerCase(); }));
+            const names = this.avSettings ? this.avSettings.names || {} : {};
             return Array.from(byKey.values()).map(function (item) {
-                return Object.assign(item, { hidden: hiddenKeys.has(item.key) });
+                return Object.assign(item, { hidden: hiddenKeys.has(item.key), title: names[avKey(item.name)] || "" });
             }).sort(function (a, b) { return (b.count - a.count) || a.name.localeCompare(b.name, "ru"); });
         },
 
@@ -220,6 +237,52 @@ export default {
             }
         },
 
+        // Своё название антивируса (этап 26е): двойной клик по названию в Справочниках
+        startAvRename(item) {
+            if (!this.canEdit) {
+                return;
+            }
+            this.avRename = { key: item.key, source: item.name, value: item.title || item.name };
+            this.$nextTick(() => {
+                const el = document.querySelector(".av-rename");
+                if (el) {
+                    el.focus();
+                    el.select();
+                }
+            });
+        },
+
+        async finishAvRename(save) {
+            const edit = this.avRename;
+            if (!edit || edit.saving) {
+                return;
+            }
+            if (!save) {
+                this.avRename = null;
+                return;
+            }
+            edit.saving = true;
+            const value = edit.value.trim();
+            const names = (this.avSettings && this.avSettings.names) || {};
+            const now = names[avKey(edit.source)] || edit.source;
+            if (value !== now) {
+                await this.updateAvSettings({ rename: { source: edit.source, name: value === edit.source ? "" : value } });
+            }
+            if (this.avRename === edit) {
+                this.avRename = null;
+            }
+        },
+
+        onAvRenameKeydown(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                this.finishAvRename(true);
+            } else if (event.key === "Escape") {
+                event.preventDefault();
+                this.finishAvRename(false);
+            }
+        },
+
         toggleAvHidden(item) {
             const hidden = this.avSettings.hidden.filter(function (n) { return n.trim().toLowerCase() !== item.key; });
             if (!item.hidden) {
@@ -234,7 +297,7 @@ export default {
             let changed = false;
             this.rows.forEach(function (row) {
                 const list = index.get(row.id);
-                const text = list ? list.map(function (a) { return a.name; }).join("\n") : null;
+                const text = list ? list.map(function (a) { return a.title; }).join("\n") : null;
                 if (row.antivirus !== text) {
                     row.antivirus = text;
                     changed = true;
@@ -267,7 +330,8 @@ export default {
         },
 
         avTitle(a) {
-            return a.name + ": " + AV_TEXT[a.status] + (a.version ? ", версия " + a.version : "") + "\nИз " + a.source;
+            return (a.title || a.name) + ": " + AV_TEXT[a.status] + (a.version ? ", версия " + a.version : "") +
+                (a.title && a.title !== a.name ? "\nВ источнике: " + a.name : "") + "\nИз " + a.source;
         },
 
         toggleScanOverlay() {
@@ -340,6 +404,10 @@ export default {
         },
 
         scanChipTitle(d) {
+            if (!d.can_take) {
+                return "Имя на компьютере — " + d.proposed + " (" + this.diffSourceShort(d) + ")" +
+                    "\nВ таблице — каким имя должно быть: переименуй компьютер. Нажми — подробнее или не показывать";
+            }
             const mark = this.scanMarkByKind[d.kind];
             return (mark ? mark.label + ". " : "") + this.diffSourceShort(d) + " предлагает: " + this.scanChipText(d) +
                 "\nНажми — взять, оставить как есть или вписать своё";
@@ -512,7 +580,7 @@ export default {
         scanSuggestFor(rowId, field) {
             const entry = this.diffIndex.get(rowId);
             const d = entry ? entry[field] : null;
-            if (!d || d.kind === "partial" || d.proposed.includes("\n")) {
+            if (!d || d.kind === "partial" || !d.can_take || d.proposed.includes("\n")) {
                 return [];
             }
             return [{ key: "scan:" + d.proposed.toLowerCase(), value: d.proposed, count: this.diffSourceShort(d), scan: true }];
@@ -532,7 +600,7 @@ export default {
         // ---------- Почему можно верить ----------
 
         diffSourceShort(d) {
-            return d.sources.map(function (s) { return s.title + " №" + s.source_id; }).join(", ");
+            return d.sources.map(sourceName).join(", ");
         },
 
         // Части текста «почему можно верить»: как сопоставлен, согласие источников, когда проверен
@@ -550,7 +618,7 @@ export default {
                 parts.push({ text: "ПК привязан вручную" });
             }
             if (by.size) {
-                parts.push({ text: "ПК опознан по " + ["mac", "serial", "id"].filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
+                parts.push({ text: "ПК опознан по " + ["mac", "serial", "id", "ip", "vacuum"].filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
             }
             if (d.sources.length > 1) {
                 parts.push(d.kind === "unsure" && d.unsure.startsWith("источники")
@@ -562,13 +630,15 @@ export default {
             }
             const dates = d.sources.map(function (s) { return s.checked_at; }).filter(Boolean).sort();
             if (dates.length) {
-                parts.push({ text: "проверен " + this.formatDate(dates[dates.length - 1]) });
+                const jabber = d.sources.every(function (s) { return s.source === "jabber"; });
+                parts.push({ text: (jabber ? "в сети " : "проверен ") + this.formatDate(dates[dates.length - 1]) });
             }
             return parts;
         },
 
         diffSourceTitle(d) {
-            return d.sources.map((s) => s.title + " №" + s.source_id + " — проверен " + this.formatTime(s.checked_at) + ", предлагает: " + s.value.split("\n").join(", ")).join("\n");
+            return d.sources.map((s) => sourceName(s) + (s.checked_at ? (s.source === "jabber" ? " — видел " : " — проверен ") + this.formatTime(s.checked_at) : "") +
+                ", " + (d.can_take ? "предлагает: " : "имя: ") + s.value.split("\n").join(", ")).join("\n");
         },
 
         // ---------- Решения ----------
@@ -599,6 +669,10 @@ export default {
         },
 
         async acceptDiffs(list) {
+            list = list.filter(function (d) { return d.can_take; });
+            if (!list.length) {
+                return;
+            }
             try {
                 const result = await this.diffPost("/api/scan/diffs/accept", {
                     items: list.map((d) => ({

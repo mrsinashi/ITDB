@@ -569,7 +569,8 @@ export default {
             add("ОС:", f.os);
             add("ЦП:", (f.cpu || []).join(", "));
             add("ОЗУ:", f.memory_mb ? f.memory_mb + " МБ" : "");
-            add("Диски:", (f.disks || []).map(function (d) { return (d.name || "?") + " (" + Math.round(d.mb / 1000) + " ГБ)"; }).join(", "));
+            // Объём — как прислал агент: в «двоичных» МБ (128 ГБ = 122 070 МБ), в столбце DRIVE — как на наклейке
+            add("Диски:", (f.disks || []).map(function (d) { return (d.name || "?") + " (" + Number(d.mb || 0).toLocaleString("ru-RU") + " МБ)"; }).join(", "));
             add("Видео:", (f.gpus || []).join(", "));
             add("Модель:", [f.manufacturer, f.model].filter(Boolean).join(" "));
             if (f.serial && f.serial !== r.values.serial) {

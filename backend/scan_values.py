@@ -9,8 +9,9 @@
    (Intel, Microsoft, Pro, 22H2, CPU, частота…) отбрасываются, синонимы
    сводятся (win → windows); если слова одного значения все есть в другом —
    это одно и то же. У многострочных (IP, MAC, диски) — по строкам: в таблице
-   записана часть того, что видит источник, — не отличие («≈»). ОЗУ — числом,
-   объём диска — с допуском 3% (250 и 256 ГБ — один диск, 240 и 250 — разные).
+   записана часть того, что видит источник, — не отличие («≈»); у IP и MAC в
+   таблице всё, что видит источник, и ещё что-то — тоже «=». ОЗУ — числом,
+   объём диска — как на наклейке (с 26е: 240, 250 и 256 ГБ — разные диски).
 2. Название для таблицы (Names.canonical): значение источника переводится в
    название из таблицы — по соответствию, заданному вручную («одно и то же»,
    scan_aliases), по тому, как это значение уже названо у сопоставленных ПК
@@ -141,7 +142,8 @@ def same_line(field, a, b, strict=False):
 
         if pa and pb:
             same_kind = not pa[0] or not pb[0] or pa[0] == pb[0]
-            return same_kind and abs(pa[1] - pb[1]) <= max(pa[1], pb[1]) * 0.03
+            # Объём с наклейки (этап 26е: 240, 250 и 256 — разные диски); 1TB = 1000
+            return same_kind and abs(pa[1] - pb[1]) <= max(pa[1], pb[1]) * 0.01
 
     if field in NUMBER_FIELDS:
         na, nb = number_of(a), number_of(b)
@@ -287,8 +289,18 @@ class Names:
             norm = norm_mac if field == "mac" else (lambda v: v.strip())
             src = {norm(v) or v.upper() for v in lines_of(raw)}
             tab = {norm(v) or v.upper() for v in lines_of(table)}
-            mark = "" if not src or not tab else ("=" if src == tab else ("≈" if tab <= src else "≠"))
-            return {"source": raw, "raw": raw, "mark": mark, "how": ""}
+            # В таблице больше, чем видит источник (три MAC, а агент прислал два), —
+            # не расхождение: лишнее в таблице сканер не убирает
+            mark = "" if not src or not tab else ("=" if src <= tab else ("≈" if tab <= src else "≠"))
+            proposed = raw
+
+            # MAC: есть общие с таблицей — тот же ПК, предлагается дописать
+            # недостающие, MAC таблицы не убираются (26е)
+            if field == "mac" and mark == "≠" and src & tab:
+                lines = lines_of(table)
+                proposed = "\n".join(lines + [v for v in lines_of(raw) if (norm(v) or v.upper()) not in tab])
+
+            return {"source": proposed, "raw": raw, "mark": mark, "how": ""}
 
         if field in EXACT_FIELDS:
             mark = "" if not raw or not table else ("=" if key_of(raw) == key_of(table) else "≠")

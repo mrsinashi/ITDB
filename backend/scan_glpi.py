@@ -444,11 +444,14 @@ def computer_details(glpi, computer_id):
                             ips.append(address["name"])
                 ports.append({"name": port.get("name"), "mac": port.get("mac"), "ips": ips})
 
-    # Портов нет (старые записи) — MAC сетевых карт из устройств
-    if not ports:
-        for card in items_of(devices.get("Item_DeviceNetworkCard")):
-            if card.get("mac"):
-                ports.append({"name": dropdown(card.get("devicenetworkcards_id")), "mac": card.get("mac"), "ips": []})
+    # Сетевые карты из устройств: у старых записей портов нет вовсе, а у
+    # некоторых карт (Wi-Fi, Bluetooth) бывает только устройство без порта
+    port_macs = {str(p.get("mac") or "").lower() for p in ports}
+    for card in items_of(devices.get("Item_DeviceNetworkCard")):
+        mac = card.get("mac")
+        if mac and str(mac).lower() not in port_macs:
+            port_macs.add(str(mac).lower())
+            ports.append({"name": dropdown(card.get("devicenetworkcards_id")), "mac": mac, "ips": []})
 
     softwares = []
     for software in item.get("_softwares") or []:

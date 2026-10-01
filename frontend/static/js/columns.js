@@ -209,7 +209,8 @@ export const SIMPLE_FIELD_LABELS = {
     always: "Без кнопки",
     // Столбец «Антивирусы» (этап 26д)
     show: "Показывать",
-    hidden: "Не показывать"
+    hidden: "Не показывать",
+    name: "Название"   // своё название антивируса (этап 26е)
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];

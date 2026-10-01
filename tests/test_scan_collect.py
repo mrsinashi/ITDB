@@ -426,7 +426,8 @@ def test_same_by_meaning():
     assert not sv.same_line("model", "HP ProDesk 400 G7", "HP ProDesk 400 G6")
     assert sv.same_line("vnc", "TightVNC", "Tight")
     assert not sv.same_line("vnc", "UltraVNC", "Tight")
-    assert sv.same_line("drive", "SSD 256", "SSD 250")        # один диск: 256 ≈ 250
+    assert not sv.same_line("drive", "SSD 256", "SSD 250")    # 26е: объём точный — разные диски
+    assert sv.same_line("drive", "HDD 1TB", "HDD 1000")
     assert not sv.same_line("drive", "SSD 240", "SSD 250")    # разные диски
     assert sv.same_line("drive", "HDD 500", "500")
     assert sv.same_line("ram", "4", "4 ГБ")

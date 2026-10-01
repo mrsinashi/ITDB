@@ -111,6 +111,24 @@ def is_virtual_port(name, mac):
     return bool(mac) and is_virtual_mac(mac)
 
 
+# Для столбца MAC (не для опознания ПК) годятся все адаптеры, которые видны в
+# GLPI / GSIT у железа: Ethernet, Wi-Fi (и со случайным MAC), Bluetooth.
+# Не годятся только программные: VPN, виртуальные машины, Wi-Fi Direct и т. п.
+SOFT_PORT_WORDS = tuple(word for word in VIRTUAL_PORT_WORDS if word != "bluetooth") + (
+    "kernel debug", "wi-fi direct", "wifi direct",
+)
+
+
+def is_soft_port(name, mac):
+    """Программный адаптер: его MAC в столбец MAC не предлагается."""
+    lower = (name or "").lower()
+
+    if any(word in lower for word in SOFT_PORT_WORDS):
+        return True
+
+    return bool(mac) and (mac.startswith(VIRTUAL_MAC_PREFIXES + ("0A:00:27",)) or mac == "FF:FF:FF:FF:FF:FF")
+
+
 def usable_ipv4(value):
     """IPv4 адрес ПК: без IPv6, 127.x, 169.254.x, 0.0.0.0."""
     try:
@@ -242,20 +260,72 @@ HDD_WORDS = re.compile(
 )
 
 
-def disk_size_text(mb):
-    """Объём как пишут на наклейке: 250059 МБ → «250», 1000204 → «1TB»."""
-    gb = mb / 1000
+MIB_TO_GB = 1024 * 1024 / 1e9
 
+
+def size_text(gb):
+    """«256», «1TB», «1.5TB»."""
     if gb >= 900:
         tb = round(gb / 1000 * 2) / 2
         return (f"{tb:.1f}".rstrip("0").rstrip(".")) + "TB"
 
-    nearest = min(DISK_SIZES, key=lambda size: abs(size - gb))
-
-    if abs(nearest - gb) <= nearest * 0.1:
-        return str(nearest)
-
     return str(round(gb))
+
+
+def nearest_size(gb):
+    """Ближайший объём с наклейки и насколько он далёк (доля)."""
+    if gb >= 900:
+        tb = round(gb / 1000 * 2) / 2 or 1
+        return tb * 1000, abs(tb * 1000 - gb) / (tb * 1000)
+
+    nearest = min(DISK_SIZES, key=lambda size: abs(size - gb))
+    return nearest, abs(nearest - gb) / nearest
+
+
+def size_in_name(name, gb):
+    """Объём из названия модели, если он сходится с объёмом диска (±12%):
+    «KINGSTON SA400S37240G» → 240, «Samsung SSD 860 EVO 250GB» → 250,
+    «CT480BX500SSD1» → 480, «… 1TB» → 1000. Нет — None."""
+    text = (name or "").upper()
+    found = []
+
+    for size in DISK_SIZES + [1000, 2000, 4000]:
+        tb = size // 1000 if size >= 1000 else None
+        patterns = [rf"(?<!\d){size}(?!\d)", rf"{size}\s?GB?(?![A-Z])"]
+
+        if tb:
+            patterns.append(rf"(?<![\d.]){tb}\s?TB?(?![A-Z\d])")
+
+        if any(re.search(p, text) for p in patterns) and abs(size - gb) <= size * 0.12:
+            found.append(size)
+
+    return min(found, key=lambda size: abs(size - gb)) if found else None
+
+
+def disk_size_text(mb, name=None):
+    """Объём, как пишут на наклейке и в названии диска.
+
+    Агенты GLPI и FusionInventory пишут объём в «двоичных» МБ (1024×1024 байт):
+    128 ГБ = 122 104 МБ, 256 ГБ = 244 198 МБ. Поэтому: сначала — объём из
+    названия модели («SA400S37240G» → 240), если он сходится с объёмом диска;
+    иначе — ближайший объём с наклейки (128, 240, 256, 500…) по объёму в
+    двоичных МБ. Если источник записал обычные МБ (250 059 у диска 250 ГБ) —
+    берётся то прочтение, которое ближе к объёму с наклейки."""
+    binary = mb * MIB_TO_GB
+    decimal = mb / 1000
+    named = [(abs(size - gb) / size, size) for gb in (binary, decimal) for size in [size_in_name(name, gb)] if size]
+
+    if named:
+        return size_text(min(named)[1])
+
+    size_b, off_b = nearest_size(binary)
+    size_d, off_d = nearest_size(decimal)
+    size, off, gb = (size_b, off_b, binary) if off_b <= off_d else (size_d, off_d, decimal)
+
+    if off <= 0.1:
+        return size_text(size)
+
+    return size_text(gb)
 
 
 def disk_kind(name, kind=None):
@@ -281,7 +351,7 @@ def drives_short(disks):
             continue
 
         kind = disk_kind(disk.get("name"), disk.get("kind"))
-        size = disk_size_text(mb)
+        size = disk_size_text(mb, disk.get("name"))
         items.append((0 if kind == "SSD" else 1 if kind == "HDD" else 2, f"{kind} {size}" if kind else size))
 
     items.sort(key=lambda item: item[0])
@@ -427,25 +497,31 @@ def build(raw):
     memory_mb, disks[{name, mb, kind}], gpus[], ports[{name, mac, ips}],
     softwares[], antivirus[{name, active, uptodate, version}], tag.
     Ответ: (values, keys, data) — values в формате ITDB, keys для сопоставления."""
-    macs = []
+    macs = []        # признаки: только физические адаптеры с заводским MAC
+    value_macs = []  # столбец MAC: все адаптеры железа (и Wi-Fi, Bluetooth)
     ips = []
     ports = []
 
     for port in raw.get("ports") or []:
         mac = norm_mac(port.get("mac"))
         virtual = is_virtual_port(port.get("name"), mac)
+        soft = is_soft_port(port.get("name"), mac)
         port_ips = [ip for ip in (usable_ipv4(v) for v in port.get("ips") or []) if ip]
         ports.append({"name": port.get("name"), "mac": mac, "ips": port_ips, "virtual": virtual})
 
-        if virtual:
+        if soft:
             continue
 
-        if mac and mac not in macs:
-            macs.append(mac)
+        if mac and mac not in value_macs:
+            value_macs.append(mac)
 
+        # IP Wi-Fi со случайным MAC — тоже адрес этого ПК
         for ip in port_ips:
             if ip not in ips:
                 ips.append(ip)
+
+        if mac and not virtual and mac not in macs:
+            macs.append(mac)
 
     serial = clean_serial(raw.get("serial"))
     uuid = clean_uuid(raw.get("uuid"))
@@ -455,7 +531,7 @@ def build(raw):
     values = {
         "hostname": (raw.get("name") or "").strip() or None,
         "ip": "\n".join(ips) or None,
-        "mac": "\n".join(macs) or None,
+        "mac": "\n".join(value_macs) or None,
         "serial": serial,
         "model": model_short(raw.get("manufacturer"), raw.get("model")),
         "os": os_short(raw.get("os_name"), raw.get("os_version"), raw.get("os_kernel")),
