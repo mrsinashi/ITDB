@@ -41,6 +41,7 @@ class Glpi:
     antivirus = []
     fresh_field = True
     fail_details = False
+    disk_models = True   # отдавать ли список моделей дисков (DeviceHardDrive)
 
 
 class FakeGlpi(BaseHTTPRequestHandler):
@@ -99,6 +100,15 @@ class FakeGlpi(BaseHTTPRequestHandler):
             start, end = (int(x) for x in query["range"][0].split("-"))
             return self.send(200, Glpi.antivirus[start:end + 1])
 
+        if path == "DeviceHardDrive":
+            # модели дисков с интерфейсом: диск ПК — (название, объём[, интерфейс])
+            if not Glpi.disk_models:
+                return self.send(403, ["ERROR_RIGHT_MISSING", "нет права"])
+            start, end = (int(x) for x in query["range"][0].split("-"))
+            models = sorted({(d[0], d[2] if len(d) > 2 else 0) for c in Glpi.computers.values() for d in c["disks"]}, key=str)
+            rows = [{"id": i + 1, "designation": n, "interfacetypes_id": kind} for i, (n, kind) in enumerate(models)]
+            return self.send(200, rows[start:end + 1])
+
         if path.startswith("Computer/"):
             if Glpi.fail_details:
                 return self.send(401, ["ERROR_SESSION_TOKEN_INVALID", "сессия кончилась"])
@@ -112,7 +122,7 @@ class FakeGlpi(BaseHTTPRequestHandler):
                 "_devices": {
                     "Item_DeviceProcessor": {"1": {"deviceprocessors_id": c["cpu"]}},
                     "Item_DeviceMemory": {str(i): {"size": m} for i, m in enumerate(c["memory"])},
-                    "Item_DeviceHardDrive": {str(i): {"deviceharddrives_id": n, "capacity": s} for i, (n, s) in enumerate(c["disks"])},
+                    "Item_DeviceHardDrive": {str(i): {"deviceharddrives_id": d[0], "capacity": d[1]} for i, d in enumerate(c["disks"])},
                     "Item_DeviceGraphicCard": {str(i): {"devicegraphiccards_id": g} for i, g in enumerate(c["gpus"])},
                 },
                 "_networkports": {
@@ -143,6 +153,7 @@ def reset_glpi():
     Glpi.antivirus = []
     Glpi.fresh_field = True
     Glpi.fail_details = False
+    Glpi.disk_models = True
 
 
 def setup_source(admin, url, kind="glpi", enabled=True):

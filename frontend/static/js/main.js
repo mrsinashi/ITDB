@@ -17,7 +17,8 @@
 //                        scan-match (сбор из GLPI / GSIT, вкладка «Названия», общее для записей),
 //                        scan-check (вкладка «Проверка»: сопоставление и предложения сканера),
 //                        scan-diffs (значения сканера в Таблице, решения по ним, столбец «Антивирусы»),
-//                        scan-vacuum (страница «Vacuum»: пользователи Jabber)
+//                        scan-vacuum (страница «Vacuum»: пользователи Jabber),
+//                        table-marks (выделения значений в Таблице: повтор, «нет в Jabber»…)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -46,6 +47,7 @@ import scanMatch from "./mixins/scan-match.js";
 import scanDiffs from "./mixins/scan-diffs.js";
 import scanCheck from "./mixins/scan-check.js";
 import scanVacuum from "./mixins/scan-vacuum.js";
+import tableMarks from "./mixins/table-marks.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -53,7 +55,7 @@ import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, tableMarks],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -197,6 +199,7 @@ const app = Vue.createApp({
             scanLegend: false,   // подсказка «что значат цвета» у включённой кнопки
             scanPop: null,       // карточка действий у блочка значения сканера
             scanMarks: [],       // /api/scan/marks — вид пометок по ситуациям
+            tableMarks: [],      // /api/table-marks — вид выделений значений в Таблице (этап 26к)
             scanOnlyRows: false, // воронка у кнопки «Значения сканера»: только строки с предложениями
             valueEdit: null,     // правка значения ПК в подробностях «Проверки»
             diffs: {
@@ -267,6 +270,7 @@ const app = Vue.createApp({
             this.loadDiffs();
             this.loadScanMarks();
             this.loadAvSettings();
+            this.loadTableMarks();
         }
     }
 });

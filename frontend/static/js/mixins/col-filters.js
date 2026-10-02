@@ -16,7 +16,7 @@
 // есть антивирус в отмеченном состоянии с отмеченным названием.
 
 import { matchesAllWords, searchNorm, searchWords, splitMulti } from "../util.js";
-import { columnTitle, dateKey, ipSubnetKey, isOverdue, OVERDUE_STYLE } from "../columns.js";
+import { columnTitle, dateKey, ipSubnetKey, isOverdue } from "../columns.js";
 
 export const EMPTY_KEY = "";
 const EMPTY_LABEL = "(пусто)";
@@ -473,7 +473,7 @@ export default {
             // Просроченная дата — красным жирным, как в таблице
             const col = this.allColumns.find(function (c) { return c.field === menu.field; });
             if (col && col.date && isOverdue(option.value)) {
-                st = Object.assign({}, st, OVERDUE_STYLE);
+                st = Object.assign({}, st, this.markStyle("overdue"));
             }
             return st.color || st.backgroundColor || st.fontWeight || st.fontStyle || st.textDecoration ? st : null;
         },

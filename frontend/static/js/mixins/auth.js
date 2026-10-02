@@ -152,6 +152,7 @@ export default {
                 this.loadColumnStyles();
                 this.loadFieldDefs();
                 this.loadAvSettings();
+                this.loadTableMarks();
             } else if (view === "users") {
                 this.loadUsers();
             } else if (view === "vacuum") {

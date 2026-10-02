@@ -7,7 +7,8 @@ export default {
     props: {
         value: Object,
         disabled: Boolean,
-        extra: Boolean
+        extra: Boolean,
+        noChip: Boolean   // с extra: без «фон блочком» (там, где фон и так блочком)
     },
     emits: ["change"],
     computed: {
@@ -48,7 +49,7 @@ export default {
                 <span class="sc-swatch" :style="{ background: s.bg_color || null }"></span>
                 <input type="color" :value="s.bg_color || '#ffffff'" :disabled="disabled" @change="emit({ bg_color: $event.target.value })">
             </label>
-            <button v-if="extra" type="button" class="sc-btn sc-chip" :class="{ on: s.chip }" :disabled="disabled" :title="s.chip ? 'Фон блочком' : 'Фон на всю ячейку'" @click="emit({ chip: !s.chip })"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="1.6" y="3.6" width="10.8" height="6.8" rx="2"/><path d="M4.5 7h5"/></svg></button>
+            <button v-if="extra && !noChip" type="button" class="sc-btn sc-chip" :class="{ on: s.chip }" :disabled="disabled" :title="s.chip ? 'Фон блочком' : 'Фон на всю ячейку'" @click="emit({ chip: !s.chip })"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="1.6" y="3.6" width="10.8" height="6.8" rx="2"/><path d="M4.5 7h5"/></svg></button>
             <button type="button" class="sc-btn" :class="{ on: s.bold }" :disabled="disabled" title="Жирный" @click="emit({ bold: !s.bold })"><b>Ж</b></button>
             <button type="button" class="sc-btn" :class="{ on: s.italic }" :disabled="disabled" title="Курсив" @click="emit({ italic: !s.italic })"><i>К</i></button>
             <template v-if="extra">

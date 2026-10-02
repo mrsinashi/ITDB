@@ -93,7 +93,6 @@
     /* Зажат Alt: значение, которое скопирует клик */
     --copy-hint-bg: rgba(0, 0, 0, 0.12);        /* затемнение — на любом фоне */
     --copy-hint-done: rgba(30, 140, 30, 0.28);
-    --dup-bg: #ffd6d6;
     --saved-bg: #d5efd5;
     --sticky-shadow: 3px 0 4px rgba(0, 0, 0, 0.12);
     --host-color: #0645ad;
@@ -117,7 +116,6 @@
     --danger: #a00;
     --warn-text: #b35c00;           /* оранжевый: «нет ни в одной группе» (Vacuum) */
     --danger-strong: #c00;
-    --overdue-text: #c00;           /* просроченная дата «Временно, до…»: красный жирный, без фона */
     --success: #2e7d32;
 }
 
@@ -1941,8 +1939,6 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 /* Акцентная шапка: боковые и верхняя линии рамки на высоте шапки — цвета
    шапки, иначе серая рамка вокруг цветной шапки делает её «на пиксель уже»
    и портит углы. */
-.tree-grid.accent-head,
-.history-frame.accent-head,
 .choices-page.accent-head .st-block,
 .choices-page.accent-head .fd-panel,
 .scan-page.accent-head .st-block {
@@ -4792,23 +4788,16 @@ button.scan-chip {
 }
 /* Блочок — как блочки сканера и антивирусов: край блочка там же, где начинается
    обычный текст (просьба 02.10: тот же отступ, что у других выделяемых значений) */
-.data-table td .cell-line.dup-chip,
+/* Высота блочка — как у блочков сканера и антивирусов (17px), а не по тексту
+   (просьба 02.10, этап 26к). Цвета выделений (повтор, логины VACUUM, имя на ПК
+   другое, срок) — из Справочников, стилем строки (mixins/table-marks.js) */
 .data-table td .cell-line.fill-chip {
     padding: 0 5px;
     border-radius: var(--radius);
-    background: var(--dup-bg);
+    line-height: 17px;
 }
-/* Логин VACUUM: такого пользователя нет — жирным красным, давно не подключался —
-   жирным оранжевым (в ячейке и в карточке ПК) */
-.cell-gone,
-.data-table td .cell-line.cell-gone {
-    color: var(--danger-strong);
-    font-weight: 700;
-}
-.cell-stale,
-.data-table td .cell-line.cell-stale {
-    color: var(--warn-text);
-    font-weight: 700;
+.data-table td .cell-line.fill-chip + .cell-line.fill-chip {
+    margin-top: 1px;
 }
 .data-table td a.id-link:hover {
     text-decoration: underline;
@@ -4943,4 +4932,34 @@ html.no-radius .vacuum-table .vc-dot {
 }
 .sm-chip:not(.on) .su-n {
     background: var(--tint-chip, #e6e6e6);
+}
+
+/* ============================================================
+   Этап 26к: правки пользователя 02.10
+   ============================================================ */
+/* Акцентная шапка блоков с прокруткой (Дерево, История, Пользователи, подсети,
+   «Проверка», «Названия», «Vacuum»): полоса прокрутки идёт до самого верха, рядом с
+   шапкой, и кольцо рамки цвета шапки красило линию над полосой и справа от неё.
+   Теперь кольцо на высоте шапки — обычного цвета рамки, а акцентная шапка лежит
+   поверх кольца: цвет схемы доходит до края блока только там, где шапка есть */
+.tree-grid.accent-head .tg-head,
+.history-table.accent-head > thead th {
+    z-index: 11;
+}
+
+/* Справочники, «Выделения в Таблице»: образец — как значение в ячейке */
+.table-marks-panel .tm-sample {
+    display: inline-block;
+    font-size: 12px;
+    line-height: 17px;
+}
+.table-marks-panel .tm-sample.chip {
+    padding: 0 5px;
+    border-radius: var(--radius);
+}
+.table-marks-panel .smk-sample-td {
+    min-width: 96px;
+}
+.table-marks-panel .scan-marks-table td.smk-label {
+    min-width: 170px;
 }

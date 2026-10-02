@@ -399,8 +399,44 @@ def antivirus_by_computer(glpi, warnings):
     return {}
 
 
-def computer_details(glpi, computer_id):
-    """Одна запись ПК со всем нужным: устройства, сетевые порты, программы."""
+def disk_interfaces(glpi):
+    """Как подключены диски (этап 26к): {название модели строчными: интерфейс} из
+    списка моделей дисков (DeviceHardDrive, поле «Интерфейс»: SATA, USB…) — у
+    самой записи диска ПК интерфейса нет. По нему отсеиваются флешки и внешние
+    диски. Не получилось (нет права, другой GLPI) — пусто: остаётся отсев по
+    названию. Одно название с разными интерфейсами — интерфейс неизвестен."""
+    found = {}
+    start = 0
+
+    while True:
+        response = glpi.call("DeviceHardDrive", range=f"{start}-{start + PAGE - 1}", expand_dropdowns="true")
+
+        if response.status not in (200, 206):
+            break
+
+        try:
+            page = json.loads(response.body.decode("utf-8"))
+        except ValueError:
+            break
+
+        if not isinstance(page, list) or not page:
+            break
+
+        for row in page:
+            if isinstance(row, dict) and row.get("designation"):
+                name = str(row["designation"]).strip().lower()
+                found.setdefault(name, set()).add((dropdown(row.get("interfacetypes_id")) or "").lower())
+
+        start += PAGE
+        if len(page) < PAGE:
+            break
+
+    return {name: next(iter(kinds)) for name, kinds in found.items() if len(kinds) == 1 and "" not in kinds}
+
+
+def computer_details(glpi, computer_id, interfaces=None):
+    """Одна запись ПК со всем нужным: устройства, сетевые порты, программы.
+    interfaces — disk_interfaces()."""
     response = glpi.call(
         f"Computer/{computer_id}",
         with_devices="true", with_networkports="true", with_softwares="true", expand_dropdowns="true",
@@ -423,10 +459,14 @@ def computer_details(glpi, computer_id):
 
     cpus = [dropdown(d.get("deviceprocessors_id")) for d in items_of(devices.get("Item_DeviceProcessor"))]
     memory = sum(number(d.get("size")) for d in items_of(devices.get("Item_DeviceMemory")))
-    disks = [
-        {"name": dropdown(d.get("deviceharddrives_id")), "mb": int(number(d.get("capacity")))}
-        for d in items_of(devices.get("Item_DeviceHardDrive"))
-    ]
+    disks = []
+    for d in items_of(devices.get("Item_DeviceHardDrive")):
+        name = dropdown(d.get("deviceharddrives_id"))
+        disk = {"name": name, "mb": int(number(d.get("capacity")))}
+        interface = (interfaces or {}).get((name or "").strip().lower())
+        if interface:
+            disk["interface"] = interface
+        disks.append(disk)
     gpus = [dropdown(d.get("devicegraphiccards_id")) for d in items_of(devices.get("Item_DeviceGraphicCard"))]
 
     ports = []
@@ -529,13 +569,14 @@ def collect(params, fresh_days, progress=None):
                 chosen.append(entry)
 
         antivirus = antivirus_by_computer(glpi, warnings) if chosen else {}
+        interfaces = disk_interfaces(glpi) if chosen else {}
         items = []
 
         if progress:
             progress(0, len(chosen))
 
         for done, entry in enumerate(chosen, start=1):
-            raw = computer_details(glpi, entry["id"])
+            raw = computer_details(glpi, entry["id"], interfaces)
 
             if raw is None:
                 stats["gone"] += 1

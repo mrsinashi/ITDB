@@ -246,7 +246,15 @@ def ram_short(total_mb):
 
 
 DISK_SIZES = [16, 32, 60, 64, 80, 120, 128, 160, 180, 240, 250, 256, 320, 480, 500, 512, 640, 750, 960]
-DISK_SKIP = re.compile(r"usb|flash|card\s*reader|multi-?card|sd\s*card|mass storage|virtual|msft|iscsi|dvd|cd-?rom", re.I)
+DISK_SKIP = re.compile(
+    r"usb|flash|card\s*reader|multi-?card|sd\s*card|mass storage|virtual|msft|iscsi|dvd|cd-?rom"
+    # флешки и внешние диски, в названии которых нет «USB» (этап 26к)
+    r"|data\s*traveler|jet\s*flash|store\s*jet|cruzer|u\s?disk|pen\s*drive|removable|external|portable"
+    r"|my\s*passport|my\s*book|\belements\b|\bexpansion\b|backup\+?\s*plus|canvio|uas\b|uasp",
+    re.I,
+)
+# Как подключён диск (GLPI: «Интерфейс» у модели диска): внешние — не DRIVE
+DISK_SKIP_INTERFACE = re.compile(r"usb|1394|firewire|thunderbolt", re.I)
 SSD_WORDS = re.compile(
     r"ssd|nvme|solid\s*state|\bm\.2\b|kingston\s+s[auvnkq]|\bsa400|\bsuv|\bskc|\bsnv|\bct\d+(bx|mx|p\d)"
     r"|\bwds\d|\bsu\d{3}|adata\s+s|apacer\s+as|\br5sl|ssdpr|patriot|spcc|netac|\bmz-|samsung\s+(pm|mz)"
@@ -341,13 +349,14 @@ def disk_kind(name, kind=None):
 
 
 def drives_short(disks):
-    """[{"name", "mb", "kind"}] → «SSD 250\\nHDD 1TB» (SSD первыми)."""
+    """[{"name", "mb", "kind", "interface"}] → «SSD 250\\nHDD 1TB» (SSD первыми).
+    Флешки и внешние диски (USB — по названию или интерфейсу) не считаются."""
     items = []
 
     for disk in disks:
         mb = disk.get("mb") or 0
 
-        if mb <= 0 or DISK_SKIP.search(disk.get("name") or ""):
+        if mb <= 0 or DISK_SKIP.search(disk.get("name") or "") or DISK_SKIP_INTERFACE.search(disk.get("interface") or ""):
             continue
 
         kind = disk_kind(disk.get("name"), disk.get("kind"))

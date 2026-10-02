@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
 import { apiFetch, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, OVERDUE_STYLE, refreshDuplicates, styleKey } from "../columns.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE — антивирусов нет
@@ -362,9 +362,9 @@ export default {
                 if (col.field === "antivirus") {
                     return { pad: CHIP_PAD, bold: avBold };
                 }
-                const m = this.lineMarks(row, col, line);
+                const ms = this.markStyle(this.lineMarkKinds(this.lineMarks(row, col, line)));
                 const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
-                return m || chip ? { pad: (m && m.dup) || chip ? CHIP_PAD : 0, bold: !!m && (m.gone || m.stale !== undefined) } : null;
+                return ms || chip ? { pad: (ms && ms.backgroundColor) || chip ? CHIP_PAD : 0, bold: !!ms && !!ms.fontWeight } : null;
             };
             this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
@@ -442,10 +442,9 @@ export default {
         },
 
         // Значения ячейки по строкам, если какое-то надо выделить (иначе null —
-        // ячейка рисуется одним текстом): повтор — красным блочком, как значение с
-        // фоном в Справочниках (с 26ж — только само значение, а не вся ячейка);
-        // логин VACUUM, которого нет в Jabber, — красным текстом; номер записи
-        // GLPI / GSIT — ссылкой на неё
+        // ячейка рисуется одним текстом): выделения Таблицы (повтор, имя на ПК
+        // другое, логин VACUUM, срок — вид из Справочников, фон — блочком у самого
+        // значения), фон из Справочников блочком, номер записи GLPI / GSIT — ссылкой
         cellParts(row, col) {
             void this.dupVersion; // дубли считаются вне Vue — зависимость вручную
             const value = row[col.field];
@@ -454,7 +453,7 @@ export default {
             }
             const link = this.diffs.links[col.field];
             const chips = this.chipColumn(col);
-            const marks = (col.dup || col.field === "vacuum") && !row.archived;
+            const marks = col.dup || col.date || col.field === "vacuum" || col.field === "hostname";
             if (!link && !chips && !marks) {
                 return null;
             }
@@ -466,43 +465,65 @@ export default {
                 // Фон из Справочников блочком: всё оформление значения — у его строки
                 const look = chips && line.trim() ? this.lineLook(col.field, line) : null;
                 const chip = !!look && look.chip;
-                if (m.dup || m.gone || m.stale !== undefined || href || chip) {
+                const kinds = this.lineMarkKinds(m);
+                const ms = this.markStyle(kinds);
+                if (kinds.length || href || chip) {
                     special = true;
                 }
-                const titles = [m.dup ? "Повтор" : "", this.vacuumMarkTitle(m), href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                const style = Object.assign({}, chip ? {
+                    backgroundColor: look.bg_color,
+                    color: look.color,
+                    fontWeight: look.bold ? "700" : null,
+                    fontStyle: look.italic ? "italic" : null,
+                    textDecoration: decoration(look.underline, look.strike)
+                } : null, ms);
                 return {
                     text: line, href: href, title: titles.join(" · ") || null,
-                    cls: { "dup-chip": !!m.dup, "fill-chip": chip, "cell-gone": !!m.gone, "cell-stale": m.stale !== undefined },
-                    style: chip ? {
-                        backgroundColor: m.dup ? null : look.bg_color,
-                        color: look.color,
-                        fontWeight: look.bold ? "700" : null,
-                        fontStyle: look.italic ? "italic" : null,
-                        textDecoration: decoration(look.underline, look.strike)
-                    } : null
+                    cls: { "fill-chip": !!style.backgroundColor },
+                    style: style
                 };
             });
             return special ? parts : null;
         },
 
-        // Чем выделить значение (строку ячейки): dup — повтор; у логина VACUUM: gone —
-        // такого пользователя в Jabber нет, stale — давно не подключался (сколько
-        // дней; null — никогда). Нечего выделять — null
+        // Чем выделить значение (строку ячейки): dup — повтор; host — имя на ПК
+        // другое (по сканеру; само имя с ПК); у логина VACUUM: gone — такого
+        // пользователя в Jabber нет, stale — давно не подключался (сколько дней;
+        // null — никогда); overdue — срок прошёл. Нечего выделять — null
         lineMarks(row, col, line) {
+            const overdue = !!col.date && isOverdue(line);
             if (row.archived) {
-                return null;
+                return overdue ? { overdue: true } : null;
             }
             const dup = !!col.dup && isDuplicateLine(line, col.field);
             let gone = false;
             let stale;
+            let host = null;
             if (col.field === "vacuum") {
                 const login = String(line).trim().toLowerCase();
                 gone = this.vacuumMissingSet.has(login);
                 if (!gone && login in this.vacuumStale) {
                     stale = this.vacuumStale[login];
                 }
+            } else if (col.field === "hostname") {
+                host = this.wrongHostname(row.id);
             }
-            return dup || gone || stale !== undefined ? { dup: dup, gone: gone, stale: stale } : null;
+            return dup || gone || stale !== undefined || host || overdue ? { dup: dup, gone: gone, stale: stale, host: host, overdue: overdue } : null;
+        },
+
+        // Виды выделений (как в Справочниках) по итогу lineMarks
+        lineMarkKinds(m) {
+            if (!m) {
+                return [];
+            }
+            return [m.dup ? "dup" : "", m.host ? "hostname" : "", m.gone ? "gone" : "", m.stale !== undefined ? "stale" : "", m.overdue ? "overdue" : ""].filter(Boolean);
+        },
+
+        // Имя этого ПК по сканеру другое (и «оставить как есть» не нажато) — это имя; иначе null
+        wrongHostname(computerId) {
+            const d = (this.diffIndex.get(computerId) || {}).hostname;
+            return d && d.can_take === false ? String(d.proposed || "").split("\n")[0] : null;
         },
 
         vacuumMarkTitle(m) {
@@ -522,7 +543,7 @@ export default {
             if (!m.gone && key in this.vacuumStale) {
                 m.stale = this.vacuumStale[key];
             }
-            return { cls: { "cell-gone": m.gone, "cell-stale": m.stale !== undefined }, title: this.vacuumMarkTitle(m) || "Скопировать" };
+            return { style: this.markStyle(this.lineMarkKinds(m)), title: this.vacuumMarkTitle(m) || "Скопировать" };
         },
 
         // Строка, где сейчас виден блочок сканера (в показанных столбцах)
@@ -646,9 +667,6 @@ export default {
 
         cellSpanStyle(row, col) {
             let base = this.cellTextStyle(row, col) || {};
-            if (col.date && isOverdue(this.cellText(row, col))) {
-                base = Object.assign({}, base, OVERDUE_STYLE);
-            }
             // Рядом блочок сканера и у ситуации «зачёркивать значение таблицы»
             const mark = this.scanCellMark(row, col);
             if (mark && mark.strike && !this.isEditing(row, col)) {

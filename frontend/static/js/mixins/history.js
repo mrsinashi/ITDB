@@ -1,7 +1,7 @@
 // Страница «История».
 
 import { apiFetch, matchesAllWords, searchWords, splitMulti } from "../util.js";
-import { OVERDUE_STYLE, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 
 // Сколько записей истории загружать сразу и по «Показать ещё»
 const HISTORY_PAGE = 200;
@@ -159,7 +159,7 @@ export default {
             }
             let st = this.effectiveStyle(r.field, choice);
             if (r.date && isOverdue(r.value)) {
-                st = Object.assign({}, st, OVERDUE_STYLE);
+                st = Object.assign({}, st, this.markStyle("overdue"));
             }
             return st.color || st.backgroundColor || st.fontWeight || st.fontStyle || st.textDecoration ? st : null;
         },

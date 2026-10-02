@@ -158,7 +158,8 @@ export const ENTITY_LABELS = {
     scan_records: "Запись",
     scan_aliases: "Название",
     scan_marks: "Пометка сканера",
-    scan_antivirus: "Антивирусы"
+    scan_antivirus: "Антивирусы",
+    table_marks: "Выделение"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -306,9 +307,6 @@ export function isOverdue(value) {
     const d = new Date();
     return key < d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 }
-
-// Просроченная дата: красный жирный текст, без фона
-export const OVERDUE_STYLE = { color: "var(--overdue-text)", fontWeight: "700" };
 
 export function compareCellValues(a, b, col) {
     const aEmpty = a === null || a === undefined || a === "";

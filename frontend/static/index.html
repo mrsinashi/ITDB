@@ -585,6 +585,25 @@
                     </div>
                 </div>
 
+                <!-- Выделения значений в Таблице (этап 26к): повтор, имя на ПК другое, логины VACUUM, срок -->
+                <div class="fd-panel scan-marks-panel table-marks-panel">
+                    <div class="fd-head">
+                        <span class="fd-title">Выделения в Таблице</span>
+                    </div>
+                    <div class="scan-marks-body">
+                        <table class="scan-marks-table">
+                            <tr v-for="m in tableMarkList" :key="m.kind">
+                                <td class="smk-sample-td"><span class="tm-sample" :class="{ chip: !!m.bg_color }" :style="markStyle(m.kind)">{{ tableMarkSample(m.kind) }}</span></td>
+                                <td class="smk-label">{{ m.label }}</td>
+                                <td>
+                                    <style-controls :value="m" :disabled="!canEdit" extra no-chip @change="updateTableMark(m.kind, $event)"></style-controls>
+                                    <span v-if="canEdit && m.changed" class="st-reset" title="Вернуть как было" @click="updateTableMark(m.kind, { reset: true })">↺</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Значения сканера в Таблице (этапы 26б, 26в): цвет блочка по ситуации, показывать ли без кнопки -->
                 <div v-if="scanMarks.length" class="fd-panel scan-marks-panel">
                     <div class="fd-head">
@@ -1409,7 +1428,7 @@
                     <div class="card-section">VACUUM</div>
                     <div class="card-sec-body">
                         <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">—</div>
-                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" :class="vacuumLoginMark(login).cls" :title="vacuumLoginMark(login).title" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
+                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" :style="vacuumLoginMark(login).style" :title="vacuumLoginMark(login).title" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                     </div>
                     <div class="card-section toggle-sec" :class="{ open: cardHistoryOpen }" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
                         <span>История</span><span v-if="!cardLoading" class="sec-count" title="Изменений">{{ cardHistoryShown.length }}</span>

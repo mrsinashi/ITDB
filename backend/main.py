@@ -27,6 +27,7 @@ from api_scan_records import router as scan_records_router
 from api_scan_diffs import av_router as scan_av_router
 from api_scan_diffs import marks_router as scan_marks_router
 from api_scan_diffs import router as scan_diffs_router
+from api_table_marks import router as table_marks_router
 
 app = FastAPI(title="ITDB dev", docs_url="/docs")
 
@@ -147,6 +148,8 @@ app.include_router(scan_records_router)
 app.include_router(scan_diffs_router)
 app.include_router(scan_marks_router)
 app.include_router(scan_av_router)
+# Выделения значений в Таблице (этап 26к): повтор, «нет в Jabber», «имя на ПК другое»…
+app.include_router(table_marks_router)
 # Пользователи Jabber (этап 26д): смотреть — редактор и администратор
 app.include_router(scan_jabber_router)
 
