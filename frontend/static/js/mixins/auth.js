@@ -161,14 +161,13 @@ export default {
                     this.loadScanSources();     // «обновить» запускает сбор из Jabber
                 }
             } else if (view === "scan") {
+                // «Сканер» всегда открывается на первой вкладке слева — «Проверке» (этап 28);
+                // редактору доступна только она
+                this.scanMatchQuery = "";
                 if (this.isAdmin) {
-                    this.scanTab = "settings";      // «Сканер» всегда открывается на «Подключениях»
-                    this.scanLinkBar = null;
-                    this.scanMatchQuery = "";
                     this.loadScan();
-                } else {
-                    this.setScanTab("check");   // редактору — только «Проверка»
                 }
+                this.setScanTab("check");
             }
         },
 

@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
@@ -27,9 +28,20 @@ from api_scan_records import router as scan_records_router
 from api_scan_diffs import av_router as scan_av_router
 from api_scan_diffs import marks_router as scan_marks_router
 from api_scan_diffs import router as scan_diffs_router
+from api_scan_schedule import router as scan_schedule_router
 from api_table_marks import router as table_marks_router
+import scan_schedule
 
-app = FastAPI(title="ITDB dev", docs_url="/docs")
+
+@asynccontextmanager
+async def lifespan(app):
+    """Вместе с программой работает расписание сборов (этап 28) — поток в этом же процессе."""
+    scan_schedule.start()
+    yield
+    scan_schedule.stop()
+
+
+app = FastAPI(title="ITDB dev", docs_url="/docs", lifespan=lifespan)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -143,6 +155,7 @@ app.include_router(users_router)
 # только администратор
 app.include_router(scan_router)
 app.include_router(scan_records_router)
+app.include_router(scan_schedule_router)
 # Расхождения (этап 26), пометки сканера (этап 26б), вид столбца «Антивирусы»
 # (этап 26д): смотреть — все, решать и настраивать вид — редактор и администратор
 app.include_router(scan_diffs_router)

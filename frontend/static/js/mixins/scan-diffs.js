@@ -44,16 +44,17 @@ function avKey(name) {
     return String(name || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 }
 
-const KEY_TEXT = { id: "ID", mac: "MAC", serial: "серийному", ip: "IP" };
+const KEY_TEXT = { id: "ID", mac: "MAC", serial: "серийному", ip: "IP", name: "имени", reserve: "резерву DHCP" };
+const KEY_ORDER = ["mac", "serial", "id", "ip", "name", "reserve"];
 // Поля-названия: «своё» значение — соответствие «одно и то же» (как NAME_FIELDS на сервере)
 const NAME_FIELDS = ["model", "motherboard", "os", "cpu", "gpu", "vnc", "drive"];
 const AV_TEXT = { on: "работает, базы актуальны", old: "работает, базы устарели", off: "выключен" };
-// Типы предложений сканера — для выбора в «Взять из сканера…»
+// Типы предложений сканера — для выбора в «Принять изменения…» (названия — просьба 02.10)
 const SCAN_KINDS = [
-    { key: "diff", label: "В таблице другое" },
-    { key: "fill", label: "В таблице пусто" },
+    { key: "diff", label: "Замена" },
+    { key: "fill", label: "Новые значения" },
     { key: "unsure", label: "Неточно" },
-    { key: "partial", label: "В таблице часть" }
+    { key: "partial", label: "Добавление значений" }
 ];
 
 export default {
@@ -81,7 +82,7 @@ export default {
             return this.scanOnlyRows && this.scanOverlay;
         },
 
-        // «Взять из сканера…» у выбранных строк Таблицы: предложения выбранных ПК,
+        // «Принять изменения…» у выбранных строк Таблицы: предложения выбранных ПК,
         // которые можно взять (без отклонённых и без имён ПК)
         scanBarAll() {
             const bar = this.actionBar;
@@ -134,6 +135,15 @@ export default {
         scanBarFieldTotal() {
             const bar = this.actionBar;
             return this.scanBarAll.filter(function (d) { return !bar.scanKind || d.kind === bar.scanKind; }).length;
+        },
+
+        // Те же списки с пунктом «все» — для выбора со счётчиками (count-select)
+        scanBarKindOptions() {
+            return [{ key: "", label: "Все", count: this.scanBarKindTotal }].concat(this.scanBarKinds);
+        },
+
+        scanBarFieldOptions() {
+            return [{ key: "", label: "Все столбцы", count: this.scanBarFieldTotal }].concat(this.scanBarFields);
         },
 
         // Есть ли что взять у выбранных строк (пункт меню «Выбрано»)
@@ -290,6 +300,7 @@ export default {
                 this.diffs.vacuumMissing = data.vacuum_missing || [];
                 this.diffs.vacuumStale = data.vacuum_stale || {};
                 this.diffs.jabber = data.jabber || {};
+                this.diffs.net = data.net || {};
             } catch (e) {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
@@ -759,7 +770,7 @@ export default {
                 parts.push({ text: "ПК привязан вручную" });
             }
             if (by.size) {
-                parts.push({ text: "ПК по " + ["mac", "serial", "id", "ip"].filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
+                parts.push({ text: "ПК по " + KEY_ORDER.filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
             }
             if (d.sources.length > 1) {
                 parts.push(d.kind === "unsure" && d.unsure.startsWith("источники")
@@ -774,8 +785,8 @@ export default {
             }
             const dates = d.sources.map(function (s) { return s.checked_at; }).filter(Boolean).sort();
             if (dates.length) {
-                const jabber = d.sources.every(function (s) { return s.source === "jabber"; });
-                parts.push({ text: (jabber ? "в сети " : "проверен ") + this.formatDate(dates[dates.length - 1]) });
+                const online = d.sources.every(function (s) { return s.source === "jabber" || s.source === "dhcp" || s.source === "net"; });
+                parts.push({ text: (online ? "в сети " : "проверен ") + this.formatDate(dates[dates.length - 1]) });
             }
             return parts;
         },
@@ -835,7 +846,7 @@ export default {
             }
         },
 
-        // «Взять из сканера…» у выбранных строк Таблицы: выбранные тип и столбец
+        // «Принять изменения…» у выбранных строк Таблицы: выбранные тип и столбец
         async submitScanBar() {
             const bar = this.actionBar;
             const list = this.scanBarDiffs.slice();
@@ -843,7 +854,7 @@ export default {
                 return;
             }
             if (!list.length) {
-                bar.error = "Нечего взять.";
+                bar.error = "Нечего принять.";
                 return;
             }
             bar.saving = true;
@@ -964,10 +975,10 @@ export default {
 
         scanMarkHint(kind) {
             return {
-                diff: "в таблице другое",
-                fill: "в таблице пусто",
+                diff: "замена",
+                fill: "новое значение",
                 unsure: "неточно — проверь сам",
-                partial: "в таблице часть"
+                partial: "добавление значений"
             }[kind] || "";
         },
 

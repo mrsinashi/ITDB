@@ -1,5 +1,6 @@
 // Сканирование (этап 24, страница только у администратора): подключения к
-// источникам данных (GLPI, GSIT, Jabber) и подсети для сетевого сканирования.
+// источникам данных (GLPI, GSIT, Jabber; с этапа 28 — DHCP по SSH и «Сеть») и
+// подсети для сетевого сканирования.
 //
 // Форма источника правится прямо в блоке: «Сохранить» отправляет только
 // изменённое, «Проверить подключение» проверяет то, что сейчас в форме (даже
@@ -32,6 +33,16 @@ export default {
             return rows;
         },
 
+        // «Сеть»: сколько подсетей и адресов пройдёт сканер
+        scanNetText() {
+            const list = this.scanSubnets.filter(function (sn) { return sn.scan; });
+            if (!list.length) {
+                return "нет — отметь «Сканировать»";
+            }
+            const size = list.reduce(function (sum, sn) { return sum + sn.size; }, 0);
+            return list.length + ", адресов: " + size;
+        },
+
         scanPurposeOptions() {
             const purposes = this.scanPurposes;
             return Object.keys(purposes).map(function (key) { return { key: key, label: purposes[key] }; });
@@ -47,6 +58,9 @@ export default {
         scanTopCountText() {
             if (this.scanTab === "check") {
                 return this.checkCountText;
+            }
+            if (this.scanTab === "schedule") {
+                return this.scheduleCountText;
             }
             return this.scanTab === "settings" ? this.scanCountText : this.scanNamesCountText;
         },
@@ -66,9 +80,6 @@ export default {
                 data.sources.forEach((s) => { forms[s.kind] = this.scanFormFrom(s); });
                 this.scanForms = forms;
                 this.resumeScanRuns();
-                if (this.view === "scan" && this.scanTab !== "settings") {
-                    this.setScanTab(this.scanTab);
-                }
             } catch (e) {
                 this.scanError = "Не удалось загрузить настройки: " + (e.message || e);
             } finally {
@@ -88,6 +99,11 @@ export default {
                 clear: { password: false, user_token: false, app_token: false },
                 verify_tls: s.verify_tls,
                 fresh_days: s.fresh_days,
+                path: s.path || "",
+                names: s.names,
+                ports: s.ports,
+                forget_host: false,   // DHCP: забыть запомненный ключ сервера при сохранении
+                keyBusy: false,
                 show: false,
                 saving: false,
                 checking: false,
@@ -112,15 +128,30 @@ export default {
                 body.enabled = f.enabled;
             }
             SOURCE_TEXT_FIELDS.forEach(function (name) {
-                if (name === "domain" && s.kind !== "jabber") {
+                if (s.form === "net" || (name === "domain" && s.form !== "jabber")) {
                     return;
                 }
                 if ((f[name] || "").trim() !== (s[name] || "")) {
                     body[name] = f[name];
                 }
             });
-            if (f.verify_tls !== s.verify_tls) {
+            if (s.form !== "net" && s.form !== "ssh" && f.verify_tls !== s.verify_tls) {
                 body.verify_tls = f.verify_tls;
+            }
+            if (s.form === "ssh") {
+                if ((f.path || "").trim().split(/\s+/).join(" ") !== (s.path || "")) {
+                    body.path = f.path;
+                }
+                if (f.forget_host && s.host_key) {
+                    body.forget_host = true;
+                }
+            }
+            if (s.form === "net") {
+                ["names", "ports"].forEach(function (name) {
+                    if (f[name] !== s[name]) {
+                        body[name] = f[name];
+                    }
+                });
             }
             if (s.fresh_days !== null && Number(f.fresh_days) !== s.fresh_days) {
                 body.fresh_days = Number(f.fresh_days);
@@ -190,6 +221,9 @@ export default {
                 const show = f.show;
                 this.scanForms[kind] = Object.assign(this.scanFormFrom(saved), { show: show });
                 this.toast(saved.title + ": настройки сохранены", "success");
+                if (this.schedule.items.length) {
+                    this.loadSchedule(true);   // «выключен» в расписании — по источнику
+                }
             } catch (e) {
                 f.error = e.message || String(e);
             } finally {
@@ -221,6 +255,9 @@ export default {
                 if (result.saved) {
                     const s = this.scanSource(kind);
                     Object.assign(s, { checked_at: result.checked_at, check_ok: result.ok, check_message: result.message });
+                    if (s.form === "ssh" && result.ok && !s.host_key) {
+                        this.loadScanSources();   // сервер запомнил отпечаток
+                    }
                 } else {
                     f.result = result;
                 }
@@ -257,15 +294,98 @@ export default {
             return "Проверено " + this.formatTime(st.at) + (st.unsaved ? " (несохранённые данные)" : "") + "\n" + st.text;
         },
 
-        // Число в шапке: ПК в GLPI / GSIT, пользователи Jabber — по последнему сбору
+        // Число в шапке: ПК в GLPI / GSIT, пользователи Jabber, аренды DHCP, ответившие
+        // адреса сети — по последнему сбору
         scanSourceCount(kind) {
             const run = this.scanRunOf(kind);
             const st = run && run.status === "ok" ? run.stats || {} : null;
-            if (!st || st.total === undefined || st.total === null) {
+            const n = !st ? null : (kind === "net" ? st.alive : (kind === "dhcp" ? st.fresh : st.total));
+            if (n === undefined || n === null) {
                 return null;
             }
             const info = this.scanRunInfo(kind);
-            return { n: st.total, title: info ? info.text : "" };
+            return { n: n, title: info ? info.text : "" };
+        },
+
+        // Подсказки поля адреса
+        scanUrlHint(s) {
+            if (s.form === "jabber") {
+                return { placeholder: "http://jabber.lan:5280", title: "Адрес любой страницы веб-админки ejabberd" };
+            }
+            if (s.form === "ssh") {
+                return { placeholder: "192.168.0.5", title: "Имя или IP сервера DHCP (SSH); порт — через двоеточие" };
+            }
+            return { placeholder: "https://glpi.lan", title: "Адрес " + s.title + ", как в браузере" };
+        },
+
+        scanFreshTitle(s) {
+            return {
+                jabber: "Кто не подключался дольше — выделяется в VACUUM",
+                ssh: "Аренды, кончившиеся раньше, не берутся",
+                net: "Сколько помнить адрес, который перестал отвечать"
+            }[s.form] || "Записи старше не берутся";
+        },
+
+        // ---------- Ключ SSH (DHCP) ----------
+
+        // Несохранённые значения формы, нужные серверу для ключа
+        scanKeyBody(kind) {
+            const body = this.scanChanges(kind);
+            delete body.enabled;
+            delete body.fresh_days;
+            return body;
+        },
+
+        // Строка для ~/.ssh/authorized_keys — в буфер обмена
+        async copyScanKey(kind) {
+            const f = this.scanForms[kind];
+            f.keyBusy = true;
+            f.error = "";
+            try {
+                const response = await apiFetch("/api/scan/sources/" + kind + "/key", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(this.scanKeyBody(kind))
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const key = await response.json();
+                this.scanSource(kind).has_key = true;
+                await this.copyText(key.line, "Ключ скопирован — строка для authorized_keys");
+            } catch (e) {
+                f.error = e.message || String(e);
+            } finally {
+                f.keyBusy = false;
+            }
+        },
+
+        async installScanKey(kind) {
+            const f = this.scanForms[kind];
+            f.keyBusy = true;
+            f.error = "";
+            try {
+                const response = await apiFetch("/api/scan/sources/" + kind + "/key/install", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(this.scanKeyBody(kind))
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const result = await response.json();
+                if (!result.ok) {
+                    throw new Error(result.message);
+                }
+                const s = this.scanSource(kind);
+                s.has_key = true;
+                s.host_key = result.source.host_key;
+                this.toast(s.title + ": " + result.message, "success");
+            } catch (e) {
+                f.error = e.message || String(e);
+            } finally {
+                f.keyBusy = false;
+            }
         },
 
         scanTag(kind) {
@@ -290,6 +410,11 @@ export default {
                 this.scanUncovered = data.uncovered;
                 this.scanBuildings = data.buildings;
                 this.scanPurposes = data.purposes;
+                // «Сеть» готова к сбору, когда есть подсети для сканирования
+                const net = this.scanSources.find(function (x) { return x.form === "net"; });
+                if (net) {
+                    net.ready = data.subnets.some(function (sn) { return sn.scan; });
+                }
             } catch (e) {
                 this.scanError = "Не удалось загрузить подсети: " + (e.message || e);
             } finally {

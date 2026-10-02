@@ -674,14 +674,14 @@ def test_diffs_unsure_and_partial(admin, editor, room, glpi_url):
 def test_marks_settings(admin, editor, reader):
     marks = ok(reader.get("/api/scan/marks"))
     assert [m["kind"] for m in marks] == ["diff", "fill", "unsure", "partial"]
-    assert marks[0]["label"] == "Отличается" and marks[3]["enabled"] is False
+    assert marks[0]["label"] == "Замена" and marks[3]["enabled"] is False
 
     assert reader.patch("/api/scan/marks/diff", json={"bold": True}).status_code == 403
     assert editor.patch("/api/scan/marks/diff", json={"color": "red"}).status_code == 400
     saved = ok(editor.patch("/api/scan/marks/diff", json={"strike": True, "frame": "#cc0000", "always": True}))
     assert (saved["strike"], saved["frame"], saved["always"]) == (True, "#cc0000", True)
     items = ok(admin.get("/api/history", params={"entity": "scan_marks"}))["items"]
-    assert items[0]["title"] == "Отличается" and set(items[0]["changes"]) == {"strike", "frame", "always"}
+    assert items[0]["title"] == "Замена" and set(items[0]["changes"]) == {"strike", "frame", "always"}
 
     # Вернуть как было — таблица пометок между тестами не очищается
     ok(editor.patch("/api/scan/marks/diff", json={"strike": False, "frame": "", "always": False}))

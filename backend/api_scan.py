@@ -1,7 +1,8 @@
-"""Сканирование, этап 24: подключения к источникам (GLPI, GSIT, Jabber) и
-подсети для сетевого сканирования. Только администратор.
+"""Сканирование, этап 24: подключения к источникам (GLPI, GSIT, Jabber; с этапа 28 —
+DHCP по SSH и «Сеть» — проход подсетей) и подсети для сетевого сканирования.
+Только администратор.
 
-Источников три, у каждого одна строка настроек; строки в базе появляются при
+У каждого источника одна строка настроек; строки в базе появляются при
 первом сохранении, до этого отдаются значения по умолчанию. Пароли и токены
 хранятся зашифрованными (secret_box.py) и наружу не отдаются — только «задан».
 Изменения пишутся в Историю (видит администратор); пароли — «задан новый».
@@ -13,8 +14,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+import scan_dhcp
 import scan_glpi
 import scan_jabber
+import scan_net
+import scan_ssh
 from auth import require_admin
 from db import get_db
 from history_log import PASSWORD_SET, log_change
@@ -25,21 +29,27 @@ from secret_box import decrypt, encrypt, key_ready
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
 # Источники: название, какие поля есть в форме, чем проверять подключение
+# form — какая форма у источника: glpi, jabber, ssh (DHCP: адрес, файл, логин,
+# пароль, ключ), net (проход подсетей: адреса нет, только что проверять).
+# fresh — срок «Актуальны» по умолчанию и наибольший:
+# - GLPI / GSIT: записи, проверенные не раньше, чем N дней назад;
+# - Jabber: кто не подключался дольше — «давно не в сети» (выделяется в VACUUM);
+# - DHCP: аренды, которые действуют или кончились не раньше N дней назад;
+# - Сеть: сколько дней помнить адрес, который перестал отвечать.
 SOURCES = {
-    "glpi": {"title": "GLPI", "check": scan_glpi.check, "glpi": True},
-    "gsit": {"title": "GSIT", "check": scan_glpi.check, "glpi": True},
-    "jabber": {"title": "Jabber", "check": scan_jabber.check, "glpi": False},
+    "glpi": {"title": "GLPI", "check": scan_glpi.check, "glpi": True, "form": "glpi", "fresh": (3, 60)},
+    "gsit": {"title": "GSIT", "check": scan_glpi.check, "glpi": True, "form": "glpi", "fresh": (3, 60)},
+    "jabber": {"title": "Jabber", "check": scan_jabber.check, "glpi": False, "form": "jabber", "fresh": (7, 365)},
+    "dhcp": {"title": "DHCP", "check": scan_dhcp.check, "glpi": False, "form": "ssh", "fresh": (30, 365)},
+    "net": {"title": "Сеть", "check": scan_net.check, "glpi": False, "form": "net", "fresh": (7, 365)},
 }
 SECRET_FIELDS = ("password", "user_token", "app_token")
 SECRET_LABELS = {"password": "пароль", "user_token": "токен пользователя", "app_token": "токен приложения"}
 SECRET_REMOVED = "удалён"
-
-# Записи GLPI/GSIT считаются актуальными, если ПК проверялся не раньше, чем N дней назад
-FRESH_DAYS_DEFAULT = 3
-FRESH_DAYS_MAX = 60
-# Jabber: кто не подключался дольше — «давно не в сети» (выделяется в ячейке VACUUM)
-JABBER_DAYS_DEFAULT = 7
-JABBER_DAYS_MAX = 365
+# Ключ SSH (DHCP) создаёт сама программа; хранится в secrets, наружу — только открытая часть
+SSH_KEY = "ssh_key"
+KEY_CREATED = "создан"
+HOST_KEY_FORGOTTEN = "забыт"
 
 # Назначение подсети
 PURPOSES = {
@@ -101,6 +111,13 @@ class SourceOut(BaseModel):
     check_ok: Optional[bool]
     check_message: Optional[str]
     last_run: Optional[RunOut] = None
+    form: str = "glpi"
+    ready: bool = False               # можно собирать: адрес указан (Сеть — есть подсети)
+    path: Optional[str] = None        # DHCP: файл аренд
+    has_key: bool = False             # DHCP: ключ ITDB создан
+    host_key: Optional[str] = None    # DHCP: отпечаток ключа сервера (запомнен)
+    names: Optional[bool] = None      # Сеть: спрашивать имена (NetBIOS, DNS)
+    ports: Optional[bool] = None      # Сеть: проверять порты
 
 
 class SourcesOut(BaseModel):
@@ -119,6 +136,10 @@ class SourceUpdate(BaseModel):
     app_token: Optional[str] = None
     verify_tls: Optional[bool] = None
     fresh_days: Optional[int] = None
+    path: Optional[str] = None
+    names: Optional[bool] = None
+    ports: Optional[bool] = None
+    forget_host: Optional[bool] = None
 
 
 class CheckOut(BaseModel):
@@ -148,7 +169,24 @@ def fresh_days_of(source, kind):
     if isinstance(value, int):
         return value
 
-    return FRESH_DAYS_DEFAULT if SOURCES[kind]["glpi"] else JABBER_DAYS_DEFAULT
+    return SOURCES[kind]["fresh"][0]
+
+
+def option_of(source, name, default):
+    value = (source.options or {}).get(name) if source else None
+    return default if value is None else value
+
+
+def scan_subnets(session):
+    """Подсети, отмеченные для сканирования."""
+    return [s.cidr for s in session.query(ScanSubnet).filter(ScanSubnet.scan == True).order_by(ScanSubnet.id)]  # noqa: E712
+
+
+def source_ready(session, kind, source):
+    if SOURCES[kind]["form"] == "net":
+        return session.query(ScanSubnet).filter(ScanSubnet.scan == True).first() is not None  # noqa: E712
+
+    return bool(source and source.url)
 
 
 def last_run_of(session, kind):
@@ -156,17 +194,26 @@ def last_run_of(session, kind):
     return run_out(run) if run else None
 
 
-def source_out(kind, source, last_run=None):
+def source_out(kind, source, last_run=None, ready=None):
     secrets = (source.secrets or {}) if source else {}
     glpi = SOURCES[kind]["glpi"]
-    fields = SECRET_FIELDS if glpi else ("password",)
+    form = SOURCES[kind]["form"]
+    fields = SECRET_FIELDS if glpi else (() if form == "net" else ("password",))
+    host_key = option_of(source, "host_key", None)
 
     return SourceOut(
+        form=form,
+        ready=bool(source and source.url) if ready is None else ready,
+        path=option_of(source, "path", scan_dhcp.DEFAULT_PATH) if form == "ssh" else None,
+        has_key=bool(secrets.get(SSH_KEY)),
+        host_key=scan_ssh.fingerprint(host_key) if host_key else None,
+        names=option_of(source, "names", True) if form == "net" else None,
+        ports=option_of(source, "ports", False) if form == "net" else None,
         kind=kind,
         title=SOURCES[kind]["title"],
         enabled=bool(source and source.enabled),
         url=source.url if source else None,
-        domain=source.domain if source and not glpi else None,
+        domain=source.domain if source and form == "jabber" else None,
         login=source.login if source else None,
         secrets={field: bool(secrets.get(field)) for field in fields},
         verify_tls=source.verify_tls if source else True,
@@ -188,7 +235,7 @@ def clean(value, limit=500):
 
 
 def clean_fresh_days(value, kind):
-    limit = FRESH_DAYS_MAX if SOURCES[kind]["glpi"] else JABBER_DAYS_MAX
+    limit = SOURCES[kind]["fresh"][1]
 
     if value is None or not (1 <= value <= limit):
         raise HTTPException(
@@ -198,10 +245,21 @@ def clean_fresh_days(value, kind):
     return value
 
 
-def connection_params(kind, source, overlay=None):
+def connection_params(kind, source, overlay=None, session=None):
     """Параметры подключения: сохранённые (пароли расшифрованы) + несохранённые
-    значения из формы (overlay) — чтобы проверить до сохранения."""
+    значения из формы (overlay) — чтобы проверить до сохранения. У «Сети» —
+    подсети для прохода (нужна session) и что проверять."""
     secrets = (source.secrets or {}) if source else {}
+    form = SOURCES[kind]["form"]
+
+    if form == "net":
+        data = overlay.model_dump(exclude_none=True) if overlay is not None else {}
+        return {
+            "subnets": scan_subnets(session),
+            "names": data.get("names", option_of(source, "names", True)),
+            "ports": data.get("ports", option_of(source, "ports", False)),
+        }
+
     params = {
         "url": source.url if source else None,
         "domain": source.domain if source else None,
@@ -227,10 +285,32 @@ def connection_params(kind, source, overlay=None):
             if field in data:
                 params[field] = data[field] or None
 
+    if form == "ssh":
+        data = overlay.model_dump(exclude_none=True) if overlay is not None else {}
+        token = secrets.get(SSH_KEY)
+        params["ssh_key"] = decrypt(token, "ключ SSH") if token else None
+        params["path"] = data.get("path") or option_of(source, "path", scan_dhcp.DEFAULT_PATH)
+        # Адрес в форме другой — запомненный ключ сервера к нему не относится
+        same_host = "url" not in data or address_of(data["url"]) == (source.url if source else None)
+        params["host_key"] = option_of(source, "host_key", None) if same_host and not data.get("forget_host") else None
+
     if not params["url"]:
         raise SourceError("Укажи адрес.")
 
     return params
+
+
+def address_of(value):
+    try:
+        return scan_ssh.clean_address(value)
+    except SourceError:
+        return None
+
+
+def remember_host(source, seen):
+    """Запомнить ключ сервера SSH при первом удачном подключении."""
+    if source is not None and seen and seen.get("host_key") and not option_of(source, "host_key", None):
+        source.options = dict(source.options or {}, host_key=seen["host_key"])
 
 
 @router.get("/sources", response_model=SourcesOut)
@@ -238,7 +318,10 @@ def list_sources(me=Depends(require_admin), session=Depends(get_db)):
     rows = {source.kind: source for source in session.query(ScanSource).all()}
     return SourcesOut(
         key_ready=key_ready(),
-        sources=[source_out(kind, rows.get(kind), last_run_of(session, kind)) for kind in SOURCES],
+        sources=[
+            source_out(kind, rows.get(kind), last_run_of(session, kind), source_ready(session, kind, rows.get(kind)))
+            for kind in SOURCES
+        ],
     )
 
 
@@ -246,13 +329,26 @@ def list_sources(me=Depends(require_admin), session=Depends(get_db)):
 def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), session=Depends(get_db)):
     check_kind(kind)
     glpi = SOURCES[kind]["glpi"]
+    form = SOURCES[kind]["form"]
     data = payload.model_dump(exclude_none=True)
 
     if not glpi:
         for field in ("user_token", "app_token"):
             data.pop(field, None)
-    else:
+
+    if form != "jabber":
         data.pop("domain", None)
+
+    if form != "ssh":
+        for field in ("path", "forget_host"):
+            data.pop(field, None)
+
+    if form != "net":
+        for field in ("names", "ports"):
+            data.pop(field, None)
+    else:
+        for field in ("url", "login", "password", "verify_tls"):
+            data.pop(field, None)
 
     source = load_source(session, kind, lock=True)
 
@@ -271,7 +367,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
     changes = {}
 
     # Jabber: адрес любой страницы веб-админки → адрес админки, домен — из пути
-    if not glpi and data.get("url"):
+    if form == "jabber" and data.get("url"):
         try:
             data["url"], domain = scan_jabber.normalize(data["url"])
         except SourceError as err:
@@ -286,7 +382,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
 
             if field == "url" and value:
                 try:
-                    value = check_url(value, "Адрес")
+                    value = scan_ssh.clean_address(value) if form == "ssh" else check_url(value, "Адрес")
                 except SourceError as err:
                     raise HTTPException(status_code=400, detail=str(err))
 
@@ -301,6 +397,29 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         days = clean_fresh_days(data["fresh_days"], kind)
         source.options = dict(source.options or {}, fresh_days=days)
         changes["fresh_days"] = {"old": before["fresh_days"], "new": days}
+
+    if "path" in data:
+        try:
+            path = " ".join(scan_ssh.split_paths(data["path"]))
+        except SourceError as err:
+            raise HTTPException(status_code=400, detail=str(err))
+
+        old = option_of(source, "path", scan_dhcp.DEFAULT_PATH)
+        source.options = dict(source.options or {}, path=path)
+        changes["path"] = {"old": old, "new": path}
+
+    for field, default in (("names", True), ("ports", False)):
+        if field in data:
+            old = option_of(source, field, default)
+            source.options = dict(source.options or {}, **{field: data[field]})
+            changes[field] = {"old": old, "new": data[field]}
+
+    # Запомненный ключ сервера SSH: забыть по просьбе или при смене адреса
+    host_changed = form == "ssh" and "url" in changes and changes["url"]["old"] != changes["url"]["new"]
+
+    if (data.get("forget_host") or host_changed) and option_of(source, "host_key", None):
+        source.options = {key: value for key, value in (source.options or {}).items() if key != "host_key"}
+        changes["host_key"] = {"old": None, "new": HOST_KEY_FORGOTTEN}
 
     secrets = dict(source.secrets or {})
 
@@ -319,13 +438,13 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
     source.secrets = secrets
 
     if "enabled" in data:
-        if data["enabled"] and not source.url:
+        if data["enabled"] and not source.url and form != "net":
             raise HTTPException(status_code=400, detail="Сначала укажи адрес.")
         source.enabled = data["enabled"]
         changes["enabled"] = {"old": before["enabled"], "new": data["enabled"]}
 
     # Параметры подключения изменились — прошлая проверка больше ничего не говорит
-    connection = {"url", "domain", "login", "verify_tls"} | set(SECRET_FIELDS)
+    connection = {"url", "domain", "login", "verify_tls", "path", "host_key"} | set(SECRET_FIELDS)
 
     if any(field in connection for field, change in changes.items() if change["old"] != change["new"]):
         source.checked_at = None
@@ -339,7 +458,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         title=SOURCES[kind]["title"], entity_key=kind,
     )
     session.commit()
-    return source_out(kind, source, last_run_of(session, kind))
+    return source_out(kind, source, last_run_of(session, kind), source_ready(session, kind, source))
 
 
 @router.post("/sources/{kind}/check", response_model=CheckOut)
@@ -355,8 +474,10 @@ def check_source(
     unsaved = payload is not None and bool(payload.model_dump(exclude_none=True))
     source = load_source(session, kind)
 
+    params = {}
+
     try:
-        params = connection_params(kind, source, payload if unsaved else None)
+        params = connection_params(kind, source, payload if unsaved else None, session)
         message = SOURCES[kind]["check"](params)
         ok = True
     except SourceError as err:
@@ -370,9 +491,106 @@ def check_source(
         source.checked_at = now
         source.check_ok = ok
         source.check_message = message
+
+        if ok:
+            remember_host(source, params.get("seen"))
+
         session.commit()
 
     return CheckOut(ok=ok, message=message, checked_at=now, saved=saved)
+
+
+# ---------- Ключ SSH (DHCP, этап 28) ----------
+
+
+class KeyOut(BaseModel):
+    line: str          # строка для ~/.ssh/authorized_keys (с ограничением «только читать файл»)
+    public: str        # сам открытый ключ
+    created: bool
+
+
+class KeyInstallOut(BaseModel):
+    ok: bool
+    message: str
+    source: SourceOut
+
+
+def check_ssh_kind(kind):
+    check_kind(kind)
+
+    if SOURCES[kind]["form"] != "ssh":
+        raise HTTPException(status_code=404, detail="У этого источника нет ключа SSH.")
+
+
+def ensure_key(session, kind, me):
+    """Ключ ITDB для источника: создаётся при первой надобности. (источник, создан ли)."""
+    source = load_source(session, kind, lock=True)
+
+    if source is None:
+        source = ScanSource(kind=kind, enabled=False, verify_tls=True, secrets={}, options={})
+        session.add(source)
+
+    if (source.secrets or {}).get(SSH_KEY):
+        return source, False
+
+    source.secrets = dict(source.secrets or {}, **{SSH_KEY: encrypt(scan_ssh.generate_key())})
+    log_change(
+        session, "scan_sources", 0, me["login"], {SSH_KEY: {"old": None, "new": KEY_CREATED}},
+        title=SOURCES[kind]["title"], entity_key=kind,
+    )
+    return source, True
+
+
+@router.post("/sources/{kind}/key", response_model=KeyOut)
+def source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_admin), session=Depends(get_db)):
+    """Открытый ключ ITDB строкой для authorized_keys — поставить на сервер вручную."""
+    check_ssh_kind(kind)
+    source, created = ensure_key(session, kind, me)
+    path = (payload.path if payload else None) or option_of(source, "path", scan_dhcp.DEFAULT_PATH)
+
+    try:
+        paths = scan_ssh.split_paths(path)
+        private = decrypt(source.secrets[SSH_KEY], "ключ SSH")
+        out = KeyOut(line=scan_ssh.authorized_line(private, paths), public=scan_ssh.public_line(private), created=created)
+    except SourceError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+    session.commit()
+    return out
+
+
+@router.post("/sources/{kind}/key/install", response_model=KeyInstallOut)
+def install_source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_admin), session=Depends(get_db)):
+    """Поставить ключ ITDB на сервер: вход по паролю (из формы или сохранённому),
+    дальше — по ключу, пароль можно не хранить."""
+    check_ssh_kind(kind)
+    source, _ = ensure_key(session, kind, me)
+    session.commit()   # ключ остаётся, даже если поставить не выйдет
+    source = load_source(session, kind, lock=True)
+    unsaved = payload is not None and bool(payload.model_dump(exclude_none=True))
+
+    try:
+        params = connection_params(kind, source, payload if unsaved else None, session)
+        info = scan_ssh.install_key(params)
+        ok, message = True, "Ключ поставлен: вход по ключу работает, пароль можно не хранить."
+    except SourceError as err:
+        ok, message, info = False, str(err), None
+
+    if ok:
+        # Ключ сервера запоминается, только если адрес в форме — сохранённый
+        if source.url and address_of(params["url"]) == source.url:
+            remember_host(source, info)
+
+        log_change(
+            session, "scan_sources", 0, me["login"], {"key_installed": {"old": None, "new": params["url"]}},
+            title=SOURCES[kind]["title"], entity_key=kind,
+        )
+        session.commit()
+
+    return KeyInstallOut(
+        ok=ok, message=message,
+        source=source_out(kind, source, last_run_of(session, kind), source_ready(session, kind, source)),
+    )
 
 
 # ---------- Подсети ----------

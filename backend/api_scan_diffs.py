@@ -23,6 +23,9 @@
 давно не подключался, отдаётся отдельно, vacuum_stale, и только выделяется).
 Этап 26ж: номера записей — в столбцы GLPI и GSIT (ID_FIELDS); «это материнская
 плата» — название модели из источника уходит в столбец «Мат. плата» (/board).
+Этап 28: сеть (аренды DHCP и проход подсетей, scan_hosts) предлагает MAC, IP и
+имя — scan_hostmatch.py; о поле, про которое уже говорит запись GLPI / GSIT,
+сеть молчит (записи главнее).
 Этап 26б: «неточно» (unsure) — источники предлагают разное или VNC-серверов
 несколько; «в таблице часть» (partial, «≈») — отдаётся для пометок, но не
 расхождение (не в счётчике); у источника — как сопоставлен (state, by) и что
@@ -49,11 +52,12 @@ from auth import get_current_user, require_editor
 from db import get_db
 from history_log import log_change
 from models import (
-    AppSetting, Computer, ScanJabberUser, ScanMark, ScanRecord, ScanReject, ScanSource, VacuumAccount,
+    AppSetting, Computer, ScanHost, ScanJabberUser, ScanMark, ScanRecord, ScanReject, ScanSource, VacuumAccount,
     VacuumAccountComputer,
 )
+from scan_hostmatch import host_rows
 from scan_match import ID_FIELDS
-from scan_values import COMPARE_FIELDS, NAME_FIELDS, clean_text, key_of
+from scan_values import COMPARE_FIELDS, NAME_FIELDS, clean_text, key_of, lines_of
 
 router = APIRouter(prefix="/api/scan/diffs", tags=["scan"])
 
@@ -120,6 +124,8 @@ class DiffsOut(BaseModel):
     # логины из таблицы, давно не подключавшиеся: логин → сколько дней (None — никогда)
     vacuum_stale: dict[str, Optional[int]] = {}
     jabber: dict[int, list[str]] = {}   # кого Jabber видит с адреса ПК: id ПК → логины
+    # что о ПК видно в сети (DHCP, проход подсетей): id ПК → {ip, mac, hostname: [значения]}
+    net: dict[int, dict[str, list[str]]] = {}
 
 
 def enabled_kinds(session):
@@ -378,10 +384,33 @@ def jabber_rows(computers, record_ips, state, vacuum):
     return result, seen_at
 
 
+def host_observations(session):
+    """Свежие наблюдения включённых источников сети (DHCP, Сеть) и сами источники."""
+    result, kinds = [], []
+    moment = datetime.now(timezone.utc)
+
+    for kind in scan_collect.HOST_KINDS:
+        source = load_source(session, kind)
+
+        if not (source and source.enabled):
+            continue
+
+        kinds.append(kind)
+        since = moment - timedelta(days=fresh_days_of(source, kind))
+
+        for row in session.query(ScanHost).filter(ScanHost.source == kind, ScanHost.seen_at >= since):
+            result.append({
+                "source": kind, "ip": row.ip, "mac": row.mac, "name": row.name, "seen_at": row.seen_at,
+                "data": row.data or {},
+            })
+
+    return result, kinds
+
+
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
     которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
-    подключавшиеся) по всем включённым источникам. Одно поле ПК — одна строка;
+    подключавшиеся, что видно в сети у ПК) по всем включённым источникам. Одно поле ПК — одна строка;
     если источники предлагают разное — «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
@@ -427,6 +456,35 @@ def compute(session, with_rejected=False):
             entry["rows"].append(row)
             entry["sources"].append(dict(source, value=row["source"]))
 
+    # Сеть (этап 28): MAC, IP и имя — там, где записи GLPI / GSIT об этом поле молчат
+    hosts, host_kinds = host_observations(session)
+    net_seen = {}
+
+    if hosts:
+        proposals, net_seen = host_rows(computers, hosts)
+
+        for proposal in proposals:
+            computer_id, field = proposal["computer_id"], proposal["field"]
+
+            if (computer_id, field) in rows:
+                continue
+
+            table = computers[computer_id].get(field)
+            row = names.compare(field, proposal["value"], table)
+
+            # MAC из сети дописывается к записанным, а не заменяет их
+            if field == "mac" and lines_of(table):
+                row["source"] = "\n".join(lines_of(table) + [proposal["value"]])
+                row["mark"] = "≠"
+
+            if row["mark"] in ("=", "≈"):
+                continue
+
+            row.update(field=field, itdb=table or "")
+            rows[(computer_id, field)] = {
+                "rows": [row], "sources": [dict(proposal["source"], value=row["source"])], "unsure": proposal["unsure"],
+            }
+
     items = []
     rejected = 0
 
@@ -454,7 +512,7 @@ def compute(session, with_rejected=False):
         proposals = {key_of(r["source"]) for r in entry["rows"]}
         row = entry["rows"][0]
         marks = {r["mark"] for r in entry["rows"]}
-        unsure = ""
+        unsure = entry.get("unsure", "")
 
         if len(proposals) > 1:
             unsure = "источники предлагают разное: " + "; ".join(f"{s['title']} — {s['value']}" for s in entry["sources"])
@@ -490,6 +548,8 @@ def compute(session, with_rejected=False):
 
         kinds = kinds + ["jabber"]
 
+    kinds = kinds + host_kinds
+
     # «Ещё у N ПК»: та же пара «в таблице — у сканера» в том же поле
     pairs = {}
 
@@ -515,7 +575,7 @@ def compute(session, with_rejected=False):
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
 
     result.sort(key=lambda d: ((d.hostname or "").lower(), d.computer_id, order.get(d.field, 99)))
-    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale
+    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen
 
 
 def record_links(session):
@@ -537,7 +597,7 @@ def list_diffs(
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    items, rejected_count, kinds, antivirus, missing, seen_at, stale = compute(session, with_rejected=rejected)
+    items, rejected_count, kinds, antivirus, missing, seen_at, stale, net_seen = compute(session, with_rejected=rejected)
     return DiffsOut(
         items=items,
         computers=len({d.computer_id for d in items if not d.rejected_by and d.kind != "partial"}),
@@ -548,6 +608,7 @@ def list_diffs(
         vacuum_missing=missing,
         vacuum_stale=stale,
         jabber=seen_at,
+        net=net_seen,
     )
 
 
@@ -721,11 +782,12 @@ def unreject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_
 
 marks_router = APIRouter(prefix="/api/scan/marks", tags=["scan"])
 
+# Названия ситуаций — как в «Принять изменения…» (просьба 02.10)
 MARK_LABELS = {
-    "diff": "Отличается",
-    "fill": "В таблице пусто",
+    "diff": "Замена",
+    "fill": "Новые значения",
     "unsure": "Неточно",
-    "partial": "В таблице часть",
+    "partial": "Добавление значений",
 }
 MARK_FIELDS = ("color", "bg_color", "bold", "italic", "strike", "frame", "enabled", "always")
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")

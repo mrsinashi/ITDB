@@ -828,6 +828,7 @@ export default {
                 page: this.$refs.pageSetWrap,
                 historySel: this.$refs.historySelWrap,
                 checkSel: this.$refs.checkSelWrap,
+                checkFields: this.$refs.checkFieldsWrap,
                 namesHelp: this.$refs.namesHelpWrap,
                 historyFilter: this.$refs.historyFilterWrap,
                 colFilter: this.$refs.colFilterPanel,

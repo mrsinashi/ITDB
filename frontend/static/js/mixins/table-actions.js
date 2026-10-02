@@ -382,7 +382,7 @@ export default {
                 bar.field = (this.bulkColumns[0] || {}).field || "";
                 bar.value = "";
             } else if (kind === "scan") {
-                // «Взять из сканера…»: тип и столбец; пусто — все
+                // «Принять изменения…»: тип и столбец; пусто — все
                 bar.scanKind = "";
                 bar.field = "";
             }
@@ -418,7 +418,7 @@ export default {
                 return "Заменить " + what + " на:";
             }
             if (bar.kind === "scan") {
-                return "Взять из сканера у " + what + ":";
+                return "Принять изменения у " + what + ":";
             }
             return "Изменить у " + what + ":";
         },

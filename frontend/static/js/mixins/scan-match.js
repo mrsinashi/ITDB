@@ -1,4 +1,4 @@
-// Сканер, этап 25: сбор из GLPI / GSIT (с этапа 26д — и Jabber), вкладка
+// Сканер, этап 25: сбор из GLPI / GSIT (с этапа 26д — и Jabber, с 28 — DHCP и сеть), вкладка
 // «Названия» и общее для записей источников (с этапа 26г записи показывает вкладка
 // «Проверка», scan-check.js; пользователей Jabber — страница «Vacuum», scan-vacuum.js).
 //
@@ -12,7 +12,9 @@
 import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
 
 const POLL_MS = 1000;
-const COLLECT_KINDS = ["glpi", "gsit", "jabber"];
+const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net"];
+// Что считает полоса сбора: «20 из 155 ПК»
+const PROGRESS_UNITS = { jabber: " пользователей", net: " адресов", dhcp: "" };
 const KEY_LABELS = { id: "ID", mac: "MAC", serial: "серийному" };
 // Поля, у которых названия сопоставляются по смыслу и словарю (этап 25б)
 const NAME_FIELDS = ["model", "motherboard", "os", "cpu", "gpu", "vnc", "drive"];
@@ -69,7 +71,7 @@ export default {
         },
 
         checkCollectBlock() {
-            const ready = this.scanCollectSources.filter(function (s) { return s.enabled && s.url; });
+            const ready = this.scanCollectSources.filter(function (s) { return s.enabled && s.ready; });
             if (!ready.length) {
                 return "Нет включённых источников";
             }
@@ -82,7 +84,7 @@ export default {
         checkCollectTitle() {
             const lines = [];
             this.scanCollectSources.forEach((s) => {
-                if (!s.enabled || !s.url) {
+                if (!s.enabled || !s.ready) {
                     return;
                 }
                 const info = this.scanRunInfo(s.kind);
@@ -92,7 +94,31 @@ export default {
             if (block && !lines.length) {
                 return block;
             }
-            return (block || "Собрать из GLPI, GSIT и Jabber") + (lines.length ? "\n\n" + lines.join("\n") : "");
+            return (block || "Собрать из всех включённых источников") + (lines.length ? "\n\n" + lines.join("\n") : "");
+        },
+
+        // Полоса сбора на «Проверке»: по всем источникам, из которых сейчас собирается
+        checkProgress() {
+            const running = this.scanCollectSources.filter((s) => this.scanCollecting(s.kind));
+            if (!running.length) {
+                return null;
+            }
+            let done = 0;
+            let total = 0;
+            const lines = [];
+            running.forEach((s) => {
+                const p = this.scanProgress(s.kind);
+                const run = this.scanRunOf(s.kind);
+                const st = (run.stats && run.stats.progress) || {};
+                done += st.total ? st.done : 0;
+                total += st.total || 0;
+                lines.push(s.title + ": " + p.text);
+            });
+            return {
+                percent: total ? Math.round(done / total * 100) : 0,
+                text: running.length === 1 ? lines[0] : (total ? done + " из " + total : "Собираю…"),
+                title: lines.join("\n")
+            };
         },
 
         scanNamesShown() {
@@ -139,8 +165,14 @@ export default {
             }
             this.scanTab = tab;
             this.scanLinkBar = null;
+            this.closeMenus();
+            this.watchSchedule(tab === "schedule");
             if (tab === "names") {
                 this.loadScanNames();
+            }
+            if (tab === "schedule") {
+                this.schedule.hover = null;
+                this.loadSchedule();
             }
             if (tab === "check") {
                 this.check.hover = null;
@@ -148,7 +180,51 @@ export default {
             }
         },
 
+        reloadScanTab() {
+            if (this.scanTab === "names") {
+                this.loadScanNames();
+            } else if (this.scanTab === "schedule") {
+                this.loadSchedule();
+            } else {
+                this.loadCheck();
+            }
+        },
+
         // ---------- Сбор ----------
+
+        // Полоса сбора источника: { percent, text }; не собирается — null
+        scanProgress(kind) {
+            const run = this.scanRunOf(kind);
+            if (!run || run.status !== "running") {
+                return null;
+            }
+            const p = (run.stats && run.stats.progress) || {};
+            if (!p.total) {
+                return { percent: 0, text: "Собираю…" };
+            }
+            return { percent: Math.round(p.done / p.total * 100), text: p.done + " из " + p.total };
+        },
+
+        // Запуск, о котором страница узнала не от своей кнопки (сбор по расписанию)
+        noteScanRun(run) {
+            const known = this.scanRunOf(run.source);
+            if (known && known.id === run.id && known.status === run.status) {
+                return;
+            }
+            if (run.status === "running") {
+                this.trackScanRun(run);
+                return;
+            }
+            const fresh = !known || known.id !== run.id;
+            this.scanRuns = Object.assign({}, this.scanRuns, { [run.source]: run });
+            const s = this.scanSource(run.source);
+            if (s) {
+                s.last_run = run;
+            }
+            if (fresh && known) {
+                this.loadDiffs();
+            }
+        },
 
         scanRunOf(kind) {
             const s = this.scanSource(kind);
@@ -187,8 +263,8 @@ export default {
             if (this.scanForms[kind] && this.scanDirty(kind)) {
                 return "Сначала сохрани настройки";
             }
-            if (!s.url) {
-                return "Сначала укажи и сохрани адрес";
+            if (!s.ready) {
+                return s.form === "net" ? "Нет подсетей для сканирования" : "Сначала укажи и сохрани адрес";
             }
             if (!s.enabled) {
                 return "Источник выключен";
@@ -216,7 +292,7 @@ export default {
                 return;
             }
             const kinds = this.scanCollectSources
-                .filter((s) => s.enabled && s.url && !this.scanCollecting(s.kind))
+                .filter((s) => s.enabled && s.ready && !this.scanCollecting(s.kind))
                 .map(function (s) { return s.kind; });
             for (const kind of kinds) {
                 try {
@@ -270,6 +346,10 @@ export default {
             if (run.status === "ok" && run.source === "jabber") {
                 const st = run.stats;
                 this.toast(title + ": собрано — пользователей " + st.total + ", в сети " + st.online, "success");
+            } else if (run.status === "ok" && run.source === "dhcp") {
+                this.toast(title + ": собрано — аренд " + (run.stats.total - run.stats.fixed) + ", действуют " + run.stats.active, "success");
+            } else if (run.status === "ok" && run.source === "net") {
+                this.toast(title + ": адресов " + run.stats.total + ", ответили " + run.stats.alive, "success");
             } else if (run.status === "ok") {
                 const st = run.stats;
                 this.toast(title + ": собрано — свежих " + st.fresh + "; сопоставлено " + ((st.key || 0) + (st.link || 0)) +
@@ -279,6 +359,9 @@ export default {
             }
             if (run.source === "jabber" && this.view === "vacuum") {
                 this.loadVacuum();
+            }
+            if (this.view === "scan" && this.scanTab === "schedule") {
+                this.loadSchedule(true);
             }
             if (this.view === "scan" && this.scanTab === "check") {
                 this.loadCheck();
@@ -302,23 +385,51 @@ export default {
             if (!run) {
                 return null;
             }
+            const took = durationText(run);
+            const result = this.scanRunText(run);
+            result.time = run.status === "running"
+                ? this.formatTime(run.started_at)
+                : this.formatTime(run.finished_at || run.started_at) + (took ? " · " + took : "") + (run.user_name ? " · " + run.user_name : "");
+            return result;
+        },
+
+        scanRunDuration(run) {
+            return durationText(run);
+        },
+
+        // Что собрано в запуске: { text, note, bad, running } (и для журнала расписания)
+        scanRunText(run) {
+            const kind = run.source;
             const s = this.scanSource(kind);
             const title = s ? s.title : kind;
             if (run.status === "running") {
                 const p = (run.stats && run.stats.progress) || {};
-                const unit = kind === "jabber" ? " пользователей" : " ПК";
-                const text = p.total ? "Собираю: " + p.done + " из " + p.total + unit + "…" : "Собираю…";
-                return { time: this.formatTime(run.started_at), text: text, bad: false, running: true };
+                const unit = kind in PROGRESS_UNITS ? PROGRESS_UNITS[kind] : " ПК";
+                return { text: p.total ? "Собираю: " + p.done + " из " + p.total + unit + "…" : "Собираю…", bad: false, running: true };
             }
-            const time = this.formatTime(run.finished_at || run.started_at) + (durationText(run) ? " · " + durationText(run) : "") +
-                (run.user_name ? " · " + run.user_name : "");
             if (run.status !== "ok") {
-                return { time: time, text: run.message || "Сбор не удался", bad: true, running: false };
+                return { text: run.message || "Сбор не удался", bad: true, running: false };
             }
             const st = run.stats || {};
             if (kind === "jabber") {
                 const groups = st.groups ? ", групп: " + st.groups : "";
-                return { time: time, text: "Пользователей: " + st.total + ", в сети: " + st.online + groups, note: run.message || "", bad: false, running: false };
+                return { text: "Пользователей: " + st.total + ", в сети: " + st.online + groups, note: run.message || "", bad: false, running: false };
+            }
+            if (kind === "dhcp") {
+                const parts = ["Аренд: " + (st.total - st.fixed), "действуют: " + st.active];
+                if (st.fixed) {
+                    parts.push("резервов: " + st.fixed);
+                }
+                if (st.stale) {
+                    parts.push("старше " + st.fresh_days + " дн.: " + st.stale);
+                }
+                return { text: parts.join(", "), note: run.message || "", bad: false, running: false };
+            }
+            if (kind === "net") {
+                return {
+                    text: "Адресов: " + st.total + ", ответили: " + st.alive + ", с MAC: " + st.mac + ", с именем: " + st.names,
+                    note: run.message || "", bad: false, running: false
+                };
             }
             const parts = [
                 "ПК в " + title + ": " + st.total,
@@ -333,7 +444,7 @@ export default {
             if (st.dup) {
                 parts.push("дублей: " + st.dup);
             }
-            return { time: time, text: parts.join(", "), note: run.message || "", bad: false, running: false };
+            return { text: parts.join(", "), note: run.message || "", bad: false, running: false };
         },
 
         // ---------- Записи ----------

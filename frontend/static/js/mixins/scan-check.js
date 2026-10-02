@@ -13,6 +13,8 @@
 // Этап 26е: ПК, о которых говорит только Jabber (VACUUM), — тоже строки;
 // HOSTNAME из источника только сообщается — «взять» его нельзя (d.can_take).
 // Этап 26ж: в подробностях — и «Мат. плата», и номера записей GLPI / GSIT.
+// Этап 28: кнопка «Фильтр» — по атрибутам (у каких полей есть предложения);
+// в подробностях — столбец «Сеть» (что видно по DHCP и проходу подсетей).
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords, clickSelect } from "../util.js";
 
@@ -55,6 +57,11 @@ function inFilter(row, filter) {
     default:
         return true;
     }
+}
+
+// Поля, по которым у строки есть предложения (и отклонённые — для их фильтра)
+function rowFields(row) {
+    return row.diffs.concat(row.rejected).map(function (d) { return d.field; });
 }
 
 function samePair(d, pair) {
@@ -164,6 +171,7 @@ export default {
         checkShown() {
             const words = searchWords(this.scanMatchQuery);
             const pair = this.check.pair;
+            const fields = this.check.fields;
             return this.checkRows.filter((row) => {
                 if (pair) {
                     if (!row.diffs.some(function (d) { return samePair(d, pair); })) {
@@ -171,9 +179,25 @@ export default {
                     }
                 } else if (!inFilter(row, this.check.filter)) {
                     return false;
+                } else if (fields.length && !rowFields(row).some(function (f) { return fields.includes(f); })) {
+                    return false;
                 }
                 return !words.length || matchesAllWords(row.search, words);
             });
+        },
+
+        // «Фильтр»: атрибуты, по которым сканер что-то предлагает строкам выбранного
+        // фильтра, с числом строк; отмеченные остаются в списке, даже если строк уже нет
+        checkFieldOptions() {
+            const counts = {};
+            this.checkRows.forEach((row) => {
+                if (inFilter(row, this.check.filter)) {
+                    new Set(rowFields(row)).forEach(function (f) { counts[f] = (counts[f] || 0) + 1; });
+                }
+            });
+            const chosen = this.check.fields;
+            return COMPARE_FIELDS.filter(function (f) { return counts[f] || chosen.includes(f); })
+                .map((f) => ({ key: f, label: this.diffFieldLabel(f), count: counts[f] || 0 }));
         },
 
         checkCountText() {
@@ -191,13 +215,15 @@ export default {
             return this.checkRows.filter(function (r) { return set.has(r.key); });
         },
 
-        // Что сделают действия над выбранными (с «ещё у N ПК» — только эта пара)
+        // Что сделают действия над выбранными (с «ещё у N ПК» — только эта пара,
+        // с фильтром по атрибутам — только отмеченные поля)
         checkSelDiffs() {
             const pair = this.check.pair;
+            const fields = pair ? [] : this.check.fields;
             const list = [];
             this.checkSelectedRows.forEach(function (row) {
                 row.diffs.forEach(function (d) {
-                    if (!pair || samePair(d, pair)) {
+                    if ((!pair || samePair(d, pair)) && (!fields.length || fields.includes(d.field))) {
                         list.push(d);
                     }
                 });
@@ -217,6 +243,11 @@ export default {
         // Jabber включён — в подробностях есть столбец «Vacuum»
         checkJabberOn() {
             return this.diffs.sources.indexOf("jabber") !== -1;
+        },
+
+        // DHCP или «Сеть» включены — в подробностях есть столбец «Сеть»
+        checkNetOn() {
+            return this.diffs.sources.indexOf("dhcp") !== -1 || this.diffs.sources.indexOf("net") !== -1;
         },
 
         checkOpenRow() {
@@ -273,6 +304,19 @@ export default {
             this.check.filter = key;
             this.check.pair = null;
             this.check.hover = null;
+            this.afterCheckRender();
+        },
+
+        toggleCheckField(field) {
+            const list = this.check.fields;
+            this.check.fields = list.includes(field) ? list.filter(function (f) { return f !== field; }) : list.concat([field]);
+            this.check.hover = null;
+            this.afterCheckRender();
+        },
+
+        clearCheckFields() {
+            this.check.fields = [];
+            this.closeMenus();
             this.afterCheckRender();
         },
 
@@ -529,6 +573,8 @@ export default {
             const props = row.record ? {} : (this.diffAllIndex.get(row.pcId) || {});
             // Столбец «Vacuum»: кого Jabber видит с адреса этого ПК
             const seen = this.checkJabberOn && !row.record ? this.diffs.jabber[row.pcId] || [] : null;
+            // Столбец «Сеть»: адрес, MAC и имя ПК по DHCP и проходу подсетей
+            const net = this.checkNetOn && !row.record ? this.diffs.net[row.pcId] || {} : null;
             return COMPARE_FIELDS.map((field) => {
                 const first = kinds.map(function (k) { return byKind[k][field]; }).find(Boolean);
                 const itdb = live ? live[field] : (first ? first.itdb : "");
@@ -538,7 +584,8 @@ export default {
                     label: this.diffFieldLabel(field),
                     itdb: itdb === null || itdb === undefined ? "" : String(itdb),
                     cells: kinds.map(function (k) { return { kind: k, c: byKind[k][field] || null }; })
-                        .concat(seen ? [{ kind: "jabber", c: field === "vacuum" && seen.length ? this.checkJabberCell(seen, itdb) : null }] : []),
+                        .concat(seen ? [{ kind: "jabber", c: field === "vacuum" && seen.length ? this.checkJabberCell(seen, itdb) : null }] : [])
+                        .concat(net ? [{ kind: "net", c: net[field] && net[field].length ? this.checkNetCell(field, net[field], itdb) : null }] : []),
                     prop: prop
                 };
             });
@@ -549,6 +596,18 @@ export default {
             const have = new Set(String(table || "").split("\n").map(function (l) { return l.trim().toLowerCase(); }).filter(Boolean));
             const mark = logins.every(function (l) { return have.has(l.toLowerCase()); }) ? "=" : "≠";
             return { source: logins.join("\n"), mark: mark, symbol: mark, markTitle: mark === "=" ? "Есть в таблице" : "В таблице нет", rawText: "" };
+        },
+
+        // Ячейка «Сеть»: что видно в сети и отметка = / ≠ (имя — без регистра и домена,
+        // у адресов и MAC — есть ли в таблице)
+        checkNetCell(field, values, table) {
+            const norm = function (v) {
+                const text = String(v).trim().toLowerCase();
+                return field === "hostname" ? text.split(".")[0] : text;
+            };
+            const have = new Set(String(table || "").split("\n").map(norm).filter(Boolean));
+            const mark = values.every(function (v) { return have.has(norm(v)); }) ? "=" : "≠";
+            return { source: values.join("\n"), mark: mark, symbol: mark, markTitle: mark === "=" ? "Есть в таблице" : "В таблице нет", rawText: "" };
         },
 
         checkCanEditValue(row, f) {
@@ -613,8 +672,8 @@ export default {
         async checkTakeSelected() {
             const list = this.checkSelTakeable.slice();
             this.closeMenus();
-            const ok = await this.confirmDialog("Взять из сканера " + list.length + " " + this.scanPlural(list.length, "значение", "значения", "значений") +
-                " у " + this.checkSelectedRows.length + " ПК?", { okText: "Взять" });
+            const ok = await this.confirmDialog("Принять " + list.length + " " + this.scanPlural(list.length, "изменение", "изменения", "изменений") +
+                " у " + this.checkSelectedRows.length + " ПК?", { okText: "Принять" });
             if (ok) {
                 await this.checkTake(list);
             }

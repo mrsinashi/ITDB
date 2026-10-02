@@ -159,8 +159,8 @@
                                     <button @click="openAction('move')" title="В другой узел дерева">Переместить…</button>
                                     <button @click="openAction('replace')" :disabled="selectedRows.length !== 1" :title="selectedRows.length !== 1 ? 'Выбери один ПК' : 'Другой ПК встаёт на его место'">Заменить…</button>
                                     <button @click="startSwap" :disabled="selectedRows.length !== 2" :title="selectedRows.length !== 2 ? 'Выбери два ПК' : 'Меняются расположение и № места'">Поменять местами</button>
-                                    <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить поле…</button>
-                                    <button @click="openAction('scan')" :disabled="!selectedScanCount" :title="selectedScanCount ? 'Предложения сканера: ' + selectedScanCount : 'Сканер ничего не предлагает'">Взять из сканера…</button>
+                                    <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить значения…</button>
+                                    <button @click="openAction('scan')" :disabled="!selectedScanCount" :title="selectedScanCount ? null : 'Сканер ничего не предлагает'">Принять изменения…<span v-if="selectedScanCount" class="dd-count">{{ selectedScanCount }}</span></button>
                                     <div class="dd-sep"></div>
                                     <button @click="setArchived(selectedRows.slice(), true)">В архив</button>
                                 </template>
@@ -280,14 +280,9 @@
                     <label class="ab-check" title="Новый — «установлен», старый — «склад»"><input type="checkbox" v-model="actionBar.with_people">пользователи и VACUUM — новому</label>
                 </template>
                 <template v-else-if="actionBar.kind === 'scan'">
-                    <select class="input ab-field ab-scan" v-model="actionBar.scanKind" title="Тип">
-                        <option value="">Все типы ({{ scanBarKindTotal }})</option>
-                        <option v-for="k in scanBarKinds" :key="k.key" :value="k.key">{{ k.label }} ({{ k.count }})</option>
-                    </select>
-                    <select class="input ab-field ab-scan" v-model="actionBar.field" title="Столбец">
-                        <option value="">Все столбцы ({{ scanBarFieldTotal }})</option>
-                        <option v-for="f in scanBarFields" :key="f.key" :value="f.key">{{ f.label }} ({{ f.count }})</option>
-                    </select>
+                    <!-- Списки со счётчиками: число — справа, как в фильтре столбца -->
+                    <count-select class="ab-scan" v-model="actionBar.scanKind" :options="scanBarKindOptions" title="Тип"></count-select>
+                    <count-select class="ab-scan" v-model="actionBar.field" :options="scanBarFieldOptions" title="Столбец"></count-select>
                     <span class="ab-title">значений: {{ scanBarDiffs.length }}</span>
                 </template>
                 <template v-else>
@@ -859,9 +854,11 @@
             <div class="toolbar">
                 <div class="tb-left">
                     <nav class="tb-tabs">
-                        <a v-if="isAdmin" href="#" :class="{ active: scanTab === 'settings' }" @click.prevent="setScanTab('settings')" >Подключения</a>
                         <a href="#" :class="{ active: scanTab === 'check' }" @click.prevent="setScanTab('check')" title="Что сканер предлагает изменить">Проверка</a>
                         <a v-if="isAdmin" href="#" :class="{ active: scanTab === 'names' }" @click.prevent="setScanTab('names')" title="Как значения источников называются в таблице">Названия</a>
+                        <a v-if="isAdmin" href="#" :class="{ active: scanTab === 'schedule' }" @click.prevent="setScanTab('schedule')" title="Когда собирать">Расписание</a>
+                        <!-- «Подключения» — последней, значком (этап 28) -->
+                        <a v-if="isAdmin" href="#" class="tb-tab-ico" :class="{ active: scanTab === 'settings' }" @click.prevent="setScanTab('settings')" title="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg></a>
                     </nav>
                     <!-- С выделением на «Проверке» вместо счётчика — «Выбрано: N ▾» (места на панели мало) -->
                     <span v-if="!(scanTab === 'check' && check.selected.length)" class="tb-count">{{ scanTopCountText() }}</span>
@@ -872,17 +869,17 @@
                         </button>
                         <div v-if="openMenu === 'checkSel'" class="dropdown attached">
                             <template v-if="canEdit">
-                                <button :disabled="!checkSelTakeable.length" @click="checkTakeSelected" >Взять из сканера ({{ checkSelTakeable.length }})</button>
-                                <button :disabled="!checkSelDiffs.length" @click="checkLeaveSelected" >Оставить как есть ({{ checkSelDiffs.length }})</button>
+                                <button :disabled="!checkSelTakeable.length" @click="checkTakeSelected" >Принять изменения<span class="dd-count">{{ checkSelTakeable.length }}</span></button>
+                                <button :disabled="!checkSelDiffs.length" @click="checkLeaveSelected" >Оставить как есть<span class="dd-count">{{ checkSelDiffs.length }}</span></button>
                             </template>
-                            <button v-if="isAdmin" :disabled="!checkSelNames.length" @click="checkConfirmSelected" >Да, это они ({{ checkSelNames.length }})</button>
+                            <button v-if="isAdmin" :disabled="!checkSelNames.length" @click="checkConfirmSelected" >Да, это они<span class="dd-count">{{ checkSelNames.length }}</span></button>
                             <div class="dd-sep"></div>
                             <button @click="clearCheckSelection">Снять выделение</button>
                         </div>
                     </span>
                     <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
                 </div>
-                <span v-if="scanTab !== 'settings'" class="tb-search">
+                <span v-if="scanTab === 'check' || scanTab === 'names'" class="tb-search">
                     <input v-model="scanMatchQuery" :placeholder="scanSearchPlaceholder" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'scanMatchQuery')">
                     <span v-if="scanMatchQuery" class="clear" title="Очистить (Esc)" @click="scanMatchQuery = ''">×</span>
@@ -898,7 +895,7 @@
                             <p class="nh-marks"><b>=</b> одно и то же<br><b>≠</b> разное<br><b>⇐</b> в таблице своё<br><b>→</b> это материнская плата</p>
                         </div>
                     </span>
-                    <button v-if="scanTab !== 'settings'" class="btn icon-only" @click="scanTab === 'names' ? loadScanNames() : loadCheck()" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+                    <button v-if="scanTab !== 'settings'" class="btn icon-only" @click="reloadScanTab()" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -936,13 +933,33 @@
                                 </label>
                             </div>
                             <table class="scan-form">
+                                <!-- «Сеть»: адреса нет — подсети из списка ниже и что проверять (этап 28) -->
+                                <template v-if="s.form === 'net'">
+                                    <tr>
+                                        <td class="sf-label">Подсети</td>
+                                        <td title="Подсети из списка ниже с «Сканировать: да»">{{ scanNetText }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="sf-label">Имена</td>
+                                        <td><label class="sf-check" title="Как ПК называет себя сам"><input type="checkbox" v-model="scanForms[s.kind].names"> NetBIOS и DNS</label></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="sf-label">Порты</td>
+                                        <td><label class="sf-check" title="135, 139, 445, 3389, 5900"><input type="checkbox" v-model="scanForms[s.kind].ports"> проверять открытые</label></td>
+                                    </tr>
+                                </template>
+                                <template v-else>
                                 <tr>
-                                    <td class="sf-label">{{ s.kind === 'jabber' ? 'Веб-админка' : 'Адрес' }}</td>
+                                    <td class="sf-label">{{ s.form === 'jabber' ? 'Веб-админка' : 'Адрес' }}</td>
                                     <td><input class="input" v-model="scanForms[s.kind].url" spellcheck="false" autocomplete="off"
-                                        :placeholder="s.kind === 'jabber' ? 'http://jabber.lan:5280' : 'https://glpi.lan'"
-                                        :title="s.kind === 'jabber' ? 'Адрес любой страницы веб-админки ejabberd' : 'Адрес ' + s.title + ', как в браузере'"></td>
+                                        :placeholder="scanUrlHint(s).placeholder" :title="scanUrlHint(s).title"></td>
                                 </tr>
-                                <tr v-if="s.kind === 'jabber'">
+                                <tr v-if="s.form === 'ssh'">
+                                    <td class="sf-label">Файл</td>
+                                    <td><input class="input" v-model="scanForms[s.kind].path" spellcheck="false" autocomplete="off" placeholder="/var/lib/dhcpd/dhcpd.leases"
+                                        title="Файл аренд; несколько — через пробел"></td>
+                                </tr>
+                                <tr v-if="s.form === 'jabber'">
                                     <td class="sf-label">Домен XMPP</td>
                                     <td><input class="input" v-model="scanForms[s.kind].domain" spellcheck="false" autocomplete="off" placeholder="jabber.lan"
                                         title="Часть логина после @. Пусто — из адреса"></td>
@@ -950,15 +967,15 @@
                                 <tr>
                                     <td class="sf-label">Логин</td>
                                     <td><input class="input" v-model="scanForms[s.kind].login" spellcheck="false" autocomplete="off"
-                                        :placeholder="s.kind === 'jabber' ? 'admin@jabber.lan' : 'itdb'"
-                                        :title="s.kind === 'jabber' ? 'Администратор Jabber' : 'Пользователь ' + s.title + ' (хватит чтения)'"></td>
+                                        :placeholder="s.form === 'jabber' ? 'admin@jabber.lan' : 'itdb'"
+                                        :title="s.form === 'jabber' ? 'Администратор Jabber' : (s.form === 'ssh' ? 'Пользователь на сервере (хватит чтения файла)' : 'Пользователь ' + s.title + ' (хватит чтения)')"></td>
                                 </tr>
-                                <tr v-for="name in (s.kind === 'jabber' ? ['password'] : ['password', 'user_token', 'app_token'])" :key="name">
+                                <tr v-for="name in (s.form === 'glpi' ? ['password', 'user_token', 'app_token'] : ['password'])" :key="name">
                                     <td class="sf-label">{{ name === 'password' ? 'Пароль' : (name === 'user_token' ? 'Токен польз.' : 'Токен прилож.') }}</td>
                                     <td><div class="sf-secret">
                                         <input class="input" :type="scanForms[s.kind].show ? 'text' : 'password'" v-model="scanForms[s.kind][name]" spellcheck="false" autocomplete="new-password"
                                             :placeholder="scanSecretPlaceholder(s.kind, name)"
-                                            :title="name === 'user_token' ? 'Токен API пользователя: вход по нему, без логина и пароля' : (name === 'app_token' ? 'App-Token клиента API, если нужен' : null)"
+                                            :title="name === 'user_token' ? 'Токен API пользователя: вход по нему, без логина и пароля' : (name === 'app_token' ? 'App-Token клиента API, если нужен' : (s.form === 'ssh' ? 'С ключом на сервере не нужен' : null))"
                                             @input="scanForms[s.kind].clear[name] = false">
                                         <span v-if="s.secrets[name]" class="sf-clear" :class="{ on: scanForms[s.kind].clear[name] }"
                                             :title="scanForms[s.kind].clear[name] ? 'Не удалять' : 'Удалить сохранённый при сохранении'" @click="toggleSecretClear(s.kind, name)">✕</span>
@@ -968,13 +985,30 @@
                                         </span>
                                     </div></td>
                                 </tr>
-                                <tr>
+                                <!-- DHCP: ключ ITDB для входа без пароля и запомненный ключ сервера -->
+                                <tr v-if="s.form === 'ssh'">
+                                    <td class="sf-label">Ключ</td>
+                                    <td><div class="sf-key">
+                                        <button type="button" class="btn" :disabled="scanForms[s.kind].keyBusy" @click="copyScanKey(s.kind)" title="Строка для ~/.ssh/authorized_keys">Скопировать</button>
+                                        <button type="button" class="btn" :disabled="scanForms[s.kind].keyBusy" @click="installScanKey(s.kind)" title="Записать ключ на сервер (вход по паролю)">{{ scanForms[s.kind].keyBusy ? "Ставлю…" : "Поставить на сервер" }}</button>
+                                    </div></td>
+                                </tr>
+                                <tr v-if="s.form === 'ssh' && s.host_key">
+                                    <td class="sf-label">Отпечаток</td>
+                                    <td><div class="sf-secret">
+                                        <span class="sf-fp" :class="{ off: scanForms[s.kind].forget_host }" :title="'Ключ сервера: ' + s.host_key">{{ s.host_key }}</span>
+                                        <span class="sf-clear" :class="{ on: scanForms[s.kind].forget_host }"
+                                            :title="scanForms[s.kind].forget_host ? 'Не забывать' : 'Забыть при сохранении'" @click="scanForms[s.kind].forget_host = !scanForms[s.kind].forget_host">✕</span>
+                                    </div></td>
+                                </tr>
+                                <tr v-if="s.form !== 'ssh'">
                                     <td class="sf-label">Сертификат</td>
                                     <td><label class="sf-check" title="Снять, если сертификат самоподписанный"><input type="checkbox" v-model="scanForms[s.kind].verify_tls"> проверять (для https)</label></td>
                                 </tr>
+                                </template>
                                 <tr v-if="s.fresh_days !== null">
                                     <td class="sf-label">Актуальны</td>
-                                    <td><label class="sf-check" :title="s.kind === 'jabber' ? 'Кто не подключался дольше — выделяется в VACUUM' : 'Записи старше не берутся'">не старше <input class="input sf-days" type="number" min="1" :max="s.kind === 'jabber' ? 365 : 60" v-model.number="scanForms[s.kind].fresh_days"> дн.</label></td>
+                                    <td><label class="sf-check" :title="scanFreshTitle(s)">не старше <input class="input sf-days" type="number" min="1" :max="s.form === 'glpi' ? 60 : 365" v-model.number="scanForms[s.kind].fresh_days"> дн.</label></td>
                                 </tr>
                             </table>
                             <!-- Под формой — только ошибки; итог проверки — в подсказке у блочка в шапке,
@@ -986,7 +1020,9 @@
                                 <button class="btn icon-only" :disabled="scanForms[s.kind].checking" @click="checkScanSource(s.kind)"
                                     :title="scanForms[s.kind].checking ? 'Проверяю…' : 'Проверить подключение'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></svg></button>
                                 <button class="btn" :disabled="!!scanCollectBlock(s.kind)" @click="collectScan(s.kind)" :title="scanCollectTitle(s.kind)">{{ scanCollecting(s.kind) ? "Собираю…" : "Собрать" }}</button>
-                                <span class="sb-gap"></span>
+                                <!-- Идёт сбор — полоса «сделано из» (этап 28) -->
+                                <span v-if="scanProgress(s.kind)" class="scan-progress sp-fit"><span class="sp-bar"><span class="sp-fill" :style="{ width: scanProgress(s.kind).percent + '%' }"></span></span><span class="sp-text">{{ scanProgress(s.kind).text }}</span></span>
+                                <span v-else class="sb-gap"></span>
                                 <button v-if="scanDirty(s.kind)" class="btn" @click="resetScanForm(s.kind)" title="Вернуть сохранённые значения">Отменить</button>
                                 <button class="btn btn-primary" :disabled="!scanDirty(s.kind) || scanForms[s.kind].saving" @click="saveScanSource(s.kind)">Сохранить</button>
                             </div>
@@ -1074,8 +1110,32 @@
                                 {{ f.label }}<span class="su-n">{{ checkCounts[f.key] }}</span>
                             </button>
                         </template>
+                        <!-- Фильтр по атрибутам (этап 28): у каких полей сканер что-то предлагает -->
+                        <span class="dropdown-wrap ck-fields" ref="checkFieldsWrap">
+                            <button class="sm-chip" :class="{ on: check.fields.length, 'menu-open': openMenu === 'checkFields' }" @click="toggleMenu('checkFields')" title="По атрибутам">
+                                Фильтр<span v-if="check.fields.length" class="su-n">{{ check.fields.length }}</span>
+                            </button>
+                            <div v-if="openMenu === 'checkFields'" class="dropdown attached ck-fields-menu">
+                                <div v-if="!checkFieldOptions.length" class="dd-note">Предложений нет</div>
+                                <div class="dd-scroll">
+                                    <label v-for="o in checkFieldOptions" :key="o.key">
+                                        <input type="checkbox" :checked="check.fields.includes(o.key)" @change="toggleCheckField(o.key)">
+                                        {{ o.label }}<span class="dd-count">{{ o.count }}</span>
+                                    </label>
+                                </div>
+                                <template v-if="check.fields.length">
+                                    <div class="dd-sep"></div>
+                                    <button @click="clearCheckFields">Сбросить</button>
+                                </template>
+                            </div>
+                        </span>
                     </template>
                     <button v-else class="sm-chip on" @click="clearCheckPair" title="Вернуться ко всем">{{ checkPairText(check.pair) }}<span class="su-n">{{ checkShown.length }}</span> ✕</button>
+                    <!-- Идёт сбор: сколько сделано по всем источникам -->
+                    <span v-if="checkProgress" class="scan-progress" :title="checkProgress.title">
+                        <span class="sp-bar"><span class="sp-fill" :style="{ width: checkProgress.percent + '%' }"></span></span>
+                        <span class="sp-text">{{ checkProgress.text }}</span>
+                    </span>
                 </div>
                 <div v-if="check.error" class="sm-error">{{ check.error }}</div>
                 <div class="users-wrap sm-wrap ck-wrap" @mouseleave="check.hover = null">
@@ -1115,6 +1175,7 @@
                                                                 <th :title="row.pc ? (row.pc.hostname || '') + ' — ' + (row.pc.place || '') : 'ПК в таблице нет'">В таблице</th>
                                                                 <th v-for="k in checkSourceKinds.filter(x => row.recs[x])" :key="'ch-' + k" colspan="2" class="ck-src-head" :title="checkSourceHeadTitle(row, k)">{{ checkSourceHead(row, k) }}</th>
                                                                 <th v-if="checkJabberOn && !row.record" colspan="2" class="ck-src-head" title="Кто в Jabber с адреса этого ПК">Vacuum</th>
+                                                                <th v-if="checkNetOn && !row.record" colspan="2" class="ck-src-head" title="DHCP и проход подсетей">Сеть</th>
                                                                 <th v-if="!row.record">Предлагается</th>
                                                             </tr>
                                                             <tr v-for="f in checkDetailFields(row)" :key="f.field">
@@ -1178,6 +1239,80 @@
                                 <span class="icon-btn" :class="{ danger: a.danger }" :title="a.title" @click.stop="a.run()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="a.icon"></svg></span>
                             </template>
                         </span>
+                    </div>
+                </div>
+            </div>
+            <!-- Расписание (этап 28): когда собирать из каждого источника; ниже — журнал запусков -->
+            <div v-else-if="scanTab === 'schedule'" class="page scan-page sched-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <div v-if="schedule.error" class="sm-error">{{ schedule.error }}</div>
+                <div class="scan-caption">Расписание</div>
+                <div class="users-wrap sched-wrap" @mouseleave="schedule.hover = null">
+                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
+                        <div class="history-scroll">
+                            <table class="history-table users-table sched-table" :class="{ 'accent-head': accentHeaders.scan }">
+                                <colgroup><col class="sd-name"><col class="sd-mode"><col class="sd-time"><col class="sd-days"><col class="sd-last"><col class="sd-next"></colgroup>
+                                <thead>
+                                    <tr><th>Источник</th><th>Запуск</th><th>Время</th><th>Дни</th><th>Последний сбор</th><th>Следующий</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="!schedule.items.length" class="h-empty"><td colspan="6">{{ schedule.loading ? "Загрузка…" : "Источников нет." }}</td></tr>
+                                    <tr v-for="it in schedule.items" :key="it.kind" class="sd-row" :class="{ 'is-hover': schedule.hover && schedule.hover.kind === it.kind }"
+                                        @mouseenter="setScheduleHover(it, $event.currentTarget)">
+                                        <td class="sd-title"><span class="u-name">{{ it.title }}</span><span v-if="!it.available" class="u-off" title="Источник выключен или не настроен">выключен</span></td>
+                                        <td class="sd-cell"><select class="input er-input" :value="scheduleModeValue(it)" title="Как часто собирать" @change="setScheduleMode(it, $event.target.value)">
+                                            <option v-for="o in scheduleModeOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
+                                        </select></td>
+                                        <td class="sd-cell sd-times">
+                                            <template v-if="it.mode === 'every'">
+                                                <span class="sd-word">с</span><input class="input er-input sd-t" :value="it.time_from" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Начало; одинаковое с концом — круглые сутки" @change="setScheduleTime(it, 'time_from', $event.target)" @keydown.enter="$event.target.blur()">
+                                                <span class="sd-word">до</span><input class="input er-input sd-t" :value="it.time_to" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Конец; одинаковое с началом — круглые сутки" @change="setScheduleTime(it, 'time_to', $event.target)" @keydown.enter="$event.target.blur()">
+                                            </template>
+                                            <template v-else-if="it.mode === 'daily'">
+                                                <span class="sd-word">в</span><input class="input er-input sd-t" :value="it.time_at" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Время запуска" @change="setScheduleTime(it, 'time_at', $event.target)" @keydown.enter="$event.target.blur()">
+                                            </template>
+                                        </td>
+                                        <td class="sd-cell"><select v-if="it.mode !== 'off'" class="input er-input" :value="it.days" title="Дни" @change="saveSchedule(it, { days: $event.target.value })">
+                                            <option value="all">каждый день</option>
+                                            <option value="work">по будням</option>
+                                        </select></td>
+                                        <td class="sd-last" :title="scheduleLastTitle(it)">
+                                            <span v-if="scanProgress(it.kind)" class="scan-progress sp-fit"><span class="sp-bar"><span class="sp-fill" :style="{ width: scanProgress(it.kind).percent + '%' }"></span></span><span class="sp-text">{{ scanProgress(it.kind).text }}</span></span>
+                                            <template v-else-if="scanRunOf(it.kind)">{{ formatTime(scanRunOf(it.kind).finished_at || scanRunOf(it.kind).started_at) }}<span v-if="scanRunOf(it.kind).status !== 'ok'" class="u-off sd-bad">ошибка</span></template>
+                                        </td>
+                                        <td class="sd-next">{{ scheduleNextText(it) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="schedule.hover" class="tree-actions" :style="{ top: schedule.hover.top + 'px', height: schedule.hover.height + 'px' }">
+                        <span class="na-box">
+                            <span class="icon-btn" :class="{ off: !!scanCollectBlock(schedule.hover.kind) }" :title="scanCollectBlock(schedule.hover.kind) || 'Собрать сейчас'" @click="collectScan(schedule.hover.kind)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18l14-9z"/></svg></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="scan-caption">Журнал</div>
+                <div class="users-wrap sched-wrap">
+                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
+                        <div class="history-scroll">
+                            <table class="history-table users-table runs-table" :class="{ 'accent-head': accentHeaders.scan }">
+                                <colgroup><col class="rn-time"><col class="rn-source"><col class="rn-user"><col class="rn-took"><col class="rn-text"></colgroup>
+                                <thead>
+                                    <tr><th>Начат</th><th>Источник</th><th>Кто</th><th class="sn-c">Длился</th><th>Итог</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="!schedule.runs.length" class="h-empty"><td colspan="5">{{ schedule.loading ? "Загрузка…" : "Сборов ещё не было." }}</td></tr>
+                                    <tr v-for="r in schedule.runs" :key="r.id">
+                                        <td class="rn-t">{{ formatTime(r.started_at) }}</td>
+                                        <td>{{ scheduleRunTitle(r) }}</td>
+                                        <td>{{ r.user_name || "" }}</td>
+                                        <td class="sn-c rn-t">{{ scheduleRunTook(r) }}</td>
+                                        <td class="rn-result" :class="{ bad: r.status === 'error' }">{{ scheduleRunText(r) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>

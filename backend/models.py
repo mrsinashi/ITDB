@@ -418,9 +418,33 @@ class ScanJabberUser(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class ScanHost(Base):
+    """Что видно в сети по адресу (этап 28): source dhcp — аренда или резерв с
+    сервера DHCP (заменяются при каждом сборе), net — ответ адреса при проходе
+    подсетей (строка остаётся, пока адрес молчит не дольше срока «Актуальны»).
+    mac, name — MAC и имя, которым машина называет себя сама (NetBIOS, имя из
+    аренды); seen_at — когда адрес был занят; data — подробности (состояние
+    аренды, чем ответил, имя в DNS, порты). С ПК таблицы не связано — предложения
+    считаются на лету (scan_hostmatch.py)."""
+    __tablename__ = "scan_hosts"
+    __table_args__ = (
+        UniqueConstraint("source", "ip", name="uq_scan_hosts_source_ip"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    source = Column(Text, nullable=False)
+    ip = Column(Text, nullable=False)
+    mac = Column(Text, nullable=True)
+    name = Column(Text, nullable=True)
+    data = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    seen_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    run_id = Column(Integer, nullable=True)
+
+
 class AppSetting(Base):
-    """Общая настройка программы (этап 26д): key → value (JSON). Сейчас —
-    «antivirus»: вид столбца «Антивирусы». Нет строки — значения по умолчанию."""
+    """Общая настройка программы (этап 26д): key → value (JSON): «antivirus» — вид
+    столбца «Антивирусы», «table_marks» — выделения в Таблице, «schedule» —
+    расписание сборов (этап 28). Нет строки — значения по умолчанию."""
     __tablename__ = "app_settings"
 
     key = Column(Text, primary_key=True)

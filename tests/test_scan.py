@@ -122,7 +122,7 @@ def test_defaults(admin):
     data = ok(admin.get("/api/scan/sources"))
     assert data["key_ready"] is True
     kinds = {s["kind"]: s for s in data["sources"]}
-    assert list(kinds) == ["glpi", "gsit", "jabber"]
+    assert list(kinds) == ["glpi", "gsit", "jabber", "dhcp", "net"]
     assert kinds["glpi"]["fresh_days"] == 3
     assert kinds["glpi"]["secrets"] == {"password": False, "user_token": False, "app_token": False}
     assert kinds["jabber"]["fresh_days"] == 7

@@ -4963,3 +4963,219 @@ html.no-radius .vacuum-table .vc-dot {
 .table-marks-panel .scan-marks-table td.smk-label {
     min-width: 170px;
 }
+
+/* ============================================================
+   Этап 28: DHCP и сеть, расписание, счётчики в списках
+   ============================================================ */
+/* Счётчик у пункта выпадающего списка — справа серым, как в фильтре столбца,
+   а не в скобках (просьба 02.10) */
+.dropdown .dd-count {
+    margin-left: auto;
+    padding-left: 14px;
+    font-size: 11px;
+    color: var(--menu-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Выбор из списка со счётчиками (components/count-select.js): вид — как у select */
+.count-select {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+}
+.count-select .cs-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    cursor: pointer;
+}
+.count-select .cs-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.count-select .cs-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.count-select .cs-arrow {
+    flex: none;
+    width: 11px;
+    height: 11px;
+    color: var(--text-secondary);
+}
+.count-select.open .cs-btn {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.count-select .cs-menu {
+    min-width: 100%;
+    max-height: 60vh;
+    box-sizing: border-box;
+    overflow-y: auto;
+    border-top-right-radius: 0;
+    z-index: 120;
+}
+.count-select .cs-menu button {
+    flex: none;
+}
+.count-select .cs-menu button.sel {
+    font-weight: 600;
+}
+.add-bar .count-select.ab-scan {
+    width: 190px;
+}
+
+/* «Сканер»: вкладка-значок «Подключения» — последней */
+.toolbar .tb-tabs a.tb-tab-ico {
+    padding: 0 12px;
+}
+.toolbar .tb-tabs a.tb-tab-ico svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* «Проверка»: кнопка «Фильтр» со списком атрибутов */
+.sm-filters .ck-fields .sm-chip {
+    padding-right: 7px;
+}
+.sm-filters .ck-fields .sm-chip .su-n {
+    margin-right: -4px;
+}
+.sm-filters .ck-fields .sm-chip.menu-open {
+    border-bottom-left-radius: 0;
+}
+.ck-fields-menu {
+    min-width: 190px;
+    z-index: 40;
+}
+
+/* Полоса сбора по ширине свободного места (блок источника, строка расписания) */
+.scan-progress.sp-fit {
+    flex: 1;
+    min-width: 0;
+    margin-left: 2px;
+}
+.scan-progress.sp-fit .sp-bar {
+    flex: 1;
+    width: auto;
+    min-width: 30px;
+}
+.scan-progress .sp-text {
+    white-space: nowrap;
+}
+
+/* Столбцы формы подключения — постоянной ширины: длинное значение (отпечаток сервера)
+   форму не раздвигает */
+.scan-form {
+    table-layout: fixed;
+}
+.scan-form .sf-label {
+    box-sizing: content-box;
+}
+/* DHCP: кнопки ключа и отпечаток сервера в форме подключения */
+.scan-form .sf-key {
+    display: flex;
+    gap: 4px;
+}
+.scan-form .sf-key .btn {
+    height: 20px;
+    padding: 0 8px;
+    font-size: 12px;
+}
+.scan-form .sf-fp {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.scan-form .sf-fp.off {
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+/* «Расписание»: настройки — прямо в строках, столбцы постоянной ширины; ниже — журнал */
+.sched-wrap {
+    width: fit-content;
+    max-width: calc(100% - 110px);
+    margin-right: 110px;
+    margin-bottom: 16px;
+}
+.sched-table,
+.runs-table {
+    width: 970px;
+    table-layout: fixed;
+}
+.sched-table col.sd-name { width: 130px; }
+.sched-table col.sd-mode { width: 150px; }
+.sched-table col.sd-time { width: 190px; }
+.sched-table col.sd-days { width: 130px; }
+.sched-table col.sd-last { width: 210px; }
+.sched-table col.sd-next { width: 160px; }
+.runs-table col.rn-time { width: 160px; }
+.runs-table col.rn-source { width: 90px; }
+.runs-table col.rn-user { width: 110px; }
+.runs-table col.rn-took { width: 90px; }
+.runs-table col.rn-text { width: 520px; }
+.sched-table td,
+.runs-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.history-table.sched-table tbody td.sd-cell {
+    padding: 1px 2px;
+    vertical-align: middle;
+}
+.sched-table td.sd-times {
+    white-space: nowrap;
+}
+.sched-table .sd-word {
+    display: inline-block;
+    min-width: 14px;
+    margin: 0 4px 0 6px;
+    text-align: center;
+}
+.sched-table .sd-t {
+    display: inline-block;
+    width: 52px;
+    padding: 0 4px;
+    vertical-align: middle;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.sched-table td.sd-last,
+.sched-table td.sd-next,
+.runs-table td.rn-t {
+    font-variant-numeric: tabular-nums;
+}
+.sched-table td.sd-last .scan-progress {
+    display: flex;
+    margin-left: 0;
+}
+.sched-table .u-off.sd-bad {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+.runs-table th.sn-c,
+.runs-table td.sn-c {
+    text-align: center;
+}
+.runs-table td.rn-result {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.runs-table td.rn-result.bad {
+    color: var(--danger);
+}
+.sched-wrap .tree-actions .icon-btn.off {
+    opacity: 0.4;
+    cursor: default;
+}

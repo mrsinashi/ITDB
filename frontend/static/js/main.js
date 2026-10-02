@@ -18,8 +18,9 @@
 //                        scan-check (вкладка «Проверка»: сопоставление и предложения сканера),
 //                        scan-diffs (значения сканера в Таблице, решения по ним, столбец «Антивирусы»),
 //                        scan-vacuum (страница «Vacuum»: пользователи Jabber),
+//                        scan-schedule (вкладка «Расписание»: когда собирать, журнал запусков),
 //                        table-marks (выделения значений в Таблице: повтор, «нет в Jabber»…)
-//   components/        — tree-node, tree-form, style-controls, location-picker
+//   components/        — tree-node, tree-form, style-controls, location-picker, count-select
 //
 // Шаблоны разметки — в index.html.
 
@@ -47,15 +48,17 @@ import scanMatch from "./mixins/scan-match.js";
 import scanDiffs from "./mixins/scan-diffs.js";
 import scanCheck from "./mixins/scan-check.js";
 import scanVacuum from "./mixins/scan-vacuum.js";
+import scanSchedule from "./mixins/scan-schedule.js";
 import tableMarks from "./mixins/table-marks.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
 import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
+import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, tableMarks],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -163,7 +166,7 @@ const app = Vue.createApp({
             ownProfile: null,    // форма «Редактировать» (логин, ФИО, должность) там же
             ownMenu: false,      // открыт список ✎ ▾ в меню пользователя
 
-            scanSources: [],     // источники: GLPI, GSIT, Jabber (с сервера)
+            scanSources: [],     // источники: GLPI, GSIT, Jabber, DHCP, Сеть (с сервера)
             scanForms: {},       // формы источников: kind → поля формы
             scanKeyReady: true,  // есть ли ключ шифрования паролей в .env
             scanError: "",
@@ -174,7 +177,8 @@ const app = Vue.createApp({
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
             subnetHover: null,   // подсеть под курсором — плашка действий
             // Этап 25: вкладки страницы, сбор и сопоставление
-            scanTab: "settings", // settings — подключения и подсети, check — проверка, names — названия
+            // check — проверка, names — названия, schedule — расписание, settings — подключения и подсети
+            scanTab: "check",
             scanRuns: {},        // kind → запуск сбора, за которым следим
             scanPollTimer: null,
             // Этап 26г: «Проверка» — записи GLPI и GSIT по ПК и предложения сканера
@@ -183,6 +187,7 @@ const app = Vue.createApp({
                 loading: false,
                 error: "",
                 filter: "todo",  // todo / unknown / diff / ok / none / rejected / all
+                fields: [],      // «Фильтр»: только строки с предложениями по этим полям
                 pair: null,      // «ещё у N ПК»: { field, table, raw }
                 open: null,      // ключ раскрытой строки (одна)
                 hover: null,     // строка под курсором — плашка действий
@@ -194,6 +199,8 @@ const app = Vue.createApp({
             vacuum: { data: null, loading: false, error: "", filter: "all" },
             vacuumQuery: "",
             scanNames: { items: [], loading: false, error: "", hover: null },
+            // «Расписание»: настройка каждого источника и журнал запусков (/api/scan/schedule, /api/scan/runs)
+            schedule: { items: [], minutes: [], runs: [], loading: false, error: "", hover: null },
             // Этапы 26б–26г: значения сканера в Таблице (кнопка на панели)
             scanOverlay: false,
             scanLegend: false,   // подсказка «что значат цвета» у включённой кнопки
@@ -212,6 +219,7 @@ const app = Vue.createApp({
                 vacuumMissing: [],  // логины VACUUM из таблицы, которых нет в Jabber
                 vacuumStale: {},    // давно не подключавшиеся: логин → сколько дней (null — никогда)
                 jabber: {},         // кого Jabber видит с адреса ПК: id ПК → логины
+                net: {},            // что о ПК видно в сети (DHCP, проход подсетей): id ПК → { ip, mac, hostname }
                 loading: false,
                 error: "",
             },
@@ -279,5 +287,6 @@ app.component("tree-node", treeNode);
 app.component("style-controls", styleControls);
 app.component("tree-form", treeForm);
 app.component("location-picker", locationPicker);
+app.component("count-select", countSelect);
 
 app.mount("#app");

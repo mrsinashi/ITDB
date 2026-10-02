@@ -7,20 +7,26 @@
 Результат записывается целиком в конце: записи источника заменяются новыми
 одной транзакцией. Сбой на середине ничего не портит — остаются прежние.
 
-В таблицу ПК сбор ничего не пишет (правило 1): только scan_records (GLPI, GSIT)
-и scan_jabber_users (Jabber — пользователи не заменяются, а обновляются: у
-ушедших из сети остаются последний IP и время).
+В таблицу ПК сбор ничего не пишет (правило 1): только scan_records (GLPI, GSIT),
+scan_jabber_users (Jabber — пользователи не заменяются, а обновляются: у
+ушедших из сети остаются последний IP и время) и scan_hosts (этап 28: DHCP —
+аренды заменяются целиком; Сеть — ответившие адреса обновляются, молчащие
+дольше срока «Актуальны» удаляются).
 """
 import logging
 import threading
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
-from api_scan import INTERRUPTED, SOURCES, connection_params, fresh_days_of, interrupted, load_source
+from api_scan import (
+    INTERRUPTED, SOURCES, connection_params, fresh_days_of, interrupted, load_source, remember_host, source_ready,
+)
 from db import SessionLocal
-from models import Choice, Computer, ScanAlias, ScanJabberUser, ScanLink, ScanRecord, ScanRun
+from models import Choice, Computer, ScanAlias, ScanHost, ScanJabberUser, ScanLink, ScanRecord, ScanRun
+from scan_dhcp import collect as dhcp_collect
 from scan_glpi import collect as glpi_collect
 from scan_jabber import collect as jabber_collect
+from scan_net import collect as net_collect
 from scan_http import SourceError
 from scan_match import drop_shared_keys, find_duplicates, match_all
 from scan_normalize import build
@@ -30,9 +36,13 @@ from scan_values import (
 
 logger = logging.getLogger("uvicorn.error")
 
-COLLECTORS = {"glpi": glpi_collect, "gsit": glpi_collect, "jabber": jabber_collect}
+COLLECTORS = {
+    "glpi": glpi_collect, "gsit": glpi_collect, "jabber": jabber_collect, "dhcp": dhcp_collect, "net": net_collect,
+}
 # Источники записей о ПК (scan_records): сопоставление, названия, расхождения
 RECORD_KINDS = ("glpi", "gsit")
+# Источники наблюдений сети (scan_hosts): адрес — MAC — имя
+HOST_KINDS = ("dhcp", "net")
 # Запуск, который «идёт» дольше, — оборвался (программу перезапускали)
 RUN_TIMEOUT = timedelta(hours=2)
 STATES = ("key", "link", "name", "conflict", "none", "dup")
@@ -79,7 +89,13 @@ def start(session, kind, user_name, background=True):
     # Блокировка строки источника: два одновременных «Собрать» не начнут два сбора
     source = load_source(session, kind, lock=True)
 
-    if source is None or not source.url:
+    if SOURCES[kind]["form"] == "net":
+        if source is None or not source.enabled:
+            raise CollectRefused("«Сеть» выключена: отметь «Включён» и сохрани.")
+
+        if not source_ready(session, kind, source):
+            raise CollectRefused("Нет подсетей для сканирования: добавь подсеть и отметь «Сканировать».")
+    elif source is None or not source.url:
         raise CollectRefused(f"Сначала укажи и сохрани адрес {title}.")
 
     if not source.enabled:
@@ -136,7 +152,7 @@ def finish(session, run, status, message=None, stats=None):
 def collect_into(session, run):
     kind = run.source
     source = load_source(session, kind)
-    params = connection_params(kind, source)
+    params = connection_params(kind, source, session=session)
     fresh_days = fresh_days_of(source, kind)
 
     def progress(done, total):
@@ -148,6 +164,9 @@ def collect_into(session, run):
 
     if kind in RECORD_KINDS:
         save_records(session, kind, run, result["items"], stats)
+    elif kind in HOST_KINDS:
+        save_hosts(session, kind, run, result["items"], fresh_days)
+        remember_host(load_source(session, kind), result.get("seen"))
     else:
         save_jabber(
             session, run, result["items"],
@@ -194,6 +213,40 @@ def save_records(session, kind, run, items, stats):
         counts[item["state"]] += 1
 
     stats.update(counts)
+
+
+def save_hosts(session, kind, run, items, fresh_days):
+    """Наблюдения сети. DHCP — копия файла аренд: заменяется целиком. Сеть —
+    ответившие адреса обновляются; адрес, который молчит, остаётся (ПК может быть
+    выключен), пока не промолчит дольше срока «Актуальны»."""
+    if kind == "dhcp":
+        session.query(ScanHost).filter(ScanHost.source == kind).delete()
+        existing = {}
+    else:
+        since = now() - timedelta(days=fresh_days)
+        session.query(ScanHost).filter(ScanHost.source == kind, ScanHost.seen_at < since).delete()
+        existing = {row.ip: row for row in session.query(ScanHost).filter(ScanHost.source == kind)}
+
+    for item in items:
+        row = existing.get(item["ip"])
+
+        if row is None:
+            row = ScanHost(source=kind, ip=item["ip"])
+            session.add(row)
+
+        # Адрес ответил, но MAC или имя в этот раз не узнали (ПК тот же) — прежние остаются
+        if item.get("mac") or row.mac is None or kind == "dhcp":
+            if row.mac and item.get("mac") and row.mac != item["mac"]:
+                row.name = None   # на адресе другая машина — прежнее имя не её
+
+            row.mac = item.get("mac")
+
+        if item.get("name") or kind == "dhcp":
+            row.name = item.get("name")
+
+        row.data = item.get("data") or {}
+        row.seen_at = item["seen_at"]
+        row.run_id = run.id
 
 
 def save_jabber(session, run, items, keep_groups=False, users_ok=False):
