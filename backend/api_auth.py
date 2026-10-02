@@ -177,6 +177,11 @@ def update_prefs(
     if "accent_borders" in payload:
         prefs["accent_borders"] = bool(payload.get("accent_borders"))
 
+    # Без закруглений; счётчики на кнопках панели (этап 26з)
+    for key in ("no_radius", "button_counts"):
+        if key in payload:
+            prefs[key] = bool(payload.get(key))
+
     # Акцентная шапка — отдельно для каждой страницы
     if "accent_headers" in payload:
         value = payload.get("accent_headers")

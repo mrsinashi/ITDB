@@ -1,6 +1,6 @@
 // Вход, выход, личные настройки (цветовая схема, акценты).
 
-import { ROLE_LABELS, THEMES, applyTheme } from "../settings.js";
+import { ROLE_LABELS, THEMES, applyNoRadius, applyTheme } from "../settings.js";
 import { apiFetch, shortName } from "../util.js";
 
 export default {
@@ -61,6 +61,8 @@ export default {
                 }
                 this.theme = applyTheme(prefs.theme || "red");
                 this.accentBorders = !!prefs.accent_borders;
+                this.noRadius = applyNoRadius(!!prefs.no_radius);
+                this.buttonCounts = prefs.button_counts !== false;
                 this.accentHeaders = Object.assign({ tree: true, history: true, choices: true, users: true, scan: true, vacuum: true }, prefs.accent_headers || {});
             } catch (e) {
                 this.user = null;
@@ -110,6 +112,21 @@ export default {
             this.accentBorders = !this.accentBorders;
             if (!(await this.savePrefs({ accent_borders: this.accentBorders }))) {
                 this.accentBorders = !this.accentBorders;
+            }
+        },
+
+        // Простая личная настройка-галочка: «Закругления», «Счётчики на кнопках»
+        async togglePref(name, key) {
+            const apply = () => {
+                if (name === "noRadius") {
+                    applyNoRadius(this.noRadius);
+                }
+            };
+            this[name] = !this[name];
+            apply();
+            if (!(await this.savePrefs({ [key]: this[name] }))) {
+                this[name] = !this[name];
+                apply();
             }
         },
 

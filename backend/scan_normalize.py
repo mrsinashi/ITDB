@@ -360,7 +360,10 @@ def drives_short(disks):
 
 GPU_SKIP = re.compile(
     r"basic\s+(display|render)|remote|radmin|dameware|mirage|vnc|citrix|parsec|meta\s+virtual|virtual"
-    r"|hyper-v|virtualbox|vmware|standard\s+vga|стандартный|idd|spacedesk|duet|splashtop|anydesk|teamviewer",
+    r"|hyper-v|virtualbox|vmware|standard\s+vga|стандартный|idd|spacedesk|duet|splashtop|anydesk|teamviewer"
+    # драйверы-перехватчики экрана программ удалённого доступа («mv video hook driver2»)
+    r"|\bhook\b|mirror|\bdriver\d*\b|драйвер|\brdp|displaylink|usb\s+display|ammyy|litemanager|\brms\b|rustdesk"
+    r"|logmein|screenconnect|nomachine|sunlogin|aeroadmin|supremo|zoom|webex",
     re.I,
 )
 GPU_INTEGRATED = re.compile(

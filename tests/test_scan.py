@@ -125,7 +125,7 @@ def test_defaults(admin):
     assert list(kinds) == ["glpi", "gsit", "jabber"]
     assert kinds["glpi"]["fresh_days"] == 3
     assert kinds["glpi"]["secrets"] == {"password": False, "user_token": False, "app_token": False}
-    assert kinds["jabber"]["fresh_days"] is None
+    assert kinds["jabber"]["fresh_days"] == 7
     assert kinds["jabber"]["secrets"] == {"password": False}
     assert kinds["glpi"]["enabled"] is False and kinds["glpi"]["verify_tls"] is True
 
@@ -197,10 +197,11 @@ def test_source_validation(admin):
     assert admin.patch("/api/scan/sources/glpi", json={"fresh_days": 0}).status_code == 400
     assert admin.patch("/api/scan/sources/glpi", json={"fresh_days": 61}).status_code == 400
     assert admin.patch("/api/scan/sources/nope", json={"url": "http://x"}).status_code == 404
-    # У Jabber нет токенов и срока — лишнее игнорируется
-    saved = ok(admin.patch("/api/scan/sources/jabber", json={"url": "http://j:5280", "user_token": "t", "fresh_days": 9}))
+    # У Jabber нет токенов — лишнее игнорируется; срок «давно не в сети» — свой, до года
+    saved = ok(admin.patch("/api/scan/sources/jabber", json={"url": "http://j:5280", "user_token": "t", "fresh_days": 90}))
     assert saved["secrets"] == {"password": False}
-    assert saved["fresh_days"] is None
+    assert saved["fresh_days"] == 90
+    assert admin.patch("/api/scan/sources/jabber", json={"fresh_days": 366}).status_code == 400
 
 
 def test_check_glpi(admin, fake):

@@ -19,7 +19,8 @@
 Этап 26е: HOSTNAME в таблице — каким имя должно быть, поэтому другое имя у
 источника только сообщается (can_take = False: взять нельзя, можно «оставить»;
 в таблице пусто — взять можно). Jabber предлагает VACUUM — см. jabber_rows
-(этап 26ж: ПК — только по IP; кто не подключался 7 дней — убрать из ячейки).
+(этап 26ж: ПК — только по IP; этап 26з: из ячейки сканер никого не убирает — кто
+давно не подключался, отдаётся отдельно, vacuum_stale, и только выделяется).
 Этап 26ж: номера записей — в столбцы GLPI и GSIT (ID_FIELDS); «это материнская
 плата» — название модели из источника уходит в столбец «Мат. плата» (/board).
 Этап 26б: «неточно» (unsure) — источники предлагают разное или VNC-серверов
@@ -42,7 +43,7 @@ from api_computers import (
     ChangeBatch, apply_fields, get_vacuum_logins, load_locations, location_path, save_changes,
     user_field_keys_of, vacuum_text,
 )
-from api_scan import SOURCES, load_source
+from api_scan import SOURCES, fresh_days_of, load_source
 from api_scan_records import save_alias, web_url_of
 from auth import get_current_user, require_editor
 from db import get_db
@@ -62,9 +63,9 @@ MAX_ITEMS = 5000
 DIFF_FIELDS = COMPARE_FIELDS + ["vacuum"] + list(ID_FIELDS.values())
 # Только сообщить, не брать: HOSTNAME в таблице — каким имя должно быть (26е)
 INFO_FIELDS = ("hostname",)
-# Jabber: последний адрес годится столько дней; кто не подключался дольше —
-# из ячейки VACUUM предлагается убрать
-JABBER_FRESH = timedelta(days=7)
+# Jabber: последний адрес годится столько дней, сколько задано у подключения
+# («Актуальны», по умолчанию 7); кто не подключался дольше — «давно не в сети»:
+# в ячейке VACUUM выделяется, но сканер его не убирает (просьба 02.10)
 # Больше людей с одного адреса — сервер или терминал: VACUUM по нему не предлагать
 JABBER_MAX_LOGINS = 3
 
@@ -116,6 +117,8 @@ class DiffsOut(BaseModel):
     antivirus: dict[int, list[AntivirusOut]] = {}   # столбец «Антивирусы» (этап 26д)
     links: dict[str, str] = {}      # столбец с номером записи → начало ссылки на неё (GLPI, GSIT)
     vacuum_missing: list[str] = []  # логины из таблицы, которых в Jabber нет (строчными)
+    # логины из таблицы, давно не подключавшиеся: логин → сколько дней (None — никогда)
+    vacuum_stale: dict[str, Optional[int]] = {}
     jabber: dict[int, list[str]] = {}   # кого Jabber видит с адреса ПК: id ПК → логины
 
 
@@ -205,14 +208,19 @@ def jabber_enabled(session):
     return bool(source and source.enabled and source.url)
 
 
+def jabber_fresh(session):
+    """Сколько дней пользователь Jabber считается недавним (настройка подключения)."""
+    return timedelta(days=fresh_days_of(load_source(session, "jabber"), "jabber"))
+
+
 def jabber_state(session):
     """Что известно о пользователях Jabber:
     by_ip — {IP: {логины}}: в сети — адреса ресурсов, не в сети — последний адрес,
-            если был в сети не раньше JABBER_FRESH назад (адреса по DHCP меняются);
+            если был в сети не раньше срока «Актуальны» (адреса по DHCP меняются);
     seen — {логин: когда был в сети}; names — {логин: как пишется};
-    stale — не подключались дольше JABBER_FRESH; gone — таких пользователей нет.
+    stale — не подключались дольше срока; gone — таких пользователей нет.
     stale и gone — только если получали список пользователей (listed)."""
-    since = datetime.now(timezone.utc) - JABBER_FRESH
+    since = datetime.now(timezone.utc) - jabber_fresh(session)
     users = session.query(ScanJabberUser).all()
     listed = any(user.registered is not None for user in users)
     by_ip = defaultdict(set)
@@ -268,17 +276,41 @@ def vacuum_missing(state, vacuum):
     return sorted(login for login in table if login in state["gone"] or login not in state["names"])
 
 
+def vacuum_stale(state, vacuum):
+    """Логины из ячеек VACUUM, давно не подключавшиеся: {логин: сколько дней};
+    None — не подключался никогда."""
+    now = datetime.now(timezone.utc)
+    table = {login for logins in vacuum.values() for login in logins}
+    result = {}
+
+    for login in sorted(table & state["stale"]):
+        last = state["seen"].get(login)
+        result[login] = (now - last).days if last else None
+
+    return result
+
+
+# Буквы, одинаковые на вид в латинице и кириллице: логин «cумкина» с латинской «c»
+# в Jabber не найдётся, хотя на глаз он тот же (02.10)
+LOOKALIKE = str.maketrans("aceopxyk", "асеорхук")
+
+
+def lookalike_key(login):
+    return login.lower().replace("ё", "е").translate(LOOKALIKE)
+
+
 def jabber_rows(computers, record_ips, state, vacuum):
     """Предложения VACUUM из Jabber: ([(ПК, таблица, предлагается, вид, почему
     неточно, пояснение, источник)], {ПК: кого Jabber видит с его адреса}).
 
     ПК — только по IP (этап 26ж): тот, у кого этот адрес в таблице или в записи
     GLPI / GSIT, сопоставленной с ним; адрес у двух ПК — не понять, чей, — пропуск.
-    - Добавить: кто в Jabber с адреса ПК (сейчас или не раньше JABBER_FRESH
+    - Добавить: кто в Jabber с адреса ПК (сейчас или не раньше срока «Актуальны»
       назад), а в VACUUM ПК его нет. Логин уже записан у другого ПК — «неточно».
-    - Убрать: кто записан в VACUUM ПК, но не подключался дольше JABBER_FRESH
-      (по списку пользователей ejabberd). Удалённых пользователей сканер не
-      убирает — они помечаются красным (vacuum_missing)."""
+    - Заменить: в ячейке логин, которого в Jabber нет, но на вид он тот же, что
+      у человека с адреса ПК (латинская буква вместо русской), — вместо него.
+    Из ячейки сканер никого не убирает: давно не подключавшиеся и удалённые
+    только выделяются (vacuum_stale, vacuum_missing)."""
     by_ip, names = state["by_ip"], state["names"]
     owners = defaultdict(set)   # IP → ПК (таблица и записи GLPI / GSIT)
 
@@ -310,11 +342,13 @@ def jabber_rows(computers, record_ips, state, vacuum):
 
         table = vacuum.get(computer_id, {})
         add = sorted(at_pc.get(computer_id, set()) - set(table))
-        drop = sorted(login for login in table if login in state["stale"])
 
-        if not add and not drop:
+        if not add:
             continue
 
+        # Опечатка в таблице: такого логина в Jabber нет, а на вид он — как у пришедшего
+        looks = {lookalike_key(login) for login in add}
+        drop = sorted(login for login in table if login not in names and lookalike_key(login) in looks)
         kept = [text for login, text in table.items() if login not in drop]
         proposed = vacuum_text(sorted(kept + [names.get(login, login) for login in add], key=str.lower)) or ""
         table_text = vacuum_text(sorted(table.values(), key=str.lower)) or ""
@@ -324,15 +358,15 @@ def jabber_rows(computers, record_ips, state, vacuum):
         ]
         unsure = "; ".join(elsewhere)
         note = "; ".join(part for part in (
-            "с IP этого ПК: " + ", ".join(names.get(login, login) for login in add) if add else "",
-            f"не подключались {JABBER_FRESH.days} дн.: " + ", ".join(table[login] for login in drop) if drop else "",
+            "с IP этого ПК: " + ", ".join(names.get(login, login) for login in add),
+            "вместо «" + "», «".join(table[login] for login in drop) + "» — там латинские буквы" if drop else "",
         ) if part)
         dates = [state["seen"][login] for login in add if state["seen"].get(login)]
         result.append((
             computer_id, table_text, proposed, "unsure" if unsure else ("diff" if table else "fill"), unsure, note,
             {
                 "source": "jabber", "title": SOURCES["jabber"]["title"], "source_id": None,
-                "checked_at": max(dates) if dates else None, "state": "key", "by": ["ip"] if add else [],
+                "checked_at": max(dates) if dates else None, "state": "key", "by": ["ip"],
                 "value": proposed,
             },
         ))
@@ -346,8 +380,9 @@ def jabber_rows(computers, record_ips, state, vacuum):
 
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
-    которых нет в Jabber, кого Jabber видит с адресов ПК) по всем включённым источникам. Одно поле ПК — одна
-    строка; если источники предлагают разное — «неточно»."""
+    которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
+    подключавшиеся) по всем включённым источникам. Одно поле ПК — одна строка;
+    если источники предлагают разное — «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
     names = scan_collect.load_names(session, computers)
@@ -439,11 +474,13 @@ def compute(session, with_rejected=False):
 
     missing = []
     seen_at = {}
+    stale = {}
 
     if jabber_enabled(session):
         state = jabber_state(session)
         vacuum = computer_vacuum(session, computers)
         missing = vacuum_missing(state, vacuum)
+        stale = vacuum_stale(state, vacuum)
 
         jabber, seen_at = jabber_rows(computers, record_ips, state, vacuum)
 
@@ -478,7 +515,7 @@ def compute(session, with_rejected=False):
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
 
     result.sort(key=lambda d: ((d.hostname or "").lower(), d.computer_id, order.get(d.field, 99)))
-    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at
+    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale
 
 
 def record_links(session):
@@ -500,7 +537,7 @@ def list_diffs(
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    items, rejected_count, kinds, antivirus, missing, seen_at = compute(session, with_rejected=rejected)
+    items, rejected_count, kinds, antivirus, missing, seen_at, stale = compute(session, with_rejected=rejected)
     return DiffsOut(
         items=items,
         computers=len({d.computer_id for d in items if not d.rejected_by and d.kind != "partial"}),
@@ -509,6 +546,7 @@ def list_diffs(
         antivirus=antivirus,
         links=record_links(session),
         vacuum_missing=missing,
+        vacuum_stale=stale,
         jabber=seen_at,
     )
 

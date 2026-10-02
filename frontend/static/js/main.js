@@ -67,6 +67,8 @@ const app = Vue.createApp({
             // Акценты (личные настройки): границы блоков цветом схемы и
             // цветная шапка таблиц — отдельно для каждой страницы
             accentBorders: false,
+            noRadius: document.documentElement.classList.contains("no-radius"),   // без закруглений
+            buttonCounts: true,   // счётчики на кнопках панели
             accentHeaders: { tree: true, history: true, choices: true, users: true, scan: true, vacuum: true },
 
             // Таблица
@@ -193,6 +195,7 @@ const app = Vue.createApp({
             scanLegend: false,   // подсказка «что значат цвета» у включённой кнопки
             scanPop: null,       // карточка действий у блочка значения сканера
             scanMarks: [],       // /api/scan/marks — вид пометок по ситуациям
+            scanOnlyRows: false, // воронка у кнопки «Значения сканера»: только строки с предложениями
             valueEdit: null,     // правка значения ПК в подробностях «Проверки»
             diffs: {
                 items: [],          // /api/scan/diffs (и отклонённые — с rejected_by)
@@ -202,6 +205,7 @@ const app = Vue.createApp({
                 antivirus: {},      // столбец «Антивирусы»: id ПК → [{ name, status, version, source }]
                 links: {},          // столбец с номером записи (glpi_id, gsit_id) → начало ссылки
                 vacuumMissing: [],  // логины VACUUM из таблицы, которых нет в Jabber
+                vacuumStale: {},    // давно не подключавшиеся: логин → сколько дней (null — никогда)
                 jabber: {},         // кого Jabber видит с адреса ПК: id ПК → логины
                 loading: false,
                 error: "",

@@ -381,8 +381,15 @@ export default {
             } else if (kind === "bulk") {
                 bar.field = (this.bulkColumns[0] || {}).field || "";
                 bar.value = "";
+            } else if (kind === "scan") {
+                // «Взять из сканера…»: тип и столбец; пусто — все
+                bar.scanKind = "";
+                bar.field = "";
             }
             this.actionBar = bar;
+            if (kind === "scan") {
+                return;
+            }
             this.$nextTick(() => this.focusAction(kind === "replace" ? "new" : kind === "bulk" ? "value" : "location"));
         },
 
@@ -409,6 +416,9 @@ export default {
             }
             if (bar.kind === "replace") {
                 return "Заменить " + what + " на:";
+            }
+            if (bar.kind === "scan") {
+                return "Взять из сканера у " + what + ":";
             }
             return "Изменить у " + what + ":";
         },
@@ -447,6 +457,10 @@ export default {
         async submitAction() {
             const bar = this.actionBar;
             if (!bar || bar.saving) {
+                return;
+            }
+            if (bar.kind === "scan") {
+                await this.submitScanBar();
                 return;
             }
             let url;

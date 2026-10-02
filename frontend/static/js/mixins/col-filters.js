@@ -10,12 +10,17 @@
 // keys — значения строчными (как в Справочниках), "" — пустая ячейка;
 // у IP — подсеть /24, у многострочных (несколько IP, MAC, дисков) — каждая строка:
 // ПК виден, если отмечено хотя бы одно из его значений.
+//
+// «Антивирусы» (этап 26з): в списке сверху — ещё и состояния (работает, базы
+// устарели, выключен); filter.statesOff — снятые состояния. ПК виден, если у него
+// есть антивирус в отмеченном состоянии с отмеченным названием.
 
 import { matchesAllWords, searchNorm, searchWords, splitMulti } from "../util.js";
 import { columnTitle, dateKey, ipSubnetKey, isOverdue, OVERDUE_STYLE } from "../columns.js";
 
 export const EMPTY_KEY = "";
 const EMPTY_LABEL = "(пусто)";
+const AV_STATES = ["on", "old", "off"];
 
 // Значения ячейки для фильтра: [{ key, value }]; пустая — [{ key: "" }]
 function valuesOf(row, col) {
@@ -47,7 +52,7 @@ export default {
                 return !!filters[col.field];
             }).map(function (col) {
                 const filter = filters[col.field];
-                return { col: col, filter: filter, set: new Set(filter.keys) };
+                return { col: col, filter: filter, set: new Set(filter.keys), statesOff: filter.statesOff || [] };
             });
         },
 
@@ -160,6 +165,27 @@ export default {
             return { left: p.left + "px", top: p.top + "px", width: p.width + "px" };
         },
 
+        // Состояния антивирусов в списке фильтра (только у столбца «Антивирусы»):
+        // [{ kind, label, count, checked, style }]
+        colFilterStates() {
+            const menu = this.colFilterMenu;
+            const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
+            if (!col || !col.scanOnly || !this.avSettings) {
+                return [];
+            }
+            const rows = this.searchRows(this.applyColFilters(this.locationRows, col.field));
+            const counts = {};
+            rows.forEach((row) => {
+                const seen = new Set(this.avItems(row).map(function (a) { return a.status; }));
+                seen.forEach(function (kind) { counts[kind] = (counts[kind] || 0) + 1; });
+            });
+            const off = (this.colFilters[col.field] || {}).statesOff || [];
+            return this.avSettings.statuses.filter(function (st) { return st.show; }).map((st) => ({
+                kind: st.kind, label: st.label, count: counts[st.kind] || 0,
+                checked: off.indexOf(st.kind) === -1, style: this.avStatusStyle(st)
+            }));
+        },
+
         colFilterMenuTitle() {
             const menu = this.colFilterMenu;
             const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
@@ -184,9 +210,9 @@ export default {
             if (!active.length) {
                 return rows;
             }
-            return rows.filter(function (row) {
-                return active.every(function (f) {
-                    return rowPasses(row, f.col, f.filter, f.set);
+            return rows.filter((row) => {
+                return active.every((f) => {
+                    return f.col.scanOnly ? this.avRowPasses(row, f) : rowPasses(row, f.col, f.filter, f.set);
                 });
             });
         },
@@ -268,15 +294,50 @@ export default {
             return filter.exclude ? !has : has;
         },
 
-        // Записать фильтр столбца; «все отмечены» — фильтра нет
-        setColFilter(field, filter) {
+        // «Антивирусы»: у ПК есть антивирус в отмеченном состоянии с отмеченным названием
+        avRowPasses(row, f) {
+            const check = function (key) { return f.filter.exclude ? !f.set.has(key) : f.set.has(key); };
+            const list = this.avItems(row);
+            if (!list.length) {
+                return !f.statesOff.length && check(EMPTY_KEY);
+            }
+            return list.some(function (a) {
+                return f.statesOff.indexOf(a.status) === -1 && check(a.title.trim().toLowerCase());
+            });
+        },
+
+        // Записать фильтр столбца; «все отмечены» — фильтра нет.
+        // statesOff — снятые состояния антивирусов (остаются при смене значений)
+        setColFilter(field, filter, statesOff) {
             const next = Object.assign({}, this.colFilters);
-            if (!filter || (filter.exclude && !filter.keys.length)) {
+            statesOff = statesOff || [];
+            if (!filter && statesOff.length) {
+                filter = { exclude: true, keys: [], labels: {} };
+            }
+            if (!filter || (filter.exclude && !filter.keys.length && !statesOff.length)) {
                 delete next[field];
             } else {
-                next[field] = filter;
+                next[field] = Object.assign({}, filter, { statesOff: statesOff });
             }
             this.colFilters = next;
+        },
+
+        colFilterStatesOff(field) {
+            return (this.colFilters[field] || {}).statesOff || [];
+        },
+
+        // Состояния антивирусов: оставить только allowed (все — фильтра по состоянию нет)
+        setAvStates(allowed) {
+            const field = this.colFilterMenu.field;
+            const off = AV_STATES.filter(function (kind) { return allowed.indexOf(kind) === -1; });
+            const old = this.colFilters[field];
+            this.setColFilter(field, old ? { exclude: old.exclude, keys: old.keys, labels: old.labels } : null, off);
+        },
+
+        toggleAvState(kind) {
+            const off = this.colFilterStatesOff(this.colFilterMenu.field);
+            const allowed = AV_STATES.filter(function (k) { return k === kind ? off.indexOf(k) !== -1 : off.indexOf(k) === -1; });
+            this.setAvStates(allowed);
         },
 
         // Отметить / снять значения открытого столбца
@@ -296,12 +357,13 @@ export default {
                 }
             });
             const filter = { exclude: old.exclude, keys: Array.from(keys), labels: labels };
+            const states = this.colFilterStatesOff(field);
             // «Только эти», а отмечено всё, что есть в столбце, — фильтра нет
             if (!filter.exclude && this.colFilterOptions.every(function (o) { return keys.has(o.key); })) {
-                this.setColFilter(field, null);
+                this.setColFilter(field, null, states);
                 return;
             }
-            this.setColFilter(field, filter);
+            this.setColFilter(field, filter, states);
         },
 
         toggleColFilterValue(option) {
@@ -313,7 +375,7 @@ export default {
             const menu = this.colFilterMenu;
             const checked = this.colFilterAllState !== true;
             if (!searchWords(menu.query).length) {
-                this.setColFilter(menu.field, checked ? null : { exclude: false, keys: [], labels: {} });
+                this.setColFilter(menu.field, checked ? null : { exclude: false, keys: [], labels: {} }, this.colFilterStatesOff(menu.field));
                 return;
             }
             this.setColFilterChecked(this.colFilterShown, checked);
@@ -327,7 +389,7 @@ export default {
                 exclude: false,
                 keys: options.map(function (o) { return o.key; }),
                 labels: labels
-            });
+            }, this.colFilterStatesOff(this.colFilterMenu.field));
         },
 
         // Enter в поиске по значениям: только найденные, меню закрывается
@@ -354,12 +416,28 @@ export default {
             }
         },
 
-        // Текст плашки: «OS: Win 7, Win 10», «Статус: кроме списан», «ИНВ: (пусто)»
+        // Отмеченные состояния антивирусов словами: «выключен, базы устарели»
+        avStatesText(item) {
+            const off = item.statesOff || [];
+            if (!off.length) {
+                return "";
+            }
+            const labels = this.avStatusMap;
+            return AV_STATES.filter(function (kind) { return off.indexOf(kind) === -1; })
+                .map(function (kind) { return (labels[kind] ? labels[kind].label : kind).toLowerCase(); }).join(", ") || "ничего";
+        },
+
+        // Текст плашки: «OS: Win 7, Win 10», «Статус: кроме списан», «ИНВ: (пусто)»,
+        // «Антивирус: выключен»
         colFilterChipText(item) {
             const labels = item.filter.labels;
             const names = item.filter.keys.map(function (key) {
                 return key === EMPTY_KEY ? EMPTY_LABEL : (labels[key] || key);
             });
+            const states = this.avStatesText(item);
+            if (states && item.filter.exclude && !names.length) {
+                return item.col.headerName + ": " + states;
+            }
             let list;
             if (!names.length) {
                 list = "ничего";
@@ -368,7 +446,7 @@ export default {
             } else {
                 list = names.slice(0, 2).join(", ") + " и ещё " + (names.length - 2);
             }
-            return item.col.headerName + ": " + (item.filter.exclude ? "кроме " : "") + list;
+            return item.col.headerName + ": " + (states ? states + "; " : "") + (item.filter.exclude ? "кроме " : "") + list;
         },
 
         colFilterChipTitle(item) {
@@ -376,8 +454,12 @@ export default {
             const names = item.filter.keys.map(function (key) {
                 return key === EMPTY_KEY ? EMPTY_LABEL : (labels[key] || key);
             });
-            return "«" + columnTitle(item.col) + "»: " + (item.filter.exclude ? "скрыты " : "показаны только ") +
-                (names.join(", ") || "—") + ". Нажми, чтобы снять фильтр";
+            const states = this.avStatesText(item);
+            if (states && item.filter.exclude && !names.length) {
+                return "«" + columnTitle(item.col) + "»: " + states;
+            }
+            return "«" + columnTitle(item.col) + "»: " + (states ? states + "; " : "") + (item.filter.exclude ? "скрыты " : "показаны только ") +
+                (names.join(", ") || "—");
         },
 
         // Значение в списке — в оформлении из Справочников (цвет, фон, Ж, К)

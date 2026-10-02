@@ -48,6 +48,13 @@ const KEY_TEXT = { id: "ID", mac: "MAC", serial: "серийному", ip: "IP" 
 // Поля-названия: «своё» значение — соответствие «одно и то же» (как NAME_FIELDS на сервере)
 const NAME_FIELDS = ["model", "motherboard", "os", "cpu", "gpu", "vnc", "drive"];
 const AV_TEXT = { on: "работает, базы актуальны", old: "работает, базы устарели", off: "выключен" };
+// Типы предложений сканера — для выбора в «Взять из сканера…»
+const SCAN_KINDS = [
+    { key: "diff", label: "В таблице другое" },
+    { key: "fill", label: "В таблице пусто" },
+    { key: "unsure", label: "Неточно" },
+    { key: "partial", label: "В таблице часть" }
+];
 
 export default {
     watch: {
@@ -65,7 +72,82 @@ export default {
     computed: {
         scanChipVersion() {
             return Array.from(this.scanShownKinds).sort().join(",") + "|" +
+                (this.diffs.vacuumMissing || []).join(",") + "|" + Object.keys(this.diffs.vacuumStale || {}).join(",") + "|" +
                 this.diffs.items.map(function (d) { return d.id + (d.rejected_by ? "-" : ":") + d.proposed; }).join("|");
+        },
+
+        // Воронка у кнопки «Значения сканера»: в таблице только строки с предложениями
+        scanOnlyOn() {
+            return this.scanOnlyRows && this.scanOverlay;
+        },
+
+        // «Взять из сканера…» у выбранных строк Таблицы: предложения выбранных ПК,
+        // которые можно взять (без отклонённых и без имён ПК)
+        scanBarAll() {
+            const bar = this.actionBar;
+            if (!bar || bar.kind !== "scan") {
+                return [];
+            }
+            const list = [];
+            bar.ids.forEach((id) => {
+                const entry = this.diffIndex.get(id);
+                Object.keys(entry || {}).forEach((field) => {
+                    if (this.diffTakeable(entry[field])) {
+                        list.push(entry[field]);
+                    }
+                });
+            });
+            return list;
+        },
+
+        // …те из них, что подходят под выбранные тип и столбец
+        scanBarDiffs() {
+            const bar = this.actionBar;
+            return this.scanBarAll.filter(function (d) {
+                return (!bar.scanKind || d.kind === bar.scanKind) && (!bar.field || d.field === bar.field);
+            });
+        },
+
+        // Типы и столбцы для выбора — с числом значений (с учётом второго выбора)
+        scanBarKinds() {
+            const bar = this.actionBar;
+            const list = this.scanBarAll.filter(function (d) { return !bar.field || d.field === bar.field; });
+            return SCAN_KINDS.map(function (k) {
+                return { key: k.key, label: k.label, count: list.filter(function (d) { return d.kind === k.key; }).length };
+            }).filter(function (k) { return k.count || k.key === bar.scanKind; });
+        },
+
+        scanBarFields() {
+            const bar = this.actionBar;
+            const list = this.scanBarAll.filter(function (d) { return !bar.scanKind || d.kind === bar.scanKind; });
+            const counts = {};
+            list.forEach(function (d) { counts[d.field] = (counts[d.field] || 0) + 1; });
+            return this.allColumns.filter(function (col) { return counts[col.field] || col.field === bar.field; })
+                .map(function (col) { return { key: col.field, label: col.headerName, count: counts[col.field] || 0 }; });
+        },
+
+        scanBarKindTotal() {
+            const bar = this.actionBar;
+            return this.scanBarAll.filter(function (d) { return !bar.field || d.field === bar.field; }).length;
+        },
+
+        scanBarFieldTotal() {
+            const bar = this.actionBar;
+            return this.scanBarAll.filter(function (d) { return !bar.scanKind || d.kind === bar.scanKind; }).length;
+        },
+
+        // Есть ли что взять у выбранных строк (пункт меню «Выбрано»)
+        selectedScanCount() {
+            let n = 0;
+            this.selectedRows.forEach((id) => {
+                const entry = this.diffIndex.get(id);
+                Object.keys(entry || {}).forEach((field) => {
+                    if (this.diffTakeable(entry[field])) {
+                        n += 1;
+                    }
+                });
+            });
+            return n;
         },
 
         diffCountBadge() {
@@ -201,12 +283,19 @@ export default {
                 this.diffs.antivirus = data.antivirus || {};
                 this.diffs.links = data.links || {};
                 this.diffs.vacuumMissing = data.vacuum_missing || [];
+                this.diffs.vacuumStale = data.vacuum_stale || {};
                 this.diffs.jabber = data.jabber || {};
             } catch (e) {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
                 this.diffs.loading = false;
             }
+        },
+
+        // Можно взять разом: значение берётся, и такие блочки в Таблице вообще показываются
+        diffTakeable(d) {
+            const mark = this.scanMarkByKind[d.kind];
+            return d.can_take && (!mark || mark.enabled);
         },
 
         async loadScanMarks() {
@@ -349,6 +438,9 @@ export default {
         toggleScanOverlay() {
             this.scanOverlay = !this.scanOverlay;
             this.scanLegend = this.scanOverlay;
+            if (!this.scanOverlay) {
+                this.scanOnlyRows = false;
+            }
             this.closeScanPop();
             if (this.scanOverlay) {
                 this.loadDiffs();
@@ -411,7 +503,7 @@ export default {
             return style;
         },
 
-        // Сканер предлагает очистить ячейку (VACUUM: никто давно не подключался) — «пусто»
+        // Сканер предлагает очистить ячейку — «пусто»
         scanChipText(d) {
             return d.proposed || "пусто";
         },
@@ -736,6 +828,24 @@ export default {
             } catch (e) {
                 this.toastError(e.message || e);
             }
+        },
+
+        // «Взять из сканера…» у выбранных строк Таблицы: выбранные тип и столбец
+        async submitScanBar() {
+            const bar = this.actionBar;
+            const list = this.scanBarDiffs.slice();
+            if (!bar || bar.saving) {
+                return;
+            }
+            if (!list.length) {
+                bar.error = "Нечего взять.";
+                return;
+            }
+            bar.saving = true;
+            await this.acceptDiffs(list);
+            this.actionBar = null;
+            this.selectedRows = [];
+            this.selectAnchorId = null;
         },
 
         async rejectDiffs(list, back) {

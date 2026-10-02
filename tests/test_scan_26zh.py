@@ -86,21 +86,24 @@ def test_users_marks_and_stale(admin, editor, reader, room, jabber_url):
     assert users["never"]["last_login_at"] is None and users["old_user"]["last_login_at"].startswith(ago(40)[:10])
     assert users["ivanov"]["online"] and users["ivanov"]["addresses"][0]["hosts"][0]["hostname"] == "pc-1"
 
-    # Таблица: кто не подключался 7 дней — убрать из ячейки; кого нет — только пометить; новый с IP ПК — добавить
+    # Таблица: из ячейки сканер никого не убирает (этап 26з) — кто давно не подключался
+    # и кого нет, только помечаются; новый с IP ПК — добавить
     data, diffs = diffs_data(reader)
     d = diffs[(first, "vacuum")]
     assert d["table"] == "fresh\nghost\nivanov\nnever\nold_user\ntypo"
-    assert d["proposed"] == "fresh\nghost\nivanov\npetrova\ntypo"
-    assert "petrova" in d["note"] and "never, old_user" in d["note"]
-    d = diffs[(second, "vacuum")]
-    assert (d["proposed"], d["raw"], d["kind"]) == ("", "—", "diff")
+    assert d["proposed"] == "fresh\nghost\nivanov\nnever\nold_user\npetrova\ntypo"
+    assert "petrova" in d["note"] and "old_user" not in d["note"]
+    assert (second, "vacuum") not in diffs
     assert data["vacuum_missing"] == ["ghost", "typo"]
+    # Сколько дней не подключался; None — никогда
+    assert data["vacuum_stale"] == {"never": None, "old_user": 40, "stale2": 8}
 
-    # Взять — ячейка очищается; отклонить — не предлагается
-    result = ok(editor.post("/api/scan/diffs/accept", json={"items": [
-        {"computer_id": second, "field": "vacuum", "value": "", "table": "stale2", "source": "Jabber"},
-    ]}))
-    assert result["accepted"] == 1 and get_row(editor, second)["vacuum"] in (None, "")
+    # Срок — в настройках подключения («Актуальны»)
+    ok(admin.patch("/api/scan/sources/jabber", json={"fresh_days": 30}))
+    assert diffs_data(reader)[0]["vacuum_stale"] == {"never": None, "old_user": 40}
+    ok(admin.patch("/api/scan/sources/jabber", json={"fresh_days": 7}))
+
+    # Отклонить — не предлагается
     ok(editor.post("/api/scan/diffs/reject", json={"items": [{"computer_id": first, "field": "vacuum", "raw": diffs[(first, "vacuum")]["raw"]}]}))
     assert (first, "vacuum") not in diffs_data(editor)[1]
 

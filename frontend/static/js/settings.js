@@ -36,6 +36,19 @@ export function applyTheme(key) {
     return key;
 }
 
+// «Без закруглений» (личная настройка): класс на <html>, кэш — чтобы не мигало при загрузке
+export const NO_RADIUS_KEY = "itdb.noRadius";
+
+export function applyNoRadius(on) {
+    document.documentElement.classList.toggle("no-radius", !!on);
+    try {
+        localStorage.setItem(NO_RADIUS_KEY, on ? "1" : "0");
+    } catch (e) {
+        // ignore
+    }
+    return !!on;
+}
+
 export const ROLE_LABELS = {
     admin: "Администратор",
     editor: "Редактор",

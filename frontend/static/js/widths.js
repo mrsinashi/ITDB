@@ -63,7 +63,7 @@ export function cellOverhead() {
 export const FILTER_ICON_SPACE = 14;
 
 // Блочок значения сканера под значением ячейки (этап 26г): шрифт ячейки, поля 5px
-const CHIP_PAD = 10;
+export const CHIP_PAD = 10;
 
 function chipWidth(probe, text) {
     probe.style.fontWeight = "400";
@@ -74,8 +74,10 @@ function chipWidth(probe, text) {
     return max + CHIP_PAD;
 }
 
-// scanChip(row, field) — текст блочка сканера в ячейке или null
-export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMap, columnStyles, scanChip) {
+// scanChip(row, field) — текст блочка сканера в ячейке или null;
+// lineInfo(row, col, line) — { pad, bold } для выделенного значения (повтор блочком,
+// жирный логин) или null
+export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMap, columnStyles, scanChip, lineInfo) {
     ensureWidthProbe();
     syncProbeFont();
     const overhead = cellOverhead();
@@ -109,8 +111,9 @@ export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMa
             const fieldStyles = styleMap[col.field];
             String(value).split("\n").forEach(function (line) {
                 const s = fieldStyles ? fieldStyles[styleKey(col.field, line)] : null;
-                probe.style.fontWeight = (colBold || (s && s.bold)) ? "700" : "400";
-                const w = measureTextWidth(line);
+                const info = lineInfo ? lineInfo(row, col, line) : null;
+                probe.style.fontWeight = (colBold || (s && s.bold) || (info && info.bold)) ? "700" : "400";
+                const w = measureTextWidth(line) + (info ? info.pad : 0);
                 if (w > max) {
                     max = w;
                 }

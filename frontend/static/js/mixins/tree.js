@@ -210,7 +210,7 @@ export default {
                 const row = block.querySelector(".st-row.search-hit");
                 const list = block.querySelector(".st-values");
                 if (row && list) {
-                    list.scrollTop = row.offsetTop - list.offsetTop - 25;
+                    list.scrollTop = row.offsetTop - list.offsetTop - 27;
                 }
             });
         },

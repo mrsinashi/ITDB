@@ -37,6 +37,9 @@ SECRET_REMOVED = "удалён"
 # Записи GLPI/GSIT считаются актуальными, если ПК проверялся не раньше, чем N дней назад
 FRESH_DAYS_DEFAULT = 3
 FRESH_DAYS_MAX = 60
+# Jabber: кто не подключался дольше — «давно не в сети» (выделяется в ячейке VACUUM)
+JABBER_DAYS_DEFAULT = 7
+JABBER_DAYS_MAX = 365
 
 # Назначение подсети
 PURPOSES = {
@@ -140,11 +143,12 @@ def load_source(session, kind, lock=False):
 
 
 def fresh_days_of(source, kind):
-    if not SOURCES[kind]["glpi"]:
-        return None
-
     value = (source.options or {}).get("fresh_days") if source else None
-    return value if isinstance(value, int) else FRESH_DAYS_DEFAULT
+
+    if isinstance(value, int):
+        return value
+
+    return FRESH_DAYS_DEFAULT if SOURCES[kind]["glpi"] else JABBER_DAYS_DEFAULT
 
 
 def last_run_of(session, kind):
@@ -183,11 +187,13 @@ def clean(value, limit=500):
     return value or None
 
 
-def clean_fresh_days(value):
-    if value is None or not (1 <= value <= FRESH_DAYS_MAX):
+def clean_fresh_days(value, kind):
+    limit = FRESH_DAYS_MAX if SOURCES[kind]["glpi"] else JABBER_DAYS_MAX
+
+    if value is None or not (1 <= value <= limit):
         raise HTTPException(
             status_code=400,
-            detail=f"Срок актуальности — от 1 до {FRESH_DAYS_MAX} дней.",
+            detail=f"Срок актуальности — от 1 до {limit} дней.",
         )
     return value
 
@@ -243,7 +249,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
     data = payload.model_dump(exclude_none=True)
 
     if not glpi:
-        for field in ("user_token", "app_token", "fresh_days"):
+        for field in ("user_token", "app_token"):
             data.pop(field, None)
     else:
         data.pop("domain", None)
@@ -292,7 +298,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         changes["verify_tls"] = {"old": before["verify_tls"], "new": data["verify_tls"]}
 
     if "fresh_days" in data:
-        days = clean_fresh_days(data["fresh_days"])
+        days = clean_fresh_days(data["fresh_days"], kind)
         source.options = dict(source.options or {}, fresh_days=days)
         changes["fresh_days"] = {"old": before["fresh_days"], "new": days}
 

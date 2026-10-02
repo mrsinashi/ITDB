@@ -109,6 +109,11 @@ export default {
         // Логины VACUUM из таблицы, которых нет в Jabber (строчными) — в ячейках красным
         vacuumMissingSet() {
             return new Set(this.diffs.vacuumMissing || []);
+        },
+
+        // Логины VACUUM из таблицы, давно не подключавшиеся: логин → дней (null — никогда)
+        vacuumStale() {
+            return this.diffs.vacuumStale || {};
         }
     },
 

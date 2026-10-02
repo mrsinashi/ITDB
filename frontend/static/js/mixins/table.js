@@ -2,7 +2,11 @@
 
 import { apiFetch, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
 import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, frameColorFor, isDuplicateLine, isOverdue, OVERDUE_STYLE, refreshDuplicates, styleKey } from "../columns.js";
-import { TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
+import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
+
+// Порядок состояний антивируса при сортировке; AV_NONE — антивирусов нет
+const AV_RANK = { on: 0, old: 1, off: 2 };
+const AV_NONE = 9;
 
 export default {
     computed: {
@@ -133,7 +137,9 @@ export default {
 
         // Фильтр по дереву, фильтры по столбцам (mixins/col-filters.js), поиск
         filteredRows() {
-            return this.searchRows(this.applyColFilters(this.locationRows, null));
+            const rows = this.searchRows(this.applyColFilters(this.locationRows, null));
+            // Значок-воронка у кнопки «Значения сканера»: только строки с предложениями
+            return this.scanOnlyOn ? rows.filter((row) => this.rowHasScanChip(row)) : rows;
         },
 
         displayRows() {
@@ -144,6 +150,20 @@ export default {
             const field = this.sortField;
             const sortCol = this.allColumns.find(function (c) { return c.field === field; });
             const dir = this.sortDir === "asc" ? 1 : -1;
+            // Антивирусы — сначала по состоянию (работает, базы устарели, выключен), потом по названию
+            if (sortCol && sortCol.scanOnly) {
+                const keys = new Map();
+                rows.forEach((row) => keys.set(row.id, this.avSortKey(row)));
+                return rows.slice().sort(function (a, b) {
+                    const ka = keys.get(a.id);
+                    const kb = keys.get(b.id);
+                    if (ka.rank !== kb.rank) {
+                        // без антивирусов — всегда внизу
+                        return ka.rank === AV_NONE ? 1 : kb.rank === AV_NONE ? -1 : (ka.rank - kb.rank) * dir;
+                    }
+                    return ka.text.localeCompare(kb.text, "ru", { numeric: true, sensitivity: "base" }) * dir;
+                });
+            }
             return rows.slice().sort(function (a, b) {
                 return compareCellValues(a[field], b[field], sortCol) * dir;
             });
@@ -336,7 +356,16 @@ export default {
                 const d = this.scanChipShown(row, field);
                 return d ? this.scanChipText(d) : null;
             };
-            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, scanChip);
+            // Блочок повтора и антивируса шире текста, выделенные логины VACUUM — жирные
+            const avBold = !!this.avSettings && this.avSettings.statuses.some(function (st) { return st.bold; });
+            const lineInfo = (row, col, line) => {
+                if (col.field === "antivirus") {
+                    return { pad: CHIP_PAD, bold: avBold };
+                }
+                const m = this.lineMarks(row, col, line);
+                return m ? { pad: m.dup ? CHIP_PAD : 0, bold: m.gone || m.stale !== undefined } : null;
+            };
+            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -398,24 +427,91 @@ export default {
                 return null;
             }
             const link = this.diffs.links[col.field];
-            const dups = !row.archived && col.dup;
-            const missing = col.field === "vacuum" && !row.archived && this.vacuumMissingSet.size ? this.vacuumMissingSet : null;
-            if (!link && !dups && !missing) {
+            if (!link && !(col.dup || col.field === "vacuum") || (row.archived && !link)) {
                 return null;
             }
             let special = false;
             const lines = col.multiline ? String(value).split("\n") : [String(value)];
             const parts = lines.map((line) => {
-                const dup = dups && isDuplicateLine(line, col.field);
-                const gone = !!missing && missing.has(line.trim().toLowerCase());
+                const m = this.lineMarks(row, col, line) || {};
                 const href = this.idLink(col.field, line);
-                if (dup || gone || href) {
+                if (m.dup || m.gone || m.stale !== undefined || href) {
                     special = true;
                 }
-                const titles = [dup ? "Повтор" : "", gone ? "Нет в Jabber" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
-                return { text: line, href: href, cls: { "dup-chip": dup, "cell-gone": gone }, title: titles.join(" · ") || null };
+                const titles = [m.dup ? "Повтор" : "", this.vacuumMarkTitle(m), href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                return {
+                    text: line, href: href, title: titles.join(" · ") || null,
+                    cls: { "dup-chip": !!m.dup, "cell-gone": !!m.gone, "cell-stale": m.stale !== undefined }
+                };
             });
             return special ? parts : null;
+        },
+
+        // Чем выделить значение (строку ячейки): dup — повтор; у логина VACUUM: gone —
+        // такого пользователя в Jabber нет, stale — давно не подключался (сколько
+        // дней; null — никогда). Нечего выделять — null
+        lineMarks(row, col, line) {
+            if (row.archived) {
+                return null;
+            }
+            const dup = !!col.dup && isDuplicateLine(line, col.field);
+            let gone = false;
+            let stale;
+            if (col.field === "vacuum") {
+                const login = String(line).trim().toLowerCase();
+                gone = this.vacuumMissingSet.has(login);
+                if (!gone && login in this.vacuumStale) {
+                    stale = this.vacuumStale[login];
+                }
+            }
+            return dup || gone || stale !== undefined ? { dup: dup, gone: gone, stale: stale } : null;
+        },
+
+        vacuumMarkTitle(m) {
+            if (m.gone) {
+                return "Нет в Jabber";
+            }
+            if (m.stale === undefined) {
+                return "";
+            }
+            return m.stale === null ? "Не подключался никогда" : "Не подключался " + m.stale + " дн.";
+        },
+
+        // Логин в карточке ПК: класс и подсказка
+        vacuumLoginMark(login) {
+            const key = String(login).trim().toLowerCase();
+            const m = { gone: this.vacuumMissingSet.has(key), stale: undefined };
+            if (!m.gone && key in this.vacuumStale) {
+                m.stale = this.vacuumStale[key];
+            }
+            return { cls: { "cell-gone": m.gone, "cell-stale": m.stale !== undefined }, title: this.vacuumMarkTitle(m) || "Скопировать" };
+        },
+
+        // Строка, где сейчас виден блочок сканера (в показанных столбцах)
+        rowHasScanChip(row) {
+            if (row.archived) {
+                return false;
+            }
+            const entry = this.diffIndex.get(row.id);
+            if (!entry) {
+                return false;
+            }
+            const kinds = this.scanShownKinds;
+            return this.columns.some(function (col) {
+                const d = entry[col.field];
+                return !!d && kinds.has(d.kind);
+            });
+        },
+
+        // Сортировка «Антивирусов»: лучшее состояние у ПК, потом названия
+        avSortKey(row) {
+            const list = this.avItems(row);
+            if (!list.length) {
+                return { rank: AV_NONE, text: "" };
+            }
+            let rank = AV_NONE;
+            list.forEach(function (a) { rank = Math.min(rank, AV_RANK[a.status]); });
+            return { rank: rank, text: list.map(function (a) { return a.title; }).join(" ") };
         },
 
         // Ссылка на запись ПК в GLPI / GSIT по номеру из столбца

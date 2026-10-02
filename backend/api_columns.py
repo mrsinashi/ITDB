@@ -84,7 +84,7 @@ COLUMNS = [
     col("gpu", "GPU", "Видеокарта (ГП / GPU)", center=True, card_copy=True, export_width=16),
     col("mac", "MAC", "MAC адрес", kind="mac", multiline=True, values="no", card_copy=True, dup=True, bulk=False, export_width=20),
     col("vnc", "VNC", "Тип VNC", center=True, hidden=True, export_width=8),
-    col("antivirus", "Антивирус", "Антивирусы", kind="scan", multiline=True, values="no", bulk=False, export_width=30),
+    col("antivirus", "Антивирус", "Антивирусы", kind="scan", center=True, multiline=True, values="no", bulk=False, export_width=30),
     col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=16),
     col("glpi_id", "GLPI", "GLPI ID", center=True, values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=8),

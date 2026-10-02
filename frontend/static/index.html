@@ -5,7 +5,7 @@
     <title>ITDB</title>
     <link rel="stylesheet" href="/app.css">
     <!-- Цветовая схема из прошлого входа — до отрисовки, чтобы не мигало -->
-    <script>try { document.documentElement.dataset.theme = localStorage.getItem("itdb.theme") || "red"; } catch (e) {}</script>
+    <script>try { document.documentElement.dataset.theme = localStorage.getItem("itdb.theme") || "red"; document.documentElement.classList.toggle("no-radius", localStorage.getItem("itdb.noRadius") === "1"); } catch (e) {}</script>
 </head>
 <body>
     <div id="app" v-cloak>
@@ -40,6 +40,12 @@
                         <div class="nc-sep"></div>
                         <label class="nc-check" title="Рамки блоков — цветом схемы">
                             <input type="checkbox" :checked="accentBorders" @change="toggleAccentBorders"> Акцентные границы блоков
+                        </label>
+                        <label class="nc-check">
+                            <input type="checkbox" :checked="!noRadius" @change="togglePref('noRadius', 'no_radius')"> Закругления
+                        </label>
+                        <label class="nc-check">
+                            <input type="checkbox" :checked="buttonCounts" @change="togglePref('buttonCounts', 'button_counts')"> Счётчики на кнопках
                         </label>
                     </div>
                 </span>
@@ -84,7 +90,7 @@
                         <div v-else class="uc-foot">
                             <span class="dropdown-wrap uc-actions">
                                 <button class="btn" :class="{ 'menu-open': ownMenu }" @click="ownMenu = !ownMenu" title="Изменить свои данные">
-                                    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span class="caret">▼</span>
+                                    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
                                 </button>
                                 <div v-if="ownMenu" class="dropdown attached">
                                     <button @click="openOwnPassword">
@@ -133,7 +139,7 @@
                     <!-- Три фильтра и больше — одной кнопкой со списком -->
                     <span v-if="activeColFilters.length >= 3" class="dropdown-wrap" ref="colFilterListWrap">
                         <button class="chip" :class="{ 'menu-open': openMenu === 'colFilterList' }" @click="toggleMenu('colFilterList')" title="Фильтры по столбцам">
-                            <span class="chip-text">Фильтры: {{ activeColFilters.length }}</span><span class="caret">▼</span>
+                            <span class="chip-text">Фильтры: {{ activeColFilters.length }}</span>
                         </button>
                         <div v-if="openMenu === 'colFilterList'" class="dropdown attached cf-list-menu">
                             <button v-for="item in activeColFilters" :key="'cfl-' + item.col.field" @click="clearColFilter(item.col.field)" :title="colFilterChipTitle(item)">
@@ -145,7 +151,7 @@
                     </span>
                     <span v-if="selectedRows.length > 0" class="dropdown-wrap" ref="selectionWrap">
                         <button class="btn" :class="{ 'menu-open': openMenu === 'selection' }" @click="toggleMenu('selection')" title="Действия с выбранными">
-                            Выбрано: {{ selectedRows.length }}<span class="caret">▼</span>
+                            Выбрано: {{ selectedRows.length }}
                         </button>
                         <div v-if="openMenu === 'selection'" class="dropdown attached">
                             <template v-if="canEdit">
@@ -154,6 +160,7 @@
                                     <button @click="openAction('replace')" :disabled="selectedRows.length !== 1" :title="selectedRows.length !== 1 ? 'Выбери один ПК' : 'Другой ПК встаёт на его место'">Заменить…</button>
                                     <button @click="startSwap" :disabled="selectedRows.length !== 2" :title="selectedRows.length !== 2 ? 'Выбери два ПК' : 'Меняются расположение и № места'">Поменять местами</button>
                                     <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить поле…</button>
+                                    <button @click="openAction('scan')" :disabled="!selectedScanCount" :title="selectedScanCount ? 'Предложения сканера: ' + selectedScanCount : 'Сканер ничего не предлагает'">Взять из сканера…</button>
                                     <div class="dd-sep"></div>
                                     <button @click="setArchived(selectedRows.slice(), true)">В архив</button>
                                 </template>
@@ -177,7 +184,7 @@
                     <button v-if="hasManualWidths" class="btn icon-only" @click="resetWidths" title="Вернуть автоширину столбцов"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="m6 8-4 4 4 4"/><path d="M2 12h20"/></svg></button>
                     <span class="dropdown-wrap" ref="columnsWrap">
                         <button class="btn icon-only" :class="{ 'has-badge': hiddenColumnCount > 0, 'menu-open': openMenu === 'columns' }" @click="toggleMenu('columns')" title="Столбцы: показать или скрыть">
-                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg><span v-if="hiddenColumnCount > 0" class="btn-badge">{{ hiddenColumnCount }}</span>
+                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg><span v-if="hiddenColumnCount > 0 && buttonCounts" class="btn-badge">{{ hiddenColumnCount }}</span>
                         </button>
                         <div v-if="openMenu === 'columns'" class="dropdown right attached columns-menu">
                             <div class="dd-scroll">
@@ -200,7 +207,7 @@
                     <span class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
                     <button class="btn icon-only" :class="{ active: scanOverlay, 'has-badge': diffs.count > 0 }" @click="toggleScanOverlay"
                         :title="scanOverlay ? null : 'Значения сканера: ' + (diffs.count || 'нет')">
-                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg><span v-if="diffs.count > 0" class="btn-badge">{{ diffCountBadge }}</span>
+                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg><span v-if="diffs.count > 0 && buttonCounts" class="btn-badge">{{ diffCountBadge }}</span>
                     </button>
                     <div v-if="scanLegend && scanOverlay" class="scan-legend">
                         <div class="sl-title">Что предлагает сканер</div>
@@ -209,6 +216,8 @@
                         </template>
                     </div>
                     </span>
+                    <!-- Только строки с предложениями: значок без кнопки, виден при включённой кнопке -->
+                    <span class="scan-only" :class="{ on: scanOnlyRows, hidden: !scanOverlay }" :title="scanOnlyRows ? 'Показать все строки' : 'Только строки с предложениями'" @click="scanOnlyRows = !scanOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                     <!-- Архив: без выбранных строк — показать архив / вернуться к таблице,
                          с выбранными — убрать их в архив (в архиве — вернуть) -->
                     <button class="btn icon-only" :class="{ active: showArchive }" :disabled="archiveSaving" @click="onArchiveButton" :title="archiveButtonTitle">
@@ -220,7 +229,7 @@
                          выгружать — не только в Excel -->
                     <span v-if="canEdit" class="dropdown-wrap" ref="addWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'add', active: newComputer }" @click="toggleMenu('add')" title="Добавить">
-                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="caret">▼</span>
+                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
                         </button>
                         <div v-if="openMenu === 'add'" class="dropdown right attached">
                             <button @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
@@ -229,7 +238,7 @@
                     <span v-if="canEdit" class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="exportWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'export' }" @click="toggleMenu('export')" title="Выгрузить">
-                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span class="caret">▼</span>
+                            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
                         </button>
                         <div v-if="openMenu === 'export'" class="dropdown right attached">
                             <button @click="closeMenus(); downloadExport(false)" title="Рабочие ПК, без архива"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel</button>
@@ -269,6 +278,17 @@
                     <location-picker ref="ab-location" class="ab-loc ab-loc-short" input-class="input" :value="actionBar.location_id" :options="locationOptions"
                         placeholder="Куда убрать старый (например, склад)" @pick="onActionLocation"></location-picker>
                     <label class="ab-check" title="Новый — «установлен», старый — «склад»"><input type="checkbox" v-model="actionBar.with_people">пользователи и VACUUM — новому</label>
+                </template>
+                <template v-else-if="actionBar.kind === 'scan'">
+                    <select class="input ab-field ab-scan" v-model="actionBar.scanKind" title="Тип">
+                        <option value="">Все типы ({{ scanBarKindTotal }})</option>
+                        <option v-for="k in scanBarKinds" :key="k.key" :value="k.key">{{ k.label }} ({{ k.count }})</option>
+                    </select>
+                    <select class="input ab-field ab-scan" v-model="actionBar.field" title="Столбец">
+                        <option value="">Все столбцы ({{ scanBarFieldTotal }})</option>
+                        <option v-for="f in scanBarFields" :key="f.key" :value="f.key">{{ f.label }} ({{ f.count }})</option>
+                    </select>
+                    <span class="ab-title">значений: {{ scanBarDiffs.length }}</span>
                 </template>
                 <template v-else>
                     <select class="input ab-field" v-model="actionBar.field" @change="closeSuggest()">
@@ -363,7 +383,7 @@
                     <template v-if="canEdit">
                         <!-- Что добавить: адрес, отделение, этаж, кабинет -->
                         <span class="dropdown-wrap" ref="treeAddWrap">
-                            <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'treeAdd', active: treeForm && treeForm.top }" @click="toggleMenu('treeAdd')" title="Добавить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="caret">▼</span></button>
+                            <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'treeAdd', active: treeForm && treeForm.top }" @click="toggleMenu('treeAdd')" title="Добавить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button>
                             <div v-if="openMenu === 'treeAdd'" class="dropdown right attached">
                                 <button v-for="k in ['building', 'department', 'floor', 'room']" :key="k" @click="closeMenus(); openAddForm(null, k)">{{ kindLabel(k) }}</button>
                             </div>
@@ -420,7 +440,7 @@
                     <!-- «Добавить» — и справа от шапки таблицы (то же, что на панели) -->
                     <div v-if="canEdit" class="side-add">
                         <span class="dropdown-wrap" ref="treeAddSideWrap">
-                            <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'treeAddSide', active: treeForm && treeForm.top }" @click="toggleMenu('treeAddSide')" title="Добавить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="caret">▼</span></button>
+                            <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'treeAddSide', active: treeForm && treeForm.top }" @click="toggleMenu('treeAddSide')" title="Добавить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button>
                             <div v-if="openMenu === 'treeAddSide'" class="dropdown attached">
                                 <button v-for="k in ['building', 'department', 'floor', 'room']" :key="k" @click="closeMenus(); openAddForm(null, k)">{{ kindLabel(k) }}</button>
                             </div>
@@ -474,7 +494,8 @@
                                     <span class="st-val"><span :class="{ boxed: !!st.bg_color }" :style="avStatusStyle(st)">{{ st.label }}</span></span>
                                     <span class="st-n" :title="'Антивирусов в таком состоянии: ' + (avStatusCounts[st.kind] || 0)">{{ avStatusCounts[st.kind] || 0 }}</span>
                                     <style-controls :value="st" :disabled="!canEdit" @change="updateAvSettings(Object.assign({ kind: st.kind }, $event))"></style-controls>
-                                    <span class="st-act">
+                                    <span class="st-act av-act">
+                                        <span v-if="canEdit && hasStyle(st)" class="st-reset" title="Сбросить оформление" @click="updateAvSettings({ kind: st.kind, color: '', bg_color: '', bold: false, italic: false })">↺</span>
                                         <span class="st-eye" :class="{ off: !st.show, disabled: !canEdit }" :title="st.show ? 'Скрыть в таблице' : 'Показывать в таблице'"
                                             @click="canEdit && updateAvSettings({ kind: st.kind, show: !st.show })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><template v-if="st.show"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></template><template v-else><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></template></svg></span>
                                     </span>
@@ -487,8 +508,9 @@
                                         <span v-else class="st-val" :class="{ 'av-can-rename': canEdit }" @dblclick="startAvRename(v)"
                                             :title="(v.title ? v.title + '\nВ источнике: ' + v.name : v.name) + (canEdit ? '\nДвойной клик — своё название' : '')"><span v-if="v.title" class="av-own">{{ v.title }}</span><template v-else>{{ v.name }}</template></span>
                                         <span class="st-n" :title="'ПК с этим антивирусом: ' + v.count">{{ v.count }}</span>
-                                        <span class="st-act av-act">
+                                        <span class="st-act av-act av-name-act">
                                             <span v-if="canEdit" class="st-ren" title="Своё название" @click="startAvRename(v)">✎</span>
+                                            <span v-if="canEdit && v.title" class="st-reset" title="Вернуть название источника" @click="updateAvSettings({ rename: { source: v.name, name: '' } })">↺</span>
                                             <span class="st-eye" :class="{ off: v.hidden, disabled: !canEdit }" :title="v.hidden ? 'Показывать в таблице' : 'Скрыть в таблице'"
                                                 @click="canEdit && toggleAvHidden(v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><template v-if="!v.hidden"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></template><template v-else><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></template></svg></span>
                                         </span>
@@ -576,7 +598,8 @@
                                 <td>
                                     <style-controls :value="m" :disabled="!canEdit" @change="updateScanMark(m.kind, $event)"></style-controls>
                                     <span class="sc" :class="{ disabled: !canEdit }">
-                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка блочка ' + m.frame : 'Рамка блочка — в тон фона'">
+                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка блочка ' + m.frame + '\nCtrl + клик — убрать' : 'Рамка блочка — в тон фона'"
+                                            @click.capture="($event.ctrlKey || $event.metaKey) && ($event.preventDefault(), canEdit && m.frame && updateScanMark(m.kind, { frame: '' }))">
                                             <span class="sc-swatch sc-frame" :style="{ borderColor: m.frame || null }"></span>
                                             <input type="color" :value="m.frame || '#9db4cc'" :disabled="!canEdit" @change="updateScanMark(m.kind, { frame: $event.target.value })">
                                         </label>
@@ -607,7 +630,7 @@
                     </button>
                     <span v-if="historySelected.length > 0" class="dropdown-wrap" ref="historySelWrap">
                         <button class="btn" :class="{ 'menu-open': openMenu === 'historySel' }" @click="toggleMenu('historySel')" title="Действия с выбранными">
-                            Выбрано: {{ historySelected.length }}<span class="caret">▼</span>
+                            Выбрано: {{ historySelected.length }}
                         </button>
                         <div v-if="openMenu === 'historySel'" class="dropdown attached">
                             <template v-if="canEdit">
@@ -627,7 +650,7 @@
                 </span>
                 <div class="tb-right">
                     <span class="dropdown-wrap" ref="historyFilterWrap">
-                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'historyFilter', active: historyFiltered }" @click="toggleMenu('historyFilter')" title="Фильтр: кто и что менял"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span class="caret">▼</span></button>
+                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'historyFilter', active: historyFiltered }" @click="toggleMenu('historyFilter')" title="Фильтр: кто и что менял"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></button>
                         <div v-if="openMenu === 'historyFilter'" class="dropdown right attached h-filter-menu">
                             <div class="dd-title">Пользователь</div>
                             <div class="dd-scroll">
@@ -825,7 +848,7 @@
                     <!-- Выделенные строки «Проверки» — действия над ними, как в Таблице -->
                     <span v-if="scanTab === 'check' && check.selected.length" class="dropdown-wrap" ref="checkSelWrap">
                         <button class="btn" :class="{ 'menu-open': openMenu === 'checkSel' }" @click="toggleMenu('checkSel')" title="Действия с выбранными">
-                            Выбрано: {{ check.selected.length }}<span class="caret">▼</span>
+                            Выбрано: {{ check.selected.length }}
                         </button>
                         <div v-if="openMenu === 'checkSel'" class="dropdown attached">
                             <template v-if="canEdit">
@@ -931,7 +954,7 @@
                                 </tr>
                                 <tr v-if="s.fresh_days !== null">
                                     <td class="sf-label">Актуальны</td>
-                                    <td><label class="sf-check" title="Записи старше не берутся">не старше <input class="input sf-days" type="number" min="1" max="60" v-model.number="scanForms[s.kind].fresh_days"> дн.</label></td>
+                                    <td><label class="sf-check" :title="s.kind === 'jabber' ? 'Кто не подключался дольше — выделяется в VACUUM' : 'Записи старше не берутся'">не старше <input class="input sf-days" type="number" min="1" :max="s.kind === 'jabber' ? 365 : 60" v-model.number="scanForms[s.kind].fresh_days"> дн.</label></td>
                                 </tr>
                             </table>
                             <!-- Под формой — только ошибки; итог проверки — в подсказке у блочка в шапке,
@@ -1246,6 +1269,15 @@
             <div v-if="openMenu === 'colFilter' && colFilterMenu" ref="colFilterPanel" class="cf-menu" :style="colFilterMenuStyle">
                 <input ref="colFilterInput" class="cf-search" v-model="colFilterMenu.query" placeholder="Найти значение" spellcheck="false" autocomplete="off"
                     :title="colFilterMenuTitle + '. Enter — показать только найденные'" @keydown.enter.prevent="onColFilterEnter">
+                <!-- «Антивирусы»: сверху — состояния -->
+                <div v-if="colFilterStates.length" class="cf-states">
+                    <label v-for="st in colFilterStates" :key="'cfs-' + st.kind" class="cf-item">
+                        <input type="checkbox" :checked="st.checked" @change="toggleAvState(st.kind)">
+                        <span class="cf-value" :class="{ 'val-chip': !!(st.style || {}).backgroundColor }" :style="st.style">{{ st.label }}</span>
+                        <span class="cf-only" title="Только это состояние" @click.prevent.stop="setAvStates([st.kind])">только</span>
+                        <span class="cf-count" title="ПК с антивирусом в этом состоянии">{{ st.count }}</span>
+                    </label>
+                </div>
                 <label class="cf-item cf-all" v-if="colFilterShown.length">
                     <input type="checkbox" :checked="colFilterAllState === true" :indeterminate.prop="colFilterAllState === null" @change="toggleColFilterAll">
                     <span class="cf-value">{{ colFilterMenu.query.trim() ? "Все найденные" : "Все" }}</span>
@@ -1376,7 +1408,7 @@
                     <div class="card-section">VACUUM</div>
                     <div class="card-sec-body">
                         <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">—</div>
-                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" :class="{ 'cell-gone': vacuumMissingSet.has(login.toLowerCase()) }" :title="vacuumMissingSet.has(login.toLowerCase()) ? 'Нет в Jabber' : 'Скопировать'" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
+                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" :class="vacuumLoginMark(login).cls" :title="vacuumLoginMark(login).title" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                     </div>
                     <div class="card-section toggle-sec" :class="{ open: cardHistoryOpen }" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
                         <span>История</span><span v-if="!cardLoading" class="sec-count" title="Изменений">{{ cardHistoryShown.length }}</span>
