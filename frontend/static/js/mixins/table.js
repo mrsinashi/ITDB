@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
 import { apiFetch, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, frameColorFor, hasDuplicateValue, isOverdue, OVERDUE_STYLE, refreshDuplicates, styleKey } from "../columns.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, frameColorFor, isDuplicateLine, isOverdue, OVERDUE_STYLE, refreshDuplicates, styleKey } from "../columns.js";
 import { TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 
 export default {
@@ -85,10 +85,9 @@ export default {
             return new Set(this.selectedRows);
         },
 
-        // Заливка ячеек (фон из Справочников или красный дубля) — для линий сетки:
+        // Заливка ячеек (фон из Справочников) — для линий сетки:
         // Map id строки → { поле: цвет }. Строки без заливки в карту не входят.
         cellFills() {
-            void this.dupVersion; // дубли считаются вне Vue — зависимость вручную
             const map = new Map();
             const cols = this.columns;
             this.displayRows.forEach((row) => {
@@ -355,9 +354,6 @@ export default {
             if (col.field === this.lastStickyField) {
                 cls["sticky-edge"] = true;
             }
-            if (!row.archived && col.dup && hasDuplicateValue(row[col.field], col.field)) {
-                cls["dup-red"] = true;
-            }
             if (this.isEditing(row, col)) {
                 cls["editing"] = true;
             }
@@ -390,12 +386,61 @@ export default {
             return Object.keys(style).length ? style : null;
         },
 
-        // Цвет заливки ячейки: дубль — красный, иначе фон значения из
-        // Справочников поверх фона столбца; null — без заливки
-        cellFillOf(row, col) {
-            if (!row.archived && col.dup && hasDuplicateValue(row[col.field], col.field)) {
-                return "var(--dup-bg)";
+        // Значения ячейки по строкам, если какое-то надо выделить (иначе null —
+        // ячейка рисуется одним текстом): повтор — красным блочком, как значение с
+        // фоном в Справочниках (с 26ж — только само значение, а не вся ячейка);
+        // логин VACUUM, которого нет в Jabber, — красным текстом; номер записи
+        // GLPI / GSIT — ссылкой на неё
+        cellParts(row, col) {
+            void this.dupVersion; // дубли считаются вне Vue — зависимость вручную
+            const value = row[col.field];
+            if (value === null || value === undefined || value === "" || this.isPending(row, col)) {
+                return null;
             }
+            const link = this.diffs.links[col.field];
+            const dups = !row.archived && col.dup;
+            const missing = col.field === "vacuum" && !row.archived && this.vacuumMissingSet.size ? this.vacuumMissingSet : null;
+            if (!link && !dups && !missing) {
+                return null;
+            }
+            let special = false;
+            const lines = col.multiline ? String(value).split("\n") : [String(value)];
+            const parts = lines.map((line) => {
+                const dup = dups && isDuplicateLine(line, col.field);
+                const gone = !!missing && missing.has(line.trim().toLowerCase());
+                const href = this.idLink(col.field, line);
+                if (dup || gone || href) {
+                    special = true;
+                }
+                const titles = [dup ? "Повтор" : "", gone ? "Нет в Jabber" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                return { text: line, href: href, cls: { "dup-chip": dup, "cell-gone": gone }, title: titles.join(" · ") || null };
+            });
+            return special ? parts : null;
+        },
+
+        // Ссылка на запись ПК в GLPI / GSIT по номеру из столбца
+        idLink(field, value) {
+            const base = this.diffs.links[field];
+            const id = String(value === null || value === undefined ? "" : value).trim();
+            return base && /^\d+$/.test(id) ? base + id : null;
+        },
+
+        idLinkTitle(field) {
+            return "Открыть в " + (field === "gsit_id" ? "GSIT" : "GLPI");
+        },
+
+        // Клик по ссылке открывает запись; с Alt / Ctrl / Shift — как обычный клик по ячейке
+        onIdLinkClick(event) {
+            if (event.altKey || event.ctrlKey || event.shiftKey || event.metaKey) {
+                event.preventDefault();
+            } else {
+                event.stopPropagation();
+            }
+        },
+
+        // Цвет заливки ячейки: фон значения из Справочников поверх фона
+        // столбца; null — без заливки (повтор заливает только значение — cellParts)
+        cellFillOf(row, col) {
             let fill = null;
             const colStyle = this.columnStyles[col.field];
             if (colStyle && colStyle.bg_color) {
@@ -828,6 +873,7 @@ export default {
             }
         },
 
+        // Ответ — сохранилось ли (true / false)
         async saveCellValue(row, col, value) {
             const pendingKey = row.id + ":" + col.field;
             this.pendingCells = Object.assign({}, this.pendingCells, { [pendingKey]: value });
@@ -848,12 +894,12 @@ export default {
                     clearPending();
                     this.toastError(await this.errorText(response));
                     await this.loadTable();
-                    return;
+                    return false;
                 }
                 if (!response.ok) {
                     clearPending();
                     this.toastError("Не удалось сохранить: " + (await this.errorText(response)));
-                    return;
+                    return false;
                 }
                 const data = await response.json();
                 const updated = data.updated || {};
@@ -869,7 +915,7 @@ export default {
                         this.toast("№ места занят — сдвинуты следующие: " + data.shifted.length, "success");
                     }
                     this.reloadCardHistory(row.id);
-                    return;
+                    return true;
                 }
                 if (index !== -1) {
                     Object.assign(this.rows[index], updated);
@@ -879,9 +925,11 @@ export default {
                     this.flashCell(row.id, col.field);
                 }
                 this.reloadCardHistory(row.id);
+                return true;
             } catch (e) {
                 clearPending();
                 this.toastError("Не удалось сохранить: " + e);
+                return false;
             }
         },
 
@@ -1176,6 +1224,22 @@ export default {
                 return null;
             }
             const text = String(value);
+            const tdBox = td.getBoundingClientRect();
+            // Значения отдельными строками (повторы, ссылки) — та, что под курсором
+            const parts = Array.from(td.querySelectorAll(".cell-line"));
+            if (parts.length) {
+                let near = null;
+                let nearDist = Infinity;
+                parts.forEach(function (el) {
+                    const rect = el.getBoundingClientRect();
+                    const dist = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+                    if (el.textContent.trim() && dist < nearDist) {
+                        nearDist = dist;
+                        near = { text: el.textContent.trim(), rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, cellRight: tdBox.right } };
+                    }
+                });
+                return near;
+            }
             const span = td.querySelector("span");
             const node = span ? span.firstChild : null;
             const tdRect = td.getBoundingClientRect();

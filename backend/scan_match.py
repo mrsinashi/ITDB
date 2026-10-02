@@ -26,7 +26,14 @@ from scan_normalize import clean_serial, norm_mac
 # Признак на стольких записях и больше — общий, не признак
 SHARED_LIMIT = 3
 
-KEY_LABELS = {"id": "GLPI ID", "mac": "MAC", "serial": "серийному"}
+KEY_LABELS = {"id": "ID", "mac": "MAC", "serial": "серийному"}
+# Номер записи источника в таблице: GLPI — столбец GLPI, GSIT — столбец GSIT (этап 26ж)
+ID_FIELDS = {"glpi": "glpi_id", "gsit": "gsit_id"}
+ID_TITLES = {"glpi": "GLPI ID", "gsit": "GSIT ID"}
+
+
+def key_labels(keys, kind):
+    return ", ".join(ID_TITLES.get(kind, "ID") if k == "id" else KEY_LABELS[k] for k in keys)
 
 
 def key_values(keys):
@@ -113,16 +120,17 @@ def short_host(name):
 
 class Index:
     """ПК ITDB по признакам. computers — [{"id", "hostname", "mac", "serial",
-    "glpi_id", "archived"}]."""
+    "glpi_id", "gsit_id", "archived"}]."""
 
     def __init__(self, computers):
         self.computers = {c["id"]: c for c in computers}
         self.by_mac = defaultdict(set)
         self.by_serial = defaultdict(set)
-        self.by_glpi = defaultdict(set)
+        self.by_id = {kind: defaultdict(set) for kind in ID_FIELDS}
         self.by_name = defaultdict(set)
         self.macs = {}
         self.serials = {}
+        self.record_ids = set()     # номера записей источника (строками) — задаёт match_all
 
         for c in computers:
             macs = {norm_mac(line) for line in (c.get("mac") or "").splitlines()}
@@ -140,10 +148,11 @@ class Index:
             if serial:
                 self.by_serial[serial.upper()].add(c["id"])
 
-            glpi = str(c.get("glpi_id") or "").strip()
+            for kind, field in ID_FIELDS.items():
+                number = str(c.get(field) or "").strip()
 
-            if glpi:
-                self.by_glpi[glpi].add(c["id"])
+                if number:
+                    self.by_id[kind][number].add(c["id"])
 
             if short_host(c.get("hostname")):
                 self.by_name[short_host(c.get("hostname"))].add(c["id"])
@@ -174,7 +183,7 @@ class Index:
 
 
 def contradictions(index, computer_id, record, kind, hits):
-    """Что у ПК ITDB другое, хотя у обоих есть: MAC, серийный, GLPI ID."""
+    """Что у ПК ITDB другое, хотя у обоих есть: MAC, серийный, ID записи."""
     result = []
     keys = record["keys"]
     macs = set(keys.get("macs") or [])
@@ -186,10 +195,13 @@ def contradictions(index, computer_id, record, kind, hits):
     if serial and index.serials.get(computer_id) and "serial" not in hits:
         result.append("серийный")
 
-    glpi = str(index.computers[computer_id].get("glpi_id") or "").strip()
+    number = str(index.computers[computer_id].get(ID_FIELDS.get(kind, "")) or "").strip()
 
-    if kind == "glpi" and glpi and glpi != str(record["source_id"]) and "id" not in hits:
-        result.append("GLPI ID")
+    # Номер в таблице указывает на другую запись источника. Если такой записи уже нет
+    # (агент поставили заново — у ПК новая запись), это не противоречие: номер устарел,
+    # сканер предложит новый
+    if number and number != str(record["source_id"]) and "id" not in hits and number in index.record_ids:
+        result.append(ID_TITLES[kind])
 
     return result
 
@@ -205,9 +217,8 @@ def match_one(index, record, kind, links):
     keys = record["keys"]
     hits = defaultdict(set)
 
-    if kind == "glpi":
-        for computer_id in index.by_glpi.get(str(record["source_id"]), ()):
-            hits[computer_id].add("id")
+    for computer_id in index.by_id.get(kind, {}).get(str(record["source_id"]), ()):
+        hits[computer_id].add("id")
 
     for mac in keys.get("macs") or []:
         for computer_id in index.by_mac.get(mac, ()):
@@ -222,7 +233,7 @@ def match_one(index, record, kind, links):
 
     if len(hits) > 1:
         parts = [
-            f"{index.host(cid)} (по {', '.join(KEY_LABELS[k] for k in sorted(by))})"
+            f"{index.host(cid)} (по {key_labels(sorted(by), kind)})"
             for cid, by in sorted(hits.items(), key=lambda item: index.host(item[0]))
         ]
         return {
@@ -240,14 +251,14 @@ def match_one(index, record, kind, links):
         if against:
             return {
                 "state": "conflict", "computer_id": None, "candidates": [computer_id], "by": by_list,
-                "note": f"Совпадает с {index.host(computer_id)} по {', '.join(KEY_LABELS[k] for k in by_list)}, "
+                "note": f"Совпадает с {index.host(computer_id)} по {key_labels(by_list, kind)}, "
                         f"но {', '.join(against)} у ПК другой",
             }
 
         if by == {"id"} and name != short_host(index.computers[computer_id].get("hostname")):
             return {
                 "state": "name", "computer_id": computer_id, "candidates": [computer_id], "by": by_list,
-                "note": "Совпадает только GLPI ID, имя другое",
+                "note": f"Совпадает только {ID_TITLES[kind]}, имя другое",
             }
 
         return {"state": "key", "computer_id": computer_id, "candidates": [], "by": by_list, "note": None}
@@ -292,6 +303,7 @@ def match_all(records, computers, links, kind):
     """{source_id: итог}. records — [{"source_id", "name", "keys", "dup_of"}]
     (уже без общих признаков), links — [{"source_id", "computer_id", "action"}]."""
     index = Index(computers)
+    index.record_ids = {str(record["source_id"]) for record in records if not record.get("dup_of")}
     links_by = defaultdict(list)
 
     for link in links:

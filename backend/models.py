@@ -54,6 +54,7 @@ class Computer(Base):
 
     type = Column(Text, nullable=True)
     model = Column(Text, nullable=True)
+    motherboard = Column(Text, nullable=True)
     os = Column(Text, nullable=True)
 
     cpu = Column(Text, nullable=True)
@@ -63,6 +64,7 @@ class Computer(Base):
 
     vnc = Column(Text, nullable=True)
     glpi_id = Column(Text, nullable=True)
+    gsit_id = Column(Text, nullable=True)
 
     extra = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     note = Column(Text, nullable=True)
@@ -324,7 +326,9 @@ class ScanLink(Base):
 
 class ScanAlias(Base):
     """Соответствие названий (этап 25б): значение источника source в поле field —
-    то же, что table_value в таблице (kind same), или точно не то же (differ).
+    то же, что table_value в таблице (kind same), или точно не то же (differ),
+    или «в таблице своё» (keep). kind board (field model): это название — не
+    модель ПК, а материнская плата: идёт в столбец «Мат. плата» как table_value.
     Ключи — без регистра и лишних пробелов (scan_values.key_of)."""
     __tablename__ = "scan_aliases"
     __table_args__ = (
@@ -337,7 +341,7 @@ class ScanAlias(Base):
     source_key = Column(Text, nullable=False)
     table_value = Column(Text, nullable=False)
     table_key = Column(Text, nullable=False)
-    kind = Column(Text, nullable=False, server_default="same")  # same / differ / keep
+    kind = Column(Text, nullable=False, server_default="same")  # same / differ / keep / board
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
@@ -384,7 +388,10 @@ class ScanJabberUser(Base):
     """Пользователь Jabber (VACUUM) из веб-админки ejabberd (этап 26д): группы
     общего ростера, в сети ли при последнем сборе и с каких адресов (ресурсы —
     клиент и IP). Строка не удаляется при пересборе: last_ip / last_seen_at —
-    последний адрес и когда пользователь был в сети (по сборам ITDB)."""
+    последний адрес и когда пользователь был в сети (по сборам ITDB).
+    registered — есть ли в списке пользователей ejabberd (None — список не
+    получали; False — удалён или его там нет), last_login_at — «Последнее
+    подключение» из этого списка."""
     __tablename__ = "scan_jabber_users"
     __table_args__ = (
         UniqueConstraint("login", name="uq_scan_jabber_users_login"),
@@ -398,6 +405,8 @@ class ScanJabberUser(Base):
     last_ip = Column(Text, nullable=True)
     last_client = Column(Text, nullable=True)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    registered = Column(Boolean, nullable=True)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
     run_id = Column(Integer, nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

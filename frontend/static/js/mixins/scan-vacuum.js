@@ -1,27 +1,36 @@
-// «Сканирование» → вкладка «Vacuum» (значок лампочки, этап 26д): пользователи
-// Jabber (VACUUM) из веб-админки ejabberd — группы, кто в сети, с какого IP и за
-// каким ПК он сейчас (ПК таблицы с этим IP; если в таблице такого нет — как его
-// называет GLPI / GSIT). У тех, кто не в сети, — последний известный IP.
+// Страница «Vacuum» (этап 26д; с 26ж — вкладка верхнего меню): пользователи Jabber
+// (VACUUM) из веб-админки ejabberd — группы, когда подключались, с какого IP и
+// какой ПК на этом IP (ПК таблицы; если в таблице такого нет — как его называет
+// GLPI / GSIT). ПК ищется только по IP. Красным — пользователя уже нет, а в группе
+// он остался; оранжевым — не входит ни в одну группу.
 //
-// Данные — /api/scan/jabber (собирает сервер: «Собрать» у Jabber на «Подключениях»,
-// «Собрать» на «Проверке» или кнопка обновления на панели этой вкладки).
+// Данные — /api/scan/jabber (собирает сервер: кнопка обновления на панели страницы,
+// «Собрать» у Jabber на «Подключениях» или «Собрать» на «Проверке»). Пока идёт
+// сбор — полоса «просмотрено из» над таблицей.
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
 
 export const VACUUM_FILTERS = [
-    { key: "all", label: "Все", title: "Все пользователи из групп Jabber и те, кого ITDB видел в сети" },
-    { key: "online", label: "В сети", title: "Подключены к Jabber сейчас (на момент последнего сбора)" },
-    { key: "offline", label: "Не в сети", title: "Не подключены: показан последний IP, с которого ITDB их видел" }
+    { key: "all", label: "Все" },
+    { key: "online", label: "В сети" },
+    { key: "offline", label: "Не в сети" },
+    { key: "gone", label: "Убрать из групп", title: "Пользователя нет, а в группе остался", optional: true },
+    { key: "nogroup", label: "Без группы", optional: true }
 ];
 
 function inVacuumFilter(u, filter) {
-    if (filter === "online") {
+    switch (filter) {
+    case "online":
         return u.online;
+    case "offline":
+        return !u.online && !u.gone;
+    case "gone":
+        return u.gone;
+    case "nogroup":
+        return u.no_group;
+    default:
+        return true;
     }
-    if (filter === "offline") {
-        return !u.online;
-    }
-    return true;
 }
 
 export default {
@@ -41,7 +50,7 @@ export default {
                     a.hosts.forEach(function (h) { hosts.push(h.hostname || ""); });
                 });
                 return Object.assign({}, u, {
-                    search: searchNorm([u.login, u.groups.join(" "), hosts.join(" "), u.addresses.map(function (a) { return a.ip || ""; }).join(" "), u.vacuum_pcs.join(" ")].join(" "))
+                    search: searchNorm([u.login, u.groups.join(" "), hosts.join(" "), u.addresses.map(function (a) { return a.ip || ""; }).join(" ")].join(" "))
                 });
             }).sort(function (a, b) {
                 return (b.online - a.online) || a.login.localeCompare(b.login, "ru", { numeric: true });
@@ -57,7 +66,7 @@ export default {
         },
 
         vacuumShown() {
-            const words = searchWords(this.scanMatchQuery);
+            const words = searchWords(this.vacuumQuery);
             return this.vacuumUsers.filter((u) => {
                 return inVacuumFilter(u, this.vacuum.filter) && (!words.length || matchesAllWords(u.search, words));
             });
@@ -72,15 +81,34 @@ export default {
             return "Пользователей: " + all + ", в сети: " + this.vacuumCounts.online;
         },
 
-        // Кнопка на панели: администратор — собрать заново из Jabber, редактор — обновить список
+        // Идёт сбор из Jabber: { percent, text } — полоса над таблицей
+        vacuumProgress() {
+            const run = this.scanRuns.jabber || (this.vacuum.data && this.vacuum.data.last_run);
+            if (!run || run.status !== "running") {
+                return null;
+            }
+            const p = (run.stats && run.stats.progress) || {};
+            if (!p.total) {
+                return { percent: 0, text: "Собираю…" };
+            }
+            return { percent: Math.round(p.done / p.total * 100), text: p.done + " из " + p.total };
+        },
+
         vacuumRefreshTitle() {
+            if (this.vacuumProgress) {
+                return "Собираю…";
+            }
             if (!this.isAdmin) {
-                return "Обновить список";
+                return "Обновить";
             }
             const block = this.scanCollectBlock("jabber");
             const info = this.scanRunInfo("jabber");
-            const last = info ? "\nПоследний сбор: " + info.time + "\n" + info.text : "";
-            return (block || "Обновить данные Vacuum: собрать из Jabber, кто в сети, с какого IP и в каких группах") + last;
+            return (block || "Собрать из Jabber") + (info ? "\nПоследний сбор: " + info.time : "");
+        },
+
+        // Логины VACUUM из таблицы, которых нет в Jabber (строчными) — в ячейках красным
+        vacuumMissingSet() {
+            return new Set(this.diffs.vacuumMissing || []);
         }
     },
 
@@ -94,13 +122,17 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 this.vacuum.data = await response.json();
-                // Запуск сбора, который идёт, — следить (редактору сервер его тоже отдаёт)
+                // Сбор уже идёт — следить (номер запуска редактору не отдаётся — просто перечитаем позже)
                 const run = this.vacuum.data.last_run;
-                if (run && run.status === "running" && this.isAdmin) {
-                    this.trackScanRun(run);
+                if (run && run.status === "running") {
+                    if (this.isAdmin) {
+                        this.trackScanRun(run);
+                    } else {
+                        setTimeout(() => this.view === "vacuum" && this.loadVacuum(), 3000);
+                    }
                 }
             } catch (e) {
-                this.vacuum.error = "Не удалось загрузить пользователей Jabber: " + (e.message || e);
+                this.vacuum.error = "Не удалось загрузить: " + (e.message || e);
             } finally {
                 this.vacuum.loading = false;
             }
@@ -129,37 +161,27 @@ export default {
                 return "Ничего не найдено.";
             }
             if (data && !data.configured) {
-                return "Jabber не настроен: укажи веб-админку на вкладке «Подключения».";
+                return "Jabber не настроен.";
             }
-            return "Пользователей пока нет: собери данные кнопкой обновления на панели.";
+            return "Пользователей пока нет.";
         },
 
-        // ПК на адресе: из таблицы — ссылкой на карточку, из GLPI / GSIT — курсивом
-        vacuumHostTitle(u, h) {
-            if (h.computer_id) {
-                return (h.place || "") + "\n" + (h.vacuum ? "Логин записан в VACUUM этого ПК" : "В VACUUM этого ПК логина нет") +
-                    "\nНажми — карточка ПК";
-            }
-            return "В таблице ПК с таким IP нет; так его называет " + h.source;
-        },
-
-        vacuumNoHostTitle(u) {
-            if (!u.addresses.length) {
-                return u.vacuum_pcs.length ? "ITDB ещё не видел этого пользователя в сети, IP не известен.\nПо таблице: логин записан в VACUUM этого ПК" : "IP не известен, и в VACUUM таблицы этого логина нет";
-            }
-            return "Ни в таблице, ни в GLPI / GSIT ПК с таким IP нет";
-        },
-
-        vacuumStatusTitle(u) {
+        // «в сети» / когда подключался / «никогда»; удалённый — «удалён»
+        vacuumStatusText(u) {
             if (u.online) {
-                return "В сети: " + u.addresses.map(function (a) { return (a.client || "клиент") + " — " + (a.ip || "IP не известен"); }).join("; ");
+                return "в сети";
             }
-            return u.last_seen_at ? "Последний раз ITDB видел в сети: " + this.formatTime(u.last_seen_at) : "ITDB ещё не видел этого пользователя в сети";
+            if (u.gone) {
+                return "удалён";
+            }
+            const last = u.last_login_at || u.last_seen_at;
+            // «никогда» — только если список пользователей получен (иначе просто не знаем)
+            return last ? this.formatTime(last) : (this.vacuum.data.listed ? "никогда" : "—");
         },
 
         vacuumIpTitle(u, a) {
-            const client = a.client ? "Клиент: " + a.client : "";
-            return u.online ? client : ("Последний IP" + (u.last_seen_at ? " (" + this.formatTime(u.last_seen_at) + ")" : "") + (client ? "\n" + client : ""));
+            const parts = [a.client || "", !u.online && u.last_seen_at ? this.formatTime(u.last_seen_at) : ""].filter(Boolean);
+            return parts.join(" · ") || null;
         }
     }
 };

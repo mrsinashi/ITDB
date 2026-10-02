@@ -2,6 +2,8 @@
 сбор пользователей (этап 26д).
 
 Как в скрипте пользователя check_users.sh: страницы
+  {адрес}/admin/server/{домен}/users/1-1000/      — все пользователи и «Последнее
+                                                    подключение» (этап 26ж)
   {адрес}/admin/server/{домен}/online-users/      — кто в сети (ссылки …/user/<имя>/)
   {адрес}/admin/server/{домен}/user/<имя>/        — подключённые ресурсы: клиент и IP
   {адрес}/admin/server/{домен}/shared-roster/     — группы общего ростера
@@ -13,6 +15,7 @@ import html as html_lib
 import ipaddress
 import re
 import urllib.parse
+from datetime import datetime
 
 from scan_http import SourceError, basic_auth, check_url, request
 
@@ -24,6 +27,18 @@ ATTR = re.compile(r"""([a-zA-Z_:-]+)\s*=\s*(?:'([^']*)'|"([^"]*)")""")
 TEXTAREA = re.compile(r"<textarea\b([^>]*)>(.*?)</textarea>", re.I | re.S)
 # Ресурс пользователя: «<li>Vacuum-IM (plain://192.168.99.231:10394#ejabberd@localhost)</li>»
 RESOURCE = re.compile(r"<li>\s*([^<]*?)\s*\(\s*[a-z0-9_]+://(.+?):(\d+)(?:#[^)]*)?\)\s*</li>", re.I)
+
+
+# Строка списка пользователей: ссылка на пользователя, …, «Последнее подключение»
+USER_ROW = re.compile(r"<tr>\s*<td>\s*<a\s+href=['\"][^'\"]*/user/([^'\"/]+)/['\"]>.*?</td>(.*?)</tr>", re.I | re.S)
+CELL = re.compile(r"<td[^>]*>(.*?)</td>", re.I | re.S)
+TAG = re.compile(r"<[^>]+>")
+LAST_DATE = re.compile(r"(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d):(\d\d)")
+ONLINE_WORDS = ("подключён", "подключен", "online")
+# Список пользователей: сколько спросить сразу и на сколько спрашивать больше
+USERS_FIRST = 1000
+USERS_STEP = 100
+USERS_MAX = 20000
 
 
 def split_admin_url(url, domain=None):
@@ -165,16 +180,95 @@ def user_resources(html):
     return result
 
 
-def collect(params, fresh_days=None, progress=None):
-    """Сбор: кто в сети и с каких адресов, группы общего ростера и их участники.
+def last_login(text):
+    """«Последнее подключение»: (в сети сейчас, когда) — «Подключён» → (True, None),
+    «2026-09-18 11:18:44» → (False, время сервера), «Никогда» → (False, None)."""
+    text = html_lib.unescape(TAG.sub("", text or "")).strip()
 
-    Ответ: {"items": [{"login", "groups", "online", "resources"}], "stats": {...},
-    "warnings": [...], "groups_ok": группы получены, "version": …}; progress(done, total) — по ходу."""
+    if text.lower() in ONLINE_WORDS:
+        return True, None
+
+    found = LAST_DATE.search(text)
+
+    if not found:
+        return False, None
+
+    try:
+        # Время сервера Jabber; считаем, что пояс тот же, что у ITDB
+        return False, datetime(*(int(x) for x in found.groups())).astimezone()
+    except ValueError:
+        return False, None
+
+
+def users_page(html):
+    """Список пользователей: {логин: (в сети, последнее подключение)}."""
+    result = {}
+
+    for name, rest in USER_ROW.findall(html):
+        cells = CELL.findall(rest)
+        result[urllib.parse.unquote(name)] = last_login(cells[-1] if cells else "")
+
+    return result
+
+
+def all_users(params):
+    """Все пользователи сервера. Страница users/1-N/ отдаёт первых N; спрашиваем
+    1000, потом на 100 больше — и так, пока пользователей прибавляется."""
+    size = USERS_FIRST
+    users = users_page(admin_page(params, f"users/1-{size}/"))
+
+    while size < USERS_MAX:
+        more = users_page(admin_page(params, f"users/1-{size + USERS_STEP}/"))
+
+        if len(more) <= len(users):
+            break
+
+        users, size = more, size + USERS_STEP
+
+    return users
+
+
+def collect(params, fresh_days=None, progress=None):
+    """Сбор: все пользователи и когда подключались, кто в сети и с каких адресов,
+    группы общего ростера и их участники.
+
+    Ответ: {"items": [{"login", "groups", "online", "resources", "registered",
+    "last_login"}], "stats": {...}, "warnings": [...], "groups_ok": группы получены,
+    "users_ok": список пользователей получен, "version": …}; registered — None,
+    если списка нет. progress(просмотрено пользователей, всего) — по ходу."""
     _, domain = split_admin_url(params["url"], params.get("domain"))
     warnings = []
     online_html = admin_page(params, "online-users/")
-    online = online_users(online_html)
+    online = {login.lower() for login in online_users(online_html)}
     version = VERSION.search(online_html)
+    users = {}
+
+    def user(login):
+        return users.setdefault(login.lower(), {
+            "login": login, "groups": [], "online": False, "resources": [], "registered": None, "last_login": None,
+        })
+
+    try:
+        listed = all_users(params)
+        users_ok = bool(listed)
+
+        if not listed:
+            warnings.append("Список пользователей пуст.")
+    except SourceError as err:
+        warnings.append(f"Список пользователей не получен: {err}")
+        listed = {}
+        users_ok = False
+
+    for login, (is_online, last) in listed.items():
+        item = user(login)
+        item["registered"] = True
+        item["last_login"] = last
+
+        if is_online:
+            online.add(login.lower())
+
+    for login in online_users(online_html):
+        user(login)
 
     try:
         groups_html = admin_page(params, "shared-roster/")
@@ -184,16 +278,6 @@ def collect(params, fresh_days=None, progress=None):
         warnings.append(f"Группы не получены: {err}")
         groups = []
         groups_ok = False
-
-    total = len(groups) + len(online)
-    done = 0
-    users = {}
-
-    def user(login):
-        return users.setdefault(login, {"login": login, "groups": [], "online": False, "resources": []})
-
-    if progress:
-        progress(0, total)
 
     for group in groups:
         title, members = group_page(admin_page(params, "shared-roster/" + urllib.parse.quote(group, safe="") + "/"))
@@ -205,29 +289,36 @@ def collect(params, fresh_days=None, progress=None):
             if login and title not in user(login)["groups"]:
                 user(login)["groups"].append(title)
 
-        done += 1
-
-        if progress and done % 10 == 0:
-            progress(done, total)
-
-    for login in online:
-        item = user(login)
-        item["online"] = True
-        item["resources"] = user_resources(admin_page(params, "user/" + urllib.parse.quote(login, safe="") + "/"))
-        done += 1
-
-        if progress and (done % 10 == 0 or done == total):
-            progress(done, total)
-
     items = sorted(users.values(), key=lambda u: u["login"].lower())
+    total = len(items)
+
+    if progress:
+        progress(0, total)
+
+    for done, item in enumerate(items, 1):
+        if users_ok and item["registered"] is None:
+            item["registered"] = False      # в группе есть, а пользователя нет
+
+        if item["login"].lower() in online:
+            item["online"] = True
+            item["resources"] = user_resources(admin_page(params, "user/" + urllib.parse.quote(item["login"], safe="") + "/"))
+
+            if progress:
+                progress(done, total)
+
+    if progress:
+        progress(total, total)
+
     stats = {
-        "total": len(items),
+        "total": sum(1 for u in items if u["registered"]) if users_ok else total,
         "online": sum(1 for u in items if u["online"]),
         "groups": len(groups),
         "no_ip": sum(1 for u in items if u["online"] and not any(r["ip"] for r in u["resources"])),
+        "gone": sum(1 for u in items if u["registered"] is False and u["groups"]),
+        "no_group": sum(1 for u in items if u["registered"] and not u["groups"]) if groups_ok else 0,
     }
     return {
-        "items": items, "stats": stats, "warnings": warnings, "groups_ok": groups_ok,
+        "items": items, "stats": stats, "warnings": warnings, "groups_ok": groups_ok, "users_ok": users_ok,
         "version": version.group(1) if version else None,
     }
 

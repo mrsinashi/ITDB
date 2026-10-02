@@ -27,6 +27,8 @@ class Ejabberd:
     groups = {}      # группа → [JID]
     online = {}      # логин → [(клиент, адрес)]
     roster_fails = False
+    users = None     # список пользователей (этап 26ж): логин → «Последнее подключение»; None — страницы нет
+    asked = []       # какие страницы users/… спрашивали
 
 
 def page(body):
@@ -52,6 +54,21 @@ class FakeEjabberd(BaseHTTPRequestHandler):
             return self.send(401, "no")
         path = urllib.parse.unquote(self.path.split("?")[0])
         rest = path[len(f"/admin/server/{DOMAIN}/"):]
+
+        if rest.startswith("users/"):
+            Ejabberd.asked.append(rest)
+
+            if Ejabberd.users is None:
+                return self.send(404, "Not Found")
+
+            first, last = (int(x) for x in rest[len("users/"):].strip("/").split("-"))
+            rows = "".join(
+                f"<tr><td><a href='../../user/{urllib.parse.quote(u)}/'>{u}@{DOMAIN}</a></td>"
+                f"<td><a href='../../user/{u}/queue/'>0</a></td><td>{when}</td></tr>"
+                for u, when in sorted(Ejabberd.users.items())[first - 1:last])
+            return self.send(200, page(
+                "<h1>Пользователи</h1><table><thead><tr><td>Пользователь</td><td>Офлайновые сообщения</td>"
+                "<td>Последнее подключение</td></tr></thead><tbody>" + rows + "</tbody></table>"))
 
         if rest == "online-users/":
             return self.send(200, page("".join(
@@ -99,6 +116,8 @@ def reset_jabber():
     Ejabberd.groups = {}
     Ejabberd.online = {}
     Ejabberd.roster_fails = False
+    Ejabberd.users = None
+    Ejabberd.asked = []
 
 
 def setup_jabber(admin, url):
@@ -156,11 +175,13 @@ def test_collect_and_tab(admin, editor, reader, room, jabber_url):
     assert users["ivanov"]["groups"] == ["Терапия"] and users["ivanov"]["online"]
     assert users["petrova"]["groups"] == ["Терапия", "ИТ"]
     host = users["ivanov"]["addresses"][0]["hosts"][0]
-    assert (host["hostname"], host["vacuum"], users["ivanov"]["addresses"][0]["client"]) == ("ter-201-1", True, "Vacuum-IM")
+    assert (host["hostname"], users["ivanov"]["addresses"][0]["client"]) == ("ter-201-1", "Vacuum-IM")
     addresses = users["petrova"]["addresses"]
     assert [a["ip"] for a in addresses] == ["10.0.2.12", "10.9.9.9"]
-    assert addresses[0]["hosts"][0]["vacuum"] is False and addresses[1]["hosts"] == []
-    assert users["ivanov"]["vacuum_pcs"] == ["ter-201-1"]
+    assert addresses[0]["hosts"][0]["hostname"] == "ter-201-2" and addresses[1]["hosts"] == []
+    # Списка пользователей у этой веб-админки нет — пометок нет, в итоге — предупреждение
+    assert "Список пользователей не получен" in run["message"]
+    assert not users["ivanov"]["gone"] and not users["ivanov"]["no_group"]
 
     # Ушёл из сети — остаются последний IP и время; пропал из групп — без групп
     seen = users["ivanov"]["last_seen_at"]

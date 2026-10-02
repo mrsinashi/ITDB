@@ -34,7 +34,7 @@ from scan_values import NAME_FIELDS, clean_text, key_of
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
 # Поля записи, которые сравниваются с ПК (как в таблице ITDB)
-VALUE_FIELDS = ["hostname", "ip", "mac", "serial", "model", "os", "cpu", "ram", "drive", "gpu", "vnc"]
+VALUE_FIELDS = ["hostname", "ip", "mac", "serial", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "vnc"]
 RUNS_LIMIT = 50
 
 
@@ -148,6 +148,7 @@ def web_url_of(source):
 def computer_brief(computer, locations):
     values = {field: getattr(computer, field) for field in VALUE_FIELDS}
     values["glpi_id"] = computer.glpi_id
+    values["gsit_id"] = computer.gsit_id
     return ComputerBrief(
         id=computer.id,
         hostname=computer.hostname,
@@ -352,7 +353,7 @@ def reset_record(kind: str, source_id: int, me=Depends(require_admin), session=D
 # ---------- Названия: соответствия значений (этап 25б) ----------
 
 NAME_FIELD_KEYS = set(NAME_FIELDS)
-ALIAS_KINDS = {"same": "одно и то же", "differ": "разное", "keep": "в таблице своё"}
+ALIAS_KINDS = {"same": "одно и то же", "differ": "разное", "keep": "в таблице своё", "board": "материнская плата"}
 
 
 class NameIn(BaseModel):
@@ -406,22 +407,18 @@ def list_names(me=Depends(require_admin), session=Depends(get_db)):
     return result
 
 
-@router.post("/names")
-def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db)):
-    """Решение по паре «значение источника — значение таблицы»: same («одно и то
-    же» — для всех ПК, одно на значение источника), differ («это разное»), keep
-    («в таблице своё» — не расхождение, но и не одно и то же), auto (забыть
-    решение по паре — как решит сравнение). Редактор тоже может: это решения
-    вкладки «Расхождения»."""
-    field = payload.field
-
+def save_alias(session, me, field, source, table, kind):
+    """Записать решение по паре (без commit). kind auto — забыть решение."""
     if field not in NAME_FIELD_KEYS:
         raise HTTPException(status_code=400, detail="Для этого поля соответствия не задаются.")
 
-    if payload.kind not in ALIAS_KINDS and payload.kind != "auto":
+    if kind not in ALIAS_KINDS and kind != "auto":
         raise HTTPException(status_code=400, detail="Неизвестный вид соответствия.")
 
-    source, table = clean_text(payload.source), clean_text(payload.table)
+    if kind == "board" and field != "model":
+        raise HTTPException(status_code=400, detail="Материнской платой помечается только модель.")
+
+    source, table = clean_text(source), clean_text(table)
 
     if not source or not table:
         raise HTTPException(status_code=400, detail="Нужны оба значения.")
@@ -432,34 +429,45 @@ def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db
     source_key, table_key = key_of(source), key_of(table)
     query = session.query(ScanAlias).filter(ScanAlias.field == field, ScanAlias.source_key == source_key)
     removed = []
+    # «Одно и то же» и «материнская плата» — одно на значение источника
+    single = ("same", "board")
 
-    # Новое решение по той же паре заменяет старое; «одно и то же» — одно на значение
+    # Новое решение по той же паре заменяет старое
     for old in query:
-        if old.table_key == table_key or (payload.kind == "same" and old.kind == "same"):
+        if old.table_key == table_key or (kind in single and old.kind in single):
             removed.append(old)
             session.delete(old)
 
     session.flush()
     title = f"{field_title(field)}: {source}"
 
-    if payload.kind == "auto":
+    if kind == "auto":
         if removed:
             log_change(
                 session, "scan_aliases", 0, me["login"],
                 {"deleted": {"old": "; ".join(f"{ALIAS_KINDS[a.kind]}: {a.table_value}" for a in removed), "new": None}},
                 title=title, entity_key=field,
             )
-        session.commit()
-        return {"ok": True}
+        return
 
     session.add(ScanAlias(
         field=field, source=source, source_key=source_key, table_value=table, table_key=table_key,
-        kind=payload.kind, user_name=me["login"],
+        kind=kind, user_name=me["login"],
     ))
     log_change(
-        session, "scan_aliases", 0, me["login"], {payload.kind: {"old": None, "new": table}},
+        session, "scan_aliases", 0, me["login"], {kind: {"old": None, "new": table}},
         title=title, entity_key=field,
     )
+
+
+@router.post("/names")
+def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db)):
+    """Решение по паре «значение источника — значение таблицы»: same («одно и то
+    же» — для всех ПК, одно на значение источника), differ («это разное»), keep
+    («в таблице своё» — не расхождение, но и не одно и то же), board (название
+    модели — это материнская плата), auto (забыть решение по паре — как решит
+    сравнение). Редактор тоже может: это решения вкладки «Проверка»."""
+    save_alias(session, me, payload.field, payload.source, payload.table, payload.kind)
     session.commit()
     return {"ok": True}
 

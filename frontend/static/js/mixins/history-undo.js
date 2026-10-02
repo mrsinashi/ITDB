@@ -17,10 +17,10 @@ const ENTITY_FILTERS = {
     field_defs: "Польз. поля",
     column_styles: "Оформление столбцов",
     users: "Пользователи системы",
-    scan_sources: "Сканирование: подключения",
-    scan_subnets: "Сканирование: подсети",
-    scan_records: "Сканирование: сопоставление",
-    scan_aliases: "Сканирование: названия",
+    scan_sources: "Сканер: подключения",
+    scan_subnets: "Сканер: подсети",
+    scan_records: "Сканер: сопоставление",
+    scan_aliases: "Сканер: названия",
     scan_marks: "Пометки сканера",
     scan_antivirus: "Антивирусы (вид столбца)"
 };

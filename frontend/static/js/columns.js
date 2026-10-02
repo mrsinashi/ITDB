@@ -10,7 +10,6 @@ export function normalizeKey(value) {
 // Дубли: поле → множество значений, встречающихся больше одного раза.
 // Какие поля проверять и какие из них многострочные — из описания столбцов.
 let duplicateSets = {};
-let multilineDupFields = new Set();
 
 export function buildDuplicateSets(rows, columns) {
     const dupColumns = (columns || []).filter(function (col) { return col.dup; });
@@ -40,26 +39,15 @@ export function buildDuplicateSets(rows, columns) {
     return sets;
 }
 
-export function hasDuplicateValue(value, field) {
-    if (value === null || value === undefined || value === "") {
-        return false;
-    }
+// Одно значение (строка многострочной ячейки) — повтор?
+export function isDuplicateLine(line, field) {
     const set = duplicateSets[field];
-    if (!set) {
-        return false;
-    }
-    const values = multilineDupFields.has(field) ? splitMulti(value) : [String(value)];
-    return values.some(function (item) {
-        return set.has(normalizeKey(item));
-    });
+    return !!set && set.has(normalizeKey(line));
 }
 
 // Пересчитать дубли (после загрузки и правки строк); columns — встроенные столбцы
 export function refreshDuplicates(rows, columns) {
     duplicateSets = buildDuplicateSets(rows, columns);
-    multilineDupFields = new Set((columns || []).filter(function (col) {
-        return col.dup && col.multiline;
-    }).map(function (col) { return col.field; }));
 }
 
 export const kindLabels = {
@@ -203,6 +191,7 @@ export const SIMPLE_FIELD_LABELS = {
     same: "Одно и то же",
     differ: "Разное",
     keep: "В таблице своё",
+    board: "Материнская плата",
     // Пометки сканера (этап 26б)
     strike: "Зачёркнутый",
     frame: "Рамка",

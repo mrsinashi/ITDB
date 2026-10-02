@@ -1,5 +1,5 @@
 """Этап 26е: объём дисков и MAC из GLPI / GSIT, имя ПК — только сообщить,
-VACUUM и IP из Jabber, свои названия антивирусов."""
+VACUUM из Jabber, свои названия антивирусов."""
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -146,7 +146,8 @@ def set_vacuum(client, computer_id, logins):
     ok(client.patch(f"/api/computers/{computer_id}", json={"vacuum": logins, "_version": get_row(client, computer_id)["version"]}))
 
 
-def test_jabber_vacuum_and_ip(admin, editor, room, glpi_url, jabber_url):
+def test_jabber_vacuum(admin, editor, room, glpi_url, jabber_url):
+    """VACUUM из Jabber — только по IP ПК (этап 26ж: IP по логину больше не предлагается)."""
     loc = room["room"]
     empty_vac = add_pc(editor, loc, "pc-empty", ip="10.0.2.11")
     has_other = add_pc(editor, loc, "pc-other", ip="10.0.2.12")
@@ -156,10 +157,7 @@ def test_jabber_vacuum_and_ip(admin, editor, room, glpi_url, jabber_url):
     visitor_pc = add_pc(editor, loc, "pc-visit", ip="10.0.2.14")
     no_ip = add_pc(editor, loc, "pc-noip")
     set_vacuum(editor, no_ip, "novikova")
-    old_ip = add_pc(editor, loc, "pc-oldip", ip="10.0.3.50")
-    set_vacuum(editor, old_ip, "popova")
     glpi_ip = add_pc(editor, loc, "pc-glpi", mac="D8:BB:C1:00:00:07")
-    set_vacuum(editor, glpi_ip, "vasiliev")
     dup_a = add_pc(editor, loc, "pc-dup-a", ip="10.0.2.20")
     add_pc(editor, loc, "pc-dup-b", ip="10.0.2.20")
 
@@ -172,41 +170,39 @@ def test_jabber_vacuum_and_ip(admin, editor, room, glpi_url, jabber_url):
         "petrova": [("Vacuum-IM", "10.0.2.12")],         # у ПК sidorov → добавить
         "kuznetsova": [("Vacuum-IM", "10.0.2.13")],      # уже записана → ничего
         "sidorov": [("Vacuum-IM", "10.0.2.14")],         # записан у другого ПК → неточно
-        "novikova": [("Vacuum-IM", "10.0.4.40")],        # IP ПК пуст → заполнить
-        "popova": [("Vacuum-IM", "10.0.4.41")],          # в таблице другой IP → неточно
-        "vasiliev": [("Vacuum-IM", "10.0.4.42")],        # IP знает GLPI — Jabber молчит
+        "novikova": [("Vacuum-IM", "10.0.4.40")],        # по логину ПК не ищется: IP не предлагается
+        "vasiliev": [("Vacuum-IM", "10.0.2.77")],        # адрес ПК знает только GLPI → VACUUM этому ПК
         "orlov": [("Vacuum-IM", "10.0.2.20")],           # адрес у двух ПК — не понять
     }
     setup_jabber(admin, jabber_url)
     assert jabber_collect(admin)["status"] == "ok"
 
-    diffs = diffs_of(editor)
+    data = ok(editor.get("/api/scan/diffs"))
+    diffs = {(d["computer_id"], d["field"]): d for d in data["items"]}
     d = diffs[(empty_vac, "vacuum")]
     assert (d["kind"], d["table"], d["proposed"], d["raw"]) == ("fill", "", "ivanov", "ivanov")
     assert d["sources"][0]["source"] == "jabber" and d["sources"][0]["source_id"] is None and d["sources"][0]["by"] == ["ip"]
+    assert "ivanov" in d["note"]
     d = diffs[(has_other, "vacuum")]
     assert (d["kind"], d["table"], d["proposed"]) == ("diff", "sidorov", "petrova\nsidorov")
     assert (has_all, "vacuum") not in diffs
     d = diffs[(visitor_pc, "vacuum")]
     assert d["kind"] == "unsure" and "pc-other" in d["unsure"]
-    d = diffs[(no_ip, "ip")]
-    assert (d["kind"], d["proposed"], d["sources"][0]["by"]) == ("fill", "10.0.4.40", ["vacuum"])
-    d = diffs[(old_ip, "ip")]
-    assert (d["kind"], d["proposed"], d["table"]) == ("unsure", "10.0.4.41", "10.0.3.50")
+    assert (no_ip, "ip") not in diffs and (no_ip, "vacuum") not in diffs
+    assert diffs[(glpi_ip, "vacuum")]["proposed"] == "vasiliev"
     assert diffs[(glpi_ip, "ip")]["sources"][0]["source"] == "glpi"
-    assert diffs[(glpi_ip, "ip")]["proposed"] == "10.0.2.77"
     assert (dup_a, "vacuum") not in diffs
-    # Kузнецова в сети с адреса ПК, где она уже записана, — IP не предлагается (адрес тот же)
-    assert (has_all, "ip") not in diffs
+    # Кого Jabber видит с адреса ПК — для столбца «Vacuum» в подробностях «Проверки»
+    assert data["jabber"][str(has_all)] == ["kuznetsova"] and data["jabber"][str(has_other)] == ["petrova"]
+    # Списка пользователей нет — «нет в Jabber» не помечается
+    assert data["vacuum_missing"] == []
 
     # Взять VACUUM — дописывается к тому, что было
     result = ok(editor.post("/api/scan/diffs/accept", json={"items": [
         {"computer_id": has_other, "field": "vacuum", "value": "petrova\nsidorov", "table": "sidorov", "source": "Jabber"},
-        {"computer_id": no_ip, "field": "ip", "value": "10.0.4.40", "table": "", "source": "Jabber"},
     ]}))
-    assert result == {"accepted": 2, "skipped": []}
+    assert result == {"accepted": 1, "skipped": []}
     assert get_row(editor, has_other)["vacuum"] == "petrova\nsidorov"
-    assert get_row(editor, no_ip)["ip"] == "10.0.4.40"
     history = ok(editor.get("/api/history", params={"entity": "computers", "entity_id": has_other}))["items"]
     assert history[0]["changes"]["vacuum"]["scan"] == "Jabber"
 

@@ -1,6 +1,6 @@
-// Сканирование, этап 25: сбор из GLPI / GSIT (с этапа 26д — и Jabber), вкладка
+// Сканер, этап 25: сбор из GLPI / GSIT (с этапа 26д — и Jabber), вкладка
 // «Названия» и общее для записей источников (с этапа 26г записи показывает вкладка
-// «Проверка», scan-check.js; пользователей Jabber — вкладка «Vacuum», scan-vacuum.js).
+// «Проверка», scan-check.js; пользователей Jabber — страница «Vacuum», scan-vacuum.js).
 //
 // Сбор идёт на сервере в фоне; страница спрашивает запуск раз в 1,5 с, пока он
 // идёт, и по окончании обновляет итог в блоке источника и «Проверку».
@@ -11,20 +11,20 @@
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
 
-const POLL_MS = 1500;
+const POLL_MS = 1000;
 const COLLECT_KINDS = ["glpi", "gsit", "jabber"];
-const KEY_LABELS = { id: "GLPI ID", mac: "MAC", serial: "серийному" };
+const KEY_LABELS = { id: "ID", mac: "MAC", serial: "серийному" };
 // Поля, у которых названия сопоставляются по смыслу и словарю (этап 25б)
-const NAME_FIELDS = ["model", "os", "cpu", "gpu", "vnc", "drive"];
+const NAME_FIELDS = ["model", "motherboard", "os", "cpu", "gpu", "vnc", "drive"];
 const MARK_TITLES = {
     "=": "Совпадает",
-    "≈": "В таблице записана часть того, что видит источник",
+    "≈": "В таблице часть",
     "≠": "Отличается"
 };
 const MANUAL_TITLES = {
-    same: "Одно и то же (задано вручную, для всех ПК)",
-    differ: "Разное (задано вручную)",
-    keep: "В таблице своё (задано вручную): не расхождение, но и не одно и то же — другим ПК табличное значение не предлагается"
+    same: "Одно и то же (вручную)",
+    differ: "Разное (вручную)",
+    keep: "В таблице своё (вручную)"
 };
 const MANUAL_NEXT = {
     same: "одно и то же",
@@ -32,10 +32,10 @@ const MANUAL_NEXT = {
     keep: "в таблице своё"
 };
 const HOW_TITLES = {
-    manual: "так названо вручную (вкладка «Названия»)",
-    learned: "так это названо у других ПК в таблице",
-    table: "так это называется в Справочнике или в таблице",
-    same: "одно и то же, названо по-разному"
+    manual: "названо вручную",
+    learned: "так названо у других ПК",
+    table: "так названо в таблице",
+    same: "названо по-разному"
 };
 function plural(n, one, few, many) {
     const m10 = n % 10;
@@ -71,7 +71,7 @@ export default {
         checkCollectBlock() {
             const ready = this.scanCollectSources.filter(function (s) { return s.enabled && s.url; });
             if (!ready.length) {
-                return "Нет включённых источников: включи GLPI, GSIT или Jabber на вкладке «Подключения»";
+                return "Нет включённых источников";
             }
             if (ready.every((s) => this.scanCollecting(s.kind))) {
                 return "Сбор уже идёт";
@@ -92,7 +92,7 @@ export default {
             if (block && !lines.length) {
                 return block;
             }
-            return (block || "Собрать заново из всех включённых источников; в таблицу ничего не пишется") + (lines.length ? "\n\n" + lines.join("\n") : "");
+            return (block || "Собрать из GLPI, GSIT и Jabber") + (lines.length ? "\n\n" + lines.join("\n") : "");
         },
 
         scanNamesShown() {
@@ -105,9 +105,6 @@ export default {
         scanSearchPlaceholder() {
             if (this.scanTab === "names") {
                 return "Поиск по названиям: поле, значение";
-            }
-            if (this.scanTab === "vacuum") {
-                return "Поиск: пользователь, группа, ПК, IP";
             }
             return "Поиск: ПК, расположение, имя в GLPI, IP, MAC, серийный, значение";
         },
@@ -149,9 +146,6 @@ export default {
                 this.check.hover = null;
                 this.loadCheck();
             }
-            if (tab === "vacuum") {
-                this.loadVacuum();
-            }
         },
 
         // ---------- Сбор ----------
@@ -173,8 +167,7 @@ export default {
                 return block;
             }
             const s = this.scanSource(kind);
-            const what = kind === "jabber" ? "Собрать из Jabber, кто в сети, с какого IP и в каких группах" :
-                "Собрать данные о ПК из " + (s ? s.title : kind) + ": только свежие записи; в таблицу ничего не пишется";
+            const what = "Собрать из " + (s ? s.title : kind);
             const info = this.scanRunInfo(kind);
             if (!info) {
                 return what + "\nЕщё не собирали";
@@ -198,7 +191,7 @@ export default {
                 return "Сначала укажи и сохрани адрес";
             }
             if (!s.enabled) {
-                return "Источник выключен: отметь «Включён» и сохрани";
+                return "Источник выключен";
             }
             return "";
         },
@@ -284,11 +277,10 @@ export default {
             } else {
                 this.toastError(title + ": " + (run.message || "сбор не удался"));
             }
-            if (run.source === "jabber") {
-                if (this.view === "scan" && this.scanTab === "vacuum") {
-                    this.loadVacuum();
-                }
-            } else if (this.view === "scan" && this.scanTab === "check") {
+            if (run.source === "jabber" && this.view === "vacuum") {
+                this.loadVacuum();
+            }
+            if (this.view === "scan" && this.scanTab === "check") {
                 this.loadCheck();
             } else {
                 this.loadDiffs();
@@ -314,7 +306,7 @@ export default {
             const title = s ? s.title : kind;
             if (run.status === "running") {
                 const p = (run.stats && run.stats.progress) || {};
-                const unit = kind === "jabber" ? "" : " ПК";
+                const unit = kind === "jabber" ? " пользователей" : " ПК";
                 const text = p.total ? "Собираю: " + p.done + " из " + p.total + unit + "…" : "Собираю…";
                 return { time: this.formatTime(run.started_at), text: text, bad: false, running: true };
             }
@@ -366,7 +358,7 @@ export default {
 
         scanStateText(r) {
             if (r.state === "key") {
-                return "по " + r.by.map(function (k) { return KEY_LABELS[k]; }).join(", ");
+                return "по " + r.by.map(function (k) { return k === "id" ? r.title + " ID" : KEY_LABELS[k]; }).join(", ");
             }
             if (r.state === "link") {
                 return "вручную";
@@ -388,19 +380,19 @@ export default {
                 return r.note;
             }
             if (r.state === "key") {
-                return "Сопоставлена по признаку: " + this.scanStateText(r);
+                return null;
             }
             if (r.state === "link") {
                 const d = r.decisions.find(function (x) { return x.action === "link"; });
                 return d ? "Привязал " + (d.user_name || "") + " " + this.formatTime(d.at) : "Привязана вручную";
             }
             if (r.state === "name") {
-                return "Совпадает только имя: подтверди, что это тот ПК";
+                return "Совпало только имя";
             }
             if (r.state === "dup") {
-                return "То же железо, что у записи №" + r.dup_of + " (она свежее): эта не используется";
+                return "То же железо, что у №" + r.dup_of;
             }
-            return "Такого ПК в таблице не нашлось";
+            return null;
         },
 
         // Строки «поле | источник | ITDB» для раскрытой записи. Сравнивает сервер
@@ -421,7 +413,7 @@ export default {
                     next: next,
                     markTitle: (c.manual ? MANUAL_TITLES[c.manual] : (MARK_TITLES[c.mark] || "")) +
                         (!c.manual && hows.length ? " — " + hows.join("; ") : "") +
-                        (cycle ? "\nДвойной клик — " + (next ? MANUAL_NEXT[next] : "как решит сравнение") : "")
+                        (cycle ? "\nДвойной клик — " + (next ? MANUAL_NEXT[next] : "сбросить") : "")
                 });
             });
         },
@@ -447,7 +439,7 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.toast(c.label + ": «" + c.raw.split("\n").join(", ") + "» и «" + c.itdb + "» — " + (c.next ? MANUAL_NEXT[c.next] : "как решит сравнение"), "success");
+                this.toast(c.label + ": «" + c.raw.split("\n").join(", ") + "» и «" + c.itdb + "» — " + (c.next ? MANUAL_NEXT[c.next] : "решение сброшено"), "success");
                 await this.loadCheck();
             } catch (e) {
                 this.toastError(e.message || e);
@@ -489,13 +481,7 @@ export default {
         },
 
         scanNameKindTitle(n) {
-            if (n.kind === "differ") {
-                return "Разное: не считать одним и тем же";
-            }
-            if (n.kind === "keep") {
-                return "В таблице своё: при таком значении источника в таблице так и оставить. Это не «одно и то же» — другим ПК табличное значение не предлагается";
-            }
-            return "Одно и то же";
+            return { differ: "Разное", keep: "В таблице своё", board: "Материнская плата" }[n.kind] || "Одно и то же";
         },
 
         scanNameOrigin(n) {

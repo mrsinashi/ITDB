@@ -159,4 +159,4 @@ def test_suggest_flag(reader):
     suggest = {column["key"] for column in columns if column["suggest"]}
 
     # Подсказки — у столбцов с повторяющимися значениями в одну строку
-    assert {"status", "type", "os", "model", "cpu", "ram", "gpu", "vnc", "gsit", "state", "label"} == suggest
+    assert {"status", "type", "os", "model", "motherboard", "cpu", "ram", "gpu", "vnc", "gsit", "state", "label"} == suggest

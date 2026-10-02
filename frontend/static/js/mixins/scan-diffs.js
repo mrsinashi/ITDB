@@ -24,7 +24,14 @@
 //
 // Этап 26е: HOSTNAME в таблице — каким имя должно быть, поэтому другое имя у
 // источника только сообщается (d.can_take = false: «взять» нет). Jabber
-// предлагает VACUUM и IP (у источника нет номера записи — source_id null).
+// предлагает VACUUM (у источника нет номера записи — source_id null).
+//
+// Этап 26ж: «Своё» в карточке у блочка — не просто правка: значение записывается
+// как правильное для того, что предлагает сканер (название — «одно и то же» для
+// всех ПК, остальное — «оставить как есть» этому ПК). «Это материнская плата» —
+// название модели уходит в столбец «Мат. плата» (у этого ПК и у всех с таким
+// названием). С расхождениями приходят ссылки на записи GLPI / GSIT (links) и
+// логины VACUUM, которых нет в Jabber (vacuum_missing).
 
 import { apiFetch } from "../util.js";
 
@@ -37,7 +44,9 @@ function avKey(name) {
     return String(name || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 }
 
-const KEY_TEXT = { id: "GLPI ID", mac: "MAC", serial: "серийному", ip: "IP", vacuum: "VACUUM" };
+const KEY_TEXT = { id: "ID", mac: "MAC", serial: "серийному", ip: "IP" };
+// Поля-названия: «своё» значение — соответствие «одно и то же» (как NAME_FIELDS на сервере)
+const NAME_FIELDS = ["model", "motherboard", "os", "cpu", "gpu", "vnc", "drive"];
 const AV_TEXT = { on: "работает, базы актуальны", old: "работает, базы устарели", off: "выключен" };
 
 export default {
@@ -190,6 +199,9 @@ export default {
                 this.diffs.rejected = data.rejected;
                 this.diffs.sources = data.sources;
                 this.diffs.antivirus = data.antivirus || {};
+                this.diffs.links = data.links || {};
+                this.diffs.vacuumMissing = data.vacuum_missing || [];
+                this.diffs.jabber = data.jabber || {};
             } catch (e) {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
@@ -399,18 +411,16 @@ export default {
             return style;
         },
 
+        // Сканер предлагает очистить ячейку (VACUUM: никто давно не подключался) — «пусто»
         scanChipText(d) {
-            return d.proposed;
+            return d.proposed || "пусто";
         },
 
         scanChipTitle(d) {
             if (!d.can_take) {
-                return "Имя на компьютере — " + d.proposed + " (" + this.diffSourceShort(d) + ")" +
-                    "\nВ таблице — каким имя должно быть: переименуй компьютер. Нажми — подробнее или не показывать";
+                return "Имя на ПК · " + this.diffSourceShort(d);
             }
-            const mark = this.scanMarkByKind[d.kind];
-            return (mark ? mark.label + ". " : "") + this.diffSourceShort(d) + " предлагает: " + this.scanChipText(d) +
-                "\nНажми — взять, оставить как есть или вписать своё";
+            return this.diffSourceShort(d) + (d.note ? " · " + d.note : "");
         },
 
         // ---------- Карточка действий у блочка ----------
@@ -546,20 +556,54 @@ export default {
             }
         },
 
+        // «Своё»: значение записывается в таблицу как правильное для того, что
+        // предлагает сканер. Название (модель, ОС, ЦП…) — «одно и то же» для всех ПК:
+        // значение источника дальше называется так. Остальное (IP, MAC, VACUUM…) —
+        // этому ПК это значение сканера больше не предлагается
         async scanPopSaveOwn() {
             const pop = this.scanPop;
             if (!pop || pop.busy) {
                 return;
             }
             pop.busy = true;
+            const d = pop.d;
+            const own = pop.own.trim();
             try {
-                const changed = await this.saveComputerValue(pop.d.computer_id, pop.d.field, pop.own.trim());
-                this.closeScanPop();
-                if (changed) {
-                    await this.loadDiffs();
+                if ((await this.saveComputerValue(d.computer_id, d.field, own)) === null) {
+                    return;   // не сохранилось — ошибку уже показала правка ячейки
                 }
+                this.closeScanPop();
+                if (own && NAME_FIELDS.includes(d.field) && d.raw) {
+                    await this.diffPost("/api/scan/names", { field: d.field, source: d.raw, table: own, kind: "same" });
+                } else {
+                    await this.diffPost("/api/scan/diffs/reject", { items: [{ computer_id: d.computer_id, field: d.field, raw: d.raw }] });
+                }
+                await this.loadDiffs();
+                this.reloadCheckIfShown();
+            } catch (e) {
+                this.toastError(e.message || e);
             } finally {
                 pop.busy = false;
+            }
+        },
+
+        // «Это материнская плата»: название — в «Мат. плату» этому ПК и всем с таким названием
+        async scanPopBoard() {
+            const pop = this.scanPop;
+            pop.busy = true;
+            this.closeScanPop();
+            await this.boardDiff(pop.d);
+        },
+
+        async boardDiff(d) {
+            try {
+                await this.diffPost("/api/scan/diffs/board", {
+                    computer_id: d.computer_id, raw: d.raw, value: d.proposed, source: this.diffSourceShort(d)
+                });
+                this.toast("Мат. плата: " + d.proposed, "success");
+                await this.afterDiffChange();
+            } catch (e) {
+                this.toastError(e.message || e);
             }
         },
 
@@ -580,7 +624,7 @@ export default {
         scanSuggestFor(rowId, field) {
             const entry = this.diffIndex.get(rowId);
             const d = entry ? entry[field] : null;
-            if (!d || d.kind === "partial" || !d.can_take || d.proposed.includes("\n")) {
+            if (!d || d.kind === "partial" || !d.can_take || !d.proposed || d.proposed.includes("\n")) {
                 return [];
             }
             return [{ key: "scan:" + d.proposed.toLowerCase(), value: d.proposed, count: this.diffSourceShort(d), scan: true }];
@@ -618,7 +662,7 @@ export default {
                 parts.push({ text: "ПК привязан вручную" });
             }
             if (by.size) {
-                parts.push({ text: "ПК опознан по " + ["mac", "serial", "id", "ip", "vacuum"].filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
+                parts.push({ text: "ПК по " + ["mac", "serial", "id", "ip"].filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
             }
             if (d.sources.length > 1) {
                 parts.push(d.kind === "unsure" && d.unsure.startsWith("источники")
@@ -627,6 +671,9 @@ export default {
             }
             if (d.kind === "unsure" && !d.unsure.startsWith("источники")) {
                 parts.push({ text: "неточно: " + d.unsure, bad: true });
+            }
+            if (d.note) {
+                parts.push({ text: d.note });
             }
             const dates = d.sources.map(function (s) { return s.checked_at; }).filter(Boolean).sort();
             if (dates.length) {
@@ -637,8 +684,8 @@ export default {
         },
 
         diffSourceTitle(d) {
-            return d.sources.map((s) => sourceName(s) + (s.checked_at ? (s.source === "jabber" ? " — видел " : " — проверен ") + this.formatTime(s.checked_at) : "") +
-                ", " + (d.can_take ? "предлагает: " : "имя: ") + s.value.split("\n").join(", ")).join("\n");
+            return d.sources.map((s) => sourceName(s) + (s.checked_at ? " · " + this.formatTime(s.checked_at) : "") +
+                (d.sources.length > 1 ? " · " + s.value.split("\n").join(", ") : "")).join("\n") + (d.note ? "\n" + d.note : "");
         },
 
         // ---------- Решения ----------
@@ -682,7 +729,7 @@ export default {
                 });
                 let text = "Принято: " + result.accepted;
                 if (result.skipped.length) {
-                    text += ". Уже изменено в таблице, пропущено: " + result.skipped.length;
+                    text += ", пропущено: " + result.skipped.length;
                 }
                 this.toast(text, result.skipped.length ? undefined : "success");
                 await this.afterDiffChange();
@@ -707,7 +754,7 @@ export default {
         async keepDiff(d) {
             try {
                 await this.diffPost("/api/scan/names", { field: d.field, source: d.raw, table: d.table, kind: "keep" });
-                this.toast(this.diffFieldLabel(d.field) + ": «" + d.table + "» при «" + d.raw + "» — оставлено как в таблице", "success");
+                this.toast(this.diffFieldLabel(d.field) + ": «" + d.table + "» — оставлено", "success");
                 await this.loadDiffs();
                 this.reloadCheckIfShown();
             } catch (e) {
@@ -717,19 +764,19 @@ export default {
 
         // ---------- Правка значения таблицы прямо из списка / подробностей записи ----------
 
-        // Своё значение в ПК (как правка ячейки): например, объединить таблицу и сканер
+        // Своё значение в ПК (как правка ячейки): например, объединить таблицу и сканер.
+        // Ответ: true — записано, false — значение то же, null — не удалось
         async saveComputerValue(computerId, field, value) {
             const row = this.rows.find(function (r) { return r.id === computerId; });
             const col = this.allColumns.find(function (c) { return c.field === field; });
             if (!row || !col) {
-                this.toastError("ПК не найден в таблице — обнови страницу.");
-                return false;
+                this.toastError("ПК не найден — обнови страницу.");
+                return null;
             }
             if (String(value) === String(row[field] || "")) {
                 return false;
             }
-            await this.saveCellValue(row, col, value);
-            return true;
+            return (await this.saveCellValue(row, col, value)) ? true : null;
         },
 
         startValueEdit(key, computerId, field, value) {
@@ -802,10 +849,10 @@ export default {
 
         scanMarkHint(kind) {
             return {
-                diff: "в таблице другое значение",
+                diff: "в таблице другое",
                 fill: "в таблице пусто",
-                unsure: "сканер не уверен: GLPI и GSIT говорят разное или значений несколько — проверь сам",
-                partial: "в таблице только часть (например, один IP из двух)"
+                unsure: "неточно — проверь сам",
+                partial: "в таблице часть"
             }[kind] || "";
         },
 

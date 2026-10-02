@@ -91,7 +91,7 @@ export default {
                 <option v-for="o in root.treeParentOptions(form.kind)" :key="o.id" :value="o.id">{{ o.path }}</option>
             </select>
             <input v-if="form.kind !== 'floor'" class="input tf-code" v-model="form.code" @keydown.enter="submit" placeholder="Код"
-                title="Код — короткое обозначение узла, необязательно. У кабинета это его номер (например, 214): он показывается в таблице в столбце «№ Кабинета» и по нему удобно искать. У адреса или отделения — сокращение для себя (например, «Л12», «ТО»).">
+                title="Необязательно. У кабинета — его номер">
             <input class="input tf-name" v-model="form.name" @keydown.enter="submit" placeholder="Название">
             <span class="tf-buttons">
                 <button class="btn btn-primary icon-only" @click="submit" :title="form.action === 'add' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>

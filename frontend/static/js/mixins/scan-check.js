@@ -10,13 +10,14 @@
 // в Таблице (Ctrl / Shift + клик, Ctrl+A, Esc), «Выбрано: N ▾» — действия над
 // выбранными. Плашка действий у открытой строки идёт за строкой при прокрутке,
 // не заходя под шапку таблицы (двигается напрямую, без перерисовки Vue).
-// Этап 26е: ПК, о которых говорит только Jabber (VACUUM, IP), — тоже строки;
+// Этап 26е: ПК, о которых говорит только Jabber (VACUUM), — тоже строки;
 // HOSTNAME из источника только сообщается — «взять» его нельзя (d.can_take).
+// Этап 26ж: в подробностях — и «Мат. плата», и номера записей GLPI / GSIT.
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords, clickSelect } from "../util.js";
 
 export const CHECK_SOURCES = ["glpi", "gsit"];
-const COMPARE_FIELDS = ["hostname", "ip", "vacuum", "mac", "serial", "model", "os", "cpu", "ram", "drive", "gpu", "vnc"];
+const COMPARE_FIELDS = ["hostname", "ip", "vacuum", "mac", "serial", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "vnc", "glpi_id", "gsit_id"];
 const STATE_ORDER = { name: 0, conflict: 0, diff: 1, ok: 2, none: 3 };
 // Значки плашки (Lucide): галочка, крестик, звено, «вернуть»
 const ICONS = {
@@ -28,13 +29,13 @@ const ICONS = {
 };
 
 export const CHECK_FILTERS = [
-    { key: "todo", label: "Нужно решить", title: "Записи, которые сканер не связал с ПК уверенно, и ПК, у которых он предлагает другие значения" },
-    { key: "unknown", label: "Не узнал ПК", title: "Совпало только имя или признаки (MAC, серийный, GLPI ID) противоречат: подтверди или привяжи вручную" },
-    { key: "diff", label: "Предлагает другое", title: "ПК, у которых сканер видит другие значения или знает то, чего нет в таблице" },
-    { key: "ok", label: "В порядке", title: "Сканер видит то же, что записано в таблице" },
-    { key: "none", label: "Нет в таблице", title: "Таких ПК в таблице не нашлось" },
-    { key: "rejected", label: "Отклонённые", title: "Значения, которые решено оставить как в таблице: их можно вернуть" },
-    { key: "all", label: "Все", title: "Все записи последнего сбора" }
+    { key: "todo", label: "Нужно решить" },
+    { key: "unknown", label: "Не узнал ПК", title: "Совпало только имя или признаки противоречат" },
+    { key: "diff", label: "Предлагает другое" },
+    { key: "ok", label: "В порядке" },
+    { key: "none", label: "Нет в таблице" },
+    { key: "rejected", label: "Отклонённые", title: "Оставлено как в таблице" },
+    { key: "all", label: "Все" }
 ];
 
 function inFilter(row, filter) {
@@ -211,6 +212,11 @@ export default {
 
         checkSelNames() {
             return this.checkSelectedRows.filter(function (r) { return r.state === "name" && r.pcId; });
+        },
+
+        // Jabber включён — в подробностях есть столбец «Vacuum»
+        checkJabberOn() {
+            return this.diffs.sources.indexOf("jabber") !== -1;
         },
 
         checkOpenRow() {
@@ -496,20 +502,15 @@ export default {
                 return { text: "это " + row.name + "?", cls: "ck-ask" };
             }
             if (row.state === "conflict") {
-                return { text: row.record.note || "признаки указывают на разные ПК", cls: "ck-bad" };
+                return { text: row.record.note || "признаки противоречат", cls: "ck-bad" };
             }
             if (row.state === "none") {
-                return { text: "в таблице такого ПК нет", cls: "ck-muted" };
+                return { text: "нет в таблице", cls: "ck-muted" };
             }
             if (!row.diffs.length) {
                 return { text: row.rejected.length ? "всё решено" : "всё совпадает", cls: "ck-muted" };
             }
-            // Предложения Jabber (VACUUM, IP) — с пометкой: в столбцах GLPI / GSIT их не видно
-            return {
-                text: row.diffs.map((d) => this.diffFieldLabel(d.field) +
-                    (d.sources.every(function (s) { return s.source === "jabber"; }) ? " (Jabber)" : "")).join(", "),
-                cls: ""
-            };
+            return { text: row.diffs.map((d) => this.diffFieldLabel(d.field)).join(", "), cls: "" };
         },
 
         checkPlace(row) {
@@ -526,6 +527,8 @@ export default {
             });
             const live = row.pcId && row.state !== "name" ? this.rows.find(function (x) { return x.id === row.pcId; }) : null;
             const props = row.record ? {} : (this.diffAllIndex.get(row.pcId) || {});
+            // Столбец «Vacuum»: кого Jabber видит с адреса этого ПК
+            const seen = this.checkJabberOn && !row.record ? this.diffs.jabber[row.pcId] || [] : null;
             return COMPARE_FIELDS.map((field) => {
                 const first = kinds.map(function (k) { return byKind[k][field]; }).find(Boolean);
                 const itdb = live ? live[field] : (first ? first.itdb : "");
@@ -534,10 +537,18 @@ export default {
                     field: field,
                     label: this.diffFieldLabel(field),
                     itdb: itdb === null || itdb === undefined ? "" : String(itdb),
-                    cells: kinds.map(function (k) { return { kind: k, c: byKind[k][field] || null }; }),
+                    cells: kinds.map(function (k) { return { kind: k, c: byKind[k][field] || null }; })
+                        .concat(seen ? [{ kind: "jabber", c: field === "vacuum" && seen.length ? this.checkJabberCell(seen, itdb) : null }] : []),
                     prop: prop
                 };
             });
+        },
+
+        // Ячейка «Vacuum» в строке VACUUM: логины с адреса ПК и отметка = / ≠
+        checkJabberCell(logins, table) {
+            const have = new Set(String(table || "").split("\n").map(function (l) { return l.trim().toLowerCase(); }).filter(Boolean));
+            const mark = logins.every(function (l) { return have.has(l.toLowerCase()); }) ? "=" : "≠";
+            return { source: logins.join("\n"), mark: mark, symbol: mark, markTitle: mark === "=" ? "Есть в таблице" : "В таблице нет", rawText: "" };
         },
 
         checkCanEditValue(row, f) {
@@ -559,7 +570,7 @@ export default {
         // Когда источник проверял ПК — в подсказке у шапки (серые подписи убраны, 01.10)
         checkSourceHeadTitle(row, kind) {
             const r = row.recs[kind];
-            return r && r.checked_at ? r.title + " проверял этот ПК " + this.formatTime(r.checked_at) : null;
+            return r && r.checked_at ? "Проверен " + this.formatTime(r.checked_at) : null;
         },
 
         checkSourceLink(r) {
@@ -603,7 +614,7 @@ export default {
             const list = this.checkSelTakeable.slice();
             this.closeMenus();
             const ok = await this.confirmDialog("Взять из сканера " + list.length + " " + this.scanPlural(list.length, "значение", "значения", "значений") +
-                " у " + this.checkSelectedRows.length + " ПК? Они запишутся в таблицу (с отметкой в Истории).", { okText: "Взять" });
+                " у " + this.checkSelectedRows.length + " ПК?", { okText: "Взять" });
             if (ok) {
                 await this.checkTake(list);
             }
@@ -613,7 +624,7 @@ export default {
             const list = this.checkSelDiffs.slice();
             this.closeMenus();
             const ok = await this.confirmDialog("Оставить как есть " + list.length + " " + this.scanPlural(list.length, "значение", "значения", "значений") +
-                "? Пока сканер видит то же, они не предлагаются (вернуть — фильтр «Отклонённые»).", { okText: "Оставить" });
+                "?", { okText: "Оставить" });
             if (ok) {
                 await this.checkLeave(list);
             }
@@ -651,10 +662,10 @@ export default {
             const host = row.name;
             const takeable = row.diffs.filter(function (d) { return d.can_take; });
             if (takeable.length && this.canEdit) {
-                list.push({ key: "take", title: "Взять из сканера всё предложенное (" + takeable.length + ")", icon: ICONS.ok, run: () => this.checkTake(takeable) });
+                list.push({ key: "take", title: "Взять всё (" + takeable.length + ")", icon: ICONS.ok, run: () => this.checkTake(takeable) });
             }
             if (row.diffs.length && this.canEdit) {
-                list.push({ key: "leave", title: "Оставить всё как есть — не предлагать, пока сканер видит то же", icon: ICONS.no, danger: true, run: () => this.checkLeave(row.diffs) });
+                list.push({ key: "leave", title: "Оставить всё как есть", icon: ICONS.no, danger: true, run: () => this.checkLeave(row.diffs) });
             }
             if (this.isAdmin && row.record) {
                 const r = row.record;
@@ -662,22 +673,22 @@ export default {
                     list.push({ key: "yes", title: "Да, это " + host, icon: ICONS.ok, run: () => this.scanDecide(r, "link", row.pcId) });
                 }
                 if ((r.state === "name" || r.state === "key") && row.pcId) {
-                    list.push({ key: "notthis", title: "Нет, это не " + host + " — больше не предлагать", icon: ICONS.no, danger: true, run: () => this.scanDecide(r, "reject", row.pcId) });
+                    list.push({ key: "notthis", title: "Нет, это не " + host, icon: ICONS.no, danger: true, run: () => this.scanDecide(r, "reject", row.pcId) });
                 }
-                list.push({ key: "link", title: "Привязать к ПК… (выбрать вручную)", icon: ICONS.link, run: () => this.openScanLinkBar(r) });
+                list.push({ key: "link", title: "Привязать к ПК…", icon: ICONS.link, run: () => this.openScanLinkBar(r) });
             }
             if (this.isAdmin && !row.record) {
                 // ПК, сопоставленный по признаку: если сканер ошибся — «это не он»
                 CHECK_SOURCES.forEach((kind) => {
                     const r = row.recs[kind];
                     if (r && r.state === "key") {
-                        list.push({ key: "unlink-" + kind, title: r.title + " №" + r.source_id + " — это не " + host + ": больше не сопоставлять", icon: ICONS.unlink, run: () => this.scanDecide(r, "reject", row.pcId) });
+                        list.push({ key: "unlink-" + kind, title: r.title + " №" + r.source_id + " — это не " + host, icon: ICONS.unlink, run: () => this.scanDecide(r, "reject", row.pcId) });
                     }
                 });
             }
             if (this.isAdmin) {
                 this.checkRowDecided(row).forEach((r) => {
-                    list.push({ key: "reset-" + r.kind, title: "Забыть решения по " + r.title + " №" + r.source_id + ": снова сопоставлять по признакам", icon: ICONS.reset, run: () => this.scanDecide(r, "reset") });
+                    list.push({ key: "reset-" + r.kind, title: "Забыть решения по " + r.title + " №" + r.source_id, icon: ICONS.reset, run: () => this.scanDecide(r, "reset") });
                 });
             }
             return list;

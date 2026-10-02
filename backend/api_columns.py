@@ -77,6 +77,7 @@ COLUMNS = [
     col("os", "OS", "Операционная система (ОС / OS)", center=True, card_copy=True, export_width=14, card_always=True),
     col("type", "ТИП", "Тип компьютера", center=True, export_width=10, card_always=True),
     col("model", "Модель", center=True, card_copy=True, export_width=16),
+    col("motherboard", "Мат. плата", "Материнская плата", center=True, card_copy=True, export_width=18),
     col("cpu", "CPU", "Процессор (ЦП / CPU)", center=True, card_copy=True, export_width=20, card_always=True),
     col("ram", "RAM", "Оперативная память (ОЗУ / RAM)", center=True, export_width=7, card_always=True),
     col("drive", "DRIVE", "Дисковые накопители (DRIVE)", kind="multiline", center=True, multiline=True, card_copy=True, export_width=16),
@@ -87,7 +88,9 @@ COLUMNS = [
     col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=16),
     col("glpi_id", "GLPI", "GLPI ID", center=True, values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=8),
-    col("gsit", "GSIT", kind="extra", extra_key="GSIT", center=True, export_width=8),
+    col("gsit_id", "GSIT", "GSIT ID", center=True, values="no", card_copy=True, dup=True, bulk=False, export_width=8),
+    # «Агент» — есть ли на ПК агент GLPI / GSIT (до 26ж столбец назывался «GSIT»; ключ в extra прежний)
+    col("gsit", "Агент", kind="extra", extra_key="GSIT", center=True, export_width=8),
     col("state", "Сост.", kind="extra", extra_key="Сост.", center=True, export_width=8),
     col("label", "Метка", kind="extra", extra_key="Метка", center=True, export_width=10),
     col("status", "Статус", center=True, export_width=10),
@@ -104,8 +107,8 @@ CARD_GROUPS = [
     (None, ["status", "temp_until"]),
     ("Размещение", ["building", "department", "floor", "room_code", "seat_no"]),
     ("Сеть", ["ip", "mac", "vnc"]),
-    ("Оборудование", ["type", "model", "os", "cpu", "ram", "drive", "gpu", "antivirus"]),
-    ("Учёт", ["inv_no", "serial", "glpi_id", "gsit", "state", "label"]),
+    ("Оборудование", ["type", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "antivirus"]),
+    ("Учёт", ["inv_no", "serial", "glpi_id", "gsit_id", "gsit", "state", "label"]),
     ("Прочее", ["user_fields", "note"]),
 ]
 

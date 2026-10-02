@@ -23,6 +23,8 @@
    значение таблицы» — не расхождение, в таблице так и оставить. Но это не
    «одно и то же»: из такой пары ничего не учится, и ПК без значения в таблице
    получит значение источника, а не табличное.
+5. «Это материнская плата» (этап 26ж): название, которое источник отдаёт как
+   модель ПК, уходит в столбец «Мат. плата» — у всех ПК (route_values).
 """
 import re
 from collections import Counter, defaultdict
@@ -33,10 +35,10 @@ from scan_normalize import norm_mac
 # Поля записи источника по видам сравнения
 EXACT_FIELDS = ("hostname", "serial")          # без учёта регистра
 SET_FIELDS = ("ip", "mac")                     # набор значений, точно
-NAME_FIELDS = ("model", "os", "cpu", "gpu", "vnc", "drive")  # названия: по смыслу и словарю
+NAME_FIELDS = ("model", "motherboard", "os", "cpu", "gpu", "vnc", "drive")  # названия: по смыслу и словарю
 MULTI_NAME_FIELDS = ("drive", "gpu", "vnc")
 NUMBER_FIELDS = ("ram",)
-COMPARE_FIELDS = ["hostname", "ip", "mac", "serial", "model", "os", "cpu", "ram", "drive", "gpu", "vnc"]
+COMPARE_FIELDS = ["hostname", "ip", "mac", "serial", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "vnc"]
 
 # Слова, которые не отличают одно значение от другого
 NOISE = {
@@ -164,6 +166,22 @@ def same_line(field, a, b, strict=False):
     return True
 
 
+def board_names(aliases):
+    """{ключ названия модели в источнике: как писать в «Мат. плате»}."""
+    return {key_of(a["source"]): a["table"] for a in aliases if a["kind"] == "board" and a["field"] == "model"}
+
+
+def route_values(values, boards):
+    """Значения записи источника по столбцам таблицы: «модель», помеченная как
+    материнская плата, идёт в «Мат. плату», а модели у записи нет."""
+    model = (values or {}).get("model")
+
+    if not model or key_of(model) not in boards:
+        return values or {}
+
+    return dict(values, model=None, motherboard=boards[key_of(model)])
+
+
 class Names:
     """Словарь названий: соответствия вручную, выученные по таблице, значения
     столбцов. aliases — [{"field", "source", "table", "kind"}] (kind same /
@@ -174,11 +192,15 @@ class Names:
         self.same = {}
         self.differ = defaultdict(set)
         self.keep = defaultdict(set)
+        aliases = list(aliases)
+        self.boards = board_names(aliases)
 
         for alias in aliases:
             key = (alias["field"], key_of(alias["source"]))
 
-            if alias["kind"] == "same":
+            if alias["kind"] == "board":
+                continue
+            elif alias["kind"] == "same":
                 self.same[key] = alias["table"]
             elif alias["kind"] == "keep":
                 self.keep[key].add(key_of(alias["table"]))

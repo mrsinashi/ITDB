@@ -106,6 +106,7 @@
     --input-focus: var(--brand-focus);
     --focus-ring: rgba(var(--brand-rgb), 0.14);
     --danger: #a00;
+    --warn-text: #b35c00;           /* оранжевый: «нет ни в одной группе» (Vacuum) */
     --danger-strong: #c00;
     --overdue-text: #c00;           /* просроченная дата «Временно, до…»: красный жирный, без фона */
     --success: #2e7d32;
@@ -3822,12 +3823,17 @@ body.login-page {
 .sm-state.st-dup {
     color: var(--text-muted);
 }
-/* Раскрытая запись — серая, пока открыта; под ней — заметный разделитель (этап 26в) */
+/* Раскрытая запись — серая, пока открыта; заметная линия — над ней (этап 26ж;
+   раньше была между строкой и подробностями) и под подробностями */
 .history-table.sm-table tbody tr.sm-open td,
 .history-table.sm-table tbody tr.sm-open:hover td {
     background: var(--sm-open-bg);
     border-right-color: #c4c4c4;
-    border-bottom: 2px solid var(--sm-detail-line);
+    border-bottom-color: #c4c4c4;
+    box-shadow: inset 0 2px 0 var(--sm-detail-line);
+}
+.history-table.sm-table tbody:first-of-type tr.sm-open:first-child td {
+    box-shadow: none;
 }
 .history-table.sm-table tbody tr.sm-open td:last-child {
     border-right-color: transparent;
@@ -4112,10 +4118,6 @@ button.scan-chip {
     min-width: 62px;
     text-align: center;
 }
-.scan-legend .sl-note {
-    margin-top: 6px;
-    color: var(--text-secondary);
-}
 
 /* Карточка «что сделать» у блочка: рядом с ним, двигается за шапку */
 .scan-pop {
@@ -4216,6 +4218,7 @@ button.scan-chip {
 }
 .scan-pop .sp-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     padding: 8px 10px 0;
     border-top: 1px solid var(--grid-line);
@@ -4223,6 +4226,9 @@ button.scan-chip {
 .scan-pop .sp-actions .btn {
     flex: 1;
     justify-content: center;
+}
+.scan-pop .sp-actions .btn.sp-wide {
+    flex: 1 0 100%;
 }
 .scan-pop .sp-all {
     display: flex;
@@ -4344,13 +4350,6 @@ button.scan-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-}
-.scan-marks-note {
-    max-width: 640px;
-    margin-top: 6px;
-    font-size: 12px;
-    line-height: 17px;
-    color: var(--text-secondary);
 }
 .scan-marks-panel {
     width: fit-content;
@@ -4525,17 +4524,9 @@ button.scan-chip {
 }
 
 /* ============================================================
-   Этап 26д: вкладка «Vacuum», пояснение «Названий», значок-вкладка
+   Этап 26д: страница «Vacuum», пояснение «Названий»
    ============================================================ */
 
-/* Вкладка-значок на второй панели (лампочка Vacuum) — как вкладки-подписи */
-.toolbar .tb-tabs a.tb-tab-icon {
-    padding: 0 12px;
-}
-.toolbar .tb-tabs a.tb-tab-icon svg {
-    width: 16px;
-    height: 16px;
-}
 /* «Названия»: пояснение — белой плашкой под кнопкой «?», как подсказка о цветах */
 .toolbar .dropdown.names-help {
     display: block;
@@ -4593,9 +4584,41 @@ button.scan-chip {
 .vacuum-table .vc-none {
     color: var(--text-muted);
 }
-.vacuum-table th.vc-c,
-.vacuum-table td.vc-c {
-    text-align: center;
+/* Пользователя уже нет, а в группе остался — красным; нет ни в одной группе — оранжевым */
+.vacuum-table tr.vc-gone td.vc-login,
+.vacuum-table tr.vc-gone td.vc-status {
+    color: var(--danger-strong);
+}
+.vacuum-table tr.vc-nogroup td.vc-login,
+.vacuum-table .vc-flag {
+    color: var(--warn-text);
+}
+.vacuum-table td.vc-status {
+    font-variant-numeric: tabular-nums;
+}
+/* Идёт сбор: полоса и «просмотрено из» — в строке фильтров */
+.scan-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 6px;
+    font-size: 12px;
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+}
+.scan-progress .sp-bar {
+    width: 180px;
+    height: 8px;
+    border: 1px solid var(--gray-line);
+    border-radius: var(--radius);
+    background: #fff;
+    overflow: hidden;
+}
+.scan-progress .sp-fill {
+    display: block;
+    height: 100%;
+    background: var(--brand);
+    transition: width .3s linear;
 }
 .vacuum-table td.vc-status {
     color: var(--text-secondary);
@@ -4717,5 +4740,63 @@ button.scan-chip {
     padding: 0 10px 8px;
     font-size: 12px;
     line-height: 16px;
+    color: var(--text-strong);
+}
+
+/* ============================================================
+   Этап 26ж: значения ячейки по строкам — повтор блочком (как значение с фоном в
+   Справочниках), логин, которого нет в Jabber, — красным, номер записи GLPI /
+   GSIT — ссылкой
+   ============================================================ */
+.data-table td .cell-lines {
+    display: block;
+}
+.data-table td .cell-line {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    color: inherit;
+    text-decoration: none;
+}
+.data-table td.center .cell-line {
+    margin-left: auto;
+    margin-right: auto;
+}
+/* Блочок шире текста на 5px с каждой стороны, текст — там же, где у соседних значений */
+.data-table td .cell-line.dup-chip {
+    margin-left: -5px;
+    margin-right: -5px;
+    padding: 0 5px;
+    border-radius: var(--radius);
+    background: var(--dup-bg);
+    max-width: calc(100% + 10px);
+}
+.data-table td.center .cell-line.dup-chip {
+    margin-left: auto;
+    margin-right: auto;
+}
+.cell-gone,
+.data-table td .cell-line.cell-gone {
+    color: var(--danger-strong);
+}
+.data-table td a.id-link:hover {
+    text-decoration: underline;
+}
+/* Карточка ПК: открыть запись в GLPI / GSIT — значком рядом с копированием */
+.id-open {
+    display: inline-flex;
+    margin-left: 5px;
+    color: var(--copy-ico);
+    vertical-align: -2px;
+    opacity: 0;
+}
+.id-open svg {
+    width: 12px;
+    height: 12px;
+}
+.card-table tr:hover .id-open {
+    opacity: 1;
+}
+.id-open:hover {
     color: var(--text-strong);
 }

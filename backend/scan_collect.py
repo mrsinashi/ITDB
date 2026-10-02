@@ -24,7 +24,9 @@ from scan_jabber import collect as jabber_collect
 from scan_http import SourceError
 from scan_match import drop_shared_keys, find_duplicates, match_all
 from scan_normalize import build
-from scan_values import COMPARE_FIELDS, MULTI_NAME_FIELDS, NAME_FIELDS, NUMBER_FIELDS, Names, lines_of
+from scan_values import (
+    COMPARE_FIELDS, MULTI_NAME_FIELDS, NAME_FIELDS, NUMBER_FIELDS, Names, board_names, lines_of, route_values,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -147,7 +149,10 @@ def collect_into(session, run):
     if kind in RECORD_KINDS:
         save_records(session, kind, run, result["items"], stats)
     else:
-        save_jabber(session, run, result["items"], keep_groups=not result.get("groups_ok", True))
+        save_jabber(
+            session, run, result["items"],
+            keep_groups=not result.get("groups_ok", True), users_ok=result.get("users_ok", False),
+        )
 
     finish(session, run, "ok", "\n".join(result["warnings"]) or None, stats)
 
@@ -191,10 +196,11 @@ def save_records(session, kind, run, items, stats):
     stats.update(counts)
 
 
-def save_jabber(session, run, items, keep_groups=False):
+def save_jabber(session, run, items, keep_groups=False, users_ok=False):
     """Пользователи Jabber: обновить, кто в сети и откуда; последний IP и время
     в сети остаются у тех, кто сейчас не в сети. keep_groups — группы получить
-    не удалось: прежние группы не трогать."""
+    не удалось: прежние группы не трогать. users_ok — получен список всех
+    пользователей: кого в нём нет — удалён (registered = False)."""
     seen_at = now()
     existing = {row.login.lower(): row for row in session.query(ScanJabberUser)}
     found = set()
@@ -216,6 +222,14 @@ def save_jabber(session, run, items, keep_groups=False):
         row.online = item["online"]
         row.resources = item["resources"] if item["online"] else []
 
+        if item.get("registered") is not None:
+            row.registered = item["registered"]
+
+        if item["online"]:
+            row.last_login_at = seen_at
+        elif item.get("last_login"):
+            row.last_login_at = item["last_login"]
+
         if item["online"]:
             row.last_seen_at = seen_at
             first = next((r for r in item["resources"] if r.get("ip")), None)
@@ -229,7 +243,14 @@ def save_jabber(session, run, items, keep_groups=False):
         found.add(key)
 
     for key, row in existing.items():
-        if key not in found and (row.online or row.resources or (row.groups and not keep_groups)):
+        if key in found:
+            continue
+
+        if users_ok and row.registered is not False:
+            row.registered = False
+            row.updated_at = seen_at
+
+        if row.online or row.resources or (row.groups and not keep_groups):
             row.online = False
             row.resources = []
 
@@ -244,10 +265,11 @@ def save_jabber(session, run, items, keep_groups=False):
 
 def computers_for_match(session):
     rows = session.query(
-        Computer.id, Computer.hostname, Computer.mac, Computer.serial, Computer.glpi_id, Computer.archived,
+        Computer.id, Computer.hostname, Computer.mac, Computer.serial, Computer.glpi_id, Computer.gsit_id, Computer.archived,
     ).all()
     return [
-        {"id": r.id, "hostname": r.hostname, "mac": r.mac, "serial": r.serial, "glpi_id": r.glpi_id, "archived": r.archived}
+        {"id": r.id, "hostname": r.hostname, "mac": r.mac, "serial": r.serial, "glpi_id": r.glpi_id,
+         "gsit_id": r.gsit_id, "archived": r.archived}
         for r in rows
     ]
 
@@ -305,6 +327,7 @@ def load_names(session, computers=None):
         choices[field].append(value)
 
     pairs = []
+    boards = board_names(aliases)
 
     for kind in RECORD_KINDS:
         matches, _ = match(session, kind)
@@ -314,7 +337,7 @@ def load_names(session, computers=None):
             if item["state"] not in ("key", "link") or item["computer_id"] not in computers:
                 continue
 
-            values = (records[source_id].data or {}).get("values") or {}
+            values = route_values((records[source_id].data or {}).get("values") or {}, boards)
             computer = computers[item["computer_id"]]
 
             for field in fields:
@@ -327,6 +350,7 @@ def load_names(session, computers=None):
 def compare_record(names, values, computer):
     """Строки сравнения записи с ПК (или без ПК — как было бы названо)."""
     result = []
+    values = route_values(values, names.boards)
 
     for field in COMPARE_FIELDS:
         item = names.compare(field, values.get(field), (computer or {}).get(field))

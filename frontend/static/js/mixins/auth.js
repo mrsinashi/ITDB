@@ -61,7 +61,7 @@ export default {
                 }
                 this.theme = applyTheme(prefs.theme || "red");
                 this.accentBorders = !!prefs.accent_borders;
-                this.accentHeaders = Object.assign({ tree: true, history: true, choices: true, users: true, scan: true }, prefs.accent_headers || {});
+                this.accentHeaders = Object.assign({ tree: true, history: true, choices: true, users: true, scan: true, vacuum: true }, prefs.accent_headers || {});
             } catch (e) {
                 this.user = null;
             }
@@ -137,9 +137,14 @@ export default {
                 this.loadAvSettings();
             } else if (view === "users") {
                 this.loadUsers();
+            } else if (view === "vacuum") {
+                this.loadVacuum();
+                if (this.isAdmin && !this.scanSources.length) {
+                    this.loadScanSources();     // «обновить» запускает сбор из Jabber
+                }
             } else if (view === "scan") {
                 if (this.isAdmin) {
-                    this.scanTab = "settings";      // «Сканирование» всегда открывается на «Подключениях»
+                    this.scanTab = "settings";      // «Сканер» всегда открывается на «Подключениях»
                     this.scanLinkBar = null;
                     this.scanMatchQuery = "";
                     this.loadScan();

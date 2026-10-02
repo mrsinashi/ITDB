@@ -16,7 +16,7 @@
 //                        scan-match (сбор из GLPI / GSIT, вкладка «Названия», общее для записей),
 //                        scan-check (вкладка «Проверка»: сопоставление и предложения сканера),
 //                        scan-diffs (значения сканера в Таблице, решения по ним, столбец «Антивирусы»),
-//                        scan-vacuum (вкладка «Vacuum»: пользователи Jabber)
+//                        scan-vacuum (страница «Vacuum»: пользователи Jabber)
 //   components/        — tree-node, tree-form, style-controls, location-picker
 //
 // Шаблоны разметки — в index.html.
@@ -67,7 +67,7 @@ const app = Vue.createApp({
             // Акценты (личные настройки): границы блоков цветом схемы и
             // цветная шапка таблиц — отдельно для каждой страницы
             accentBorders: false,
-            accentHeaders: { tree: true, history: true, choices: true, users: true, scan: true },
+            accentHeaders: { tree: true, history: true, choices: true, users: true, scan: true, vacuum: true },
 
             // Таблица
             tableLoading: true,
@@ -168,7 +168,7 @@ const app = Vue.createApp({
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
             subnetHover: null,   // подсеть под курсором — плашка действий
             // Этап 25: вкладки страницы, сбор и сопоставление
-            scanTab: "settings", // settings — подключения и подсети, check — проверка, names — названия, vacuum — Jabber
+            scanTab: "settings", // settings — подключения и подсети, check — проверка, names — названия
             scanRuns: {},        // kind → запуск сбора, за которым следим
             scanPollTimer: null,
             // Этап 26г: «Проверка» — записи GLPI и GSIT по ПК и предложения сканера
@@ -183,9 +183,10 @@ const app = Vue.createApp({
                 selected: [],    // ключи выделенных строк
                 anchor: null     // строка, от которой идёт Shift+клик
             },
-            scanMatchQuery: "",  // поиск на «Проверке», «Названиях» и «Vacuum»
-            // Этап 26д: «Vacuum» — пользователи Jabber (/api/scan/jabber)
+            scanMatchQuery: "",  // поиск на «Проверке» и «Названиях»
+            // Страница «Vacuum» — пользователи Jabber (/api/scan/jabber)
             vacuum: { data: null, loading: false, error: "", filter: "all" },
+            vacuumQuery: "",
             scanNames: { items: [], loading: false, error: "", hover: null },
             // Этапы 26б–26г: значения сканера в Таблице (кнопка на панели)
             scanOverlay: false,
@@ -199,6 +200,9 @@ const app = Vue.createApp({
                 rejected: 0,
                 sources: [],
                 antivirus: {},      // столбец «Антивирусы»: id ПК → [{ name, status, version, source }]
+                links: {},          // столбец с номером записи (glpi_id, gsit_id) → начало ссылки
+                vacuumMissing: [],  // логины VACUUM из таблицы, которых нет в Jabber
+                jabber: {},         // кого Jabber видит с адреса ПК: id ПК → логины
                 loading: false,
                 error: "",
             },

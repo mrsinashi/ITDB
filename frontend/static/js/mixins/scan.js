@@ -48,9 +48,6 @@ export default {
             if (this.scanTab === "check") {
                 return this.checkCountText;
             }
-            if (this.scanTab === "vacuum") {
-                return this.vacuumCountText;
-            }
             return this.scanTab === "settings" ? this.scanCountText : this.scanNamesCountText;
         },
 
@@ -69,7 +66,7 @@ export default {
                 data.sources.forEach((s) => { forms[s.kind] = this.scanFormFrom(s); });
                 this.scanForms = forms;
                 this.resumeScanRuns();
-                if (this.scanTab !== "settings") {
+                if (this.view === "scan" && this.scanTab !== "settings") {
                     this.setScanTab(this.scanTab);
                 }
             } catch (e) {
@@ -255,7 +252,7 @@ export default {
         scanTagTitle(kind) {
             const st = this.scanStatus(kind);
             if (!st) {
-                return "Подключение ещё не проверяли: значок с вилкой внизу";
+                return "Не проверяли";
             }
             return "Проверено " + this.formatTime(st.at) + (st.unsaved ? " (несохранённые данные)" : "") + "\n" + st.text;
         },
