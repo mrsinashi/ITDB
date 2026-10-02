@@ -475,7 +475,7 @@ export default {
             if (col && col.date && isOverdue(option.value)) {
                 st = Object.assign({}, st, OVERDUE_STYLE);
             }
-            return st.color || st.backgroundColor || st.fontWeight || st.fontStyle ? st : null;
+            return st.color || st.backgroundColor || st.fontWeight || st.fontStyle || st.textDecoration ? st : null;
         },
     }
 };

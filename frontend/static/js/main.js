@@ -7,6 +7,7 @@
 //   widths.js          — автоширина столбцов
 //   tree-utils.js      — значки и ширина колонки дерева
 //   shortcuts.js       — сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
+//   alt-copy.js        — Alt + клик: копирование значения во всех таблицах, кроме главной
 //   mixins/            — методы и вычисляемые значения по разделам:
 //                        auth, table, table-actions, card, tree, history, choices, common,
 //                        suggest (подсказки при вводе), users (пользователи системы),
@@ -26,6 +27,7 @@ import { loadJson } from "./util.js";
 import { HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY } from "./columns.js";
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
+import "./alt-copy.js";
 
 import common from "./mixins/common.js";
 import auth from "./mixins/auth.js";

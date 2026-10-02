@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
 import { apiFetch, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, frameColorFor, isDuplicateLine, isOverdue, OVERDUE_STYLE, refreshDuplicates, styleKey } from "../columns.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, OVERDUE_STYLE, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE — антивирусов нет
@@ -363,7 +363,8 @@ export default {
                     return { pad: CHIP_PAD, bold: avBold };
                 }
                 const m = this.lineMarks(row, col, line);
-                return m ? { pad: m.dup ? CHIP_PAD : 0, bold: m.gone || m.stale !== undefined } : null;
+                const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
+                return m || chip ? { pad: (m && m.dup) || chip ? CHIP_PAD : 0, bold: !!m && (m.gone || m.stale !== undefined) } : null;
             };
             this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
@@ -392,25 +393,50 @@ export default {
             return cls;
         },
 
-        cellTextStyle(row, col) {
-            const style = {};
-            const colStyle = this.columnStyles[col.field];
-            if (colStyle && colStyle.color) {
-                style.color = colStyle.color;
-            }
+        // Оформление ячейки целиком: столбец и поверх — первое оформленное значение.
+        // Фон блочком ячейку не оформляет (его строки рисует cellParts): тогда —
+        // только столбец, а если и у него блочок — ничего. Нет оформления — null
+        cellLook(row, col) {
             const fieldStyles = this.choiceStyleMap[col.field];
-            if (fieldStyles) {
-                const value = row[col.field];
-                if (value !== null && value !== undefined && value !== "") {
-                    const lines = String(value).split("\n");
-                    for (const line of lines) {
-                        const s = fieldStyles[styleKey(col.field, line)];
-                        if (s && s.color) {
-                            style.color = s.color;
-                            break;
-                        }
+            if (!fieldStyles && !this.columnStyles[col.field]) {
+                return null;
+            }
+            let found = "";
+            const value = row[col.field];
+            if (fieldStyles && value !== null && value !== undefined && value !== "") {
+                for (const line of String(value).split("\n")) {
+                    if (fieldStyles[styleKey(col.field, line)]) {
+                        found = line;
+                        break;
                     }
                 }
+            }
+            let look = this.lineLook(col.field, found);
+            if (look.chip && this.chipColumn(col)) {
+                look = found ? this.lineLook(col.field, "") : null;
+                if (look && look.chip) {
+                    look = null;
+                }
+            }
+            return look;
+        },
+
+        // Фон блочком — в столбцах, где значение рисуется обычным текстом
+        chipColumn(col) {
+            return !col.note && !col.scanOnly && this.chipFields.has(col.field);
+        },
+
+        cellTextStyle(row, col) {
+            const look = this.cellLook(row, col);
+            if (!look) {
+                return null;
+            }
+            const style = {};
+            if (look.color) {
+                style.color = look.color;
+            }
+            if (look.underline || look.strike) {
+                style.textDecoration = decoration(look.underline, look.strike);
             }
             return Object.keys(style).length ? style : null;
         },
@@ -427,7 +453,9 @@ export default {
                 return null;
             }
             const link = this.diffs.links[col.field];
-            if (!link && !(col.dup || col.field === "vacuum") || (row.archived && !link)) {
+            const chips = this.chipColumn(col);
+            const marks = (col.dup || col.field === "vacuum") && !row.archived;
+            if (!link && !chips && !marks) {
                 return null;
             }
             let special = false;
@@ -435,13 +463,23 @@ export default {
             const parts = lines.map((line) => {
                 const m = this.lineMarks(row, col, line) || {};
                 const href = this.idLink(col.field, line);
-                if (m.dup || m.gone || m.stale !== undefined || href) {
+                // Фон из Справочников блочком: всё оформление значения — у его строки
+                const look = chips && line.trim() ? this.lineLook(col.field, line) : null;
+                const chip = !!look && look.chip;
+                if (m.dup || m.gone || m.stale !== undefined || href || chip) {
                     special = true;
                 }
                 const titles = [m.dup ? "Повтор" : "", this.vacuumMarkTitle(m), href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
                 return {
                     text: line, href: href, title: titles.join(" · ") || null,
-                    cls: { "dup-chip": !!m.dup, "cell-gone": !!m.gone, "cell-stale": m.stale !== undefined }
+                    cls: { "dup-chip": !!m.dup, "fill-chip": chip, "cell-gone": !!m.gone, "cell-stale": m.stale !== undefined },
+                    style: chip ? {
+                        backgroundColor: m.dup ? null : look.bg_color,
+                        color: look.color,
+                        fontWeight: look.bold ? "700" : null,
+                        fontStyle: look.italic ? "italic" : null,
+                        textDecoration: decoration(look.underline, look.strike)
+                    } : null
                 };
             });
             return special ? parts : null;
@@ -537,51 +575,17 @@ export default {
         // Цвет заливки ячейки: фон значения из Справочников поверх фона
         // столбца; null — без заливки (повтор заливает только значение — cellParts)
         cellFillOf(row, col) {
-            let fill = null;
-            const colStyle = this.columnStyles[col.field];
-            if (colStyle && colStyle.bg_color) {
-                fill = colStyle.bg_color;
-            }
-            const fieldStyles = this.choiceStyleMap[col.field];
-            const value = row[col.field];
-            if (fieldStyles && value !== null && value !== undefined && value !== "") {
-                for (const line of String(value).split("\n")) {
-                    const s = fieldStyles[styleKey(col.field, line)];
-                    if (s) {
-                        if (s.bg_color) {
-                            fill = s.bg_color;
-                        }
-                        break;
-                    }
-                }
-            }
-            return fill;
+            const look = this.cellLook(row, col);
+            return look && !look.chip ? look.bg_color : null;
         },
 
         cellTdStyle(row, col) {
             const style = {};
-            // Сначала оформление столбца, поверх — оформление значения
-            const colStyle = this.columnStyles[col.field];
-            if (colStyle) {
-                if (colStyle.bg_color) style.backgroundColor = colStyle.bg_color;
-                if (colStyle.bold) style.fontWeight = "700";
-                if (colStyle.italic) style.fontStyle = "italic";
-            }
-            const fieldStyles = this.choiceStyleMap[col.field];
-            if (fieldStyles) {
-                const value = row[col.field];
-                if (value !== null && value !== undefined && value !== "") {
-                    const lines = String(value).split("\n");
-                    for (const line of lines) {
-                        const s = fieldStyles[styleKey(col.field, line)];
-                        if (s) {
-                            if (s.bg_color) style.backgroundColor = s.bg_color;
-                            if (s.bold) style.fontWeight = "700";
-                            if (s.italic) style.fontStyle = "italic";
-                            break;
-                        }
-                    }
-                }
+            // Оформление столбца и поверх — значения (фон блочком — у строк, cellParts)
+            const look = this.cellLook(row, col);
+            if (look) {
+                if (look.bold) style.fontWeight = "700";
+                if (look.italic) style.fontStyle = "italic";
             }
             if (col.bold) {
                 style.fontWeight = "700";
@@ -648,7 +652,7 @@ export default {
             // Рядом блочок сканера и у ситуации «зачёркивать значение таблицы»
             const mark = this.scanCellMark(row, col);
             if (mark && mark.strike && !this.isEditing(row, col)) {
-                base = Object.assign({}, base, { textDecoration: "line-through" });
+                base = Object.assign({}, base, { textDecoration: (base.textDecoration === "underline" ? "underline " : "") + "line-through" });
             }
             if (this.isEditing(row, col)) {
                 return Object.assign({}, base, { visibility: "hidden" });

@@ -154,6 +154,11 @@ export default {
             return this.diffs.count > 99 ? "99" : String(this.diffs.count);
         },
 
+        // Подсказка кнопки «Значения сканера»: сколько их всего (на кнопке — не больше 99)
+        scanButtonTitle() {
+            return "Значения сканера: " + (this.diffs.count || "нет");
+        },
+
         scanMarkByKind() {
             const map = {};
             this.scanMarks.forEach(function (m) { map[m.kind] = m; });

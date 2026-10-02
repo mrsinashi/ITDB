@@ -15,11 +15,18 @@
     /* Серые плоскости: шапки, группы, подписи — одна шкала для всех разделов */
     --gray-head: #f0f0f0;           /* шапка таблиц и панель (как у главной таблицы) */
     --gray-group: #e9e9e9;          /* строка-группа: адрес в дереве, день в истории, группа карточки — везде одна */
-    --gray-line: #d8d8d8;           /* линии шапок и групп, рамки блоков */
+    --gray-line: #d8d8d8;           /* линии шапок и групп */
+    --frame-gray: #a4a4a4;          /* рамки блоков и главной таблицы без акцентных границ */
+    --table-back: #e3e3e3;          /* фон вокруг главной таблицы, когда она уже окна */
     --group-line: #c8c8c8;          /* линии над и под строкой-группой (адрес в дереве) */
     --sm-detail-line: #a9a9a9;      /* нижняя линия раскрытых подробностей записи */
     --sm-open-bg: #dcdcdc;          /* раскрытая строка «Проверки» */
     --row-hover-chip: #efd3ae;      /* блочок с числом в строке под курсором — в тон бежевой подсветки */
+    /* Серый текст и линии на бежевой подсветке — в её тон */
+    --hover-muted: #b39c80;         /* вместо --text-muted */
+    --hover-soft: #917a5d;          /* вместо --text-soft */
+    --hover-secondary: #685742;     /* вместо --text-secondary */
+    --hover-line: #d9c3a0;          /* рамки блочков и кнопок, точка «не в сети» */
     --radius: 3px;                  /* единое скругление: как у кнопок и поиска на панели */
     --block-head: 26px;             /* высота шапки блоков: таблицы Дерева, Истории, Справочники, Сканер… */
     --badge-bg: #8a8a8a;            /* счётчик в углу кнопки панели — серый */
@@ -1099,18 +1106,24 @@ select.input {
    Таблица
    ============================================================ */
 
+/* Таблица уже окна — стоит по центру на сером фоне, с тенью; крайние линии —
+   рамка вокруг (слева у ячеек своей линии нет). Шире окна — как раньше */
 .table-wrap {
     flex: 1;
     overflow: auto;
     min-height: 0;
-    background: var(--bg);
+    background: var(--table-back);
 }
 
 .data-table {
+    --frame: var(--frame-gray);
+    margin: 0 auto;
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
     font-size: 12px;
+    background: var(--bg);
+    box-shadow: 0 0 0 1px var(--frame), 0 1px 8px rgba(0, 0, 0, 0.22);
     transform: translateZ(0);
 }
 
@@ -1459,6 +1472,10 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 .copy-hint.done {
     background: var(--copy-hint-done);
+}
+/* Та же подсветка в остальных таблицах (js/alt-copy.js) — поверх окон и карточек */
+.copy-hint.over {
+    z-index: 400;
 }
 
 /* Дубль — красная заливка (цвет задаёт cellTdStyle, как у цветов справочника) */
@@ -1909,7 +1926,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .history-frame,
 .st-block,
 .fd-panel {
-    --frame: var(--gray-line);
+    --frame: var(--frame-gray);
     --frame-head: var(--frame);     /* цвет рамки на высоте шапки */
     --head-h: var(--block-head);    /* высота шапки блока вместе с её нижней линией */
     position: relative;
@@ -2928,7 +2945,7 @@ select.er-input {
    Манера главной таблицы: серая шапка, линии сетки, плотные строки. */
 .st-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     align-items: start;
     gap: 10px;
 }
@@ -3006,6 +3023,10 @@ select.er-input {
     text-overflow: ellipsis;
     vertical-align: middle;
 }
+/* Фон заливкой ячейки (не блочком) — образец во всю строку */
+.st-val span.boxed.fill {
+    display: block;
+}
 .st-n {
     flex: 0 0 26px;
     text-align: right;
@@ -3054,7 +3075,7 @@ select.er-input {
     padding: 2px 9px;
 }
 
-/* Кнопки оформления: A — цвет текста, квадрат — фон, Ж, К */
+/* Кнопки оформления: A — цвет текста, квадрат — фон, фон блочком, Ж, К, Ч, З */
 .sc {
     display: inline-flex;
     gap: 2px;
@@ -3086,6 +3107,10 @@ select.er-input {
     background: var(--brand);
     border-color: var(--brand-dark);
     color: #fff;
+}
+.sc-chip svg {
+    width: 14px;
+    height: 14px;
 }
 .sc.disabled .sc-btn {
     cursor: default;
@@ -3275,8 +3300,9 @@ select.er-input {
 }
 
 /* Акцентные границы блоков (как у окон Windows 11): та же толщина,
-   только цвет — --brand-accent. Не кнопки, не сетка таблиц, не главная
-   таблица и не карточка ПК. */
+   только цвет — --brand-accent. Не кнопки, не сетка таблиц и не карточка ПК.
+   Без них рамка — --frame-gray. У главной таблицы рамка видна, когда она уже окна */
+body.accent-borders .data-table,
 body.accent-borders .tree-grid,
 body.accent-borders .history-frame,
 body.accent-borders .st-block,
@@ -4766,7 +4792,8 @@ button.scan-chip {
 }
 /* Блочок — как блочки сканера и антивирусов: край блочка там же, где начинается
    обычный текст (просьба 02.10: тот же отступ, что у других выделяемых значений) */
-.data-table td .cell-line.dup-chip {
+.data-table td .cell-line.dup-chip,
+.data-table td .cell-line.fill-chip {
     padding: 0 5px;
     border-radius: var(--radius);
     background: var(--dup-bg);
@@ -4828,7 +4855,7 @@ button.scan-chip {
     border-bottom: 1px solid var(--menu-border);
 }
 /* Воронка у включённой кнопки «Значения сканера»: только строки с предложениями.
-   Значок без кнопки; место под него есть всегда — кнопка при включении не сдвигается */
+   Значок без кнопки; есть только при включённой кнопке (просьба 02.10) */
 .toolbar .scan-only {
     display: inline-flex;
     align-items: center;
@@ -4839,9 +4866,6 @@ button.scan-chip {
     margin: 0 -2px;
     color: var(--text-muted);
     cursor: pointer;
-}
-.toolbar .scan-only.hidden {
-    visibility: hidden;
 }
 .toolbar .scan-only svg {
     width: 13px;
@@ -4869,4 +4893,54 @@ html.no-radius *::after {
 }
 html.no-radius .vacuum-table .vc-dot {
     border-radius: 50% !important;
+}
+
+/* ============================================================
+   Этап 26и: серое на жёлтой (бежевой) подсветке — в её тон (просьба 02.10).
+   У подсвеченной строки или кнопки переопределяются переменные серого текста —
+   всё серое внутри (подписи, «пусто», счётчики, значки) берёт оттенок само;
+   серое, заданное цветом напрямую, — правилами ниже. Выбранные (синие) строки,
+   раскрытые строки «Проверки» и строки правки — не жёлтые, их не касается.
+   ============================================================ */
+.data-table tbody tr.row-hover:not(.row-selected),
+.card-table tr:not(.ct-group):hover,
+.card-section.toggle-sec:hover,
+.node-row:hover,
+.node-row.is-hover,
+.history-table > tbody > tr:not(.h-day, .h-selected, .row-selected, .er-row, .sm-open, .sm-detail):is(:hover, .is-hover),
+.st-row:not(.st-sub):hover,
+.fd-table tr:hover,
+.sm-chip:not(.on):hover,
+.sm-compare td:is(.smc-can-edit, .smc-mark.cycle, .ck-mark-td.cycle):hover {
+    --text-muted: var(--hover-muted);
+    --text-soft: var(--hover-soft);
+    --text-secondary: var(--hover-secondary);
+    --tint-line: var(--hover-line);
+    --tint-chip: var(--row-hover-chip);
+}
+/* Найденное поиском в Справочниках — жёлтое: серое в его тон */
+.st-row.search-hit {
+    --text-muted: #b5a878;
+    --text-soft: #8f8459;
+    --text-secondary: #675e3d;
+    --tint-line: #dccf9d;
+    --tint-chip: #f3e3a4;
+}
+/* Серое, заданное напрямую: рамки блочков и кнопок, точка «не в сети», счётчик */
+.sm-state.st-name,
+.st-row .sc-btn,
+.st-row .st-tag {
+    border-color: var(--tint-line, #cfcfcf);
+}
+.st-row .sc-color:not(.set) .sc-swatch {
+    border-color: var(--tint-line, #bbb);
+}
+.st-row .sc-color:not(.set) .sc-letter {
+    color: var(--text-muted);
+}
+.vacuum-table .vc-status:not(.on) .vc-dot {
+    background: var(--tint-line, #c4c4c4);
+}
+.sm-chip:not(.on) .su-n {
+    background: var(--tint-chip, #e6e6e6);
 }

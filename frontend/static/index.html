@@ -206,18 +206,18 @@
                          что предлагают GLPI / GSIT; у включённой при наведении — что значат цвета -->
                     <span class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
                     <button class="btn icon-only" :class="{ active: scanOverlay, 'has-badge': diffs.count > 0 }" @click="toggleScanOverlay"
-                        :title="scanOverlay ? null : 'Значения сканера: ' + (diffs.count || 'нет')">
+                        :title="scanOverlay ? null : scanButtonTitle">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg><span v-if="diffs.count > 0 && buttonCounts" class="btn-badge">{{ diffCountBadge }}</span>
                     </button>
                     <div v-if="scanLegend && scanOverlay" class="scan-legend">
-                        <div class="sl-title">Что предлагает сканер</div>
+                        <div class="sl-title">{{ scanButtonTitle }}</div>
                         <template v-for="m in scanMarks" :key="m.kind">
                             <div v-if="m.enabled" class="sl-row"><span class="scan-chip" :style="scanChipStyle(m)">{{ scanLegendSample(m.kind) }}</span><span class="sl-text">{{ scanMarkHint(m.kind) }}</span></div>
                         </template>
                     </div>
                     </span>
-                    <!-- Только строки с предложениями: значок без кнопки, виден при включённой кнопке -->
-                    <span class="scan-only" :class="{ on: scanOnlyRows, hidden: !scanOverlay }" :title="scanOnlyRows ? 'Показать все строки' : 'Только строки с предложениями'" @click="scanOnlyRows = !scanOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
+                    <!-- Только строки с предложениями: значок без кнопки, есть только при включённой кнопке -->
+                    <span v-if="scanOverlay" class="scan-only" :class="{ on: scanOnlyRows }" :title="scanOnlyRows ? 'Показать все строки' : 'Только строки с предложениями'" @click="scanOnlyRows = !scanOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                     <!-- Архив: без выбранных строк — показать архив / вернуться к таблице,
                          с выбранными — убрать их в архив (в архиве — вернуть) -->
                     <button class="btn icon-only" :class="{ active: showArchive }" :disabled="archiveSaving" @click="onArchiveButton" :title="archiveButtonTitle">
@@ -303,8 +303,9 @@
                 <span v-if="actionBar.error" class="ab-error">{{ actionBar.error }}</span>
             </div>
 
+            <!-- Таблица уже окна — по центру (отступ слева — целым числом пикселей, иначе линии мылятся) -->
             <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
-                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'alt-copy': altDown }" ref="table" :style="{ width: totalWidth + 'px' }">
+                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'alt-copy': altDown }" ref="table" :style="{ width: totalWidth + 'px', marginLeft: 'max(0px, round(down, (100% - ' + totalWidth + 'px) / 2, 1px))' }">
                     <colgroup>
                         <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
                     </colgroup>
@@ -334,7 +335,7 @@
                                 <!-- Антивирусы (этап 26д): строкой каждый, цвет — по состоянию (Справочники) -->
                                 <span v-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avStyle(a) || {}).backgroundColor }" :style="avStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
                                 <!-- Значения по строкам: повтор — блочком, логина нет в Jabber — красным, номер GLPI / GSIT — ссылкой -->
-                                <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :title="p.title">{{ p.text }}</span></template></span>
+                                <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :style="p.style" :title="p.title">{{ p.text }}</span></template></span>
                                 <span v-else :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)">{{ cellText(row, col) }}</span>
                                 <button v-if="scanCellMark(row, col) && !isEditing(row, col)" type="button" class="scan-chip"
                                     :class="{ open: scanPop && scanPop.row.id === row.id && scanPop.col.field === col.field }"
@@ -521,17 +522,17 @@
                         </template>
                         <template v-else>
                         <div v-if="!b.orphan" class="st-row st-colrow">
-                            <span class="st-val"><span :class="{ boxed: !!effectiveStyle(b.field, null).backgroundColor }" :style="effectiveStyle(b.field, null)">Весь столбец</span></span>
+                            <span class="st-val"><span :class="sampleClass(b.field, null)" :style="effectiveStyle(b.field, null)">Весь столбец</span></span>
                             <span class="st-n"></span>
-                            <style-controls :value="columnStyles[b.field]" :disabled="!canEdit" @change="setColumnStyle(b.field, $event)"></style-controls>
+                            <style-controls extra :value="columnStyles[b.field]" :disabled="!canEdit" @change="setColumnStyle(b.field, $event)"></style-controls>
                             <span class="st-act"><span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)">↺</span></span>
                         </div>
                         <template v-if="b.valuesOn">
                             <div class="st-values">
                                 <div v-for="v in b.values" :key="v.key" class="st-row" :class="{ unused: v.count === 0, 'search-hit': choicesMatch.valueSet.has(b.field + '|' + v.key) }">
-                                    <span class="st-val" :title="v.value"><span :class="{ boxed: !!effectiveStyle(b.field, v.choice).backgroundColor }" :style="effectiveStyle(b.field, v.choice)"><template v-if="choicesMatch.valueSet.has(b.field + '|' + v.key)"><template v-for="(p, i) in hl(v.value)" :key="i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></template><template v-else>{{ v.value }}</template></span></span>
+                                    <span class="st-val" :title="v.value"><span :class="sampleClass(b.field, v.choice)" :style="effectiveStyle(b.field, v.choice)"><template v-if="choicesMatch.valueSet.has(b.field + '|' + v.key)"><template v-for="(p, i) in hl(v.value)" :key="i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></template><template v-else>{{ v.value }}</template></span></span>
                                     <span class="st-n" :title="'ПК с этим значением: ' + v.count">{{ v.count }}</span>
-                                    <style-controls :value="v.choice" :disabled="!canEdit" @change="setValueStyle(b.field, v, $event)"></style-controls>
+                                    <style-controls extra :value="v.choice" :disabled="!canEdit" @change="setValueStyle(b.field, v, $event)"></style-controls>
                                     <span class="st-act">
                                         <span v-if="canEdit && hasStyle(v.choice)" class="st-reset" title="Сбросить оформление" @click="resetValueStyle(b.field, v)">↺</span>
                                         <span v-else-if="canEdit && v.choice && v.count === 0" class="st-del" title="Удалить из справочника (в таблице не встречается)" @click="deleteChoice(v.choice)">✕</span>

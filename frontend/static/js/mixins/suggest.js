@@ -203,7 +203,7 @@ export default {
             }
             const choice = (this.choiceStyleMap[s.field] || {})[option.key] || null;
             const st = this.effectiveStyle(s.field, choice);
-            return st.color || st.backgroundColor || st.fontWeight || st.fontStyle ? st : null;
+            return st.color || st.backgroundColor || st.fontWeight || st.fontStyle || st.textDecoration ? st : null;
         },
     }
 };

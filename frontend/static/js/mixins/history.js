@@ -161,7 +161,7 @@ export default {
             if (r.date && isOverdue(r.value)) {
                 st = Object.assign({}, st, OVERDUE_STYLE);
             }
-            return st.color || st.backgroundColor || st.fontWeight || st.fontStyle ? st : null;
+            return st.color || st.backgroundColor || st.fontWeight || st.fontStyle || st.textDecoration ? st : null;
         },
 
         splitLines(value) {

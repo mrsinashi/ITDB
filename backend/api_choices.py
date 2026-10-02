@@ -6,7 +6,9 @@ from history_log import choice_title, diff, log_change
 from models import Choice
 
 # Поля значения справочника, которые пишутся в историю (порядок — нет)
-HISTORY_FIELDS = ("value", "color", "bg_color", "bold", "italic")
+# Галочки оформления: жирный, курсив, подчёркнутый, зачёркнутый, фон блочком
+FLAG_FIELDS = ("bold", "italic", "underline", "strike", "chip")
+HISTORY_FIELDS = ("value", "color", "bg_color") + FLAG_FIELDS
 
 router = APIRouter(prefix="/api/choices", tags=["choices"])
 
@@ -27,8 +29,7 @@ def list_choices(session=Depends(get_db)):
                 "sort": c.sort,
                 "color": c.color,
                 "bg_color": c.bg_color,
-                "bold": c.bold,
-                "italic": c.italic,
+                **{name: getattr(c, name) for name in FLAG_FIELDS},
             }
             for c in choices
         ]
@@ -114,10 +115,9 @@ def update_choice(
     if "bg_color" in payload:
         bg = (payload.get("bg_color") or "").strip()
         choice.bg_color = bg if bg else None
-    if "bold" in payload:
-        choice.bold = bool(payload.get("bold"))
-    if "italic" in payload:
-        choice.italic = bool(payload.get("italic"))
+    for name in FLAG_FIELDS:
+        if name in payload:
+            setattr(choice, name, bool(payload.get(name)))
     if "sort" in payload:
         try:
             choice.sort = int(payload.get("sort"))

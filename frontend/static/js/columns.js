@@ -130,6 +130,11 @@ export function styleKey(field, line) {
     return String(line).trim().toLowerCase();
 }
 
+// Подчёркнутый и зачёркнутый — одним свойством CSS; ни того, ни другого — null
+export function decoration(underline, strike) {
+    return [underline ? "underline" : "", strike ? "line-through" : ""].filter(Boolean).join(" ") || null;
+}
+
 // Подписи полей в истории (ключ поля → как показывать): полные названия
 // столбцов и подписи записей, которые не столбцы (с сервера)
 // Подписи полей в Истории — как в карточке, без расшифровок в скобках (этап 19)
@@ -161,6 +166,8 @@ export const SIMPLE_FIELD_LABELS = {
     bg_color: "Фон",
     bold: "Жирный",
     italic: "Курсив",
+    underline: "Подчёркнутый",
+    chip: "Фон блочком",
     label: "Название",
     archived: "Архив",
     role: "Роль",

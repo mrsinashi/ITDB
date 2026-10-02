@@ -1,7 +1,11 @@
 // Страница «Справочники»: значения, оформление столбцов и значений, пользовательские поля.
 
 import { apiFetch, matchesAllWords, searchNorm, searchWords, splitMulti } from "../util.js";
-import { columnTitle, ipSubnetKey } from "../columns.js";
+import { columnTitle, decoration, ipSubnetKey, styleKey } from "../columns.js";
+
+const NO_STYLE = {};
+// «Сбросить оформление» значения или столбца
+const STYLE_RESET = { color: "", bg_color: "", bold: false, italic: false, underline: false, strike: false, chip: false };
 
 export default {
     computed: {
@@ -57,8 +61,8 @@ export default {
 
         choiceStyleMap() {
             const map = {};
-            this.choicesItems.forEach(function (item) {
-                if (!item.color && !item.bg_color && !item.bold && !item.italic) {
+            this.choicesItems.forEach((item) => {
+                if (!this.hasStyle(item)) {
                     return;
                 }
                 if (!map[item.field]) {
@@ -68,10 +72,31 @@ export default {
                     color: item.color || null,
                     bg_color: item.bg_color || null,
                     bold: item.bold || false,
-                    italic: item.italic || false
+                    italic: item.italic || false,
+                    underline: item.underline || false,
+                    strike: item.strike || false,
+                    chip: item.chip || false
                 };
             });
             return map;
+        },
+
+        // Столбцы, где фон у значений может быть блочком (а не заливкой ячейки):
+        // только их ячейки Таблица разбирает по строкам
+        chipFields() {
+            const set = new Set();
+            Object.keys(this.columnStyles).forEach((field) => {
+                const st = this.columnStyles[field];
+                if (st.bg_color && st.chip) {
+                    set.add(field);
+                }
+            });
+            this.choicesItems.forEach(function (item) {
+                if (item.bg_color && item.chip) {
+                    set.add(item.field);
+                }
+            });
+            return set;
         },
 
         // «Справочники»: блок на каждый столбец таблицы, в том же порядке.
@@ -249,7 +274,32 @@ export default {
         },
 
         hasStyle(st) {
-            return !!(st && (st.color || st.bg_color || st.bold || st.italic));
+            return !!(st && (st.color || st.bg_color || st.bold || st.italic || st.underline || st.strike));
+        },
+
+        // Оформление строки значения как есть: значение поверх столбца. chip — фон
+        // блочком у текста (решает тот, чей фон: значение или столбец)
+        lineLook(field, line) {
+            const col = this.columnStyles[field] || NO_STYLE;
+            const val = (this.choiceStyleMap[field] || NO_STYLE)[styleKey(field, line)] || NO_STYLE;
+            const bg = val.bg_color || col.bg_color || null;
+            return {
+                color: val.color || col.color || null,
+                bg_color: bg,
+                chip: !!bg && !!(val.bg_color ? val.chip : col.chip),
+                bold: !!(val.bold || col.bold),
+                italic: !!(val.italic || col.italic),
+                underline: !!(val.underline || col.underline),
+                strike: !!(val.strike || col.strike)
+            };
+        },
+
+        // Образец в Справочниках: фон блочком — по ширине текста, заливкой — во всю строку
+        sampleClass(field, choice) {
+            const col = this.columnStyles[field] || NO_STYLE;
+            const val = choice || NO_STYLE;
+            const bg = val.bg_color || col.bg_color;
+            return { boxed: !!bg, fill: !!bg && !(val.bg_color ? val.chip : col.chip) };
         },
 
         // Как значение выглядит в таблице: столбец + значение поверх
@@ -260,7 +310,8 @@ export default {
                 color: val.color || col.color || null,
                 backgroundColor: val.bg_color || col.bg_color || null,
                 fontWeight: (val.bold || col.bold) ? "700" : null,
-                fontStyle: (val.italic || col.italic) ? "italic" : null
+                fontStyle: (val.italic || col.italic) ? "italic" : null,
+                textDecoration: decoration(val.underline || col.underline, val.strike || col.strike)
             };
         },
 
@@ -282,7 +333,7 @@ export default {
                     delete next[field];
                 }
                 this.columnStyles = next;
-                if ("bold" in patch) {
+                if ("bold" in patch || "chip" in patch || "bg_color" in patch) {
                     this.recalcWidths();
                 }
             } catch (e) {
@@ -291,7 +342,7 @@ export default {
         },
 
         resetColumnStyle(field) {
-            this.setColumnStyle(field, { color: "", bg_color: "", bold: false, italic: false });
+            this.setColumnStyle(field, Object.assign({}, STYLE_RESET));
         },
 
         // Значение из данных, которого нет в справочнике, добавляется туда
@@ -314,7 +365,7 @@ export default {
                 .reduce(function (m, c) { return Math.max(m, c.sort || 0); }, 0);
             this.choicesItems.push({
                 id: data.id, field: field, value: entry.value, sort: maxSort + 1,
-                color: null, bg_color: null, bold: false, italic: false
+                color: null, bg_color: null, bold: false, italic: false, underline: false, strike: false, chip: false
             });
             return this.choicesItems[this.choicesItems.length - 1];
         },
@@ -334,7 +385,7 @@ export default {
                     const v = patch[k];
                     choice[k] = (k === "color" || k === "bg_color") ? (v || null) : v;
                 });
-                if ("bold" in patch) {
+                if ("bold" in patch || "chip" in patch || "bg_color" in patch) {
                     this.recalcWidths();
                 }
             } catch (e) {
@@ -343,7 +394,7 @@ export default {
         },
 
         resetValueStyle(field, entry) {
-            this.setValueStyle(field, entry, { color: "", bg_color: "", bold: false, italic: false });
+            this.setValueStyle(field, entry, Object.assign({}, STYLE_RESET));
         },
 
         async deleteChoice(item) {

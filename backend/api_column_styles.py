@@ -7,7 +7,9 @@ from db import get_db
 from history_log import column_label, log_change
 from models import ColumnStyle
 
-STYLE_FIELDS = ("color", "bg_color", "bold", "italic")
+# Галочки: жирный, курсив, подчёркнутый, зачёркнутый, фон блочком (а не заливкой ячейки)
+FLAG_FIELDS = ("bold", "italic", "underline", "strike", "chip")
+STYLE_FIELDS = ("color", "bg_color") + FLAG_FIELDS
 
 router = APIRouter(prefix="/api/column-styles", tags=["column_styles"])
 
@@ -20,9 +22,13 @@ def style_dict(item):
         "field": item.field,
         "color": item.color,
         "bg_color": item.bg_color,
-        "bold": item.bold,
-        "italic": item.italic,
+        **{name: bool(getattr(item, name)) for name in FLAG_FIELDS},
     }
+
+
+def is_empty(item):
+    """Оформления нет («блочком» без фона ничего не значит) — строка не нужна."""
+    return not (item.color or item.bg_color or item.bold or item.italic or item.underline or item.strike)
 
 
 @router.get("")
@@ -52,23 +58,22 @@ def update_column_style(
     item = session.get(ColumnStyle, field)
     existed = item is not None
     if not existed:
-        item = ColumnStyle(field=field, bold=False, italic=False)
+        item = ColumnStyle(field=field, **{name: False for name in FLAG_FIELDS})
     before = style_dict(item)
     if "color" in payload:
         item.color = clean_color(payload.get("color"))
     if "bg_color" in payload:
         item.bg_color = clean_color(payload.get("bg_color"))
-    if "bold" in payload:
-        item.bold = bool(payload.get("bold"))
-    if "italic" in payload:
-        item.italic = bool(payload.get("italic"))
+    for name in FLAG_FIELDS:
+        if name in payload:
+            setattr(item, name, bool(payload.get(name)))
 
     result = style_dict(item)
     # Оформление столбца: entity_id 0, столбец — в entity_key
     log_change(session, "column_styles", 0, user["login"],
                {name: {"old": before[name], "new": result[name]} for name in STYLE_FIELDS},
                title=column_label(session, field), entity_key=field)
-    empty = not (item.color or item.bg_color or item.bold or item.italic)
+    empty = is_empty(item)
     if empty and existed:
         session.delete(item)
     elif not empty and not existed:

@@ -89,6 +89,10 @@ class Choice(Base):
     bg_color = Column(Text, nullable=True)
     bold = Column(Boolean, nullable=False, server_default="false")
     italic = Column(Boolean, nullable=False, server_default="false")
+    underline = Column(Boolean, nullable=False, server_default="false")
+    strike = Column(Boolean, nullable=False, server_default="false")
+    # Фон — блочком у текста, а не заливкой ячейки (этап 26и)
+    chip = Column(Boolean, nullable=False, server_default="false")
 
 
 class Person(Base):
@@ -220,6 +224,9 @@ class ColumnStyle(Base):
     bg_color = Column(Text, nullable=True)
     bold = Column(Boolean, nullable=False, server_default="false")
     italic = Column(Boolean, nullable=False, server_default="false")
+    underline = Column(Boolean, nullable=False, server_default="false")
+    strike = Column(Boolean, nullable=False, server_default="false")
+    chip = Column(Boolean, nullable=False, server_default="false")
 
 
 class ScanSource(Base):

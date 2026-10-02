@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
+from api_column_styles import is_empty
 from api_columns import EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY
 from api_computers import (
     DATE_FIELDS,
@@ -47,17 +48,21 @@ Ref = namedtuple("Ref", "entity entity_id entity_key")
 LOCATION_VALUE_FIELDS = {"name", "code", "archived"}
 LOCATION_LABELS = {"name": "Название", "code": "Код", "archived": "Архив"}
 
+# Галочки оформления значения и столбца
+STYLE_FLAGS = {"bold", "italic", "underline", "strike", "chip"}
+
 # Этап 19б: справочники, польз. поля, оформление столбцов, пользователи системы.
 # fields — поля, которые можно отменить и вернуть; admin — только администратор.
 SIMPLE = {
-    "choices": {"model": Choice, "fields": {"value", "color", "bg_color", "bold", "italic"}},
+    "choices": {"model": Choice, "fields": {"value", "color", "bg_color"} | STYLE_FLAGS},
     "field_defs": {"model": FieldDef, "fields": {"label", "archived"}},
-    "column_styles": {"model": ColumnStyle, "fields": {"color", "bg_color", "bold", "italic"}},
+    "column_styles": {"model": ColumnStyle, "fields": {"color", "bg_color"} | STYLE_FLAGS},
     "users": {"model": User, "fields": {"login", "full_name", "position", "role", "archived"}, "admin": True},
 }
 SIMPLE_LABELS = {
     "value": "Значение", "color": "Цвет текста", "bg_color": "Фон", "bold": "Жирный",
-    "italic": "Курсив", "label": "Название", "archived": "Архив", "role": "Роль",
+    "italic": "Курсив", "underline": "Подчёркнутый", "strike": "Зачёркнутый", "chip": "Фон блочком",
+    "label": "Название", "archived": "Архив", "role": "Роль",
     "password": "Пароль", "created": "Создано", "deleted": "Удалено",
     "login": "Логин", "full_name": "ФИО", "position": "Должность",
 }
@@ -140,7 +145,7 @@ def find_object(session, ref, lock=True):
 
     if ref.entity == "column_styles":
         obj = session.get(ColumnStyle, ref.entity_key)
-        return obj or ColumnStyle(field=ref.entity_key, bold=False, italic=False)
+        return obj or ColumnStyle(field=ref.entity_key, **{name: False for name in STYLE_FLAGS})
 
     models = {"computers": Computer, "locations": Location}
     model = models.get(ref.entity) or SIMPLE[ref.entity]["model"]
@@ -399,7 +404,7 @@ def set_simple_value(session, entity, obj, field, value, user):
     if same(field, old, value):
         return {}
 
-    if field in ("bold", "italic", "archived"):
+    if field in STYLE_FLAGS or field == "archived":
         value = bool(value)
     elif field in ("color", "bg_color"):
         value = value or None
@@ -440,7 +445,7 @@ def set_simple_value(session, entity, obj, field, value, user):
 
     # Оформление столбца: пустое удаляется, новое добавляется
     if entity == "column_styles":
-        empty = not (obj.color or obj.bg_color or obj.bold or obj.italic)
+        empty = is_empty(obj)
         stored = session.get(ColumnStyle, obj.field) is not None
 
         if empty and stored:
