@@ -55,7 +55,7 @@ from models import (
     AppSetting, Computer, ScanHost, ScanJabberUser, ScanMark, ScanRecord, ScanReject, ScanSource, VacuumAccount,
     VacuumAccountComputer,
 )
-from scan_hostmatch import host_rows
+from scan_hostmatch import TITLES as HOST_TITLES, confirmed, host_rows
 from scan_match import ID_FIELDS
 from scan_values import COMPARE_FIELDS, NAME_FIELDS, clean_text, key_of, lines_of
 
@@ -126,6 +126,8 @@ class DiffsOut(BaseModel):
     jabber: dict[int, list[str]] = {}   # кого Jabber видит с адреса ПК: id ПК → логины
     # что о ПК видно в сети (DHCP, проход подсетей): id ПК → {ip, mac, hostname: [значения]}
     net: dict[int, dict[str, list[str]]] = {}
+    # ПК, проверенные и GLPI / GSIT, и сетью: id ПК → чем («GLPI», «Сеть»; этап 28б)
+    verified: dict[int, list[str]] = {}
 
 
 def enabled_kinds(session):
@@ -410,7 +412,7 @@ def host_observations(session):
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
     которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
-    подключавшиеся, что видно в сети у ПК) по всем включённым источникам. Одно поле ПК — одна строка;
+    подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью) по всем включённым источникам. Одно поле ПК — одна строка;
     если источники предлагают разное — «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
@@ -422,6 +424,7 @@ def compute(session, with_rejected=False):
 
     rows = {}   # (ПК, поле) → {row из compare, sources: [...]}
     antivirus = {}
+    in_records = defaultdict(list)  # ПК → источники записей, уверенно сопоставленных с ним
     record_ips = defaultdict(set)   # IP → ПК, с которыми сопоставлены записи с этим IP
     numbers = {     # номера записей GLPI / GSIT, записанные в таблице
         row[0]: dict(zip(ID_FIELDS.values(), row[1:]))
@@ -431,6 +434,10 @@ def compute(session, with_rejected=False):
     for kind, source_id, item, record in matched_records(session, kinds, computers):
         computer_id = item["computer_id"]
         values = (record.data or {}).get("values") or {}
+
+        if SOURCES[kind]["title"] not in in_records[computer_id]:
+            in_records[computer_id].append(SOURCES[kind]["title"])
+
         antivirus.setdefault(computer_id, {}).setdefault(kind, []).extend(av_entries(kind, record))
         source = {
             "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id,
@@ -459,9 +466,15 @@ def compute(session, with_rejected=False):
     # Сеть (этап 28): MAC, IP и имя — там, где записи GLPI / GSIT об этом поле молчат
     hosts, host_kinds = host_observations(session)
     net_seen = {}
+    verified = {}
 
     if hosts:
         proposals, net_seen = host_rows(computers, hosts)
+        # Проверен и записью GLPI / GSIT, и сетью (этап 28б)
+        verified = {
+            computer_id: in_records[computer_id] + [HOST_TITLES.get(kind, kind) for kind in found]
+            for computer_id, found in confirmed(computers, hosts).items() if in_records.get(computer_id)
+        }
 
         for proposal in proposals:
             computer_id, field = proposal["computer_id"], proposal["field"]
@@ -575,7 +588,7 @@ def compute(session, with_rejected=False):
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
 
     result.sort(key=lambda d: ((d.hostname or "").lower(), d.computer_id, order.get(d.field, 99)))
-    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen
+    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen, verified
 
 
 def record_links(session):
@@ -597,7 +610,7 @@ def list_diffs(
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    items, rejected_count, kinds, antivirus, missing, seen_at, stale, net_seen = compute(session, with_rejected=rejected)
+    items, rejected_count, kinds, antivirus, missing, seen_at, stale, net_seen, verified = compute(session, with_rejected=rejected)
     return DiffsOut(
         items=items,
         computers=len({d.computer_id for d in items if not d.rejected_by and d.kind != "partial"}),
@@ -609,6 +622,7 @@ def list_diffs(
         vacuum_stale=stale,
         jabber=seen_at,
         net=net_seen,
+        verified=verified,
     )
 
 
@@ -860,13 +874,15 @@ def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), sess
 av_router = APIRouter(prefix="/api/scan/antivirus", tags=["scan"])
 
 AV_KEY = "antivirus"
-AV_STYLE_FIELDS = ("color", "bg_color", "bold", "italic", "show")
+AV_STYLE_FIELDS = ("color", "bg_color", "bold", "italic", "underline", "strike", "chip", "show")
 # Начальный вид (26е): блочком с фоном по состоянию, как значения в Справочниках —
 # зелёный, оранжевый, красный (миграция a3d7c1e5f9b2 переводит и прежний вид 26д)
+# С 28б — те же кнопки, что у значений Справочников: Ч, З и «фон блочком» (chip)
+AV_PLAIN = {"color": None, "bold": False, "italic": False, "underline": False, "strike": False, "chip": True, "show": True}
 AV_DEFAULTS = {
-    "on": {"color": None, "bg_color": "#cdebd0", "bold": False, "italic": False, "show": True},
-    "old": {"color": None, "bg_color": "#fde0b8", "bold": False, "italic": False, "show": True},
-    "off": {"color": None, "bg_color": "#f7c6c6", "bold": False, "italic": False, "show": True},
+    "on": {**AV_PLAIN, "bg_color": "#cdebd0"},
+    "old": {**AV_PLAIN, "bg_color": "#fde0b8"},
+    "off": {**AV_PLAIN, "bg_color": "#f7c6c6"},
 }
 AV_HIDDEN_MAX = 100
 AV_NAMES_MAX = 300
@@ -880,6 +896,9 @@ class AvStatusOut(BaseModel):
     bg_color: Optional[str]
     bold: bool
     italic: bool
+    underline: bool = False
+    strike: bool = False
+    chip: bool = True
     show: bool
 
 
@@ -901,6 +920,9 @@ class AvUpdate(BaseModel):
     bg_color: Optional[str] = None
     bold: Optional[bool] = None
     italic: Optional[bool] = None
+    underline: Optional[bool] = None
+    strike: Optional[bool] = None
+    chip: Optional[bool] = None
     show: Optional[bool] = None
     hidden: Optional[list[str]] = None
     rename: Optional[AvRename] = None

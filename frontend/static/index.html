@@ -11,23 +11,23 @@
     <div id="app" v-cloak>
         <nav class="top-menu" v-if="user">
             <span class="brand">ITDB<span v-if="user.label" class="brand-label" title="ITDB_LABEL из .env">{{ user.label }}</span></span>
-            <a href="#" @click.prevent="setView('table')" :class="{ active: view === 'table' }">Таблица</a>
-            <a href="#" @click.prevent="setView('tree')" :class="{ active: view === 'tree' }">Дерево</a>
-            <a v-if="canEdit" href="#" @click.prevent="setView('vacuum')" :class="{ active: view === 'vacuum' }">Vacuum</a>
-            <a v-if="canEdit" href="#" @click.prevent="setView('scan')" :class="{ active: view === 'scan' }">Сканер</a>
+            <a href="#table" @click="navClick($event, () => setView('table'))" :class="{ active: view === 'table' }">Таблица</a>
+            <a href="#tree" @click="navClick($event, () => setView('tree'))" :class="{ active: view === 'tree' }">Дерево</a>
+            <a v-if="canEdit" href="#vacuum" @click="navClick($event, () => setView('vacuum'))" :class="{ active: view === 'vacuum' }">Vacuum</a>
+            <a v-if="canEdit" href="#scan" @click="navClick($event, () => setView('scan'))" :class="{ active: view === 'scan' }">Сканер</a>
             <span class="menu-right">
                 <!-- Значки справа: Справочники, История, Пользователи, Настройки -->
-                <a href="#" class="nav-icon nav-tab" @click.prevent="setView('choices')" :class="{ active: view === 'choices' }" title="Справочники">
+                <a href="#choices" class="nav-icon nav-tab" @click="navClick($event, () => setView('choices'))" :class="{ active: view === 'choices' }" title="Справочники">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
                 </a>
-                <a href="#" class="nav-icon nav-tab" @click.prevent="setView('history')" :class="{ active: view === 'history' }" title="История">
+                <a href="#history" class="nav-icon nav-tab" @click="navClick($event, () => setView('history'))" :class="{ active: view === 'history' }" title="История">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
                 </a>
-                <a v-if="isAdmin" href="#" class="nav-icon nav-tab" @click.prevent="setView('users')" :class="{ active: view === 'users' }" title="Пользователи">
+                <a v-if="isAdmin" href="#users" class="nav-icon nav-tab" @click="navClick($event, () => setView('users'))" :class="{ active: view === 'users' }" title="Пользователи">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </a>
                 <span class="dropdown-wrap nav-pop" ref="settingsWrap">
-                    <a href="#" class="nav-icon" :class="{ open: openMenu === 'settings' }" @click.prevent="toggleMenu('settings')" title="Настройки">
+                    <a class="nav-icon" :class="{ open: openMenu === 'settings' }" @click.prevent="toggleMenu('settings')" title="Настройки">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     </a>
                     <div v-if="openMenu === 'settings'" class="nav-card settings-card">
@@ -50,7 +50,7 @@
                     </div>
                 </span>
                 <span class="dropdown-wrap nav-pop" ref="userWrap">
-                    <a href="#" class="nav-user" ref="navUser" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')" :title="navUserTitle">
+                    <a class="nav-user" ref="navUser" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')" :title="navUserTitle">
                         {{ navUserName }}
                     </a>
                     <div v-if="openMenu === 'user'" class="nav-card user-card">
@@ -176,7 +176,13 @@
                         @keydown.esc.prevent="onSearchEsc($event, 'quickFilter')">
                     <span v-if="quickFilter" class="clear" title="Очистить (Esc)" @click="quickFilter = ''">×</span>
                 </span>
-                <div class="tb-right">
+                <div class="tb-right tb-right-wide">
+                    <!-- Второй вид таблицы: свой набор столбцов; у кнопки меняется только значок -->
+                    <button class="btn icon-only tb-view" @click="toggleTableView" :title="tableView === 2 ? 'Основной вид' : 'Второй вид'">
+                        <svg v-if="tableView === 2" class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+                        <svg v-else class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+                    </button>
+                    <span class="tb-view-gap"></span>
                     <span v-if="tableError" class="tb-error" :title="tableError">{{ tableError }}</span>
                     <!-- Появляются слева от постоянных кнопок: остальное не сдвигается -->
                     <button v-if="activeColFilters.length" class="btn icon-only" @click="clearAllColFilters" title="Сбросить фильтры по столбцам"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.013 3H2l8 9.46V19l4 2v-8.54l.9-1.055"/><path d="m22 3-5 5"/><path d="m17 3 5 5"/></svg></button>
@@ -328,10 +334,10 @@
                                 @mouseenter="handleNoteEnter($event, row, col)"
                                 @mouseleave="hideNoteTooltip">
                                 <!-- Антивирусы (этап 26д): строкой каждый, цвет — по состоянию (Справочники) -->
-                                <span v-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avStyle(a) || {}).backgroundColor }" :style="avStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
+                                <span v-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avCellStyle(a) || {}).backgroundColor }" :style="avCellStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
                                 <!-- Значения по строкам: повтор — блочком, логина нет в Jabber — красным, номер GLPI / GSIT — ссылкой -->
-                                <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :style="p.style" :title="p.title">{{ p.text }}</span></template></span>
-                                <span v-else :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)">{{ cellText(row, col) }}</span>
+                                <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><a v-else-if="p.card" class="cell-line host-link" :class="p.cls" :style="p.style" :href="p.card" draggable="false" :title="p.title" @click.prevent>{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :style="p.style" :title="p.title" @dblclick="onCellValueDblclick($event, row, col)">{{ p.text }}</span></template></span>
+                                <span v-else :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)" @dblclick="onCellValueDblclick($event, row, col)">{{ cellText(row, col) }}</span>
                                 <button v-if="scanCellMark(row, col) && !isEditing(row, col)" type="button" class="scan-chip"
                                     :class="{ open: scanPop && scanPop.row.id === row.id && scanPop.col.field === col.field }"
                                     :style="scanChipStyle(scanCellMark(row, col))" :title="scanChipTitle(scanCellDiff(row, col))"
@@ -420,9 +426,9 @@
                     <!-- Действия со строкой — плашка справа от таблицы -->
                     <div v-if="treeHover" class="tree-actions" :style="{ top: treeHover.top + 'px', height: treeHover.height + 'px' }">
                         <span class="na-box">
-                            <span class="icon-btn" title="Показать эти ПК в таблице" @click="treeAction('showLocationInTable')">
+                            <a class="icon-btn" :href="pageHref('table', { loc: treeHover.node.id })" title="Показать эти ПК в таблице" @click="navClick($event, () => treeAction('showLocationInTable'))">
                                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.5h12M6 6.5V13"/></svg>
-                            </span>
+                            </a>
                             <template v-if="canEdit">
                                 <span class="na-sep"></span>
                                 <span class="icon-btn" title="Выше" @click="treeAction('moveLocationUp')">↑</span>
@@ -487,11 +493,11 @@
                             <template v-if="avSettings">
                                 <div class="st-row st-sub">Состояние</div>
                                 <div v-for="st in avSettings.statuses" :key="st.kind" class="st-row" :class="{ 'av-off': !st.show }">
-                                    <span class="st-val"><span :class="{ boxed: !!st.bg_color }" :style="avStatusStyle(st)">{{ st.label }}</span></span>
+                                    <span class="st-val"><span :class="{ boxed: !!st.bg_color, fill: !!st.bg_color && st.chip === false }" :style="avStatusStyle(st)">{{ st.label }}</span></span>
                                     <span class="st-n" :title="'Антивирусов в таком состоянии: ' + (avStatusCounts[st.kind] || 0)">{{ avStatusCounts[st.kind] || 0 }}</span>
-                                    <style-controls :value="st" :disabled="!canEdit" @change="updateAvSettings(Object.assign({ kind: st.kind }, $event))"></style-controls>
+                                    <style-controls extra :value="st" :disabled="!canEdit" @change="updateAvSettings(Object.assign({ kind: st.kind }, $event))"></style-controls>
                                     <span class="st-act av-act">
-                                        <span v-if="canEdit && hasStyle(st)" class="st-reset" title="Сбросить оформление" @click="updateAvSettings({ kind: st.kind, color: '', bg_color: '', bold: false, italic: false })">↺</span>
+                                        <span v-if="canEdit && hasStyle(st)" class="st-reset" title="Сбросить оформление" @click="updateAvSettings({ kind: st.kind, color: '', bg_color: '', bold: false, italic: false, underline: false, strike: false })">↺</span>
                                         <span class="st-eye" :class="{ off: !st.show, disabled: !canEdit }" :title="st.show ? 'Скрыть в таблице' : 'Показывать в таблице'"
                                             @click="canEdit && updateAvSettings({ kind: st.kind, show: !st.show })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><template v-if="st.show"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></template><template v-else><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></template></svg></span>
                                     </span>
@@ -521,6 +527,11 @@
                             <span class="st-n"></span>
                             <style-controls extra :value="columnStyles[b.field]" :disabled="!canEdit" @change="setColumnStyle(b.field, $event)"></style-controls>
                             <span class="st-act"><span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)">↺</span></span>
+                        </div>
+                        <!-- Тип VNC: чем подключаться к ПК, у которого он не указан (Enter по выбранной строке) -->
+                        <div v-if="b.field === 'vnc'" class="st-row st-vnc" title="Подключение, если у ПК тип VNC не указан">
+                            <span class="st-val">По умолчанию</span>
+                            <label v-for="k in vncKinds" :key="k.key" class="st-radio"><input type="radio" name="vnc-default" :checked="appSettings.vnc_default === k.key" :disabled="!canEdit" @change="setVncDefault(k.key)">{{ k.label }}</label>
                         </div>
                         <template v-if="b.valuesOn">
                             <div class="st-values">
@@ -588,10 +599,10 @@
                     <div class="scan-marks-body">
                         <table class="scan-marks-table">
                             <tr v-for="m in tableMarkList" :key="m.kind">
-                                <td class="smk-sample-td"><span class="tm-sample" :class="{ chip: !!m.bg_color }" :style="markStyle(m.kind)">{{ tableMarkSample(m.kind) }}</span></td>
+                                <td class="smk-sample-td"><span class="tm-sample" :class="{ chip: !!m.bg_color, fill: !!m.bg_color && m.chip === false }" :style="markStyle(m.kind)">{{ tableMarkSample(m.kind) }}</span></td>
                                 <td class="smk-label">{{ m.label }}</td>
                                 <td>
-                                    <style-controls :value="m" :disabled="!canEdit" extra no-chip @change="updateTableMark(m.kind, $event)"></style-controls>
+                                    <style-controls :value="m" :disabled="!canEdit" extra @change="updateTableMark(m.kind, $event)"></style-controls>
                                     <span v-if="canEdit && m.changed" class="st-reset" title="Вернуть как было" @click="updateTableMark(m.kind, { reset: true })">↺</span>
                                 </td>
                             </tr>
@@ -713,7 +724,7 @@
                             @mousedown="onHistoryRowMouseDown($event)" @click="onHistoryRowClick($event, item)">
                             <td class="h-time">{{ formatClock(item.at) }}</td>
                             <td class="h-obj">
-                                <span v-if="item.entity === 'computers'" class="h-link" @click="openCardById(item.entity_id)" title="Открыть карточку">{{ item.title || ('ПК #' + item.entity_id) }}</span>
+                                <a v-if="item.entity === 'computers'" class="h-link" :href="pageHref('table', { pc: item.entity_id })" draggable="false" @click.prevent="openCardById(item.entity_id)" title="Открыть карточку">{{ item.title || ('ПК #' + item.entity_id) }}</a>
                                 <span v-else class="h-other" :title="entityLabel(item.entity) + ' ' + (item.title || ('#' + item.entity_id))"><span class="h-obj-kind">{{ entityLabel(item.entity) }}</span>{{ item.title || ('#' + item.entity_id) }}</span>
                                 <span v-if="historyFilter.entityId === null" class="h-only" title="Показать изменения только этого объекта" @click="filterHistoryObject(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                             </td>
@@ -854,11 +865,13 @@
             <div class="toolbar">
                 <div class="tb-left">
                     <nav class="tb-tabs">
-                        <a href="#" :class="{ active: scanTab === 'check' }" @click.prevent="setScanTab('check')" title="Что сканер предлагает изменить">Проверка</a>
-                        <a v-if="isAdmin" href="#" :class="{ active: scanTab === 'names' }" @click.prevent="setScanTab('names')" title="Как значения источников называются в таблице">Названия</a>
-                        <a v-if="isAdmin" href="#" :class="{ active: scanTab === 'schedule' }" @click.prevent="setScanTab('schedule')" title="Когда собирать">Расписание</a>
-                        <!-- «Подключения» — последней, значком (этап 28) -->
-                        <a v-if="isAdmin" href="#" class="tb-tab-ico" :class="{ active: scanTab === 'settings' }" @click.prevent="setScanTab('settings')" title="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg></a>
+                        <a href="#scan/check" :class="{ active: scanTab === 'check' }" @click="navClick($event, () => setScanTab('check'))" title="Что сканер предлагает изменить">Проверка</a>
+                        <!-- «Сеть» (этап 28б): что собрали DHCP и проход подсетей -->
+                        <a href="#scan/net" :class="{ active: scanTab === 'net' }" @click="navClick($event, () => setScanTab('net'))" title="DHCP и проход подсетей">Сеть</a>
+                        <a v-if="isAdmin" href="#scan/names" :class="{ active: scanTab === 'names' }" @click="navClick($event, () => setScanTab('names'))" title="Как значения источников называются в таблице">Названия</a>
+                        <a v-if="isAdmin" href="#scan/schedule" :class="{ active: scanTab === 'schedule' }" @click="navClick($event, () => setScanTab('schedule'))" title="Когда собирать">Расписание</a>
+                        <!-- «Подключения» — последней, значком-шестерёнкой -->
+                        <a v-if="isAdmin" href="#scan/settings" class="tb-tab-ico" :class="{ active: scanTab === 'settings' }" @click="navClick($event, () => setScanTab('settings'))" title="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
                     </nav>
                     <!-- С выделением на «Проверке» вместо счётчика — «Выбрано: N ▾» (места на панели мало) -->
                     <span v-if="!(scanTab === 'check' && check.selected.length)" class="tb-count">{{ scanTopCountText() }}</span>
@@ -879,7 +892,7 @@
                     </span>
                     <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
                 </div>
-                <span v-if="scanTab === 'check' || scanTab === 'names'" class="tb-search">
+                <span v-if="scanTab === 'check' || scanTab === 'names' || scanTab === 'net'" class="tb-search">
                     <input v-model="scanMatchQuery" :placeholder="scanSearchPlaceholder" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'scanMatchQuery')">
                     <span v-if="scanMatchQuery" class="clear" title="Очистить (Esc)" @click="scanMatchQuery = ''">×</span>
@@ -1156,7 +1169,7 @@
                                             :class="{ 'is-hover': check.hover && check.hover.key === row.key, 'sm-open': check.open === row.key, 'row-selected': isCheckSelected(row) }"
                                             @mouseenter="setCheckHover(row, $event.currentTarget)" @mousedown="onCheckRowMouseDown($event, row)" @click="onCheckRowClick($event, row)"
                                             >
-                                            <td class="ck-pc"><span class="ck-host" :class="{ 'ck-noname': !row.pc }">{{ row.name }}</span><span class="ck-place">{{ checkPlace(row) }}</span></td>
+                                            <td class="ck-pc"><a v-if="row.pc" class="ck-host" :href="pageHref('table', { pc: row.pc.id })" draggable="false" @click.prevent>{{ row.name }}</a><span v-else class="ck-host ck-noname">{{ row.name }}</span><span class="ck-place">{{ checkPlace(row) }}</span></td>
                                             <td v-for="k in checkSourceKinds" :key="row.key + k" class="ck-src-cell">
                                                 <template v-if="checkSourceCell(row, k)">
                                                     <a v-if="checkSourceLink(row.recs[k])" class="ck-id" :href="checkSourceLink(row.recs[k])" target="_blank" rel="noopener" @click.stop :title="'Открыть в ' + row.recs[k].title">№{{ row.recs[k].source_id }}</a><span v-else class="ck-id">№{{ row.recs[k].source_id }}</span>
@@ -1188,7 +1201,7 @@
                                                                         @dblclick.stop="cell.c && cell.c.cycle && scanCycleMark(cell.c)" @mousedown="cell.c && cell.c.cycle && $event.detail > 1 && $event.preventDefault()" @click.stop>
                                                                         <span v-if="cell.c && cell.c.symbol" class="ck-mark" :class="{ manual: cell.c.manual, ne: cell.c.symbol === '≠' }">{{ cell.c.symbol }}</span>
                                                                     </td>
-                                                                    <td class="smc-v ck-cmp" :class="{ 'ck-same': cell.c && cell.c.mark === '=' && !cell.c.manual }"><template v-if="cell.c">{{ cell.c.source }}<span v-if="cell.c.rawText" class="smc-raw"> ({{ cell.c.rawText }})</span></template></td>
+                                                                    <td class="smc-v ck-cmp" :class="{ 'ck-same': cell.c && cell.c.mark === '=' && !cell.c.manual }" @dblclick="f.field === 'vnc' && cell.c && row.pc && checkVncConnect($event, row.pc.id, cell.c.source)"><template v-if="cell.c">{{ cell.c.source }}<span v-if="cell.c.rawText" class="smc-raw"> ({{ cell.c.rawText }})</span></template></td>
                                                                 </template>
                                                                 <td v-if="!row.record" class="smc-v cmp-prop">
                                                                     <span v-if="f.prop" class="ck-prop">
@@ -1203,7 +1216,7 @@
                                                                         </template>
                                                                         <span v-if="!f.prop.rejected_by && f.prop.kind === 'unsure'" class="ck-note bad" :title="f.prop.unsure">неточно</span>
                                                                         <span v-if="!f.prop.rejected_by && !f.prop.can_take" class="ck-note bad">имя на ПК другое</span>
-                                                                        <a v-if="f.prop.same_pair && !f.prop.rejected_by" href="#" class="ck-pair" @click.prevent.stop="showCheckPair(f.prop)" title="Показать их">ещё у {{ f.prop.same_pair }} ПК</a>
+                                                                        <a v-if="f.prop.same_pair && !f.prop.rejected_by" class="ck-pair" @click.prevent.stop="showCheckPair(f.prop)" title="Показать их">ещё у {{ f.prop.same_pair }} ПК</a>
                                                                     </span>
                                                                 </td>
                                                             </tr>
@@ -1239,6 +1252,42 @@
                                 <span class="icon-btn" :class="{ danger: a.danger }" :title="a.title" @click.stop="a.run()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="a.icon"></svg></span>
                             </template>
                         </span>
+                    </div>
+                </div>
+            </div>
+            <!-- Сеть (этап 28б): адреса из DHCP и прохода подсетей и какой ПК таблицы на каждом -->
+            <div v-else-if="scanTab === 'net'" class="page scan-match-page net-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <div class="sm-filters">
+                    <button v-for="f in netFilters" :key="f.key" class="sm-chip" :class="{ on: net.filter === f.key }" :title="f.title" @click="net.filter = f.key">
+                        {{ f.label }}<span class="su-n">{{ netCounts[f.key] }}</span>
+                    </button>
+                </div>
+                <div v-if="net.error" class="sm-error">{{ net.error }}</div>
+                <div class="users-wrap sm-wrap net-wrap">
+                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
+                        <div class="history-scroll">
+                            <table class="history-table users-table net-table" :class="{ 'accent-head': accentHeaders.scan }">
+                                <thead>
+                                    <tr><th>IP</th><th>MAC</th><th>Имя</th><th>DHCP</th><th>Сеть</th><th>Когда</th><th>ПК в таблице</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="!netShown.length" class="h-empty"><td colspan="7">{{ netEmptyText() }}</td></tr>
+                                    <tr v-for="h in netShown" :key="h.ip">
+                                        <td class="nt-ip">{{ h.ip }}</td>
+                                        <td class="nt-mac"><div v-for="m in h.mac" :key="m" class="vc-line">{{ m }}</div></td>
+                                        <td class="nt-name"><div v-for="n in h.name" :key="n" class="vc-line">{{ n }}</div></td>
+                                        <td class="nt-src" :title="netSeenTitle(h.dhcp)">{{ h.dhcp ? h.dhcp.text : "" }}</td>
+                                        <td class="nt-src" :title="netSeenTitle(h.net)">{{ h.net ? h.net.text : "" }}</td>
+                                        <td class="nt-when">{{ formatTime(h.seen_at) }}</td>
+                                        <td class="nt-pc">
+                                            <div v-for="c in h.computers" :key="c.computer_id" class="vc-line">
+                                                <a class="vc-host" :href="pageHref('table', { pc: c.computer_id })" :title="netPcTitle(c)" @click="navClick($event, () => openCardById(c.computer_id))">{{ c.hostname || "без имени" }}</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1400,7 +1449,7 @@
                                         <td class="vc-hosts">
                                             <template v-for="(a, ai) in u.addresses" :key="'h' + ai">
                                                 <div v-for="(h, hi) in a.hosts" :key="ai + '-' + hi" class="vc-line">
-                                                    <a v-if="h.computer_id" href="#" class="vc-host" :title="h.place || null" @click.prevent="openCardById(h.computer_id)">{{ h.hostname || "без имени" }}</a>
+                                                    <a v-if="h.computer_id" :href="pageHref('table', { pc: h.computer_id })" class="vc-host" :title="h.place || null" @click="navClick($event, () => openCardById(h.computer_id))">{{ h.hostname || "без имени" }}</a>
                                                     <span v-else class="vc-host vc-src" :title="'В таблице нет; имя из ' + h.source">{{ h.hostname || "без имени" }}</span>
                                                 </div>
                                                 <div v-if="!a.hosts.length" class="vc-line vc-none">—</div>
@@ -1529,7 +1578,7 @@
                                     </template>
                                     <span v-else-if="r.empty" class="ct-empty">—</span>
                                     <span v-else-if="r.key === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(card)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avStyle(a) || {}).backgroundColor }" :style="avStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
-                                    <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)">{{ r.value }}</span>
+                                    <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)" @dblclick="onCardValueDblclick($event, r, r.value)">{{ r.value }}</span>
                                     <template v-if="cardEditKey === r.key">
                                         <location-picker v-if="cardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="card.location_id" :options="locationOptions"
                                             placeholder="Расположение…" @pick="onCardLocationPick" @cancel="cardEditKey = null"></location-picker>

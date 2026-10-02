@@ -33,6 +33,7 @@
 // названием). С расхождениями приходят ссылки на записи GLPI / GSIT (links) и
 // логины VACUUM, которых нет в Jabber (vacuum_missing).
 
+import { decoration } from "../columns.js";
 import { apiFetch } from "../util.js";
 
 // Источник значения: «GLPI №12»; у Jabber номера записи нет
@@ -71,9 +72,15 @@ export default {
     },
 
     computed: {
+        // Есть состояние антивируса с фоном «на всю ячейку»
+        avFillOn() {
+            return !!this.avSettings && this.avSettings.statuses.some(function (st) { return !!st.bg_color && st.chip === false; });
+        },
+
         scanChipVersion() {
             return Array.from(this.scanShownKinds).sort().join(",") + "|" +
                 (this.diffs.vacuumMissing || []).join(",") + "|" + Object.keys(this.diffs.vacuumStale || {}).join(",") + "|" +
+                Object.keys(this.diffs.verified || {}).join(",") + "|" +
                 this.diffs.items.map(function (d) { return d.id + (d.rejected_by ? "-" : ":") + d.proposed; }).join("|");
         },
 
@@ -301,6 +308,7 @@ export default {
                 this.diffs.vacuumStale = data.vacuum_stale || {};
                 this.diffs.jabber = data.jabber || {};
                 this.diffs.net = data.net || {};
+                this.diffs.verified = data.verified || {};
             } catch (e) {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
@@ -438,12 +446,36 @@ export default {
                 color: st.color || null,
                 backgroundColor: st.bg_color || null,
                 fontWeight: st.bold ? "700" : null,
-                fontStyle: st.italic ? "italic" : null
+                fontStyle: st.italic ? "italic" : null,
+                textDecoration: decoration(st.underline, st.strike)
             };
         },
 
         avStyle(a) {
             return this.avStatusStyle(this.avStatusMap[a.status]);
+        },
+
+        // В ячейке Таблицы: фон «на всю ячейку» красит ячейку (avCellFill), а не строку
+        avCellStyle(a) {
+            const st = this.avStatusMap[a.status];
+            const style = this.avStatusStyle(st);
+            if (style && st.chip === false) {
+                style.backgroundColor = null;
+            }
+            return style;
+        },
+
+        // Заливка ячейки «Антивирус»: фон первого антивируса, у состояния которого фон не блочком
+        avCellFill(row) {
+            if (!this.avFillOn) {
+                return null;
+            }
+            const map = this.avStatusMap;
+            const found = this.avItems(row).find(function (a) {
+                const st = map[a.status];
+                return !!st && !!st.bg_color && st.chip === false;
+            });
+            return found ? map[found.status].bg_color : null;
         },
 
         avTitle(a) {

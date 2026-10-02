@@ -153,6 +153,7 @@ export default {
                 this.loadFieldDefs();
                 this.loadAvSettings();
                 this.loadTableMarks();
+                this.loadAppSettings();
             } else if (view === "users") {
                 this.loadUsers();
             } else if (view === "vacuum") {
@@ -169,6 +170,7 @@ export default {
                 }
                 this.setScanTab("check");
             }
+            this.syncHash();
         },
 
         async logout() {

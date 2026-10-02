@@ -42,6 +42,18 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
+    // Ctrl+Z — отменить своё последнее изменение, Ctrl+Y / Ctrl+Shift+Z — вернуть
+    // (в поле ввода — обычная отмена набранного)
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.code === "KeyZ" || event.code === "KeyY") &&
+        !event.defaultPrevented && !isTypingTarget(document.activeElement) && !vm.editingRowId) {
+        event.preventDefault();
+        if (event.code === "KeyY" || event.shiftKey) {
+            vm.redoLast();
+        } else {
+            vm.undoLast();
+        }
+        return;
+    }
     if (event.key === "Escape" && vm.card) {
         if (vm.cardEditKey) {
             vm.cardEditKey = null;
@@ -111,6 +123,13 @@ window.addEventListener("keydown", function (event) {
         vm.selectAllVisible();
     } else if (event.key === "Escape" && vm.selectedRows.length && !vm.editingRowId) {
         vm.clearSelection();
+    } else if (event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
+        !vm.editingRowId && !vm.openMenu && !vm.scanPop && !vm.actionBar && !vm.newComputer && !vm.showArchive &&
+        !event.target.closest(".dropdown, .cf-menu, .scan-pop, .add-bar")) {
+        // Enter при одной выбранной строке — подключиться к ПК по VNC
+        if (vm.vncConnectSelected()) {
+            event.preventDefault();
+        }
     }
 });
 

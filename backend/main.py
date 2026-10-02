@@ -24,6 +24,8 @@ from api_columns import router as columns_router
 from api_users import router as users_router
 from api_scan import router as scan_router
 from api_scan_jabber import router as scan_jabber_router
+from api_scan_net import router as scan_net_router
+from api_settings import router as settings_router
 from api_scan_records import router as scan_records_router
 from api_scan_diffs import av_router as scan_av_router
 from api_scan_diffs import marks_router as scan_marks_router
@@ -165,6 +167,10 @@ app.include_router(scan_av_router)
 app.include_router(table_marks_router)
 # Пользователи Jabber (этап 26д): смотреть — редактор и администратор
 app.include_router(scan_jabber_router)
+# Что видно в сети (этап 28б): вкладка «Сеть» — редактор и администратор
+app.include_router(scan_net_router)
+# Общие настройки из интерфейса (VNC по умолчанию): смотреть — все, менять — редактор
+app.include_router(settings_router)
 
 @app.get("/api/health")
 def health():

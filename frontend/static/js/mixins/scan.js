@@ -62,6 +62,9 @@ export default {
             if (this.scanTab === "schedule") {
                 return this.scheduleCountText;
             }
+            if (this.scanTab === "net") {
+                return this.netCountText;
+            }
             return this.scanTab === "settings" ? this.scanCountText : this.scanNamesCountText;
         },
 

@@ -160,7 +160,8 @@ export const ENTITY_LABELS = {
     scan_schedule: "Расписание",
     scan_marks: "Пометка сканера",
     scan_antivirus: "Антивирусы",
-    table_marks: "Выделение"
+    table_marks: "Выделение",
+    app_settings: "Настройка"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -218,7 +219,8 @@ export const SIMPLE_FIELD_LABELS = {
     // Столбец «Антивирусы» (этап 26д)
     show: "Показывать",
     hidden: "Не показывать",
-    name: "Название"   // своё название антивируса (этап 26е)
+    name: "Название",   // своё название антивируса (этап 26е)
+    vnc_default: "VNC"
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];
@@ -239,6 +241,24 @@ export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
 export const DEFAULT_HIDDEN_SEEN_KEY = "itdb.defaultHiddenSeen.v1";
 export const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
 
+// Второй вид таблицы (этап 28б, кнопка справа от поиска): свой набор столбцов,
+// «Каб» и «Кабинет» — одним столбцом «Кабинет» («[214] Процедурная», как в карточке)
+export const TABLE_VIEW_KEY = "itdb.tableView.v1";
+export const HIDDEN_COLUMNS2_KEY = "itdb.hiddenColumns2.v1";
+export const ROOM_PARTS = ["room_code", "room_name"];
+export const ROOM_COLUMN = {
+    field: "room", headerName: "Кабинет", cardLabel: "Кабинет",
+    location: true, editable: false, values: false, bulk: false
+};
+// Столбцы второго вида, пока пользователь не выбрал свои
+export const VIEW2_COLUMNS = ["building", "department", "room", "hostname", "ip", "vacuum", "os", "type", "model", "cpu", "ram", "drive", "gpu"];
+
+export function roomText(row) {
+    const code = row.room_code;
+    const name = row.room_name;
+    return code && name ? "[" + code + "] " + name : (code || name || null);
+}
+
 // Поля карточки, которые можно править двойным кликом (ключ строки карточки → поле)
 export const LOCATION_EDIT = { field: "location_id", headerName: "Расположение", location: true };
 export const CARD_EDIT_EXTRA = {
@@ -250,7 +270,7 @@ export const CARD_EDIT_EXTRA = {
 };
 
 // Столбцы таблицы, которые показывают расположение ПК
-export const LOCATION_FIELDS = ["building", "department", "floor", "room_code", "room_name"];
+export const LOCATION_FIELDS = ["building", "department", "floor", "room_code", "room_name", "room"];
 
 // ============================================================
 // Сортировка значений

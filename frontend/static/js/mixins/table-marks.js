@@ -7,15 +7,16 @@ import { apiFetch } from "../util.js";
 import { decoration } from "../columns.js";
 
 // Порядок наложения, если у значения несколько выделений: следующее поверх
-const MARK_ORDER = ["dup", "stale", "gone", "hostname", "overdue"];
-const SAMPLES = { dup: "10.0.2.11", hostname: "ter-201-1", gone: "ivanov", stale: "petrova", overdue: "01.09.2026" };
+const MARK_ORDER = ["verified", "dup", "stale", "gone", "hostname", "overdue"];
+const SAMPLES = { dup: "10.0.2.11", hostname: "ter-201-1", gone: "ivanov", stale: "petrova", overdue: "01.09.2026", verified: "ter-201-2" };
 // Пока настройки не загружены — вид по умолчанию (как на сервере)
 const DEFAULTS = [
-    { kind: "dup", label: "Повтор", bg_color: "#ffd6d6" },
+    { kind: "dup", label: "Повтор", bg_color: "#ffd6d6", chip: true },
     { kind: "hostname", label: "Имя на ПК другое", color: "#cc0000", bold: true },
     { kind: "gone", label: "Нет в Jabber", color: "#cc0000", bold: true },
     { kind: "stale", label: "Давно не подключался", color: "#b35c00", bold: true },
-    { kind: "overdue", label: "Срок прошёл", color: "#cc0000", bold: true }
+    { kind: "overdue", label: "Срок прошёл", color: "#cc0000", bold: true },
+    { kind: "verified", label: "Проверен сетью и GLPI / GSIT" }
 ];
 
 export default {
@@ -33,6 +34,11 @@ export default {
         // Меняется вид выделений — пересчитать ширину столбцов (жирный, блочок)
         tableMarkVersion() {
             return this.tableMarkList.map(function (m) { return m.kind + (m.bold ? "b" : "") + (m.bg_color ? "c" : ""); }).join("|");
+        },
+
+        // Есть выделение с фоном «на всю ячейку» (обычно нет — тогда ячейки не проверяются)
+        markFillOn() {
+            return this.tableMarkList.some(function (m) { return !!m.bg_color && m.chip === false; });
         }
     },
 
@@ -90,6 +96,20 @@ export default {
                 if (m.underline || m.strike) style.textDecoration = decoration(m.underline, m.strike);
             });
             return style && Object.keys(style).length ? style : null;
+        },
+
+        // Фон этих выделений — блочком у значения (а не на всю ячейку): решает то
+        // выделение, чей фон виден (последнее с фоном по порядку наложения)
+        markChip(kinds) {
+            const map = this.tableMarkMap;
+            let chip = true;
+            MARK_ORDER.forEach(function (kind) {
+                const m = kinds.indexOf(kind) >= 0 ? map[kind] : null;
+                if (m && m.bg_color) {
+                    chip = m.chip !== false;
+                }
+            });
+            return chip;
         },
 
         tableMarkSample(kind) {

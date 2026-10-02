@@ -1,8 +1,10 @@
 """Выделения значений в Таблице (этап 26к): как показывать значение, когда с ним
 что-то не так, — повтор, логина нет в Jabber, логин давно не подключался, имя на
-ПК другое (по сканеру), дата просрочена. Вид — общий для всех, настраивается в
-Справочниках, как оформление значений; хранится в app_settings («table_marks»),
-нет строки — вид по умолчанию. Фон — всегда блочком у самого значения."""
+ПК другое (по сканеру), дата просрочена, — или наоборот, всё в порядке: ПК проверен
+и GLPI / GSIT, и сетью (этап 28б; по умолчанию не выделяется). Вид — общий для всех,
+настраивается в Справочниках, как оформление значений; хранится в app_settings
+(«table_marks»), нет строки — вид по умолчанию. Фон — блочком у самого значения или
+(chip = False) на всю ячейку."""
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -20,8 +22,8 @@ router = APIRouter(prefix="/api/table-marks", tags=["table"])
 KEY = "table_marks"
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 COLORS = ("color", "bg_color")
-FLAGS = ("bold", "italic", "underline", "strike")
-PLAIN = {"color": None, "bg_color": None, "bold": False, "italic": False, "underline": False, "strike": False}
+FLAGS = ("bold", "italic", "underline", "strike", "chip")
+PLAIN = {"color": None, "bg_color": None, "bold": False, "italic": False, "underline": False, "strike": False, "chip": True}
 
 # вид → (название, столбец-образец, вид по умолчанию); порядок — как в Справочниках
 MARKS = {
@@ -30,6 +32,7 @@ MARKS = {
     "gone": ("Нет в Jabber", {"color": "#cc0000", "bold": True}),
     "stale": ("Давно не подключался", {"color": "#b35c00", "bold": True}),
     "overdue": ("Срок прошёл", {"color": "#cc0000", "bold": True}),
+    "verified": ("Проверен сетью и GLPI / GSIT", {}),
 }
 
 
@@ -42,6 +45,7 @@ class MarkOut(BaseModel):
     italic: bool
     underline: bool
     strike: bool
+    chip: bool      # фон блочком у значения (иначе — на всю ячейку)
     changed: bool   # вид не как по умолчанию
 
 
@@ -53,6 +57,7 @@ class MarkUpdate(BaseModel):
     italic: Optional[bool] = None
     underline: Optional[bool] = None
     strike: Optional[bool] = None
+    chip: Optional[bool] = None
     reset: Optional[bool] = None
 
 

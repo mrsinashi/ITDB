@@ -1,8 +1,9 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
 import { apiFetch, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY, columnTitle, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
+import { pageLink } from "../route.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE — антивирусов нет
 const AV_RANK = { on: 0, old: 1, off: 2 };
@@ -40,18 +41,49 @@ export default {
                 };
             });
             const statusIndex = base.findIndex(function (c) { return c.field === "status"; });
-            if (statusIndex >= 0) {
-                return base.slice(0, statusIndex).concat(extra).concat(base.slice(statusIndex));
+            const all = statusIndex >= 0 ? base.slice(0, statusIndex).concat(extra).concat(base.slice(statusIndex)) : base.concat(extra);
+            if (this.tableView !== 2) {
+                return all;
             }
-            return base.concat(extra);
+            // Второй вид: «Каб» и «Кабинет» — одним столбцом «Кабинет» («[214] Процедурная»)
+            const manual = self.manualWidths[ROOM_COLUMN.field];
+            const room = Object.assign({}, ROOM_COLUMN, { width: manual !== undefined ? manual : (self.autoWidths[ROOM_COLUMN.field] || 100) });
+            const result = [];
+            all.forEach(function (col) {
+                if (ROOM_PARTS.indexOf(col.field) === -1) {
+                    result.push(col);
+                } else if (col.field === ROOM_PARTS[0]) {
+                    result.push(room);
+                }
+            });
+            return result;
+        },
+
+        // Скрытые столбцы текущего вида. У второго вида набор свой; пока его не
+        // меняли — показаны только столбцы из VIEW2_COLUMNS
+        hiddenNow() {
+            if (this.tableView !== 2) {
+                return this.hiddenColumns;
+            }
+            if (this.hiddenColumns2) {
+                return this.hiddenColumns2;
+            }
+            return this.allColumns.map(function (col) { return col.field; }).filter(function (field) {
+                return VIEW2_COLUMNS.indexOf(field) === -1;
+            });
         },
 
         // Видимые столбцы
         columns() {
-            const hidden = this.hiddenColumns;
+            const hidden = this.hiddenNow;
             return this.allColumns.filter(function (col) {
                 return hidden.indexOf(col.field) === -1;
             });
+        },
+
+        // Столбцы для расчёта ширины: встроенные и «Кабинет» второго вида
+        widthColumns() {
+            return this.builtinColumns.concat([ROOM_COLUMN]);
         },
 
         hiddenColumnCount() {
@@ -211,6 +243,13 @@ export default {
                 this.updateStickyShadow();
             });
         },
+
+        hiddenColumns2() {
+            saveJson(HIDDEN_COLUMNS2_KEY, this.hiddenColumns2);
+            this.$nextTick(() => {
+                this.updateStickyShadow();
+            });
+        },
     },
 
     methods: {
@@ -260,6 +299,8 @@ export default {
                 }
                 const data = await response.json();
                 this.rows = data.rows || [];
+                // «Кабинет» второго вида: номер и название одной строкой
+                this.rows.forEach(function (row) { row.room = roomText(row); });
                 this.applyAntivirus();
                 refreshDuplicates(this.rows, this.builtinColumns);
                 this.dupVersion++;
@@ -364,9 +405,9 @@ export default {
                 }
                 const ms = this.markStyle(this.lineMarkKinds(this.lineMarks(row, col, line)));
                 const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
-                return ms || chip ? { pad: (ms && ms.backgroundColor) || chip ? CHIP_PAD : 0, bold: !!ms && !!ms.fontWeight } : null;
+                return ms || chip ? { pad: (ms && ms.backgroundColor) || chip ? CHIP_PAD : 0, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» — запас не мешает
             };
-            this.autoWidths = computeAutoWidths(this.rows, this.builtinColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, scanChip, lineInfo);
+            this.autoWidths = computeAutoWidths(this.rows, this.widthColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -453,11 +494,13 @@ export default {
             }
             const link = this.diffs.links[col.field];
             const chips = this.chipColumn(col);
-            const marks = col.dup || col.date || col.field === "vacuum" || col.field === "hostname";
+            const host = col.field === "hostname";
+            const marks = col.dup || col.date || col.field === "vacuum" || host;
             if (!link && !chips && !marks) {
                 return null;
             }
-            let special = false;
+            // Имя ПК — всегда ссылкой на его карточку: средняя кнопка открывает её в новой вкладке
+            let special = host;
             const lines = col.multiline ? String(value).split("\n") : [String(value)];
             const parts = lines.map((line) => {
                 const m = this.lineMarks(row, col, line) || {};
@@ -470,7 +513,7 @@ export default {
                 if (kinds.length || href || chip) {
                     special = true;
                 }
-                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", m.verified ? "Проверен: " + m.verified.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
                 const style = Object.assign({}, chip ? {
                     backgroundColor: look.bg_color,
                     color: look.color,
@@ -478,8 +521,15 @@ export default {
                     fontStyle: look.italic ? "italic" : null,
                     textDecoration: decoration(look.underline, look.strike)
                 } : null, ms);
+                // Фон выделения «на всю ячейку» красит ячейку (cellFillOf), а не значение
+                if (ms && ms.backgroundColor && !this.markChip(kinds)) {
+                    delete style.backgroundColor;
+                    if (chip) {
+                        style.backgroundColor = look.bg_color;
+                    }
+                }
                 return {
-                    text: line, href: href, title: titles.join(" · ") || null,
+                    text: line, href: href, card: host ? pageLink("table", { pc: row.id }) : null, title: titles.join(" · ") || null,
                     cls: { "fill-chip": !!style.backgroundColor },
                     style: style
                 };
@@ -500,6 +550,7 @@ export default {
             let gone = false;
             let stale;
             let host = null;
+            let verified = null;
             if (col.field === "vacuum") {
                 const login = String(line).trim().toLowerCase();
                 gone = this.vacuumMissingSet.has(login);
@@ -508,8 +559,10 @@ export default {
                 }
             } else if (col.field === "hostname") {
                 host = this.wrongHostname(row.id);
+                // Проверен и GLPI / GSIT, и сетью (чем именно — в подсказке)
+                verified = host ? null : (this.diffs.verified[row.id] || null);
             }
-            return dup || gone || stale !== undefined || host || overdue ? { dup: dup, gone: gone, stale: stale, host: host, overdue: overdue } : null;
+            return dup || gone || stale !== undefined || host || overdue || verified ? { dup: dup, gone: gone, stale: stale, host: host, overdue: overdue, verified: verified } : null;
         },
 
         // Виды выделений (как в Справочниках) по итогу lineMarks
@@ -517,7 +570,7 @@ export default {
             if (!m) {
                 return [];
             }
-            return [m.dup ? "dup" : "", m.host ? "hostname" : "", m.gone ? "gone" : "", m.stale !== undefined ? "stale" : "", m.overdue ? "overdue" : ""].filter(Boolean);
+            return [m.verified ? "verified" : "", m.dup ? "dup" : "", m.host ? "hostname" : "", m.gone ? "gone" : "", m.stale !== undefined ? "stale" : "", m.overdue ? "overdue" : ""].filter(Boolean);
         },
 
         // Имя этого ПК по сканеру другое (и «оставить как есть» не нажато) — это имя; иначе null
@@ -596,8 +649,39 @@ export default {
         // Цвет заливки ячейки: фон значения из Справочников поверх фона
         // столбца; null — без заливки (повтор заливает только значение — cellParts)
         cellFillOf(row, col) {
+            const marked = this.markFillOf(row, col);
+            if (marked) {
+                return marked;
+            }
+            if (col.scanOnly) {
+                return this.avCellFill(row);
+            }
             const look = this.cellLook(row, col);
             return look && !look.chip ? look.bg_color : null;
+        },
+
+        // Фон выделения (повтор, проверен…), у которого выбрано «на всю ячейку»:
+        // по первому такому значению ячейки; нет — null
+        markFillOf(row, col) {
+            if (!this.markFillOn || !(col.dup || col.date || col.field === "vacuum" || col.field === "hostname")) {
+                return null;
+            }
+            void this.dupVersion;
+            const value = row[col.field];
+            if (value === null || value === undefined || value === "") {
+                return null;
+            }
+            const lines = col.multiline ? String(value).split("\n") : [String(value)];
+            for (const line of lines) {
+                const kinds = this.lineMarkKinds(this.lineMarks(row, col, line));
+                if (kinds.length && !this.markChip(kinds)) {
+                    const ms = this.markStyle(kinds);
+                    if (ms && ms.backgroundColor) {
+                        return ms.backgroundColor;
+                    }
+                }
+            }
+            return null;
         },
 
         cellTdStyle(row, col) {
@@ -863,14 +947,23 @@ export default {
         },
 
         isColumnHidden(field) {
-            return this.hiddenColumns.indexOf(field) !== -1;
+            return this.hiddenNow.indexOf(field) !== -1;
+        },
+
+        // Скрытые столбцы — у каждого вида таблицы свои
+        setHiddenColumns(list) {
+            if (this.tableView === 2) {
+                this.hiddenColumns2 = list;
+            } else {
+                this.hiddenColumns = list;
+            }
         },
 
         toggleColumn(field) {
             if (this.isColumnHidden(field)) {
-                this.hiddenColumns = this.hiddenColumns.filter(function (f) { return f !== field; });
+                this.setHiddenColumns(this.hiddenNow.filter(function (f) { return f !== field; }));
             } else {
-                this.hiddenColumns = this.hiddenColumns.concat([field]);
+                this.setHiddenColumns(this.hiddenNow.concat([field]));
             }
             if (this.sortField === field && this.isColumnHidden(field)) {
                 this.resetSort();
@@ -878,7 +971,30 @@ export default {
         },
 
         showAllColumns() {
-            this.hiddenColumns = [];
+            this.setHiddenColumns([]);
+        },
+
+        // Второй вид таблицы (кнопка справа от поиска): свой набор столбцов,
+        // «Каб» и «Кабинет» — одним столбцом
+        toggleTableView() {
+            this.cancelEdit();
+            this.scanPop = null;
+            this.closeMenus();
+            this.tableView = this.tableView === 2 ? 1 : 2;
+            saveJson(TABLE_VIEW_KEY, this.tableView);
+            // Сортировка и фильтры по столбцу, которого в этом виде нет, снимаются
+            const fields = this.allColumns.map(function (col) { return col.field; });
+            if (this.sortField && fields.indexOf(this.sortField) === -1) {
+                this.resetSort();
+            }
+            Object.keys(this.colFilters).forEach((field) => {
+                if (fields.indexOf(field) === -1) {
+                    this.clearColFilter(field);
+                }
+            });
+            this.$nextTick(() => {
+                this.updateStickyShadow();
+            });
         },
 
         // ---------- Поиск ----------
@@ -911,7 +1027,7 @@ export default {
                             if (t.field === "seat_no" || t.field === "room_code") {
                                 return t.text.trim() === w;
                             }
-                            return /\s/.test(t.text.trim()) && t.text.split(/[\s,;]+/).indexOf(w) !== -1;
+                            return /\s/.test(t.text.trim()) && t.text.split(/[\s,;[\]]+/).indexOf(w) !== -1;
                         });
                     }
                     return texts.some(function (t) { return t.text.indexOf(w) !== -1; });

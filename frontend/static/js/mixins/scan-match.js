@@ -132,6 +132,9 @@ export default {
             if (this.scanTab === "names") {
                 return "Поиск по названиям: поле, значение";
             }
+            if (this.scanTab === "net") {
+                return "Поиск: IP, MAC, имя, ПК";
+            }
             return "Поиск: ПК, расположение, имя в GLPI, IP, MAC, серийный, значение";
         },
 
@@ -178,6 +181,10 @@ export default {
                 this.check.hover = null;
                 this.loadCheck();
             }
+            if (tab === "net") {
+                this.loadNet();
+            }
+            this.syncHash();
         },
 
         reloadScanTab() {
@@ -185,6 +192,8 @@ export default {
                 this.loadScanNames();
             } else if (this.scanTab === "schedule") {
                 this.loadSchedule();
+            } else if (this.scanTab === "net") {
+                this.loadNet();
             } else {
                 this.loadCheck();
             }

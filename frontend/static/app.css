@@ -5179,3 +5179,106 @@ html.no-radius .vacuum-table .vc-dot {
     opacity: 0.4;
     cursor: default;
 }
+
+/* ============================================================
+   Этап 28б
+   ============================================================ */
+
+/* «Закругления» выключены — значения-блочки всё равно скруглены (просьба 02.10):
+   блочки в ячейках Таблицы, значения сканера, антивирусы, значения в Справочниках,
+   карточке, подсказках и фильтре столбца */
+html.no-radius .data-table td .cell-line.fill-chip,
+html.no-radius .scan-chip,
+html.no-radius .av-line.av-chip,
+html.no-radius .st-val span.boxed,
+html.no-radius .val-chip,
+html.no-radius .tm-sample.chip {
+    border-radius: var(--radius) !important;
+}
+
+/* Имя ПК в Таблице — ссылка на его карточку (средняя кнопка — в новой вкладке) */
+.data-table td a.host-link {
+    color: var(--host-color);
+    cursor: pointer;
+}
+.data-table.alt-copy td a.host-link {
+    cursor: default;
+}
+/* Меню настроек и пользователя — не страницы: ссылки без адреса */
+.top-menu a:not([href]) {
+    cursor: pointer;
+}
+.history-table a.h-link {
+    color: inherit;
+    text-decoration: none;
+}
+.tree-actions a.icon-btn {
+    text-decoration: none;
+}
+.ck-table a.ck-host {
+    color: inherit;
+    text-decoration: none;
+}
+.ck-compare a.ck-pair {
+    cursor: pointer;
+}
+
+/* Таблица: кнопка второго вида — сразу справа от поиска, остальные кнопки — у правого края */
+.toolbar .tb-right.tb-right-wide {
+    justify-self: stretch;
+}
+.toolbar .tb-view-gap {
+    flex: 1 1 auto;
+}
+
+/* Справочники, «Выделения в Таблице»: фон «на всю ячейку» — образец во всю ширину */
+.table-marks-panel .tm-sample.chip.fill {
+    display: block;
+}
+
+/* Справочники, «Тип VNC»: чем подключаться по умолчанию */
+.st-row.st-vnc .st-val {
+    color: var(--text-secondary);
+}
+.st-row.st-vnc .st-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.st-row.st-vnc .st-radio input {
+    margin: 0;
+    accent-color: var(--brand);
+}
+
+/* «Сканер» → «Сеть»: адреса из DHCP и прохода подсетей */
+.net-wrap {
+    min-width: 600px;
+}
+.net-table td {
+    white-space: nowrap;
+}
+.net-table .nt-ip {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.net-table .nt-mac,
+.net-table .nt-when {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.net-table .nt-src {
+    white-space: nowrap;
+}
+.net-table a.vc-host {
+    color: inherit;
+    text-decoration: none;
+}
+.net-table a.vc-host:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}

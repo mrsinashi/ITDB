@@ -19,14 +19,18 @@
 //                        scan-diffs (значения сканера в Таблице, решения по ним, столбец «Антивирусы»),
 //                        scan-vacuum (страница «Vacuum»: пользователи Jabber),
 //                        scan-schedule (вкладка «Расписание»: когда собирать, журнал запусков),
-//                        table-marks (выделения значений в Таблице: повтор, «нет в Jabber»…)
+//                        table-marks (выделения значений в Таблице: повтор, «нет в Jabber»…),
+//                        scan-net (вкладка «Сеть»: что собрали DHCP и проход подсетей),
+//                        nav (адреса страниц, Ctrl+Z / Ctrl+Y),
+//                        vnc (подключение к ПК через внешнее приложение, itdb://vnc/…)
+//   route.js           — адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        — tree-node, tree-form, style-controls, location-picker, count-select
 //
 // Шаблоны разметки — в index.html.
 
 import "./settings.js";
 import { loadJson } from "./util.js";
-import { HIDDEN_COLUMNS_KEY, SEARCH_HIDDEN_KEY } from "./columns.js";
+import { HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY } from "./columns.js";
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
 import "./alt-copy.js";
@@ -50,6 +54,9 @@ import scanCheck from "./mixins/scan-check.js";
 import scanVacuum from "./mixins/scan-vacuum.js";
 import scanSchedule from "./mixins/scan-schedule.js";
 import tableMarks from "./mixins/table-marks.js";
+import scanNet from "./mixins/scan-net.js";
+import nav from "./mixins/nav.js";
+import vnc from "./mixins/vnc.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -58,7 +65,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -95,6 +102,10 @@ const app = Vue.createApp({
             cardGroups: [],
             historyLabels: {},
             hiddenColumns: loadJson(HIDDEN_COLUMNS_KEY, []),
+            // Второй вид таблицы (кнопка справа от поиска): 1 — основной, 2 — второй;
+            // его скрытые столбцы (null — ещё не меняли: столбцы по умолчанию)
+            tableView: loadJson(TABLE_VIEW_KEY, 1) === 2 ? 2 : 1,
+            hiddenColumns2: loadJson(HIDDEN_COLUMNS2_KEY, null),
             searchHidden: loadJson(SEARCH_HIDDEN_KEY, false),
             locationFilter: null,
             // Фильтры по столбцам: поле → { exclude, keys, labels } (mixins/col-filters.js)
@@ -197,6 +208,12 @@ const app = Vue.createApp({
             scanMatchQuery: "",  // поиск на «Проверке» и «Названиях»
             // Страница «Vacuum» — пользователи Jabber (/api/scan/jabber)
             vacuum: { data: null, loading: false, error: "", filter: "all" },
+            // Вкладка «Сеть»: адреса из DHCP и прохода подсетей (/api/scan/hosts)
+            net: { data: null, loading: false, error: "", filter: "all" },
+            // Общие настройки (/api/settings): VNC по умолчанию
+            appSettings: { vnc_default: "tight" },
+            undone: [],          // что отменил Ctrl+Z — для возврата Ctrl+Y
+            undoBusy: false,
             vacuumQuery: "",
             scanNames: { items: [], loading: false, error: "", hover: null },
             // «Расписание»: настройка каждого источника и журнал запусков (/api/scan/schedule, /api/scan/runs)
@@ -220,6 +237,7 @@ const app = Vue.createApp({
                 vacuumStale: {},    // давно не подключавшиеся: логин → сколько дней (null — никогда)
                 jabber: {},         // кого Jabber видит с адреса ПК: id ПК → логины
                 net: {},            // что о ПК видно в сети (DHCP, проход подсетей): id ПК → { ip, mac, hostname }
+                verified: {},       // ПК, проверенные и GLPI / GSIT, и сетью: id ПК → чем
                 loading: false,
                 error: "",
             },
@@ -279,6 +297,10 @@ const app = Vue.createApp({
             this.loadScanMarks();
             this.loadAvSettings();
             this.loadTableMarks();
+            this.loadAppSettings();
+            // Страница из адреса (#scan/net, #table?pc=12): ссылки открываются в новой вкладке
+            window.addEventListener("hashchange", () => this.applyHash());
+            this.applyHash();
         }
     }
 });

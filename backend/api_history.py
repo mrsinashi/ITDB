@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,7 +8,10 @@ from sqlalchemy import desc, func, text
 from api_computers import ChangeBatch
 from auth import get_current_user, require_editor
 from db import get_db
-from history_undo import SIMPLE, Ref, cancel_changes, find_object, object_title, revert_value, value_history
+from history_undo import (
+    ENTITIES, SIMPLE, Ref, cancel_changes, field_kind, field_label, find_object, object_title, ref_of, revert_value,
+    value_history,
+)
 from models import Computer, History, Location
 
 router = APIRouter(prefix="/api", tags=["history"])
@@ -243,6 +247,77 @@ def cancel_history(payload: CancelRequest, user=Depends(require_editor), session
     session.commit()
 
     return {"ok": True, "count": count, "shifted": batch.changed_ids()}
+
+
+# Ctrl+Z (этап 28б): отменяется последнее своё действие не старше этого срока
+UNDO_WINDOW = timedelta(hours=12)
+
+
+@router.post("/history/undo-last")
+def undo_last(user=Depends(require_editor), session=Depends(get_db)):
+    """Отменить своё последнее действие (Ctrl+Z): все его записи истории — одной
+    отменой, как «Отменить изменения» в Истории. Действие — записи одного
+    сохранения (у них одно время). items — что отменено (для возврата Ctrl+Y)."""
+    allowed = [
+        entity for entity in ENTITIES
+        if user["role"] == "admin" or not SIMPLE.get(entity, {}).get("admin")
+    ]
+    mine = [
+        History.user_name == user["login"],
+        History.cancelled == False,  # noqa: E712
+        History.at >= datetime.now(timezone.utc) - UNDO_WINDOW,
+    ]
+    last = session.query(History).filter(*mine).order_by(desc(History.id)).first()
+
+    if last is None:
+        raise HTTPException(status_code=404, detail="Отменять нечего.")
+
+    records = session.query(History).filter(*mine, History.at == last.at).order_by(History.id).with_for_update().all()
+
+    # Последним могло быть то, что не отменяется: настройка (вид выделений, сканер),
+    # создание, удаление, смена пароля — тогда не отменяется ничего (а не то, что было раньше)
+    if any(record.entity not in allowed for record in records):
+        raise HTTPException(status_code=400, detail="Последнее действие — настройка: она не отменяется.")
+
+    if any(field_kind(record.entity, field) == "fixed" for record in records for field in record.changes or {}):
+        raise HTTPException(status_code=400, detail="Последнее действие — создание или удаление: оно не отменяется.")
+
+    pairs = [
+        (record, field)
+        for record in records
+        for field, change in (record.changes or {}).items()
+        if not change.get("cancelled")
+    ]
+
+    # Что отменяется — словами, пока значения ещё прежние
+    objects = {ref_of(record) for record, _ in pairs}
+
+    if len(objects) == 1:
+        ref = ref_of(pairs[0][0])
+        obj = find_object(session, ref, lock=False)
+        title = (object_title(session, obj, ref) if obj is not None else None) or pairs[0][0].title or ""
+        labels = []
+
+        for record, field in pairs:
+            label = field_label(session, record.entity, field)
+
+            if label not in labels:
+                labels.append(label)
+
+        text = f"{title} — {', '.join(labels)}" if title else ", ".join(labels)
+    else:
+        text = f"изменений: {len(pairs)}, объектов: {len(objects)}"
+
+    batch = ChangeBatch(user["login"])
+    count = cancel_changes(session, pairs, True, user, batch)
+    batch.finish(session)
+    session.commit()
+
+    return {
+        "ok": True, "count": count, "text": text,
+        "items": [{"id": record.id, "field": field} for record, field in pairs],
+        "entities": sorted({record.entity for record, _ in pairs}),
+    }
 
 
 class RevertRequest(BaseModel):

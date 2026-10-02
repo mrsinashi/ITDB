@@ -24,11 +24,12 @@ const ENTITY_FILTERS = {
     scan_schedule: "Сканер: расписание",
     scan_marks: "Пометки сканера",
     scan_antivirus: "Антивирусы (вид столбца)",
-    table_marks: "Выделения в Таблице"
+    table_marks: "Выделения в Таблице",
+    app_settings: "Настройки"
 };
 // Только администратор видит эти записи; отмены у них нет (только просмотр)
 const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule"];
-const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule", "scan_marks", "scan_antivirus", "table_marks"];
+const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule", "scan_marks", "scan_antivirus", "table_marks", "app_settings"];
 
 export default {
     computed: {
