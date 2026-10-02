@@ -1,6 +1,6 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
-import { apiFetch, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
+import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
 import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
@@ -18,8 +18,9 @@ export default {
             });
         },
 
-        // Все столбцы (и скрытые) — для меню «Столбцы»
-        allColumns() {
+        // Все столбцы как в описании с сервера (и скрытые): «Каб» и «Кабинет» — порознь.
+        // Для Справочников: оформление задаётся им, а не общему столбцу Таблицы
+        baseColumns() {
             const self = this;
             const base = this.builtinColumns.map(function (col) {
                 const manual = self.manualWidths[col.field];
@@ -41,11 +42,14 @@ export default {
                 };
             });
             const statusIndex = base.findIndex(function (c) { return c.field === "status"; });
-            const all = statusIndex >= 0 ? base.slice(0, statusIndex).concat(extra).concat(base.slice(statusIndex)) : base.concat(extra);
-            if (this.tableView !== 2) {
-                return all;
-            }
-            // Второй вид: «Каб» и «Кабинет» — одним столбцом «Кабинет» («[214] Процедурная»)
+            return statusIndex >= 0 ? base.slice(0, statusIndex).concat(extra).concat(base.slice(statusIndex)) : base.concat(extra);
+        },
+
+        // Все столбцы Таблицы (и скрытые) — для меню «Столбцы». «Каб» и «Кабинет» —
+        // одним столбцом «Кабинет» («[214] Процедурная») в обоих видах (28в)
+        allColumns() {
+            const self = this;
+            const all = this.baseColumns;
             const manual = self.manualWidths[ROOM_COLUMN.field];
             const room = Object.assign({}, ROOM_COLUMN, { width: manual !== undefined ? manual : (self.autoWidths[ROOM_COLUMN.field] || 100) });
             const result = [];
@@ -81,7 +85,7 @@ export default {
             });
         },
 
-        // Столбцы для расчёта ширины: встроенные и «Кабинет» второго вида
+        // Столбцы для расчёта ширины: встроенные и общий «Кабинет»
         widthColumns() {
             return this.builtinColumns.concat([ROOM_COLUMN]);
         },
@@ -299,7 +303,7 @@ export default {
                 }
                 const data = await response.json();
                 this.rows = data.rows || [];
-                // «Кабинет» второго вида: номер и название одной строкой
+                // «Кабинет»: номер и название одной строкой
                 this.rows.forEach(function (row) { row.room = roomText(row); });
                 this.applyAntivirus();
                 refreshDuplicates(this.rows, this.builtinColumns);
@@ -407,7 +411,7 @@ export default {
                 const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
                 return ms || chip ? { pad: (ms && ms.backgroundColor) || chip ? CHIP_PAD : 0, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» — запас не мешает
             };
-            this.autoWidths = computeAutoWidths(this.rows, this.widthColumns, this.tableFieldDefs, this.choiceStyleMap, this.columnStyles, scanChip, lineInfo);
+            this.autoWidths = computeAutoWidths(this.rows, this.widthColumns, this.tableFieldDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -439,7 +443,7 @@ export default {
         // только столбец, а если и у него блочок — ничего. Нет оформления — null
         cellLook(row, col) {
             const fieldStyles = this.choiceStyleMap[col.field];
-            if (!fieldStyles && !this.columnStyles[col.field]) {
+            if (!fieldStyles && !this.tableColumnStyles[col.field]) {
                 return null;
             }
             let found = "";
@@ -974,8 +978,7 @@ export default {
             this.setHiddenColumns([]);
         },
 
-        // Второй вид таблицы (кнопка справа от поиска): свой набор столбцов,
-        // «Каб» и «Кабинет» — одним столбцом
+        // Второй вид таблицы (кнопка справа от поиска): свой набор столбцов
         toggleTableView() {
             this.cancelEdit();
             this.scanPop = null;
@@ -1026,6 +1029,10 @@ export default {
                         return texts.some(function (t) {
                             if (t.field === "seat_no" || t.field === "room_code") {
                                 return t.text.trim() === w;
+                            }
+                            // «[214] Процедурная» или просто «214»
+                            if (t.field === "room") {
+                                return t.text.split(/[\s,;[\]]+/).indexOf(w) !== -1;
                             }
                             return /\s/.test(t.text.trim()) && t.text.split(/[\s,;[\]]+/).indexOf(w) !== -1;
                         });
@@ -1256,6 +1263,12 @@ export default {
             const ctrl = event.ctrlKey || event.metaKey;
             if (ctrl || event.shiftKey || event.altKey) {
                 event.preventDefault();
+            }
+            // Нажатие с Ctrl / Shift не переносит фокус (чтобы не выделялся текст), и он
+            // оставался в поле поиска: Enter, Ctrl+A и Esc после выделения строки шли
+            // в поле, а не в таблицу (28в: «Enter по выделенной строке не срабатывает»)
+            if ((ctrl || event.shiftKey) && !event.altKey && isTypingTarget(document.activeElement)) {
+                document.activeElement.blur();
             }
             if (event.altKey || event.shiftKey) {
                 return;

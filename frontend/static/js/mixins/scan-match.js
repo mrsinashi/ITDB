@@ -427,7 +427,7 @@ export default {
             if (kind === "dhcp") {
                 const parts = ["Аренд: " + (st.total - st.fixed), "действуют: " + st.active];
                 if (st.fixed) {
-                    parts.push("резервов: " + st.fixed);
+                    parts.push("привязок: " + st.fixed);
                 }
                 if (st.stale) {
                     parts.push("старше " + st.fresh_days + " дн.: " + st.stale);

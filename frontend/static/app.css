@@ -1358,6 +1358,20 @@ select.input {
 .data-table td.center {
     text-align: center;
 }
+/* Правый край — как левый (28в): у последнего столбца своей линии справа нет, край
+   таблицы — её рамка. Иначе рядом с рамкой шла вторая линия — сетки */
+.data-table th:last-child {
+    --grid-shadow: inset 0 -1px 0 var(--grid-head-line-h);
+    /* Шапка липкая — рисуется своим слоем и на дробном масштабе (110%, 125%) наполовину
+       закрывала рамку таблицы: свой кусок рамки шапка рисует сама */
+    box-shadow: var(--grid-shadow), 1px 0 0 var(--frame);
+}
+.data-table th:first-child {
+    box-shadow: var(--grid-shadow), -1px 0 0 var(--frame);
+}
+.data-table td:last-child {
+    --grid-shadow: inset 0 -1px 0 var(--h-line);
+}
 
 .data-table td.link {
     cursor: pointer;
@@ -1438,6 +1452,10 @@ body.ui-dark-hostname .data-table td.link:hover span {
     border: 1px solid var(--hf-own);
     pointer-events: none;
     z-index: 1;
+}
+/* В последнем столбце рамка ячейки справа ложится на рамку таблицы — как слева в первом */
+.data-table tbody td:last-child:hover::after {
+    right: -1px;
 }
 /* Левую линию рамки перекрывает липкий столбец слева (IP над VACUUM),
    поэтому её рисует и сам сосед — своей линией справа. */
@@ -5097,6 +5115,10 @@ html.no-radius .vacuum-table .vc-dot {
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
 }
+/* DHCP: «+» в последней строке «Конфиг N» — ещё один файл настроек */
+.scan-form .sf-add {
+    color: var(--text-secondary);
+}
 .scan-form .sf-fp.off {
     color: var(--text-muted);
     text-decoration: line-through;
@@ -5267,9 +5289,13 @@ html.no-radius .tm-sample.chip {
     white-space: nowrap;
 }
 .net-table .nt-mac,
+.net-table .nt-ports,
 .net-table .nt-when {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+.net-table .nt-none {
+    color: var(--text-muted);
 }
 .net-table .nt-src {
     white-space: nowrap;

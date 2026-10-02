@@ -190,6 +190,7 @@ export const SIMPLE_FIELD_LABELS = {
     fresh_days: "Актуальны, дней",
     // DHCP по SSH, сеть, расписание (этап 28)
     path: "Файл",
+    configs: "Файлы настроек",
     ssh_key: "Ключ SSH",
     key_installed: "Ключ поставлен на сервер",
     host_key: "Отпечаток сервера",
@@ -241,8 +242,10 @@ export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
 export const DEFAULT_HIDDEN_SEEN_KEY = "itdb.defaultHiddenSeen.v1";
 export const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
 
-// Второй вид таблицы (этап 28б, кнопка справа от поиска): свой набор столбцов,
-// «Каб» и «Кабинет» — одним столбцом «Кабинет» («[214] Процедурная», как в карточке)
+// Второй вид таблицы (этап 28б, кнопка справа от поиска): свой набор столбцов.
+// «Каб» и «Кабинет» в Таблице — одним столбцом «Кабинет» («[214] Процедурная», как в
+// карточке): сначала только во втором виде, с 28в — в обоих. Оформляется он как
+// «Кабинет» (название) из Справочников: STYLE_OF
 export const TABLE_VIEW_KEY = "itdb.tableView.v1";
 export const HIDDEN_COLUMNS2_KEY = "itdb.hiddenColumns2.v1";
 export const ROOM_PARTS = ["room_code", "room_name"];
@@ -252,6 +255,19 @@ export const ROOM_COLUMN = {
 };
 // Столбцы второго вида, пока пользователь не выбрал свои
 export const VIEW2_COLUMNS = ["building", "department", "room", "hostname", "ip", "vacuum", "os", "type", "model", "cpu", "ram", "drive", "gpu"];
+
+// Чьё оформление из Справочников у общего столбца: столбец и значения названия
+// кабинета; у названия оформления столбца нет — номера
+export const ROOM_STYLE_FIELDS = ["room_name", "room_code"];
+
+// Скрытые столбцы основного вида, сохранённые до 28в: «Каб» и «Кабинет» были
+// порознь — общий «Кабинет» скрыт, если скрыты были оба
+export function mergeRoomHidden(list) {
+    const hidden = Array.isArray(list) ? list : [];
+    const rest = hidden.filter(function (field) { return ROOM_PARTS.indexOf(field) === -1; });
+    const both = ROOM_PARTS.every(function (field) { return hidden.indexOf(field) !== -1; });
+    return both && rest.indexOf(ROOM_COLUMN.field) === -1 ? rest.concat([ROOM_COLUMN.field]) : rest;
+}
 
 export function roomText(row) {
     const code = row.room_code;

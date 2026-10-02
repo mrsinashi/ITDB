@@ -7,9 +7,16 @@
   называет себя иначе — имя (в таблице пусто — заполнить, иначе только сообщить);
 - по IP (слабее): адрес записан у одного ПК, MAC с этого адреса в таблице нет.
   MAC предлагается, если машина на адресе называет себя как ПК (NetBIOS, имя из
-  аренды DHCP) или адрес закреплён за MAC в настройках DHCP; имя неизвестно, а
-  MAC у ПК пуст — «неточно»; имя другое, MAC чужого ПК или сам ПК виден на другом
-  адресе — ничего не предлагается.
+  аренды DHCP); имя неизвестно, а MAC у ПК пуст — «неточно»; имя другое, MAC
+  чужого ПК или сам ПК виден на другом адресе — ничего не предлагается.
+Привязки MAC — IP из настроек DHCP (data.fixed) — не наблюдения: адрес на машине
+могли поменять вручную. Они слабее всего, что видно на самом деле (этап 28в):
+- MAC по привязке предлагается, только если на адресе ПК сеть и аренды никакого MAC
+  не показали и MAC привязки нигде больше не виден; уверенно — когда host в
+  настройках называется как ПК (или так себя назвала машина на адресе), иначе, при
+  пустом MAC в таблице, — «неточно»;
+- IP по привязке предлагается только ПК без IP в таблице, всегда «неточно»;
+- имя и «проверен сетью» по привязкам не считаются.
 Случайные («локально назначенные») и виртуальные MAC не участвуют.
 """
 from collections import defaultdict
@@ -34,6 +41,11 @@ def same_name(table, seen):
         return False
 
     return a == b or (len(b) == NETBIOS_LEN and a.startswith(b))
+
+
+def is_fixed(obs):
+    """Привязка из настроек DHCP, а не наблюдение."""
+    return bool((obs.get("data") or {}).get("fixed"))
 
 
 def source_of(obs, by, value):
@@ -71,6 +83,9 @@ def confirmed(computers, hosts):
     result = defaultdict(list)
 
     for obs in hosts:
+        if is_fixed(obs):
+            continue   # привязка в настройках не значит, что машину видно в сети
+
         found = None
         mac = obs.get("mac")
 
@@ -99,7 +114,18 @@ def host_rows(computers, hosts):
     latest_by_mac = {}   # MAC → самое свежее наблюдение (действующая аренда — свежее ушедшей)
     by_ip = defaultdict(list)
 
+    fixed_by_ip = {}     # адрес → привязка из настроек DHCP
+    fixed_by_mac = defaultdict(list)
+
     for obs in hosts:
+        if is_fixed(obs):
+            fixed_by_ip[obs["ip"]] = obs
+
+            if obs.get("mac"):
+                fixed_by_mac[obs["mac"]].append(obs)
+
+            continue
+
         by_ip[obs["ip"]].append(obs)
         mac = obs.get("mac")
 
@@ -146,9 +172,27 @@ def host_rows(computers, hosts):
                 "source": source_of(named, ["mac"], named["name"]),
             })
 
+    # --- по MAC, только из настроек DHCP: адрес — лишь ПК без IP в таблице ---
+    for computer_id, macs in pc_macs.items():
+        if pc_ips[computer_id] or any(mac in latest_by_mac for mac in macs):
+            continue   # IP в таблице есть (мог быть задан вручную) или ПК виден в сети
+
+        found = [
+            obs for mac in macs if mac_owner.get(mac) == {computer_id} and not is_virtual_mac(mac)
+            for obs in fixed_by_mac.get(mac, []) if not ip_owner.get(obs["ip"])
+        ]
+
+        if found:
+            ips = sorted({obs["ip"] for obs in found})
+            proposals.append({
+                "computer_id": computer_id, "field": "ip", "value": "\n".join(ips),
+                "unsure": "IP из настроек DHCP: в сети ПК на нём не виден",
+                "source": source_of(found[0], ["mac", "reserve"], "\n".join(ips)),
+            })
+
     # --- по IP ---
     for ip, owners in ip_owner.items():
-        if len(owners) != 1 or ip not in by_ip:
+        if len(owners) != 1 or (ip not in by_ip and ip not in fixed_by_ip):
             continue
 
         computer_id = next(iter(owners))
@@ -158,7 +202,9 @@ def host_rows(computers, hosts):
 
         table_name = computers[computer_id].get("hostname")
 
-        for obs in sorted(by_ip[ip], key=lambda o: o["seen_at"], reverse=True):
+        real = sorted(by_ip.get(ip, []), key=lambda o: o["seen_at"], reverse=True)
+
+        for obs in real:
             mac = obs.get("mac")
 
             if not mac or is_virtual_mac(mac):
@@ -171,11 +217,8 @@ def host_rows(computers, hosts):
                 break      # на адресе — другой ПК таблицы
 
             name = obs.get("name")
-            fixed = bool((obs.get("data") or {}).get("fixed"))
 
-            if fixed:
-                by, unsure = ["ip", "reserve"], ""
-            elif name and same_name(table_name, name):
+            if name and same_name(table_name, name):
                 by, unsure = ["ip", "name"], ""
             elif name:
                 break      # на адресе машина с другим именем
@@ -191,5 +234,33 @@ def host_rows(computers, hosts):
                 "source": source_of(obs, by, mac),
             })
             break
+
+        # Привязка из настроек DHCP — когда на адресе никакого MAC на самом деле не видно
+        obs = fixed_by_ip.get(ip)
+
+        if obs is None or any(o.get("mac") for o in real):
+            continue
+
+        mac = obs.get("mac")
+
+        if not mac or is_virtual_mac(mac) or mac in pc_macs[computer_id] or mac_owner.get(mac) or mac in latest_by_mac:
+            continue   # уже записан, MAC другого ПК или машина с ним видна на другом адресе
+
+        names = [o["name"] for o in real if o.get("name")]
+
+        if names and not any(same_name(table_name, name) for name in names):
+            continue   # на адресе машина с другим именем
+
+        if names or same_name(table_name, (obs.get("data") or {}).get("host")):
+            unsure = ""
+        elif not pc_macs[computer_id]:
+            unsure = "MAC из настроек DHCP: в сети не подтвердился"
+        else:
+            continue
+
+        proposals.append({
+            "computer_id": computer_id, "field": "mac", "value": mac, "unsure": unsure,
+            "source": source_of(obs, ["ip", "reserve"], mac),
+        })
 
     return proposals, {computer_id: dict(fields) for computer_id, fields in seen.items()}

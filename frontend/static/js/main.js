@@ -30,7 +30,7 @@
 
 import "./settings.js";
 import { loadJson } from "./util.js";
-import { HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY } from "./columns.js";
+import { HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, mergeRoomHidden } from "./columns.js";
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
 import "./alt-copy.js";
@@ -101,7 +101,7 @@ const app = Vue.createApp({
             builtinColumns: [],
             cardGroups: [],
             historyLabels: {},
-            hiddenColumns: loadJson(HIDDEN_COLUMNS_KEY, []),
+            hiddenColumns: mergeRoomHidden(loadJson(HIDDEN_COLUMNS_KEY, [])),
             // Второй вид таблицы (кнопка справа от поиска): 1 — основной, 2 — второй;
             // его скрытые столбцы (null — ещё не меняли: столбцы по умолчанию)
             tableView: loadJson(TABLE_VIEW_KEY, 1) === 2 ? 2 : 1,

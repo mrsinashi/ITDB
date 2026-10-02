@@ -51,31 +51,48 @@ def test_hosts_page(admin, editor, reader, room):
     first = add_pc(editor, loc, "pc-1", ip="10.0.5.11")
     second = add_pc(editor, loc, "pc-2", ip="10.0.5.99", mac="D8:CB:8A:00:00:12")
     save_hosts(
-        obs("10.0.5.11", "D8:CB:8A:00:00:11", "PC-1", how=["ping", "netbios"], dns="pc-1.corp.lan", ports=[445, 5900]),
+        obs("10.0.5.11", "D8:CB:8A:00:00:11", "PC-1", how=["ping", "netbios"], dns="pc-1.corp.lan", ports=[5900, 445], rfb="003.008"),
         obs("10.0.5.11", "D8:CB:8A:00:00:11", "pc-1", source="dhcp", state="active", active=True),
-        obs("10.0.5.12", "D8:CB:8A:00:00:12", None, source="dhcp", fixed=True, host="pc-2"),
+        obs("10.0.5.11", "D8:CB:8A:00:00:AA", None, source="dhcp_conf", fixed=True, host="buh-1", file="/etc/dhcp/a.conf"),
+        obs("10.0.5.12", "D8:CB:8A:00:00:12", None, source="dhcp_conf", fixed=True, host="pc-2"),
+        obs("10.0.5.13", "D8:CB:8A:00:00:11", None, source="dhcp", fixed=True, host="old"),   # привязка, собранная до 28в
         obs("10.0.5.2", None, None, how=["ping"]),
     )
 
     assert reader.get("/api/scan/hosts").status_code == 403
     data = ok(editor.get("/api/scan/hosts"))
-    assert [h["ip"] for h in data["hosts"]] == ["10.0.5.2", "10.0.5.11", "10.0.5.12"]   # по порядку адресов
+    assert [h["ip"] for h in data["hosts"]] == ["10.0.5.2", "10.0.5.11", "10.0.5.12", "10.0.5.13"]   # по порядку адресов
     assert [s["kind"] for s in data["sources"]] == ["dhcp", "net"]
     hosts = {h["ip"]: h for h in data["hosts"]}
 
+    # Источники говорят разное — оба значения, у каждого — откуда; привязка — последней
     both = hosts["10.0.5.11"]
-    assert both["mac"] == ["D8:CB:8A:00:00:11"] and both["name"] == ["PC-1"]
-    assert both["dhcp"]["text"] == "аренда" and both["net"]["text"] == "ping, NetBIOS"
-    assert "DNS: pc-1.corp.lan" in both["net"]["details"] and "порты: 445, 5900" in both["net"]["details"]
+    assert both["mac"] == [
+        {"value": "D8:CB:8A:00:00:11", "sources": ["Сеть", "DHCP: аренда"]},
+        {"value": "D8:CB:8A:00:00:AA", "sources": ["DHCP: привязка"]},
+    ]
+    assert both["name"] == [
+        {"value": "PC-1", "sources": ["Сеть", "DHCP: аренда"]}, {"value": "buh-1", "sources": ["DHCP: привязка"]},
+    ]
+    assert both["dhcp"]["text"] == "аренда" and both["net"]["text"] == "ping, NetBIOS" and both["conf"]["text"] == "привязка"
+    assert both["conf"]["details"] == ["host buh-1", "файл: /etc/dhcp/a.conf"]
+    assert "DNS: pc-1.corp.lan" in both["net"]["details"]
+    assert both["ports"] == [445, 5900] and both["rfb"] == "003.008"
     assert [(c["computer_id"], c["by"]) for c in both["computers"]] == [(first, ["ip"])]
 
-    # Резерв: ПК найден по MAC, хотя IP в таблице у него другой
+    # Привязка: ПК найден по MAC из настроек, хотя IP в таблице у него другой; «когда» — пусто
     fixed = hosts["10.0.5.12"]
-    assert fixed["dhcp"]["text"] == "резерв" and fixed["net"] is None
-    assert [(c["computer_id"], c["by"]) for c in fixed["computers"]] == [(second, ["mac"])]
+    assert fixed["conf"]["text"] == "привязка" and fixed["dhcp"] is None and fixed["net"] is None
+    assert fixed["seen_at"] is None and fixed["ports"] is None
+    assert fixed["name"] == [{"value": "pc-2", "sources": ["DHCP: привязка"]}]
+    assert [(c["computer_id"], c["by"]) for c in fixed["computers"]] == [(second, ["conf"])]
+
+    # MAC привязки на самом деле виден на другом адресе
+    assert hosts["10.0.5.13"]["conf"]["details"] == ["host old", "MAC сейчас на 10.0.5.11"]
 
     alone = hosts["10.0.5.2"]
     assert alone["computers"] == [] and alone["mac"] == [] and alone["net"]["text"] == "ping"
+    assert alone["ports"] is None and alone["seen_at"]
 
 
 def test_verified(admin, editor, reader, room, glpi_url):

@@ -45,7 +45,7 @@ function avKey(name) {
     return String(name || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 }
 
-const KEY_TEXT = { id: "ID", mac: "MAC", serial: "серийному", ip: "IP", name: "имени", reserve: "резерву DHCP" };
+const KEY_TEXT = { id: "ID", mac: "MAC", serial: "серийному", ip: "IP", name: "имени", reserve: "привязке DHCP" };
 const KEY_ORDER = ["mac", "serial", "id", "ip", "name", "reserve"];
 // Поля-названия: «своё» значение — соответствие «одно и то же» (как NAME_FIELDS на сервере)
 const NAME_FIELDS = ["model", "motherboard", "os", "cpu", "gpu", "vnc", "drive"];

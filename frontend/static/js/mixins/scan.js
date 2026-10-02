@@ -103,6 +103,8 @@ export default {
                 verify_tls: s.verify_tls,
                 fresh_days: s.fresh_days,
                 path: s.path || "",
+                // DHCP: файлы настроек — строками «Конфиг N»; пустая строка — место для первого
+                configs: s.configs && s.configs.length ? s.configs.slice() : [""],
                 names: s.names,
                 ports: s.ports,
                 forget_host: false,   // DHCP: забыть запомненный ключ сервера при сохранении
@@ -144,6 +146,10 @@ export default {
             if (s.form === "ssh") {
                 if ((f.path || "").trim().split(/\s+/).join(" ") !== (s.path || "")) {
                     body.path = f.path;
+                }
+                const configs = f.configs.map(function (c) { return c.trim(); }).filter(Boolean);
+                if (configs.join("\n") !== (s.configs || []).join("\n")) {
+                    body.configs = configs;
                 }
                 if (f.forget_host && s.host_key) {
                     body.forget_host = true;
@@ -224,6 +230,10 @@ export default {
                 const show = f.show;
                 this.scanForms[kind] = Object.assign(this.scanFormFrom(saved), { show: show });
                 this.toast(saved.title + ": настройки сохранены", "success");
+                // Ключ на сервере читает файлы, записанные при его установке
+                if (saved.has_key && ("path" in body || "configs" in body)) {
+                    this.toast(saved.title + ": файлы изменены — поставь ключ заново", "info", 7000);
+                }
                 if (this.schedule.items.length) {
                     this.loadSchedule(true);   // «выключен» в расписании — по источнику
                 }
@@ -327,6 +337,18 @@ export default {
                 ssh: "Аренды, кончившиеся раньше, не берутся",
                 net: "Сколько помнить адрес, который перестал отвечать"
             }[s.form] || "Записи старше не берутся";
+        },
+
+        // DHCP: ещё одна строка «Конфиг N» («+» — в последней строке)
+        addScanConfig(kind, event) {
+            const table = event.currentTarget.closest("table");
+            this.scanForms[kind].configs.push("");
+            this.$nextTick(function () {
+                const inputs = table.querySelectorAll(".sf-config input");
+                if (inputs.length) {
+                    inputs[inputs.length - 1].focus();
+                }
+            });
         },
 
         // ---------- Ключ SSH (DHCP) ----------

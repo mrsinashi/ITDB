@@ -1,8 +1,11 @@
 """Вкладка «Сеть» «Сканера» (этап 28б): что собрали DHCP и проход подсетей.
 
 GET /api/scan/hosts — адреса из scan_hosts, по строке на адрес: MAC и имя машины,
-что говорит DHCP (аренда или резерв) и что ответило при проходе подсети, и какой
-ПК таблицы на этом адресе: по IP из таблицы или по MAC. Ничего не пишет.
+что говорит DHCP (аренда, привязка в настройках) и что ответило при проходе подсети
+(чем ответил, открытые порты), и какой ПК таблицы на этом адресе: по IP из таблицы
+или по MAC. Источники говорят разное — значения показываются все, у каждого —
+откуда оно (этап 28в); первым — то, что видно на самом деле (сеть, потом аренда),
+последним — привязка из настроек DHCP. Ничего не пишет.
 Сбор — POST /api/scan/sources/{dhcp|net}/collect. Смотреть — редактор и администратор.
 """
 import ipaddress
@@ -18,7 +21,8 @@ from api_scan import SOURCES, RunOut, last_run_of, load_source
 from auth import require_editor
 from db import get_db
 from models import Computer, ScanHost
-from scan_hostmatch import lines
+from scan_dhcp import CONF_SOURCE
+from scan_hostmatch import lines, same_name
 from scan_normalize import is_virtual_mac, norm_mac, usable_ipv4
 
 router = APIRouter(prefix="/api/scan/hosts", tags=["scan"])
@@ -39,15 +43,25 @@ class HostPc(BaseModel):
     computer_id: int
     hostname: Optional[str]
     place: Optional[str]
-    by: list[str]              # ip, mac — по чему найден
+    by: list[str]              # ip, mac, conf (MAC привязки из настроек DHCP) — по чему найден
+
+
+class ValueOut(BaseModel):
+    """Значение и кто его назвал: «Сеть», «DHCP: аренда», «DHCP: привязка»."""
+    value: str
+    sources: list[str]
 
 
 class HostOut(BaseModel):
     ip: str
-    mac: list[str]
-    name: list[str]
-    dhcp: Optional[SeenOut] = None
+    mac: list[ValueOut]
+    name: list[ValueOut]
+    dhcp: Optional[SeenOut] = None    # аренда
+    conf: Optional[SeenOut] = None    # привязка из настроек DHCP
     net: Optional[SeenOut] = None
+    ports: Optional[list[int]] = None   # открытые порты; None — не проверялись
+    rfb: Optional[str] = None           # версия VNC на порту 5900
+    seen_at: Optional[datetime] = None  # когда адрес был занят на самом деле (привязка не в счёт)
     computers: list[HostPc]
 
 
@@ -71,22 +85,37 @@ def moment(value):
         return None
 
 
+WHO = {"net": "Сеть", "dhcp": "DHCP: аренда", "conf": "DHCP: привязка"}
+# Сначала — что видно на самом деле; привязка из настроек — последней
+ORDER = ("net", "dhcp", "conf")
+
+
 def dhcp_seen(row):
     data = row.data or {}
     details = []
+    text = "аренда" if data.get("active") else "аренда кончилась"
 
-    if data.get("fixed"):
-        text = "резерв"
-
-        if data.get("host"):
-            details.append("host " + str(data["host"]))
-    else:
-        text = "аренда" if data.get("active") else "аренда кончилась"
-
-        if data.get("state"):
-            details.append("состояние: " + str(data["state"]))
+    if data.get("state"):
+        details.append("состояние: " + str(data["state"]))
 
     return SeenOut(mac=row.mac, name=row.name, seen_at=row.seen_at, text=text, details=details)
+
+
+def conf_seen(row, elsewhere):
+    """Привязка из настроек DHCP; elsewhere — адреса, где этот MAC виден на самом деле."""
+    data = row.data or {}
+    details = []
+
+    if data.get("host"):
+        details.append("host " + str(data["host"]))
+
+    if data.get("file"):
+        details.append("файл: " + str(data["file"]))
+
+    if elsewhere:
+        details.append("MAC сейчас на " + ", ".join(elsewhere))
+
+    return SeenOut(mac=row.mac, name=data.get("host"), seen_at=row.seen_at, text="привязка", details=details)
 
 
 def net_seen(row):
@@ -101,16 +130,42 @@ def net_seen(row):
     if data.get("group"):
         details.append("группа: " + str(data["group"]))
 
-    if data.get("ports"):
-        details.append("порты: " + ", ".join(str(port) for port in data["ports"]))
-
-    if data.get("rfb"):
-        details.append("VNC: " + str(data["rfb"]))
-
     return SeenOut(
         mac=row.mac, name=row.name, seen_at=row.seen_at,
         text=", ".join(HOW.get(item, str(item)) for item in how) or "ответил", details=details,
     )
+
+
+def ports_of(row):
+    """Открытые порты адреса: список; порты не проверялись — None."""
+    ports = (row.data or {}).get("ports") if row is not None else None
+
+    if not isinstance(ports, list):
+        return None
+
+    return sorted(port for port in ports if isinstance(port, int))
+
+
+def merge(values, same):
+    """[(значение, кто назвал)] → [ValueOut]: одинаковые значения — одной строкой."""
+    result = []
+
+    for value, who in values:
+        if not value:
+            continue
+
+        found = next((item for item in result if same(item.value, value)), None)
+
+        if found is None:
+            result.append(ValueOut(value=value, sources=[who]))
+        elif who not in found.sources:
+            found.sources.append(who)
+
+    return result
+
+
+def same_host(a, b):
+    return a.lower() == b.lower() or same_name(a, b) or same_name(b, a)
 
 
 def ip_key(ip):
@@ -141,42 +196,57 @@ def list_hosts(me=Depends(require_editor), session=Depends(get_db)):
                 by_mac.setdefault(mac, []).append(c.id)
 
     found = {}
+    kinds = [kind for group in scan_collect.HOST_SOURCES.values() for kind in group]
+    seen_macs = {}   # MAC → адреса, где он виден на самом деле (сеть, аренда)
 
-    for row in session.query(ScanHost).filter(ScanHost.source.in_(scan_collect.HOST_KINDS)):
-        entry = found.setdefault(row.ip, {})
-        entry[row.source] = row
+    for row in session.query(ScanHost).filter(ScanHost.source.in_(kinds)):
+        # Привязки, собранные до 28в, лежат строками dhcp с пометкой fixed
+        fixed = row.source == CONF_SOURCE or bool((row.data or {}).get("fixed"))
+        kind = "conf" if fixed else row.source
+        found.setdefault(row.ip, {})[kind] = row
+
+        if not fixed and row.mac:
+            seen_macs.setdefault(row.mac, set()).add(row.ip)
 
     hosts = []
 
     for ip, entry in found.items():
-        macs, names = [], []
-
-        # Сеть видит машину сейчас — её MAC и имя первыми
-        for kind in ("net", "dhcp"):
-            row = entry.get(kind)
-
-            if row is None:
-                continue
-
-            if row.mac and row.mac not in macs:
-                macs.append(row.mac)
-
-            if row.name and row.name.lower() not in [name.lower() for name in names]:
-                names.append(row.name)
-
+        macs = merge([(entry[kind].mac, WHO[kind]) for kind in ORDER if kind in entry], lambda a, b: a == b)
+        names = merge(
+            [
+                ((entry[kind].data or {}).get("host") if kind == "conf" else entry[kind].name, WHO[kind])
+                for kind in ORDER if kind in entry
+            ],
+            same_host,
+        )
+        conf = entry.get("conf")
         pcs = {}
 
         for computer_id in by_ip.get(ip, []):
             pcs.setdefault(computer_id, []).append("ip")
 
-        for mac in macs:
-            for computer_id in by_mac.get(mac, []):
-                pcs.setdefault(computer_id, []).append("mac")
+        for kind in ORDER:
+            row = entry.get(kind)
+
+            for computer_id in (by_mac.get(row.mac, []) if row is not None and row.mac else []):
+                pcs.setdefault(computer_id, []).append("conf" if kind == "conf" else "mac")
+
+        for by in pcs.values():
+            if "mac" in by and "conf" in by:
+                by.remove("conf")
+
+        real = [entry[kind].seen_at for kind in ("net", "dhcp") if kind in entry]
+        elsewhere = sorted(seen_macs.get(conf.mac, set()) - {ip}, key=ip_key) if conf is not None and conf.mac else []
+        net = entry.get("net")
 
         hosts.append(HostOut(
             ip=ip, mac=macs, name=names,
             dhcp=dhcp_seen(entry["dhcp"]) if "dhcp" in entry else None,
-            net=net_seen(entry["net"]) if "net" in entry else None,
+            conf=conf_seen(conf, elsewhere) if conf is not None else None,
+            net=net_seen(net) if net is not None else None,
+            ports=ports_of(net),
+            rfb=(net.data or {}).get("rfb") if net is not None else None,
+            seen_at=max(real) if real else None,
             computers=[
                 HostPc(computer_id=computer_id, hostname=computers[computer_id]["hostname"],
                        place=computers[computer_id]["place"], by=sorted(set(by)))

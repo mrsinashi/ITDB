@@ -19,7 +19,7 @@ import scan_ssh
 from conftest import ok
 from db import SessionLocal
 from models import ScanHost
-from scan_hostmatch import host_rows, same_name
+from scan_hostmatch import confirmed, host_rows, same_name
 from scan_http import SourceError
 from test_scan_collect import add_pc, collect, secret_key  # noqa: F401
 
@@ -84,9 +84,36 @@ def test_build_fresh_only():
     # Аренда, кончившаяся 40 дней назад, не берётся; 3 дня назад — берётся
     assert set(by_ip) == {"10.0.5.11", "10.0.5.13", "10.0.5.200", "10.0.5.201", "10.0.5.202"}
     assert stats == {"total": 6, "fresh": 5, "active": 1, "stale": 1, "fixed": 3, "no_mac": 0}
-    assert by_ip["10.0.5.11"]["data"]["active"] is True
+    assert by_ip["10.0.5.11"]["data"]["active"] is True and "source" not in by_ip["10.0.5.11"]
     assert by_ip["10.0.5.200"]["data"] == {"fixed": True, "host": "printer-1"} and by_ip["10.0.5.200"]["name"] is None
+    # Привязка из настроек — строкой своего вида, отдельно от аренд
+    assert by_ip["10.0.5.200"]["source"] == scan_dhcp.CONF_SOURCE
     assert len(scan_dhcp.build(LEASES, 2)[0]) == 4
+
+
+def test_build_lease_and_binding_on_one_address():
+    """На адресе и аренда, и привязка из файла настроек — остаются обе; файл привязки запоминается."""
+    conf = "subnet 10.0.5.0 netmask 255.255.255.0 {\n  host pc-1 { hardware ethernet d8:cb:8a:00:00:aa; fixed-address 10.0.5.11; }\n}"
+    items, stats = scan_dhcp.build([("/var/lib/dhcpd/dhcpd.leases", LEASES), ("/etc/dhcp/sub5.conf", conf)], 30)
+    on_address = [item for item in items if item["ip"] == "10.0.5.11"]
+    assert [(item.get("source"), item["mac"]) for item in on_address] == [
+        (None, "D8:CB:8A:00:00:11"), (scan_dhcp.CONF_SOURCE, "D8:CB:8A:00:00:AA"),
+    ]
+    assert on_address[1]["data"] == {"fixed": True, "host": "pc-1", "file": "/etc/dhcp/sub5.conf"}
+    assert stats["fixed"] == 4 and stats["total"] == 7
+
+
+def test_read_command_and_split_files():
+    command = scan_ssh.read_command(["/a/leases", "/b/c.conf"])
+    assert command == "echo; echo '#ITDB-FILE /a/leases'; cat -- /a/leases; echo; echo '#ITDB-FILE /b/c.conf'; cat -- /b/c.conf"
+    out = "\n#ITDB-FILE /a/leases\nlease 1\nno newline\n#ITDB-FILE /b/c.conf\nhost x {}\n"
+    assert scan_ssh.split_files(out) == [("/a/leases", "lease 1\nno newline\n"), ("/b/c.conf", "host x {}\n")]
+    # Ключ на сервере — с прежней командой «cat»: меток нет
+    assert scan_ssh.split_files("lease 1\n") == [(None, "lease 1\n")]
+    assert scan_ssh.all_paths({"path": "/a/leases", "configs": ["/b/c.conf", " ", "/b/c.conf", "/d"]}) == ["/a/leases", "/b/c.conf", "/d"]
+
+    with pytest.raises(SourceError):
+        scan_ssh.config_paths(["etc/dhcpd.conf"])
 
 
 def test_ssh_address_and_paths():
@@ -156,12 +183,22 @@ class FakeSsh(paramiko.ServerInterface):
             # Ключ с command="…": что бы ни просили, выполняется команда из authorized_keys
             command = next(line for line in Ssh.authorized).split('"')[1]
 
-        if command.startswith("cat -- "):
-            for path in command[len("cat -- "):].split():
-                if path in Ssh.files:
-                    out += Ssh.files[path].encode()
-                else:
-                    err, code = f"cat: {path}: No such file or directory".encode(), 1
+        if "cat -- " in command and "authorized_keys" not in command:
+            # «echo; echo '#ITDB-FILE путь'; cat -- путь; …» (или прежнее «cat -- a b»)
+            for step in command.split(";"):
+                step = step.strip()
+
+                if step == "echo":
+                    out += b"\n"
+                elif step.startswith("echo "):
+                    out += step[len("echo "):].strip("'").encode() + b"\n"
+                elif step.startswith("cat -- "):
+                    for path in step[len("cat -- "):].split():
+                        if path in Ssh.files:
+                            out += Ssh.files[path].encode()
+                            code = 0
+                        else:
+                            err, code = f"cat: {path}: No such file or directory".encode(), 1
         elif "authorized_keys" in command:
             data = b""
 
@@ -238,6 +275,15 @@ def hosts(kind):
         session.close()
 
 
+def all_hosts():
+    session = SessionLocal()
+
+    try:
+        return session.query(ScanHost).all()
+    finally:
+        session.close()
+
+
 def diffs_of(client):
     data = ok(client.get("/api/scan/diffs"))
     return data, {(d["computer_id"], d["field"]): d for d in data["items"]}
@@ -264,7 +310,7 @@ def test_dhcp_check_pins_host_key(admin, ssh_port):
     setup_dhcp(admin, ssh_port)
     result = ok(admin.post("/api/scan/sources/dhcp/check"))
     assert result["ok"] and result["saved"], result
-    assert "вход по паролю" in result["message"] and "аренд 3" in result["message"] and "резервов 3" in result["message"]
+    assert "вход по паролю" in result["message"] and "аренд 3" in result["message"] and "привязок 3" in result["message"]
     pinned = source(admin, "dhcp")["host_key"]
     assert pinned.startswith("SHA256:")
 
@@ -293,9 +339,11 @@ def test_dhcp_key_install_and_collect(admin, editor, room, ssh_port):
     setup_dhcp(admin, ssh_port)
     key = ok(admin.post("/api/scan/sources/dhcp/key"))
     assert key["created"] and key["public"].startswith("ssh-rsa ") and key["public"].endswith(" itdb")
-    assert key["line"].startswith('command="cat -- /var/lib/dhcpd/dhcpd.leases",no-pty,')
-    again = ok(admin.post("/api/scan/sources/dhcp/key", json={"path": "/a/b /c"}))
-    assert not again["created"] and again["public"] == key["public"] and 'command="cat -- /a/b /c"' in again["line"]
+    leases = scan_dhcp.DEFAULT_PATH
+    assert key["line"].startswith(f"command=\"echo; echo '#ITDB-FILE {leases}'; cat -- {leases}\",no-pty,")
+    again = ok(admin.post("/api/scan/sources/dhcp/key", json={"path": "/a/b /c", "configs": ["/d"]}))
+    assert not again["created"] and again["public"] == key["public"]
+    assert all(f"cat -- {path}" in again["line"] for path in ("/a/b", "/c", "/d"))
 
     # Без пароля ключ не поставить
     ok(admin.patch("/api/scan/sources/dhcp", json={"password": ""}))
@@ -362,7 +410,7 @@ def test_host_rows():
         4: {"hostname": "pc-4", "ip": "10.0.5.14", "mac": "D8:CB:8A:00:00:14"},   # переехал на другой адрес
         5: {"hostname": "pc-5", "ip": "10.0.5.15", "mac": "D8:CB:8A:00:00:15"},   # всё совпадает, имя другое
         6: {"hostname": "pc-6", "ip": "10.0.5.16", "mac": "D8:CB:8A:00:00:16"},   # на адресе — MAC ПК 4
-        7: {"hostname": "pc-7", "ip": "10.0.5.17", "mac": "D8:CB:8A:00:00:17"},   # резерв: второй MAC
+        7: {"hostname": "pc-7", "ip": "10.0.5.17", "mac": "D8:CB:8A:00:00:17"},   # привязка: другой MAC, в сети не виден
         8: {"hostname": "pc-8", "ip": "10.0.5.18", "mac": "D8:CB:8A:00:00:18"},   # имя неизвестно, MAC есть
         9: {"hostname": "", "ip": "10.0.5.19", "mac": "D8:CB:8A:00:00:19"},       # имени в таблице нет
     }
@@ -380,14 +428,51 @@ def test_host_rows():
     ]
     proposals, net = host_rows(computers, seen)
     got = {(p["computer_id"], p["field"]): p for p in proposals}
-    assert set(got) == {(1, "mac"), (3, "mac"), (4, "ip"), (5, "hostname"), (7, "mac"), (9, "hostname")}
+    assert set(got) == {(1, "mac"), (3, "mac"), (4, "ip"), (5, "hostname"), (9, "hostname")}
     assert got[(1, "mac")]["value"] == "D8:CB:8A:00:00:11" and got[(1, "mac")]["source"]["by"] == ["ip", "name"]
     assert got[(3, "mac")]["unsure"] and got[(3, "mac")]["source"]["title"] == "Сеть"
     assert got[(4, "ip")]["value"] == "10.0.5.16" and got[(4, "ip")]["source"]["by"] == ["mac"]
     assert got[(5, "hostname")]["value"] == "DESKTOP-5"
-    assert got[(7, "mac")]["source"]["by"] == ["ip", "reserve"] and not got[(7, "mac")]["unsure"]
     assert got[(9, "hostname")]["value"] == "pc-9"
     assert net[4]["ip"] == ["10.0.5.16"] and net[5]["hostname"] == ["DESKTOP-5"]
+
+
+def test_host_rows_bindings_are_weakest():
+    """Привязка MAC — IP из настроек DHCP слабее всего, что видно на самом деле (этап 28в)."""
+    computers = {
+        1: {"hostname": "pc-1", "ip": "10.0.5.11", "mac": ""},                    # host называется как ПК
+        2: {"hostname": "pc-2", "ip": "10.0.5.12", "mac": ""},                    # host называется иначе
+        3: {"hostname": "pc-3", "ip": "10.0.5.13", "mac": "D8:CB:8A:00:00:13"},   # MAC уже есть, host иначе
+        4: {"hostname": "pc-4", "ip": "10.0.5.14", "mac": ""},                    # на адресе виден другой MAC
+        5: {"hostname": "pc-5", "ip": "10.0.5.15", "mac": ""},                    # MAC привязки виден на другом адресе
+        6: {"hostname": "pc-6", "ip": "", "mac": "D8:CB:8A:00:00:66"},            # IP в таблице пуст
+        7: {"hostname": "pc-7", "ip": "10.0.5.77", "mac": "D8:CB:8A:00:00:67"},   # IP задан вручную — другой
+        8: {"hostname": "pc-8", "ip": "10.0.5.18", "mac": ""},                    # имя на адресе подтвердилось, MAC — из привязки
+    }
+    seen = [
+        obs("10.0.5.11", "D8:CB:8A:00:0A:11", fixed=True, host="PC-1"),
+        obs("10.0.5.12", "D8:CB:8A:00:0A:12", fixed=True, host="buh"),
+        obs("10.0.5.13", "D8:CB:8A:00:0A:13", fixed=True, host="x"),
+        obs("10.0.5.14", "D8:CB:8A:00:0A:14", fixed=True, host="pc-4"),
+        obs("10.0.5.14", "D8:CB:8A:00:0B:14", source="net"),
+        obs("10.0.5.15", "D8:CB:8A:00:0A:15", fixed=True, host="pc-5"),
+        obs("10.0.5.99", "D8:CB:8A:00:0A:15", source="net"),
+        obs("10.0.5.16", "D8:CB:8A:00:00:66", fixed=True, host="pc-6"),
+        obs("10.0.5.17", "D8:CB:8A:00:00:67", fixed=True, host="pc-7"),
+        obs("10.0.5.18", "D8:CB:8A:00:0A:18", fixed=True, host="x"),
+        obs("10.0.5.18", None, "PC-8", source="net"),
+    ]
+    proposals, _ = host_rows(computers, seen)
+    got = {(p["computer_id"], p["field"]): p for p in proposals}
+    assert set(got) == {(1, "mac"), (2, "mac"), (4, "mac"), (6, "ip"), (8, "mac")}
+    assert got[(1, "mac")]["source"]["by"] == ["ip", "reserve"] and not got[(1, "mac")]["unsure"]
+    assert got[(2, "mac")]["unsure"] and got[(2, "mac")]["value"] == "D8:CB:8A:00:0A:12"
+    # На адресе виден настоящий MAC — предлагается он, а не привязка
+    assert got[(4, "mac")]["value"] == "D8:CB:8A:00:0B:14" and got[(4, "mac")]["source"]["title"] == "Сеть"
+    assert got[(6, "ip")]["value"] == "10.0.5.16" and got[(6, "ip")]["unsure"]
+    assert got[(8, "mac")]["value"] == "D8:CB:8A:00:0A:18" and not got[(8, "mac")]["unsure"]
+    # «Проверен сетью» по привязке не считается (ПК 8 сеть видит сама: имя на адресе)
+    assert confirmed(computers, seen) == {8: ["net"]}
 
 
 def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
@@ -399,9 +484,24 @@ def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
     Ssh.files = {scan_dhcp.DEFAULT_PATH: LEASES + "\n" + lease("10.0.5.60", "d8:cb:8a:00:00:60", "DESKTOP-60")}
     assert collect(admin, "dhcp")["status"] == "ok"
 
+    # Привязка адреса ПК к другому MAC в настройках (host printer-1) — не повод менять MAC
+    _, diffs = diffs_of(editor)
+    assert (second, "mac") not in diffs
+
+    # host в файле настроек называется как ПК — MAC привязки предлагается дописать
+    conf = "/etc/dhcp/hosts.conf"
+    Ssh.files[conf] = "host pc-7 { hardware ethernet 00:1b:a9:00:00:77; fixed-address 10.0.5.200; }"
+    saved = ok(admin.patch("/api/scan/sources/dhcp", json={"configs": [conf, " "]}))
+    assert saved["configs"] == [conf] and saved["path"] == scan_dhcp.DEFAULT_PATH
+    run = collect(admin, "dhcp")
+    assert run["status"] == "ok" and run["stats"]["fixed"] == 3, run
+    rows = {(row.source, row.ip): row for row in all_hosts()}
+    assert rows[("dhcp_conf", "10.0.5.200")].data == {"fixed": True, "host": "pc-7", "file": conf}
+
     _, diffs = diffs_of(editor)
     diff = diffs[(second, "mac")]
-    assert diff["kind"] == "diff" and diff["proposed"] == "D8:CB:8A:00:00:07\n00:1B:A9:00:00:01" and diff["raw"] == "00:1B:A9:00:00:01"
+    assert diff["kind"] == "diff" and diff["proposed"] == "D8:CB:8A:00:00:07\n00:1B:A9:00:00:77" and diff["raw"] == "00:1B:A9:00:00:77"
+    assert diff["sources"][0]["by"] == ["ip", "reserve"]
     name = diffs[(named, "hostname")]
     assert name["proposed"] == "DESKTOP-60" and name["can_take"] is False
 
@@ -409,6 +509,46 @@ def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
     ok(admin.patch("/api/scan/sources/dhcp", json={"enabled": False}))
     data, diffs = diffs_of(editor)
     assert not diffs and "dhcp" not in data["sources"]
+
+
+def test_dhcp_config_files(admin, ssh_port):
+    """Файлы настроек — отдельным списком; ключ на сервере с прежним набором файлов — предупреждение."""
+    setup_dhcp(admin, ssh_port)
+    assert source(admin, "dhcp")["configs"] == []
+    assert admin.patch("/api/scan/sources/dhcp", json={"configs": ["etc/a.conf"]}).status_code == 400
+    assert admin.patch("/api/scan/sources/dhcp", json={"configs": ["/etc/a b.conf; rm"]}).status_code == 400
+
+    # Прежняя запись «Файл: аренды и настройки через пробел» — первый путь аренды, остальные — настройки
+    saved = ok(admin.patch("/api/scan/sources/dhcp", json={"path": scan_dhcp.DEFAULT_PATH + " /etc/dhcp/dhcpd.conf"}))
+    assert saved["path"] == scan_dhcp.DEFAULT_PATH and saved["configs"] == ["/etc/dhcp/dhcpd.conf"]
+    saved = ok(admin.patch("/api/scan/sources/dhcp", json={"configs": []}))
+    assert saved["configs"] == []
+
+    # Ключ поставлен, когда файлов настроек не было
+    assert ok(admin.post("/api/scan/sources/dhcp/key/install"))["ok"]
+    ok(admin.patch("/api/scan/sources/dhcp", json={"password": ""}))
+    one, two = "/etc/dhcp/sub1.conf", "/etc/dhcp/sub2.conf"
+    Ssh.files[one] = "host a { hardware ethernet 00:1b:a9:00:01:01; fixed-address 10.0.6.1; }"
+    Ssh.files[two] = "# пусто"
+    saved = ok(admin.patch("/api/scan/sources/dhcp", json={"configs": [one, two]}))
+    assert saved["configs"] == [one, two] and saved["check_ok"] is None
+    run = collect(admin, "dhcp")
+    assert run["status"] == "ok" and "поставь ключ заново" in run["message"] and run["stats"]["fixed"] == 3
+
+    # Ключ поставлен заново — читаются все файлы; файл без привязок — предупреждение
+    assert ok(admin.post("/api/scan/sources/dhcp/key/install", json={"password": "pw"}))["ok"]
+    assert all(f"cat -- {path}" in Ssh.authorized[0] for path in (scan_dhcp.DEFAULT_PATH, one, two))
+    run = collect(admin, "dhcp")
+    assert run["status"] == "ok" and run["stats"]["fixed"] == 4, run
+    assert run["message"] == f"{two} — привязок MAC — IP нет."
+    result = ok(admin.post("/api/scan/sources/dhcp/check"))
+    assert result["ok"] and "привязок 4" in result["message"]
+
+    # Файла настроек на сервере нет — аренды всё равно собраны
+    del Ssh.files[two]
+    assert ok(admin.post("/api/scan/sources/dhcp/key/install", json={"password": "pw"}))["ok"]
+    run = collect(admin, "dhcp")
+    assert run["status"] == "ok" and f"{two} — не прочитан." in run["message"] and "No such file" in run["message"]
 
 
 # ---------- Сеть: проход подсетей ----------
@@ -433,6 +573,7 @@ def test_nbstat_and_arp(tmp_path):
     )
     assert scan_net.arp_table(str(arp)) == {"192.168.0.10": "D8:CB:8A:11:22:33"}
     assert scan_net.targets(["10.0.5.0/30", "10.0.5.0/30", "10.0.6.7/32"]) == ["10.0.5.1", "10.0.5.2", "10.0.6.7"]
+    assert {22, 80, 443, 8080, 3389, 5900} <= set(scan_net.PORTS)
 
 
 def test_net_collect(admin, editor, room, monkeypatch):

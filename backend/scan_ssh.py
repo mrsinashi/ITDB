@@ -32,6 +32,10 @@ KEY_COMMENT = "itdb"
 # Ограничения ключа в authorized_keys: только заданная команда
 KEY_OPTIONS = "no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding"
 PATH_RE = re.compile(r"^/[\w./+@:-]+$")
+MAX_CONFIGS = 30
+# Метка перед каждым файлом в выводе сервера
+FILE_MARK = "#ITDB-FILE "
+FILE_LINE = re.compile(r"(?m)^" + re.escape(FILE_MARK) + r"(\S+)[ \t]*\r?$\n?")
 
 
 def split_host(address):
@@ -77,11 +81,43 @@ def split_paths(text):
     return paths
 
 
+def config_paths(configs):
+    """Файлы настроек (dhcpd.conf и его части): список полных путей, пустые пропускаются."""
+    result = []
+
+    for text in configs or []:
+        if (text or "").strip():
+            for path in split_paths(text):
+                if path not in result:
+                    result.append(path)
+
+    if len(result) > MAX_CONFIGS:
+        raise SourceError(f"Файлов настроек слишком много (больше {MAX_CONFIGS}).")
+
+    return result
+
+
+def all_paths(params):
+    """Все файлы подключения: аренды, за ними — настройки."""
+    paths = split_paths(params.get("path"))
+    return paths + [path for path in config_paths(params.get("configs")) if path not in paths]
+
+
 def read_command(paths):
-    return "cat -- " + " ".join(shlex.quote(path) for path in paths)
+    """Перед каждым файлом — строка-метка: по ней видно, какие файлы сервер отдал
+    (ключ на сервере выполняет команду, записанную при его установке)."""
+    return "; ".join(f"echo; echo '{FILE_MARK}{path}'; cat -- {shlex.quote(path)}" for path in paths)
 
 
-# ---------- Ключ ITDB ----------
+def split_files(text):
+    """Вывод сервера → [(путь, текст)]. Меток нет (ключ поставлен версией до 28в:
+    просто «cat») — [(None, весь текст)]."""
+    parts = FILE_LINE.split(text)
+
+    if len(parts) == 1:
+        return [(None, text)]
+
+    return [(parts[index], parts[index + 1]) for index in range(1, len(parts), 2)]
 
 
 def generate_key():
@@ -297,24 +333,30 @@ class Session:
 
 
 def read_files(params):
-    """Содержимое файлов (текст) и сведения о подключении."""
-    paths = split_paths(params.get("path"))
+    """Файлы с сервера [(путь, текст)] и сведения о подключении. Путь None — сервер
+    отдал всё одним куском (ключ на нём — с прежней командой)."""
+    paths = all_paths(params)
 
     with Session(params) as session:
         out, err, code = session.run(read_command(paths))
         info = session.info
 
-    if code != 0 or (not out and err):
+    files = split_files(out.decode("utf-8", errors="replace"))
+    # Не прочитался файл настроек — не повод терять аренды: об этом скажет сборщик
+    leases_read = files[0][0] in (None, paths[0]) and files[0][1].strip()
+
+    if not leases_read and (code != 0 or err):
         raise SourceError("Файл не прочитать: " + (err or f"код {code}") + ". Проверь путь и права пользователя.")
 
-    return out.decode("utf-8", errors="replace"), info
+    info["read_error"] = err if (code != 0 or err) else None
+    return files, info
 
 
 def install_key(params):
     """Поставить ключ ITDB на сервер (вход — по паролю): строка в
     ~/.ssh/authorized_keys с ограничением «только читать файл». Прежние строки
     ITDB заменяются. Ответ — сведения о подключении."""
-    paths = split_paths(params.get("path"))
+    paths = all_paths(params)
     line = authorized_line(params["ssh_key"], paths)
     marker = shlex.quote(" " + KEY_COMMENT + "$")
     script = (

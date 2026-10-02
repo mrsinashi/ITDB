@@ -958,7 +958,7 @@
                                     </tr>
                                     <tr>
                                         <td class="sf-label">Порты</td>
-                                        <td><label class="sf-check" title="135, 139, 445, 3389, 5900"><input type="checkbox" v-model="scanForms[s.kind].ports"> проверять открытые</label></td>
+                                        <td><label class="sf-check" title="22, 80, 135, 139, 443, 445, 3389, 5900, 8080"><input type="checkbox" v-model="scanForms[s.kind].ports"> проверять открытые</label></td>
                                     </tr>
                                 </template>
                                 <template v-else>
@@ -970,7 +970,18 @@
                                 <tr v-if="s.form === 'ssh'">
                                     <td class="sf-label">Файл</td>
                                     <td><input class="input" v-model="scanForms[s.kind].path" spellcheck="false" autocomplete="off" placeholder="/var/lib/dhcpd/dhcpd.leases"
-                                        title="Файл аренд; несколько — через пробел"></td>
+                                        title="Файл аренд"></td>
+                                </tr>
+                                <!-- DHCP: файлы настроек с привязками MAC — IP; «+» — только в последней строке (28в) -->
+                                <tr v-for="(c, ci) in (s.form === 'ssh' ? scanForms[s.kind].configs : [])" :key="'cfg' + ci">
+                                    <td class="sf-label">Конфиг {{ ci + 1 }}</td>
+                                    <td><div class="sf-secret sf-config">
+                                        <input class="input" v-model="scanForms[s.kind].configs[ci]" spellcheck="false" autocomplete="off" placeholder="/etc/dhcp/dhcpd.conf"
+                                            title="Файл настроек с привязками MAC — IP">
+                                        <span v-if="ci === scanForms[s.kind].configs.length - 1 && c.trim()" class="sf-eye sf-add" title="Ещё файл" @click="addScanConfig(s.kind, $event)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                        </span>
+                                    </div></td>
                                 </tr>
                                 <tr v-if="s.form === 'jabber'">
                                     <td class="sf-label">Домен XMPP</td>
@@ -1258,7 +1269,7 @@
             <!-- Сеть (этап 28б): адреса из DHCP и прохода подсетей и какой ПК таблицы на каждом -->
             <div v-else-if="scanTab === 'net'" class="page scan-match-page net-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <div class="sm-filters">
-                    <button v-for="f in netFilters" :key="f.key" class="sm-chip" :class="{ on: net.filter === f.key }" :title="f.title" @click="net.filter = f.key">
+                    <button v-for="f in netFiltersShown" :key="f.key" class="sm-chip" :class="{ on: net.filter === f.key }" :title="f.title" @click="net.filter = f.key">
                         {{ f.label }}<span class="su-n">{{ netCounts[f.key] }}</span>
                     </button>
                 </div>
@@ -1268,17 +1279,19 @@
                         <div class="history-scroll">
                             <table class="history-table users-table net-table" :class="{ 'accent-head': accentHeaders.scan }">
                                 <thead>
-                                    <tr><th>IP</th><th>MAC</th><th>Имя</th><th>DHCP</th><th>Сеть</th><th>Когда</th><th>ПК в таблице</th></tr>
+                                    <tr><th>IP</th><th>MAC</th><th>Имя</th><th>DHCP</th><th>Сеть</th><th>Порты</th><th>Когда</th><th>ПК в таблице</th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-if="!netShown.length" class="h-empty"><td colspan="7">{{ netEmptyText() }}</td></tr>
+                                    <tr v-if="!netShown.length" class="h-empty"><td colspan="8">{{ netEmptyText() }}</td></tr>
                                     <tr v-for="h in netShown" :key="h.ip">
                                         <td class="nt-ip">{{ h.ip }}</td>
-                                        <td class="nt-mac"><div v-for="m in h.mac" :key="m" class="vc-line">{{ m }}</div></td>
-                                        <td class="nt-name"><div v-for="n in h.name" :key="n" class="vc-line">{{ n }}</div></td>
-                                        <td class="nt-src" :title="netSeenTitle(h.dhcp)">{{ h.dhcp ? h.dhcp.text : "" }}</td>
+                                        <!-- Источники говорят разное — значения строками; откуда каждое — в подсказке -->
+                                        <td class="nt-mac"><div v-for="m in h.mac" :key="m.value" class="vc-line" :title="m.sources.join(', ')">{{ m.value }}</div></td>
+                                        <td class="nt-name"><div v-for="n in h.name" :key="n.value" class="vc-line" :title="n.sources.join(', ')">{{ n.value }}</div></td>
+                                        <td class="nt-src" :title="netDhcpTitle(h)">{{ netDhcpText(h) }}</td>
                                         <td class="nt-src" :title="netSeenTitle(h.net)">{{ h.net ? h.net.text : "" }}</td>
-                                        <td class="nt-when">{{ formatTime(h.seen_at) }}</td>
+                                        <td class="nt-ports" :class="{ 'nt-none': h.ports && !h.ports.length }" :title="netPortsTitle(h)">{{ h.ports ? (h.ports.join(", ") || "—") : "" }}</td>
+                                        <td class="nt-when">{{ h.seen_at ? formatTime(h.seen_at) : "" }}</td>
                                         <td class="nt-pc">
                                             <div v-for="c in h.computers" :key="c.computer_id" class="vc-line">
                                                 <a class="vc-host" :href="pageHref('table', { pc: c.computer_id })" :title="netPcTitle(c)" @click="navClick($event, () => openCardById(c.computer_id))">{{ c.hostname || "без имени" }}</a>

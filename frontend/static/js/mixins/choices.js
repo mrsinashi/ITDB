@@ -1,7 +1,7 @@
 // Страница «Справочники»: значения, оформление столбцов и значений, пользовательские поля.
 
 import { apiFetch, matchesAllWords, searchNorm, searchWords, splitMulti } from "../util.js";
-import { columnTitle, decoration, ipSubnetKey, styleKey } from "../columns.js";
+import { ROOM_COLUMN, ROOM_STYLE_FIELDS, columnTitle, decoration, ipSubnetKey, styleKey } from "../columns.js";
 
 const NO_STYLE = {};
 // «Сбросить оформление» значения или столбца
@@ -78,15 +78,37 @@ export default {
                     chip: item.chip || false
                 };
             });
+            // Общий «Кабинет» Таблицы («[214] Процедурная») оформляется как его название
+            const names = map[ROOM_STYLE_FIELDS[0]];
+            if (names) {
+                const room = {};
+                this.rows.forEach(function (row) {
+                    const st = row.room && row.room_name ? names[String(row.room_name).trim().toLowerCase()] : null;
+                    if (st) {
+                        room[String(row.room).trim().toLowerCase()] = st;
+                    }
+                });
+                map[ROOM_COLUMN.field] = room;
+            }
             return map;
+        },
+
+        // Оформление столбцов для Таблицы: у общего «Кабинета» — как у названия
+        // кабинета (нет — как у номера)
+        tableColumnStyles() {
+            const field = ROOM_STYLE_FIELDS.find((f) => this.columnStyles[f]);
+            if (!field) {
+                return this.columnStyles;
+            }
+            return Object.assign({}, this.columnStyles, { [ROOM_COLUMN.field]: this.columnStyles[field] });
         },
 
         // Столбцы, где фон у значений может быть блочком (а не заливкой ячейки):
         // только их ячейки Таблица разбирает по строкам
         chipFields() {
             const set = new Set();
-            Object.keys(this.columnStyles).forEach((field) => {
-                const st = this.columnStyles[field];
+            Object.keys(this.tableColumnStyles).forEach((field) => {
+                const st = this.tableColumnStyles[field];
                 if (st.bg_color && st.chip) {
                     set.add(field);
                 }
@@ -94,6 +116,9 @@ export default {
             this.choicesItems.forEach(function (item) {
                 if (item.bg_color && item.chip) {
                     set.add(item.field);
+                    if (item.field === ROOM_STYLE_FIELDS[0]) {
+                        set.add(ROOM_COLUMN.field);
+                    }
                 }
             });
             return set;
@@ -104,7 +129,7 @@ export default {
         styleBlocks() {
             const collect = (field, multiline, subnet) => this.collectValues(field, multiline, subnet);
             const byField = this.choicesByField;
-            const blocks = this.allColumns.map((col) => {
+            const blocks = this.baseColumns.map((col) => {
                 const valuesOn = col.values !== false;
                 return {
                     field: col.field,
@@ -280,7 +305,7 @@ export default {
         // Оформление строки значения как есть: значение поверх столбца. chip — фон
         // блочком у текста (решает тот, чей фон: значение или столбец)
         lineLook(field, line) {
-            const col = this.columnStyles[field] || NO_STYLE;
+            const col = this.tableColumnStyles[field] || NO_STYLE;
             const val = (this.choiceStyleMap[field] || NO_STYLE)[styleKey(field, line)] || NO_STYLE;
             const bg = val.bg_color || col.bg_color || null;
             return {

@@ -10,7 +10,7 @@
 В таблицу ПК сбор ничего не пишет (правило 1): только scan_records (GLPI, GSIT),
 scan_jabber_users (Jabber — пользователи не заменяются, а обновляются: у
 ушедших из сети остаются последний IP и время) и scan_hosts (этап 28: DHCP —
-аренды заменяются целиком; Сеть — ответившие адреса обновляются, молчащие
+аренды и привязки из настроек заменяются целиком; Сеть — ответившие адреса обновляются, молчащие
 дольше срока «Актуальны» удаляются).
 """
 import logging
@@ -23,7 +23,7 @@ from api_scan import (
 )
 from db import SessionLocal
 from models import Choice, Computer, ScanAlias, ScanHost, ScanJabberUser, ScanLink, ScanRecord, ScanRun
-from scan_dhcp import collect as dhcp_collect
+from scan_dhcp import CONF_SOURCE, collect as dhcp_collect
 from scan_glpi import collect as glpi_collect
 from scan_jabber import collect as jabber_collect
 from scan_net import collect as net_collect
@@ -43,6 +43,8 @@ COLLECTORS = {
 RECORD_KINDS = ("glpi", "gsit")
 # Источники наблюдений сети (scan_hosts): адрес — MAC — имя
 HOST_KINDS = ("dhcp", "net")
+# Какие строки scan_hosts пишет источник: DHCP — аренды и привязки из настроек
+HOST_SOURCES = {"dhcp": ("dhcp", CONF_SOURCE), "net": ("net",)}
 # Запуск, который «идёт» дольше, — оборвался (программу перезапускали)
 RUN_TIMEOUT = timedelta(hours=2)
 STATES = ("key", "link", "name", "conflict", "none", "dup")
@@ -216,11 +218,12 @@ def save_records(session, kind, run, items, stats):
 
 
 def save_hosts(session, kind, run, items, fresh_days):
-    """Наблюдения сети. DHCP — копия файла аренд: заменяется целиком. Сеть —
+    """Наблюдения сети. DHCP — копия файлов сервера (аренды и привязки из настроек —
+    строками своего вида): заменяется целиком. Сеть —
     ответившие адреса обновляются; адрес, который молчит, остаётся (ПК может быть
     выключен), пока не промолчит дольше срока «Актуальны»."""
     if kind == "dhcp":
-        session.query(ScanHost).filter(ScanHost.source == kind).delete()
+        session.query(ScanHost).filter(ScanHost.source.in_(HOST_SOURCES[kind])).delete(synchronize_session=False)
         existing = {}
     else:
         since = now() - timedelta(days=fresh_days)
@@ -231,7 +234,7 @@ def save_hosts(session, kind, run, items, fresh_days):
         row = existing.get(item["ip"])
 
         if row is None:
-            row = ScanHost(source=kind, ip=item["ip"])
+            row = ScanHost(source=item.get("source") or kind, ip=item["ip"])
             session.add(row)
 
         # Адрес ответил, но MAC или имя в этот раз не узнали (ПК тот же) — прежние остаются

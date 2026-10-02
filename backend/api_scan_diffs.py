@@ -400,7 +400,9 @@ def host_observations(session):
         kinds.append(kind)
         since = moment - timedelta(days=fresh_days_of(source, kind))
 
-        for row in session.query(ScanHost).filter(ScanHost.source == kind, ScanHost.seen_at >= since):
+        for row in session.query(ScanHost).filter(
+            ScanHost.source.in_(scan_collect.HOST_SOURCES[kind]), ScanHost.seen_at >= since,
+        ):
             result.append({
                 "source": kind, "ip": row.ip, "mac": row.mac, "name": row.name, "seen_at": row.seen_at,
                 "data": row.data or {},

@@ -114,6 +114,7 @@ class SourceOut(BaseModel):
     form: str = "glpi"
     ready: bool = False               # можно собирать: адрес указан (Сеть — есть подсети)
     path: Optional[str] = None        # DHCP: файл аренд
+    configs: list[str] = []           # DHCP: файлы настроек с привязками MAC — IP
     has_key: bool = False             # DHCP: ключ ITDB создан
     host_key: Optional[str] = None    # DHCP: отпечаток ключа сервера (запомнен)
     names: Optional[bool] = None      # Сеть: спрашивать имена (NetBIOS, DNS)
@@ -137,6 +138,7 @@ class SourceUpdate(BaseModel):
     verify_tls: Optional[bool] = None
     fresh_days: Optional[int] = None
     path: Optional[str] = None
+    configs: Optional[list[str]] = None
     names: Optional[bool] = None
     ports: Optional[bool] = None
     forget_host: Optional[bool] = None
@@ -177,6 +179,17 @@ def option_of(source, name, default):
     return default if value is None else value
 
 
+def dhcp_files(source, data=None):
+    """DHCP: (файл аренд, [файлы настроек]) — сохранённые, поверх них — из формы
+    (data). В «Файл» раньше дописывали и dhcpd.conf через пробел: первый путь —
+    аренды, остальные — настройки. Плохой путь — SourceError."""
+    data = data or {}
+    paths = scan_ssh.split_paths(data.get("path") or option_of(source, "path", scan_dhcp.DEFAULT_PATH))
+    configs = data["configs"] if "configs" in data else (option_of(source, "configs", None) or [])
+    extra = [path for path in paths[1:] if path not in configs]
+    return paths[0], scan_ssh.config_paths(extra + list(configs))
+
+
 def scan_subnets(session):
     """Подсети, отмеченные для сканирования."""
     return [s.cidr for s in session.query(ScanSubnet).filter(ScanSubnet.scan == True).order_by(ScanSubnet.id)]  # noqa: E712
@@ -200,11 +213,13 @@ def source_out(kind, source, last_run=None, ready=None):
     form = SOURCES[kind]["form"]
     fields = SECRET_FIELDS if glpi else (() if form == "net" else ("password",))
     host_key = option_of(source, "host_key", None)
+    files = dhcp_files(source) if form == "ssh" else None
 
     return SourceOut(
         form=form,
         ready=bool(source and source.url) if ready is None else ready,
-        path=option_of(source, "path", scan_dhcp.DEFAULT_PATH) if form == "ssh" else None,
+        path=files[0] if files else None,
+        configs=files[1] if files else [],
         has_key=bool(secrets.get(SSH_KEY)),
         host_key=scan_ssh.fingerprint(host_key) if host_key else None,
         names=option_of(source, "names", True) if form == "net" else None,
@@ -289,7 +304,7 @@ def connection_params(kind, source, overlay=None, session=None):
         data = overlay.model_dump(exclude_none=True) if overlay is not None else {}
         token = secrets.get(SSH_KEY)
         params["ssh_key"] = decrypt(token, "ключ SSH") if token else None
-        params["path"] = data.get("path") or option_of(source, "path", scan_dhcp.DEFAULT_PATH)
+        params["path"], params["configs"] = dhcp_files(source, data)
         # Адрес в форме другой — запомненный ключ сервера к нему не относится
         same_host = "url" not in data or address_of(data["url"]) == (source.url if source else None)
         params["host_key"] = option_of(source, "host_key", None) if same_host and not data.get("forget_host") else None
@@ -340,7 +355,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         data.pop("domain", None)
 
     if form != "ssh":
-        for field in ("path", "forget_host"):
+        for field in ("path", "configs", "forget_host"):
             data.pop(field, None)
 
     if form != "net":
@@ -398,15 +413,21 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         source.options = dict(source.options or {}, fresh_days=days)
         changes["fresh_days"] = {"old": before["fresh_days"], "new": days}
 
-    if "path" in data:
+    if "path" in data or "configs" in data:
+        old_path, old_configs = dhcp_files(source)
+
         try:
-            path = " ".join(scan_ssh.split_paths(data["path"]))
+            path, configs = dhcp_files(source, data)
         except SourceError as err:
             raise HTTPException(status_code=400, detail=str(err))
 
-        old = option_of(source, "path", scan_dhcp.DEFAULT_PATH)
-        source.options = dict(source.options or {}, path=path)
-        changes["path"] = {"old": old, "new": path}
+        source.options = dict(source.options or {}, path=path, configs=configs)
+
+        if path != old_path:
+            changes["path"] = {"old": old_path, "new": path}
+
+        if configs != old_configs:
+            changes["configs"] = {"old": "\n".join(old_configs) or None, "new": "\n".join(configs) or None}
 
     for field, default in (("names", True), ("ports", False)):
         if field in data:
@@ -444,7 +465,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         changes["enabled"] = {"old": before["enabled"], "new": data["enabled"]}
 
     # Параметры подключения изменились — прошлая проверка больше ничего не говорит
-    connection = {"url", "domain", "login", "verify_tls", "path", "host_key"} | set(SECRET_FIELDS)
+    connection = {"url", "domain", "login", "verify_tls", "path", "configs", "host_key"} | set(SECRET_FIELDS)
 
     if any(field in connection for field, change in changes.items() if change["old"] != change["new"]):
         source.checked_at = None
@@ -546,10 +567,9 @@ def source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(req
     """Открытый ключ ITDB строкой для authorized_keys — поставить на сервер вручную."""
     check_ssh_kind(kind)
     source, created = ensure_key(session, kind, me)
-    path = (payload.path if payload else None) or option_of(source, "path", scan_dhcp.DEFAULT_PATH)
-
     try:
-        paths = scan_ssh.split_paths(path)
+        path, configs = dhcp_files(source, payload.model_dump(exclude_none=True) if payload else None)
+        paths = scan_ssh.all_paths({"path": path, "configs": configs})
         private = decrypt(source.secrets[SSH_KEY], "ключ SSH")
         out = KeyOut(line=scan_ssh.authorized_line(private, paths), public=scan_ssh.public_line(private), created=created)
     except SourceError as err:
