@@ -22,7 +22,8 @@
 //                        table-marks (выделения значений в Таблице: повтор, «нет в Jabber»…),
 //                        scan-net (вкладка «Сеть»: что собрали DHCP и проход подсетей),
 //                        nav (адреса страниц, Ctrl+Z / Ctrl+Y),
-//                        vnc (подключение к ПК через внешнее приложение, itdb://vnc/…)
+//                        vnc (подключение к ПК через внешнее приложение, itdb://vnc/…),
+//                        print (печать Таблицы: окно с настройками и листом)
 //   route.js           — адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        — tree-node, tree-form, style-controls, location-picker, count-select
 //
@@ -57,6 +58,7 @@ import tableMarks from "./mixins/table-marks.js";
 import scanNet from "./mixins/scan-net.js";
 import nav from "./mixins/nav.js";
 import vnc from "./mixins/vnc.js";
+import print from "./mixins/print.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -65,7 +67,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -128,6 +130,8 @@ const app = Vue.createApp({
             newComputer: null,
             // Строка действия с выбранными: переместить / заменить / изменить поле
             actionBar: null,
+            // Окно печати таблицы (mixins/print.js): строки, столбцы и настройки листа
+            printDlg: null,
             newComputerError: "",
             newComputerSaving: false,
 

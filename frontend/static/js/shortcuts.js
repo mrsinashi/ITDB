@@ -24,6 +24,17 @@ window.addEventListener("keydown", function (event) {
     if (!vm) {
         return;
     }
+    // Окно печати: Esc — закрыть (сначала список столбцов), Ctrl+P — печать листа
+    if (vm.printDlg && !vm.dialog) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            vm.onPrintEsc();
+        } else if (event.code === "KeyP" && (event.ctrlKey || event.metaKey) && !event.altKey) {
+            event.preventDefault();
+            vm.doPrint();
+        }
+        return;
+    }
     // Окно «История значения»: Esc — закрыть
     if (vm.valueDialog && !vm.dialog) {
         if (event.key === "Escape") {

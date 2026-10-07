@@ -182,6 +182,10 @@
                         <svg v-if="tableView === 2" class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
                         <svg v-else class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
                     </button>
+                    <!-- Печать таблицы: выбранные строки, без выделения — все показанные -->
+                    <button class="btn icon-only tb-print" @click="openPrint" :title="selectedRows.length ? 'Печать: выбранные (' + selectedRows.length + ')' : 'Печать'">
+                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                    </button>
                     <span class="tb-view-gap"></span>
                     <span v-if="tableError" class="tb-error" :title="tableError">{{ tableError }}</span>
                     <!-- Появляются слева от постоянных кнопок: остальное не сдвигается -->
@@ -1711,6 +1715,55 @@
                         <button v-if="valueDialog.data.kind === 'value'" class="btn btn-primary" :disabled="!vhCanRevert || valueDialog.busy" @click="vhRevert">Вернуть это значение</button>
                     </template>
                     <button class="btn" @click="closeValueDialog">Закрыть</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= Печать таблицы (mixins/print.js) ================= -->
+        <div v-if="printDlg" class="dialog-overlay pr-overlay" @mousedown.self="closePrint">
+            <div class="dialog pr-dialog" role="dialog" @click="onPrintDialogClick">
+                <div class="vh-head">
+                    <span class="vh-title"><b>Печать</b> · {{ printDlg.selected ? "выбрано строк" : "строк" }}: {{ printDlg.rows.length }}</span>
+                    <span class="vh-now" title="Таблица — по ширине листа">масштаб: <b>{{ Math.round(printDlg.scale * 100) }}%</b></span>
+                    <span class="vh-close" title="Закрыть (Esc)" @click="closePrint">×</span>
+                </div>
+                <div class="pr-opts">
+                    <span class="dropdown-wrap" ref="printColsWrap">
+                        <button class="btn" :class="{ 'menu-open': printDlg.colsOpen }" @click="printDlg.colsOpen = !printDlg.colsOpen" title="Какие столбцы печатать">Столбцы: {{ printColumns.length }}<span class="caret">▼</span></button>
+                        <div v-if="printDlg.colsOpen" class="dropdown attached columns-menu">
+                            <div class="dd-scroll">
+                                <label v-for="col in allColumns" :key="'pr-' + col.field">
+                                    <input type="checkbox" :checked="printDlg.fields.indexOf(col.field) !== -1" @change="togglePrintColumn(col.field)">
+                                    {{ printColTitle(col) }}
+                                </label>
+                            </div>
+                            <div class="dd-sep"></div>
+                            <button @click="setPrintColumns('table')" :disabled="printColumnsAsTable">Как в таблице</button>
+                            <button @click="setPrintColumns('all')" :disabled="printColumns.length === allColumns.length">Все</button>
+                        </div>
+                    </span>
+                    <span class="pr-sep"></span>
+                    <button class="sm-chip" :class="{ on: printDlg.color === 'color' }" @click="setPrintOption('color', 'color')">Цветная</button>
+                    <button class="sm-chip" :class="{ on: printDlg.color === 'bw' }" @click="setPrintOption('color', 'bw')">Чёрно-белая</button>
+                    <span class="pr-sep"></span>
+                    <select class="input" v-model="printDlg.paper" @change="printChanged()" title="Формат листа">
+                        <option v-for="p in printPapers" :key="p" :value="p">{{ p }}</option>
+                    </select>
+                    <select class="input" v-model="printDlg.landscape" @change="printChanged()" title="Ориентация">
+                        <option :value="true">Альбомная</option>
+                        <option :value="false">Книжная</option>
+                    </select>
+                    <label class="pr-field">Поля
+                        <input class="input pr-margin" :class="{ bad: printMarginBad }" v-model="printDlg.margin" @input="printChanged(350)" autocomplete="off" title="От 0 до 5 см">
+                        см</label>
+                    <span class="pr-sep"></span>
+                    <label class="pr-check" title="Шапка на каждой странице"><input type="checkbox" v-model="printDlg.headers" @change="printChanged()">Сквозные заголовки</label>
+                    <label class="pr-check"><input type="checkbox" v-model="printDlg.strike" @change="printChanged()">Зачёркивание</label>
+                </div>
+                <iframe ref="printFrame" class="pr-frame" title="Лист"></iframe>
+                <div class="dialog-buttons">
+                    <button class="btn" @click="closePrint">Закрыть</button>
+                    <button class="btn btn-primary" @click="doPrint">Печать</button>
                 </div>
             </div>
         </div>

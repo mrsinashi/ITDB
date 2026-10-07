@@ -5347,3 +5347,70 @@ html.no-radius .tm-sample.chip {
     margin: 0 4px;
     background: var(--gray-line);
 }
+
+/* ---------- Печать таблицы (mixins/print.js): окно с настройками и листом ---------- */
+.dialog-overlay.pr-overlay {
+    padding-top: 4vh;
+}
+.dialog.pr-dialog {
+    width: 1240px;
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+}
+.pr-dialog .vh-head {
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+.pr-dialog .dialog-buttons {
+    border-radius: 0 0 var(--radius) var(--radius);
+}
+.pr-opts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--grid-head-bg);
+    border-bottom: 1px solid var(--gray-line);
+    font-size: 12px;
+}
+.pr-opts .pr-sep {
+    width: 1px;
+    height: 16px;
+    margin: 0 4px;
+    background: var(--gray-line);
+}
+.pr-opts .dropdown-wrap .btn.menu-open {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.pr-opts .pr-field,
+.pr-opts .pr-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+.pr-opts .pr-check {
+    cursor: pointer;
+    user-select: none;
+}
+.pr-opts .pr-check input {
+    margin: 0;
+    accent-color: var(--brand);
+}
+.pr-opts .pr-margin {
+    width: 42px;
+    text-align: center;
+}
+.pr-opts .pr-margin.bad {
+    border-color: var(--danger);
+}
+.pr-frame {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    border: none;
+    background: #8f8f8f;
+}
