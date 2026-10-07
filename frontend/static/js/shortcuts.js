@@ -1,7 +1,22 @@
 // Сочетания клавиш проверяются по самой клавише (event.code), а не по букве:
 // так они работают в любой раскладке (Ctrl+F и в русской, где это «Ctrl+А»).
 
-import { isTypingTarget } from "./util.js";
+import { isTypingTarget, setCtrlDown } from "./util.js";
+
+// Зажат Ctrl: шапка Таблицы под курсором показывает закреплённые столбцы
+window.addEventListener("keydown", function (event) {
+    if (event.key === "Control" || event.key === "Meta") {
+        setCtrlDown(true);
+    }
+});
+window.addEventListener("keyup", function (event) {
+    if (event.key === "Control" || event.key === "Meta") {
+        setCtrlDown(false);
+    }
+});
+window.addEventListener("blur", function () {
+    setCtrlDown(false);
+});
 
 // Ctrl+F и Alt+F — в поиск текущего раздела
 window.addEventListener("keydown", function (event) {

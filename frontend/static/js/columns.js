@@ -248,6 +248,10 @@ export const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
 // «Кабинет» (название) из Справочников: STYLE_OF
 export const TABLE_VIEW_KEY = "itdb.tableView.v1";
 export const HIDDEN_COLUMNS2_KEY = "itdb.hiddenColumns2.v1";
+// Закреплённые столбцы (Ctrl+клик по шапке; нет записи — как в описании столбцов) и
+// масштаб таблицы по ширине окна (кнопка на панели)
+export const PINNED_COLUMNS_KEY = "itdb.pinnedColumns.v1";
+export const TABLE_FIT_KEY = "itdb.tableFit.v1";
 export const ROOM_PARTS = ["room_code", "room_name"];
 export const ROOM_COLUMN = {
     field: "room", headerName: "Кабинет", cardLabel: "Кабинет",

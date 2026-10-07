@@ -176,8 +176,10 @@ body.ui-light-toolbar {
     --tb-ctrl-border: #cfcfcf;
     --tb-ctrl-text: #333;
     --tb-ctrl-hover-bg: #f0f0f0;
-    --tb-ctrl-on-bg: var(--brand);
-    --tb-ctrl-on-border: var(--brand-dark);
+    --tb-tab-on-bg: var(--brand);   /* выбранная вкладка панели — по-прежнему цветом схемы */
+    /* Включённая кнопка панели — тёмно-серая, не цветом схемы (07.10) */
+    --tb-ctrl-on-bg: #555;
+    --tb-ctrl-on-border: #444;
     --tb-ctrl-on-text: #fff;
     --tb-input-bg: #fff;
     --tb-input-border: #cfcfcf;
@@ -1115,13 +1117,15 @@ select.input {
 
 .data-table {
     --frame: var(--frame-gray);
+    /* Толщина линий сетки и рамки: 1px экрана и в масштабе по ширине окна (tableStyle) */
+    --px: 1px;
     margin: 0 auto;
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
     font-size: 12px;
     background: var(--bg);
-    box-shadow: 0 0 0 1px var(--frame), 0 1px 8px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 0 0 var(--px) var(--frame), 0 1px 8px rgba(0, 0, 0, 0.22);
     transform: translateZ(0);
 }
 
@@ -1138,7 +1142,7 @@ select.input {
     user-select: none;
     white-space: nowrap;
     overflow: hidden;
-    --grid-shadow: inset -1px 0 0 var(--grid-head-line-v), inset 0 -1px 0 var(--grid-head-line-h);
+    --grid-shadow: inset calc(-1 * var(--px)) 0 0 var(--grid-head-line-v), inset 0 calc(-1 * var(--px)) 0 var(--grid-head-line-h);
     box-shadow: var(--grid-shadow);
 }
 
@@ -1351,7 +1355,7 @@ select.input {
        своя строка / строка ниже выбраны — как слой выделения */
     --self-a: 0%;
     --below-a: 0%;
-    --grid-shadow: inset -1px 0 0 var(--v-line), inset 0 -1px 0 var(--h-line);
+    --grid-shadow: inset calc(-1 * var(--px)) 0 0 var(--v-line), inset 0 calc(-1 * var(--px)) 0 var(--h-line);
     box-shadow: var(--grid-shadow);
 }
 
@@ -1361,16 +1365,16 @@ select.input {
 /* Правый край — как левый (28в): у последнего столбца своей линии справа нет, край
    таблицы — её рамка. Иначе рядом с рамкой шла вторая линия — сетки */
 .data-table th:last-child {
-    --grid-shadow: inset 0 -1px 0 var(--grid-head-line-h);
+    --grid-shadow: inset 0 calc(-1 * var(--px)) 0 var(--grid-head-line-h);
     /* Шапка липкая — рисуется своим слоем и на дробном масштабе (110%, 125%) наполовину
        закрывала рамку таблицы: свой кусок рамки шапка рисует сама */
-    box-shadow: var(--grid-shadow), 1px 0 0 var(--frame);
+    box-shadow: var(--grid-shadow), var(--px) 0 0 var(--frame);
 }
 .data-table th:first-child {
-    box-shadow: var(--grid-shadow), -1px 0 0 var(--frame);
+    box-shadow: var(--grid-shadow), calc(-1 * var(--px)) 0 0 var(--frame);
 }
 .data-table td:last-child {
-    --grid-shadow: inset 0 -1px 0 var(--h-line);
+    --grid-shadow: inset 0 calc(-1 * var(--px)) 0 var(--h-line);
 }
 
 .data-table td.link {
@@ -1445,25 +1449,25 @@ body.ui-dark-hostname .data-table td.link:hover span {
 .data-table tbody td:hover::after {
     content: "";
     position: absolute;
-    top: -1px;
-    left: -1px;
+    top: calc(-1 * var(--px));
+    left: calc(-1 * var(--px));
     right: 0;
     bottom: 0;
-    border: 1px solid var(--hf-own);
+    border: var(--px) solid var(--hf-own);
     pointer-events: none;
     z-index: 1;
 }
 /* В последнем столбце рамка ячейки справа ложится на рамку таблицы — как слева в первом */
 .data-table tbody td:last-child:hover::after {
-    right: -1px;
+    right: calc(-1 * var(--px));
 }
 /* Левую линию рамки перекрывает липкий столбец слева (IP над VACUUM),
    поэтому её рисует и сам сосед — своей линией справа. */
 .data-table tbody td:has(+ td:hover) {
-    box-shadow: inset -1px 0 0 var(--hf-right, var(--hf-row)), var(--grid-shadow);
+    box-shadow: inset calc(-1 * var(--px)) 0 0 var(--hf-right, var(--hf-row)), var(--grid-shadow);
 }
 .data-table.sticky-stuck tbody td.sticky-edge:has(+ td:hover) {
-    box-shadow: inset -1px 0 0 var(--hf-right, var(--hf-row)), var(--grid-shadow), var(--sticky-shadow);
+    box-shadow: inset calc(-1 * var(--px)) 0 0 var(--hf-right, var(--hf-row)), var(--grid-shadow), var(--sticky-shadow);
 }
 .data-table tbody td.editing::after {
     display: none;
@@ -3736,7 +3740,7 @@ body.login-page {
     color: var(--tb-ctrl-text);
 }
 .toolbar .tb-tabs a.active {
-    background: var(--tb-ctrl-on-bg);
+    background: var(--tb-tab-on-bg, var(--tb-ctrl-on-bg));
     color: var(--tb-ctrl-on-text);
     font-weight: 600;
 }
@@ -5413,4 +5417,16 @@ html.no-radius .tm-sample.chip {
     width: 100%;
     border: none;
     background: #8f8f8f;
+}
+
+/* Масштаб таблицы по ширине окна (кнопка на панели): полоса прокрутки справа — всегда,
+   иначе её появление меняет ширину, а с ней масштаб — и по кругу */
+.table-wrap.fit {
+    overflow-y: scroll;
+}
+
+/* Закреплённые столбцы (Ctrl+клик по шапке): зажат Ctrl и курсор на шапке — у шапки
+   каждого закреплённого столбца сверху тень цветом схемы. Только в шапке */
+html.ctrl-down .data-table thead:hover th.sticky {
+    background-image: linear-gradient(to bottom, color-mix(in srgb, var(--brand-dark) 75%, transparent), color-mix(in srgb, var(--brand) 28%, transparent) 4px, transparent 9px);
 }

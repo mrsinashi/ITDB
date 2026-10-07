@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
-import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, setCtrlDown } from "../util.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
@@ -60,6 +60,11 @@ export default {
                     result.push(room);
                 }
             });
+            // Закрепление своё (Ctrl+клик по шапке) — вместо заданного в описании столбцов
+            const pinned = this.pinnedColumns;
+            if (pinned) {
+                result.forEach(function (col) { col.sticky = pinned.indexOf(col.field) !== -1; });
+            }
             return result;
         },
 
@@ -209,15 +214,6 @@ export default {
           return this.displayRows.length;
         },
 
-        lastStickyField() {
-          let last = null;
-          for (const col of this.columns) {
-            if (col.sticky) {
-              last = col.field;
-            }
-          }
-          return last;
-        },
     },
 
     watch: {
@@ -316,6 +312,30 @@ export default {
             this.tableLoading = false;
         },
 
+        // Клик по шапке — сортировка, с Ctrl — закрепить столбец / снять закрепление
+        onHeadClick(event, col) {
+            if (event.ctrlKey || event.metaKey) {
+                this.togglePin(col);
+            } else {
+                this.sortBy(col);
+            }
+        },
+
+        togglePin(col) {
+            const pinned = this.allColumns.filter(function (c) { return c.sticky; }).map(function (c) { return c.field; });
+            const at = pinned.indexOf(col.field);
+            if (at === -1) {
+                pinned.push(col.field);
+            } else {
+                pinned.splice(at, 1);
+            }
+            this.pinnedColumns = pinned;
+            saveJson(PINNED_COLUMNS_KEY, pinned);
+            this.$nextTick(() => {
+                this.updateStickyShadow();
+            });
+        },
+
         sortBy(col) {
             if (this.sortField !== col.field) {
                 this.sortField = col.field;
@@ -336,6 +356,7 @@ export default {
         startResize(event, col) {
             const startX = event.clientX;
             const startWidth = col.width;
+            const zoom = this.tableZoom || 1;   // таблица в масштабе — путь мыши пересчитывается
             const tableEl = this.$refs.table;
             if (!tableEl) {
                 return;
@@ -347,7 +368,7 @@ export default {
             const startTotal = this.totalWidth;
 
             function onMouseMove(e) {
-                const delta = e.clientX - startX;
+                const delta = (e.clientX - startX) / zoom;
                 let newWidth = startWidth + delta;
                 if (newWidth < 40) {
                     newWidth = 40;
@@ -361,7 +382,7 @@ export default {
             function onMouseUp(e) {
                 document.removeEventListener("mousemove", onMouseMove);
                 document.removeEventListener("mouseup", onMouseUp);
-                const delta = e.clientX - startX;
+                const delta = (e.clientX - startX) / zoom;
                 let newWidth = startWidth + delta;
                 if (newWidth < 40) {
                     newWidth = 40;
@@ -426,7 +447,7 @@ export default {
             if (col.note) {
                 cls["note-cell"] = true;
             }
-            if (col.field === this.lastStickyField) {
+            if (col.field === this.stuckEdge) {
                 cls["sticky-edge"] = true;
             }
             if (this.isEditing(row, col)) {
@@ -1195,16 +1216,21 @@ export default {
             if (!wrap) {
                 return;
             }
-            // HOSTNAME прилипает, когда уезжают все столбцы перед ним.
-            let threshold = 0;
+            // Закреплённый столбец прилипает, когда уезжают все незакреплённые перед ним.
+            // Тень — у последнего из прилипших (закреплённые могут стоять не подряд)
+            const scrollLeft = wrap.scrollLeft / (this.tableZoom || 1);
+            let loose = 0;
+            let edge = null;
             for (const col of this.columns) {
-                if (col.sticky) {
-                    break;
+                if (!col.sticky) {
+                    loose += col.width;
+                } else if (scrollLeft > 0 && scrollLeft >= loose - 0.5) {
+                    edge = col.field;
                 }
-                threshold += col.width;
             }
-            const scrollLeft = wrap.scrollLeft;
-            this.stickyStuck = scrollLeft >= threshold;
+            if (this.stuckEdge !== edge) {
+                this.stuckEdge = edge;
+            }
         },
         
         onTableMouseMove(event) {
@@ -1213,6 +1239,7 @@ export default {
             if (this.altDown !== event.altKey) {
                 this.altDown = event.altKey;
             }
+            setCtrlDown(event.ctrlKey || event.metaKey);
             if (this.altDown || this.copyHint) {
                 this.updateCopyHint();
             }

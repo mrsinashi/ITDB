@@ -31,7 +31,7 @@
 
 import "./settings.js";
 import { loadJson } from "./util.js";
-import { HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, mergeRoomHidden } from "./columns.js";
+import { HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN_KEY, TABLE_FIT_KEY, TABLE_VIEW_KEY, mergeRoomHidden } from "./columns.js";
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
 import "./alt-copy.js";
@@ -59,6 +59,7 @@ import scanNet from "./mixins/scan-net.js";
 import nav from "./mixins/nav.js";
 import vnc from "./mixins/vnc.js";
 import print from "./mixins/print.js";
+import tableFit from "./mixins/table-fit.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -67,7 +68,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -118,7 +119,14 @@ const app = Vue.createApp({
             pendingCells: {},
             openMenu: null,
             noteTooltip: { visible: false, text: "", top: 0, left: 0, width: 0 },
-            stickyStuck: false,
+            // Закреплённый столбец, у правого края которого сейчас тень (под него уехали соседи)
+            stuckEdge: null,
+            // Закреплённые столбцы: список полей; null — как в описании столбцов (HOSTNAME, IP)
+            pinnedColumns: loadJson(PINNED_COLUMNS_KEY, null),
+            // Масштаб таблицы по ширине окна: включён ли, сам масштаб и отступ слева
+            tableFit: loadJson(TABLE_FIT_KEY, false) === true,
+            tableZoom: 1,
+            tableFitMargin: 0,
             editingRowId: null,
             editingField: null,
             editValue: "",
@@ -299,6 +307,7 @@ const app = Vue.createApp({
             window.addEventListener("resize", () => { this.scanFitCompare(); this.placeCheckPlate(); });
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();
+            this.watchTableFit();
             this.loadDiffs();
             this.loadScanMarks();
             this.loadAvSettings();

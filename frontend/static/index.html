@@ -182,6 +182,10 @@
                         <svg v-if="tableView === 2" class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
                         <svg v-else class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
                     </button>
+                    <!-- Масштаб таблицы по ширине окна -->
+                    <button class="btn icon-only tb-fit" :class="{ active: tableFit }" @click="toggleTableFit" :title="tableFit ? 'Обычный масштаб' : 'По ширине окна'">
+                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 8-4 4 4 4"/></svg>
+                    </button>
                     <!-- Печать таблицы: выбранные строки, без выделения — все показанные -->
                     <button class="btn icon-only tb-print" @click="openPrint" :title="selectedRows.length ? 'Печать: выбранные (' + selectedRows.length + ')' : 'Печать'">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
@@ -191,7 +195,7 @@
                     <!-- Появляются слева от постоянных кнопок: остальное не сдвигается -->
                     <button v-if="activeColFilters.length" class="btn icon-only" @click="clearAllColFilters" title="Сбросить фильтры по столбцам"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.013 3H2l8 9.46V19l4 2v-8.54l.9-1.055"/><path d="m22 3-5 5"/><path d="m17 3 5 5"/></svg></button>
                     <button v-if="sortField" class="btn icon-only" @click="resetSort" title="Сбросить сортировку"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></button>
-                    <button v-if="hasManualWidths" class="btn icon-only" @click="resetWidths" title="Вернуть автоширину столбцов"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="m6 8-4 4 4 4"/><path d="M2 12h20"/></svg></button>
+                    <button v-if="hasManualWidths" class="btn icon-only" @click="resetWidths" title="Вернуть автоширину столбцов"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 12h6"/><path d="M8 12H2"/><path d="M12 2v2"/><path d="M12 8v2"/><path d="M12 14v2"/><path d="M12 20v2"/><path d="m19 15 3-3-3-3"/><path d="m5 9-3 3 3 3"/></svg></button>
                     <span class="dropdown-wrap" ref="columnsWrap">
                         <button class="btn icon-only" :class="{ 'has-badge': hiddenColumnCount > 0, 'menu-open': openMenu === 'columns' }" @click="toggleMenu('columns')" title="Столбцы: показать или скрыть">
                             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg><span v-if="hiddenColumnCount > 0 && buttonCounts" class="btn-badge">{{ hiddenColumnCount }}</span>
@@ -309,17 +313,17 @@
             </div>
 
             <!-- Таблица уже окна — по центру (отступ слева — целым числом пикселей, иначе линии мылятся) -->
-            <div class="table-wrap" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
-                <table class="data-table" :class="{ 'sticky-stuck': stickyStuck, 'alt-copy': altDown }" ref="table" :style="{ width: totalWidth + 'px', marginLeft: 'max(0px, round(down, (100% - ' + totalWidth + 'px) / 2, 1px))' }">
+            <div class="table-wrap" :class="{ fit: tableFit }" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
+                <table class="data-table" :class="{ 'sticky-stuck': !!stuckEdge, 'alt-copy': altDown }" ref="table" :style="tableStyle">
                     <colgroup>
                         <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
                     </colgroup>
                     <thead>
                         <tr>
                             <th v-for="col in columns" :key="'th-' + col.field" :data-field="col.field"
-                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === lastStickyField, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field }"
+                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field }"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
-                                @click="sortBy(col)" @contextmenu.prevent="openColFilter(col, $event)">
+                                @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
                                 <!-- Подпись по центру; справа всегда место под воронку: не хватает — подпись левее -->
                                 <span class="th-in"><span class="th-pad"></span><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
                                 <span class="th-filter" :class="{ on: isColFiltered(col.field) }" :title="isColFiltered(col.field) ? 'Изменить фильтр' : 'Фильтр'" @click.stop="openColFilter(col, $event)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>

@@ -23,6 +23,14 @@ export function saveJson(key, value) {
     }
 }
 
+// Зажат Ctrl — класс на странице: по нему шапка Таблицы показывает закреплённые столбцы
+export function setCtrlDown(on) {
+    const root = document.documentElement;
+    if (root.classList.contains("ctrl-down") !== !!on) {
+        root.classList.toggle("ctrl-down", !!on);
+    }
+}
+
 export function pad2(n) {
     return n < 10 ? "0" + n : String(n);
 }
