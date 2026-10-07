@@ -1270,6 +1270,8 @@ export default {
             if ((ctrl || event.shiftKey) && !event.altKey && isTypingTarget(document.activeElement)) {
                 document.activeElement.blur();
             }
+            // Любое нажатие запоминает ПК для Enter (VNC), Alt+P (ping), Alt+R (RDP)
+            this.setActiveRow(row);
             if (event.altKey || event.shiftKey) {
                 return;
             }

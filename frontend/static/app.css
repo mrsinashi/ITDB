@@ -5308,3 +5308,42 @@ html.no-radius .tm-sample.chip {
     text-decoration: underline;
     text-underline-offset: 2px;
 }
+
+/* ============================================================
+   Этап 31: последняя нажатая строка Таблицы (Enter — VNC, Alt+P — ping,
+   Alt+R — RDP идут к этому ПК) — полоска у левого края строки
+   ============================================================ */
+:root {
+    --row-active-bar: #555;
+}
+.data-table tbody tr.row-active td:first-child::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 1px;
+    width: 3px;
+    background: var(--row-active-bar);
+    pointer-events: none;
+}
+
+/* Этап 31: «Сеть» и «Vacuum» — то, что видели давно (старше срока «Актуальны»), не
+   удаляется, а показывается серым: вся строка — адрес давно не виден / пользователь
+   давно не подключался; отдельное значение — давно его называл только этот источник */
+.net-table tr.nt-stale td,
+.net-table .nt-old,
+.vacuum-table tr.vc-stale td,
+.vacuum-table tr.vc-stale .vc-host,
+.vacuum-table tr.vc-ip-stale td.vc-ip,
+.vacuum-table tr.vc-ip-stale td.vc-hosts,
+.vacuum-table tr.vc-ip-stale .vc-host {
+    color: var(--text-muted);
+}
+/* Черта между фильтрами и фильтрами по источникам («Сеть») */
+.sm-filters .sm-sep {
+    align-self: center;
+    width: 1px;
+    height: 16px;
+    margin: 0 4px;
+    background: var(--gray-line);
+}

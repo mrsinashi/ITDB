@@ -3,9 +3,10 @@
 
 import { isTypingTarget } from "./util.js";
 
-// Ctrl+F — в поиск текущего раздела
+// Ctrl+F и Alt+F — в поиск текущего раздела
 window.addEventListener("keydown", function (event) {
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === "KeyF") {
+    const ctrl = event.ctrlKey || event.metaKey;
+    if (event.code === "KeyF" && !event.shiftKey && (ctrl !== event.altKey)) {
         const input = Array.from(document.querySelectorAll(".tb-search input")).find(function (el) {
             return el.offsetParent !== null;
         });
@@ -114,7 +115,24 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
-    if (vm.view !== "table" || vm.card || event.defaultPrevented || isTypingTarget(document.activeElement)) {
+    if (vm.view !== "table" || event.defaultPrevented || isTypingTarget(document.activeElement)) {
+        return;
+    }
+    // Enter — VNC, Alt+P — ping, Alt+R — RDP: к ПК, по строке которого нажали последним
+    // (выделять не нужно); открыта карточка — к её ПК
+    const plainEnter = event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+    const altKey = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    const what = plainEnter ? "vnc" : (altKey && event.code === "KeyP" ? "ping" : (altKey && event.code === "KeyR" ? "rdp" : null));
+    if (what) {
+        if (!vm.editingRowId && !vm.cardEditKey && !vm.editingHostname && !vm.openMenu && !vm.scanPop && !vm.actionBar &&
+            !vm.newComputer && !vm.showArchive &&
+            !(plainEnter && event.target.closest && event.target.closest("button, .dropdown, .cf-menu, .scan-pop, .add-bar")) &&
+            vm.connectActive(what)) {
+            event.preventDefault();
+        }
+        return;
+    }
+    if (vm.card) {
         return;
     }
     // Ctrl+A — выделить все видимые строки таблицы
@@ -123,13 +141,6 @@ window.addEventListener("keydown", function (event) {
         vm.selectAllVisible();
     } else if (event.key === "Escape" && vm.selectedRows.length && !vm.editingRowId) {
         vm.clearSelection();
-    } else if (event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
-        !vm.editingRowId && !vm.openMenu && !vm.scanPop && !vm.actionBar && !vm.newComputer && !vm.showArchive &&
-        !event.target.closest(".dropdown, .cf-menu, .scan-pop, .add-bar")) {
-        // Enter при одной выбранной строке — подключиться к ПК по VNC
-        if (vm.vncConnectSelected()) {
-            event.preventDefault();
-        }
     }
 });
 

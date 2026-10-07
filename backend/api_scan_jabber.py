@@ -5,12 +5,14 @@ GET /api/scan/jabber — пользователи из последних сбо
 не в сети, — последний известный IP) и какой ПК стоит на этом адресе: ПК таблицы
 с таким IP, а если в таблице его нет — запись GLPI / GSIT с таким IP. ПК ищется
 только по IP (этап 26ж). Пометки: gone — пользователя нет, а в группе он остался
-(убрать из группы); no_group — не входит ни в одну группу. Ничего не пишет.
+(убрать из группы); no_group — не входит ни в одну группу; stale — не подключался
+дольше срока «Актуальны», ip_stale — адрес видели дольше этого срока назад (этап 31:
+последнее известное не пропадает, на странице оно серым). Ничего не пишет.
 Сбор — POST /api/scan/sources/jabber/collect (api_scan_records.py). Смотреть —
 редактор и администратор.
 """
 import ipaddress
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -18,7 +20,7 @@ from pydantic import BaseModel
 
 import scan_collect
 from api_computers import load_locations, location_path
-from api_scan import SOURCES, RunOut, last_run_of, load_source
+from api_scan import SOURCES, RunOut, fresh_days_of, last_run_of, load_source
 from auth import require_editor
 from db import get_db
 from models import Computer, ScanJabberUser, ScanRecord
@@ -49,6 +51,8 @@ class JabberUserOut(BaseModel):
     last_login_at: Optional[datetime] # «Последнее подключение» по списку ejabberd
     gone: bool = False                # пользователя нет, а в группе остался
     no_group: bool = False            # не входит ни в одну группу
+    stale: bool = False               # давно не подключался
+    ip_stale: bool = False            # последний IP видели давно
 
 
 class JabberOut(BaseModel):
@@ -103,6 +107,7 @@ def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
     computers, by_ip, records = address_index(session)
     rows = session.query(ScanJabberUser).order_by(ScanJabberUser.login).all()
     listed = any(row.registered is not None for row in rows)
+    since = datetime.now(timezone.utc) - timedelta(days=fresh_days_of(source, "jabber"))
     users = []
 
     def hosts_of(ip):
@@ -137,6 +142,8 @@ def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
         else:
             addresses = []
 
+        last = max((d for d in (row.last_login_at, row.last_seen_at) if d), default=None)
+
         users.append(JabberUserOut(
             login=row.login,
             groups=groups,
@@ -146,6 +153,8 @@ def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
             last_login_at=row.last_login_at,
             gone=row.registered is False,
             no_group=bool(listed and row.registered and not groups),
+            stale=bool(not row.online and row.registered is not False and last is not None and last < since),
+            ip_stale=bool(not row.online and row.last_ip and (row.last_seen_at is None or row.last_seen_at < since)),
         ))
 
     return JabberOut(

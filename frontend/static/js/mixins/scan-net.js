@@ -2,7 +2,10 @@
 // настроек) и проход подсетей — по строке на адрес: MAC, имя машины, что сказал
 // каждый источник, открытые порты и какой ПК таблицы на этом адресе (по IP из
 // таблицы или по MAC). Источники называют разный MAC или имя — значения строками,
-// откуда каждое — в подсказке (28в). Данные — /api/scan/hosts; собирает сервер
+// откуда каждое — в подсказке (28в). Этап 31: фильтры по источникам (Сканер — проход
+// подсетей, Leases — аренды DHCP, DHCP Config — привязки), у каждого значения в
+// подсказке — «Источник: …»; то, что видели давно (старше срока «Актуальны»), не
+// удаляется, а показывается серым. Данные — /api/scan/hosts; собирает сервер
 // («Собрать» на «Проверке», расписание).
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
@@ -14,8 +17,16 @@ export const NET_FILTERS = [
     { key: "differ", label: "Расхождения", title: "Источники называют разный MAC или имя", optional: true }
 ];
 
+// Фильтры по источникам: адреса, о которых источник что-то знает. Нажатие на
+// включённый — снять
+export const NET_SOURCES = [
+    { key: "net", label: "Сканер", title: "Ответили при проходе подсетей" },
+    { key: "dhcp", label: "Leases", title: "Есть аренда DHCP" },
+    { key: "conf", label: "DHCP Config", title: "Есть привязка в настройках DHCP" }
+];
+
 const PORT_NAMES = { 22: "SSH", 80: "HTTP", 135: "RPC", 139: "NetBIOS", 443: "HTTPS", 445: "SMB", 3389: "RDP", 5900: "VNC", 8080: "HTTP" };
-const BY_TEXT = { ip: "по IP", mac: "по MAC", conf: "по MAC из привязки DHCP" };
+const BY_TEXT = { ip: "по IP из таблицы", mac: "по MAC", conf: "по MAC из DHCP Config" };
 
 function inNetFilter(h, filter) {
     if (filter === "known") {
@@ -25,9 +36,13 @@ function inNetFilter(h, filter) {
         return h.computers.length === 0;
     }
     if (filter === "differ") {
-        return h.mac.length > 1 || h.name.length > 1;
+        return h.differ;
     }
     return true;
+}
+
+function fromText(sources) {
+    return "Источник: " + sources.join(", ");
 }
 
 export default {
@@ -54,18 +69,30 @@ export default {
             });
         },
 
+        netSources() {
+            return NET_SOURCES;
+        },
+
+        // Числа на кнопках: у первого ряда — с учётом выбранного источника, у источников —
+        // с учётом первого ряда
         netCounts() {
             const counts = {};
+            const source = this.net.source;
+            const filter = this.net.filter;
             NET_FILTERS.forEach((f) => {
-                counts[f.key] = this.netHosts.filter(function (h) { return inNetFilter(h, f.key); }).length;
+                counts[f.key] = this.netHosts.filter(function (h) { return inNetFilter(h, f.key) && (!source || h[source]); }).length;
+            });
+            NET_SOURCES.forEach((s) => {
+                counts[s.key] = this.netHosts.filter(function (h) { return inNetFilter(h, filter) && h[s.key]; }).length;
             });
             return counts;
         },
 
         netShown() {
             const words = searchWords(this.scanMatchQuery);
+            const source = this.net.source;
             return this.netHosts.filter((h) => {
-                return inNetFilter(h, this.net.filter) && (!words.length || matchesAllWords(h.search, words));
+                return inNetFilter(h, this.net.filter) && (!source || h[source]) && (!words.length || matchesAllWords(h.search, words));
             });
         },
 
@@ -100,12 +127,42 @@ export default {
             return this.netHosts.length ? "Ничего не найдено." : "Пока пусто — собери DHCP или Сеть.";
         },
 
-        // Подсказка у ячейки источника: когда, MAC и имя по этому источнику, подробности
-        netSeenTitle(s) {
+        setNetSource(key) {
+            this.net.source = this.net.source === key ? null : key;
+        },
+
+        // Подсказка у значения MAC / имени: откуда оно
+        netValueTitle(v) {
+            return fromText(v.sources) + (v.stale ? "\nДавно" : "");
+        },
+
+        // Подсказка у IP: кто знает этот адрес
+        netIpTitle(h) {
+            const who = NET_SOURCES.filter(function (s) { return h[s.key]; }).map(function (s) { return s.label; });
+            return fromText(who);
+        },
+
+        // Подсказка у «Когда»: кто видел последним и когда видел каждый
+        netWhenTitle(h) {
+            if (!h.seen_at) {
+                return null;
+            }
+            const lines = [fromText([h.seen_by])];
+            if (h.net && h.dhcp) {
+                lines.push("Сканер: " + this.formatTime(h.net.seen_at), "Leases: " + this.formatTime(h.dhcp.seen_at));
+            }
+            if (h.stale) {
+                lines.push("Давно");
+            }
+            return lines.join("\n");
+        },
+
+        // Подсказка у ячейки источника: кто, когда, MAC и имя по этому источнику, подробности
+        netSeenTitle(s, who) {
             if (!s) {
                 return null;
             }
-            return [this.formatTime(s.seen_at), s.mac ? "MAC: " + s.mac : "", s.name ? "Имя: " + s.name : ""].concat(s.details || []).filter(Boolean).join("\n");
+            return [who ? fromText([who]) : "", this.formatTime(s.seen_at) + (s.stale ? " — давно" : ""), s.mac ? "MAC: " + s.mac : "", s.name ? "Имя: " + s.name : ""].concat(s.details || []).filter(Boolean).join("\n");
         },
 
         // Столбец «DHCP»: аренда и (или) привязка из настроек
@@ -114,9 +171,9 @@ export default {
         },
 
         netDhcpTitle(h) {
-            const lease = h.dhcp ? this.netSeenTitle(h.dhcp) : null;
+            const lease = h.dhcp ? this.netSeenTitle(h.dhcp, "Leases") : null;
             // У привязки времени нет: это настройка, а не наблюдение
-            const conf = h.conf ? ["Привязка", h.conf.mac ? "MAC: " + h.conf.mac : ""].concat(h.conf.details || []).filter(Boolean).join("\n") : null;
+            const conf = h.conf ? [fromText(["DHCP Config"]), h.conf.mac ? "MAC: " + h.conf.mac : ""].concat(h.conf.details || []).filter(Boolean).join("\n") : null;
             return [lease, conf].filter(Boolean).join("\n\n") || null;
         },
 
@@ -125,12 +182,12 @@ export default {
                 return null;
             }
             if (!h.ports.length) {
-                return "Открытых нет";
+                return fromText(["Сканер"]) + "\nОткрытых нет";
             }
-            return h.ports.map(function (port) {
+            return [fromText(["Сканер"])].concat(h.ports.map(function (port) {
                 const name = PORT_NAMES[port] || "";
                 return port + (name ? " — " + name : "") + (port === 5900 && h.rfb ? " (RFB " + h.rfb + ")" : "");
-            }).join("\n");
+            })).join("\n");
         },
 
         netPcTitle(c) {

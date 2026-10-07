@@ -1219,7 +1219,8 @@
                                                                         <span class="scan-chip" :class="{ off: f.prop.rejected_by }" :style="scanChipStyle(scanMarkByKind[f.prop.kind] || {})" :title="f.prop.rejected_by ? 'Оставлено: ' + f.prop.rejected_by + ', ' + formatTime(f.prop.rejected_at) : diffSourceTitle(f.prop)">{{ scanChipText(f.prop) }}</span>
                                                                         <template v-if="canEdit">
                                                                             <template v-if="!f.prop.rejected_by">
-                                                                                <svg v-if="f.prop.can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click.stop="checkTake([f.prop])"><title>Взять из сканера</title><path d="M20 6 9 17l-5-5"/></svg>
+                                                                                <svg v-if="f.prop.can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click.stop="checkTake([f.prop])"><title>{{ f.prop.replace ? "Добавить" : "Взять из сканера" }}</title><path d="M20 6 9 17l-5-5"/></svg>
+                                                                                <svg v-if="f.prop.can_take && f.prop.replace" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" @click.stop="checkTake([f.prop], true)"><title>Заменить: {{ f.prop.replace.split("\n").join(", ") }}</title><path d="M14 4a2 2 0 0 1 2-2"/><path d="M16 10a2 2 0 0 1-2-2"/><path d="M20 2a2 2 0 0 1 2 2"/><path d="M22 8a2 2 0 0 1-2 2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a3 3 0 0 1 3-3h1"/><rect x="2" y="14" width="8" height="8" rx="2"/></svg>
                                                                                 <svg class="act-ico act-no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click.stop="checkLeave([f.prop])"><title>Оставить как есть</title><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                                                                 <svg v-if="f.field === 'model' && f.prop.proposed" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" @click.stop="boardDiff(f.prop)"><title>Это материнская плата</title><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M11 9h4a2 2 0 0 0 2-2V3"/><circle cx="9" cy="9" r="2"/><path d="M7 21v-4a2 2 0 0 1 2-2h4"/><circle cx="15" cy="15" r="2"/></svg>
                                                                             </template>
@@ -1272,6 +1273,11 @@
                     <button v-for="f in netFiltersShown" :key="f.key" class="sm-chip" :class="{ on: net.filter === f.key }" :title="f.title" @click="net.filter = f.key">
                         {{ f.label }}<span class="su-n">{{ netCounts[f.key] }}</span>
                     </button>
+                    <!-- По источникам (этап 31): нажатие на включённый — снять -->
+                    <span class="sm-sep"></span>
+                    <button v-for="s in netSources" :key="s.key" class="sm-chip" :class="{ on: net.source === s.key }" :title="s.title" @click="setNetSource(s.key)">
+                        {{ s.label }}<span class="su-n">{{ netCounts[s.key] }}</span>
+                    </button>
                 </div>
                 <div v-if="net.error" class="sm-error">{{ net.error }}</div>
                 <div class="users-wrap sm-wrap net-wrap">
@@ -1283,15 +1289,16 @@
                                 </thead>
                                 <tbody>
                                     <tr v-if="!netShown.length" class="h-empty"><td colspan="8">{{ netEmptyText() }}</td></tr>
-                                    <tr v-for="h in netShown" :key="h.ip">
-                                        <td class="nt-ip">{{ h.ip }}</td>
+                                    <!-- Давно не видели (старше срока «Актуальны») — не удаляется, а серым (этап 31) -->
+                                    <tr v-for="h in netShown" :key="h.ip" :class="{ 'nt-stale': h.stale }">
+                                        <td class="nt-ip" :title="netIpTitle(h)">{{ h.ip }}</td>
                                         <!-- Источники говорят разное — значения строками; откуда каждое — в подсказке -->
-                                        <td class="nt-mac"><div v-for="m in h.mac" :key="m.value" class="vc-line" :title="m.sources.join(', ')">{{ m.value }}</div></td>
-                                        <td class="nt-name"><div v-for="n in h.name" :key="n.value" class="vc-line" :title="n.sources.join(', ')">{{ n.value }}</div></td>
-                                        <td class="nt-src" :title="netDhcpTitle(h)">{{ netDhcpText(h) }}</td>
-                                        <td class="nt-src" :title="netSeenTitle(h.net)">{{ h.net ? h.net.text : "" }}</td>
-                                        <td class="nt-ports" :class="{ 'nt-none': h.ports && !h.ports.length }" :title="netPortsTitle(h)">{{ h.ports ? (h.ports.join(", ") || "—") : "" }}</td>
-                                        <td class="nt-when">{{ h.seen_at ? formatTime(h.seen_at) : "" }}</td>
+                                        <td class="nt-mac"><div v-for="m in h.mac" :key="m.value" class="vc-line" :class="{ 'nt-old': m.stale }" :title="netValueTitle(m)">{{ m.value }}</div></td>
+                                        <td class="nt-name"><div v-for="n in h.name" :key="n.value" class="vc-line" :class="{ 'nt-old': n.stale }" :title="netValueTitle(n)">{{ n.value }}</div></td>
+                                        <td class="nt-src" :class="{ 'nt-old': h.dhcp && h.dhcp.stale && !h.conf }" :title="netDhcpTitle(h)">{{ netDhcpText(h) }}</td>
+                                        <td class="nt-src" :class="{ 'nt-old': h.net && h.net.stale }" :title="netSeenTitle(h.net, 'Сканер')">{{ h.net ? h.net.text : "" }}</td>
+                                        <td class="nt-ports" :class="{ 'nt-none': h.ports && !h.ports.length, 'nt-old': h.net && h.net.stale }" :title="netPortsTitle(h)">{{ h.ports ? (h.ports.join(", ") || "—") : "" }}</td>
+                                        <td class="nt-when" :title="netWhenTitle(h)">{{ h.seen_at ? formatTime(h.seen_at) : "" }}</td>
                                         <td class="nt-pc">
                                             <div v-for="c in h.computers" :key="c.computer_id" class="vc-line">
                                                 <a class="vc-host" :href="pageHref('table', { pc: c.computer_id })" :title="netPcTitle(c)" @click="navClick($event, () => openCardById(c.computer_id))">{{ c.hostname || "без имени" }}</a>
@@ -1424,7 +1431,7 @@
                     <span v-if="vacuumQuery" class="clear" title="Очистить (Esc)" @click="vacuumQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
-                    <button class="btn icon-only" :class="{ busy: vacuumProgress }" :disabled="!!vacuumProgress || (isAdmin && !!scanCollectBlock('jabber'))" @click="refreshVacuum" :title="vacuumRefreshTitle"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+                    <button class="btn icon-only" @click="loadVacuum()" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -1436,6 +1443,8 @@
             </div>
             <div class="page scan-match-page vacuum-page" :class="{ 'accent-head': accentHeaders.vacuum }">
                 <div class="sm-filters">
+                    <!-- Просканировать Vacuum заново (этап 31): как «Собрать» на «Проверке» -->
+                    <button v-if="isAdmin" class="btn ck-collect" :disabled="!!vacuumProgress || !!scanCollectBlock('jabber')" @click="refreshVacuum" :title="vacuumRefreshTitle">{{ vacuumProgress ? "Сканирую…" : "Сканировать" }}</button>
                     <template v-for="f in vacuumFilters" :key="f.key">
                         <button v-if="!f.optional || vacuumCounts[f.key]" class="sm-chip" :class="['vf-' + f.key, { on: vacuum.filter === f.key }]" :title="f.title" @click="setVacuumFilter(f.key)">
                             {{ f.label }}<span class="su-n">{{ vacuumCounts[f.key] }}</span>
@@ -1456,8 +1465,9 @@
                                 </thead>
                                 <tbody>
                                     <tr v-if="!vacuumShown.length" class="h-empty"><td colspan="5">{{ vacuumEmptyText() }}</td></tr>
-                                    <tr v-for="u in vacuumShown" :key="u.login" :class="{ 'vc-gone': u.gone, 'vc-nogroup': u.no_group }">
-                                        <td class="vc-login" :title="u.gone ? 'Пользователя нет — убрать из групп' : (u.no_group ? 'Нет ни в одной группе' : null)">{{ u.login }}</td>
+                                    <!-- Давно не подключался — серым; последний IP видели давно — серые IP и ПК (этап 31) -->
+                                    <tr v-for="u in vacuumShown" :key="u.login" :class="{ 'vc-gone': u.gone, 'vc-nogroup': u.no_group, 'vc-stale': u.stale, 'vc-ip-stale': u.ip_stale }">
+                                        <td class="vc-login" :title="u.gone ? 'Пользователя нет — убрать из групп' : (u.no_group ? 'Нет ни в одной группе' : (u.stale ? 'Давно не подключался' : null))">{{ u.login }}</td>
                                         <td class="vc-groups">{{ u.groups.join(", ") }}<span v-if="u.no_group" class="vc-flag">нет групп</span></td>
                                         <td class="vc-hosts">
                                             <template v-for="(a, ai) in u.addresses" :key="'h' + ai">
@@ -1545,8 +1555,13 @@
                 <div v-if="!scanPop.d.can_take" class="sp-info">Имя на ПК другое.</div>
                 <template v-if="canEdit">
                     <div class="sp-actions">
-                        <button v-if="scanPop.d.can_take" class="btn btn-primary" @click="scanPopTake">Взять из сканера</button>
-                        <button class="btn" @click="scanPopLeave">{{ !scanPop.d.can_take ? "Не показывать" : scanPop.d.table ? "Оставить как есть" : "Не заполнять" }}</button>
+                        <!-- VACUUM: дописать к тем, кто в ячейке, или заменить их (этап 31) -->
+                        <template v-if="scanPop.d.can_take && scanPop.d.replace">
+                            <button class="btn btn-primary" :title="diffResultTitle(scanPop.d.proposed)" @click="scanPopTake(false)">Добавить</button>
+                            <button class="btn" :title="diffResultTitle(scanPop.d.replace)" @click="scanPopTake(true)">Заменить</button>
+                        </template>
+                        <button v-else-if="scanPop.d.can_take" class="btn btn-primary" @click="scanPopTake(false)">Взять из сканера</button>
+                        <button class="btn" :class="{ 'sp-wide': scanPop.d.can_take && scanPop.d.replace }" @click="scanPopLeave">{{ !scanPop.d.can_take ? "Не показывать" : scanPop.d.table ? "Оставить как есть" : "Не заполнять" }}</button>
                         <button v-if="scanPop.d.field === 'model' && scanPop.d.proposed" class="btn sp-wide" @click="scanPopBoard" title="Записать в «Мат. плату»; так же — у всех ПК с этим названием">Это материнская плата</button>
                     </div>
                     <label v-if="scanPopCanAll(scanPop)" class="sp-all">
@@ -1605,7 +1620,8 @@
                                         <span class="scan-chip" :style="scanChipStyle(scanMarkByKind[cardScanDiff(r).kind] || {})">{{ scanChipText(cardScanDiff(r)) }}</span>
                                         <span class="cs-src">{{ diffSourceShort(cardScanDiff(r)) }}<template v-if="cardScanDiff(r).kind === 'unsure'"> · <span class="cs-unsure">неточно</span></template></span>
                                         <template v-if="canEdit">
-                                            <svg v-if="cardScanDiff(r).can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)])"><title>Взять из сканера</title><path d="M20 6 9 17l-5-5"/></svg>
+                                            <svg v-if="cardScanDiff(r).can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)])"><title>{{ cardScanDiff(r).replace ? "Добавить" : "Взять из сканера" }}</title><path d="M20 6 9 17l-5-5"/></svg>
+                                            <svg v-if="cardScanDiff(r).can_take && cardScanDiff(r).replace" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)], true)"><title>Заменить: {{ cardScanDiff(r).replace.split("\n").join(", ") }}</title><path d="M14 4a2 2 0 0 1 2-2"/><path d="M16 10a2 2 0 0 1-2-2"/><path d="M20 2a2 2 0 0 1 2 2"/><path d="M22 8a2 2 0 0 1-2 2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a3 3 0 0 1 3-3h1"/><rect x="2" y="14" width="8" height="8" rx="2"/></svg>
                                             <svg class="act-ico act-no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="rejectDiffs([cardScanDiff(r)])"><title>Оставить как есть</title><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                         </template>
                                     </div>

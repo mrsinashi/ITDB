@@ -10,8 +10,10 @@
 В таблицу ПК сбор ничего не пишет (правило 1): только scan_records (GLPI, GSIT),
 scan_jabber_users (Jabber — пользователи не заменяются, а обновляются: у
 ушедших из сети остаются последний IP и время) и scan_hosts (этап 28: DHCP —
-аренды и привязки из настроек заменяются целиком; Сеть — ответившие адреса обновляются, молчащие
-дольше срока «Актуальны» удаляются).
+аренды обновляются, привязки из настроек заменяются целиком; Сеть — ответившие
+адреса обновляются). Наблюдения по сроку не удаляются (этап 31): то, что старше
+срока «Актуальны», остаётся последним известным — в «Сети» серым, в предложения
+не идёт.
 """
 import logging
 import threading
@@ -218,20 +220,29 @@ def save_records(session, kind, run, items, stats):
 
 
 def save_hosts(session, kind, run, items, fresh_days):
-    """Наблюдения сети. DHCP — копия файлов сервера (аренды и привязки из настроек —
-    строками своего вида): заменяется целиком. Сеть —
-    ответившие адреса обновляются; адрес, который молчит, остаётся (ПК может быть
-    выключен), пока не промолчит дольше срока «Актуальны»."""
+    """Наблюдения сети. По сроку ничего не удаляется (этап 31): ПК может быть
+    выключен месяцами и стоять на месте — последнее известное об адресе остаётся
+    (что старше срока «Актуальны» — в «Сети» серым и в предложения не идёт).
+    DHCP — аренды обновляются по адресу (аренда, которой в файле уже нет, остаётся
+    как была), привязки из настроек — это настройка, а не наблюдение: заменяются
+    целиком. Сеть — ответившие адреса обновляются, молчащие остаются."""
     if kind == "dhcp":
-        session.query(ScanHost).filter(ScanHost.source.in_(HOST_SOURCES[kind])).delete(synchronize_session=False)
+        session.query(ScanHost).filter(ScanHost.source == CONF_SOURCE).delete(synchronize_session=False)
         existing = {}
+
+        for row in session.query(ScanHost).filter(ScanHost.source == kind):
+            # Привязки, собранные до 28в, лежали строками dhcp с пометкой fixed
+            if (row.data or {}).get("fixed"):
+                session.delete(row)
+            else:
+                existing[row.ip] = row
+
+        session.flush()
     else:
-        since = now() - timedelta(days=fresh_days)
-        session.query(ScanHost).filter(ScanHost.source == kind, ScanHost.seen_at < since).delete()
         existing = {row.ip: row for row in session.query(ScanHost).filter(ScanHost.source == kind)}
 
     for item in items:
-        row = existing.get(item["ip"])
+        row = existing.get(item["ip"]) if (item.get("source") or kind) == kind else None
 
         if row is None:
             row = ScanHost(source=item.get("source") or kind, ip=item["ip"])
@@ -250,6 +261,14 @@ def save_hosts(session, kind, run, items, fresh_days):
         row.data = item.get("data") or {}
         row.seen_at = item["seen_at"]
         row.run_id = run.id
+
+    if kind == "dhcp":
+        # Аренды в файле больше нет — она не действует; когда адрес был занят, остаётся
+        found = {item["ip"] for item in items if (item.get("source") or kind) == kind}
+
+        for ip, row in existing.items():
+            if ip not in found and not (row.data or {}).get("gone"):
+                row.data = dict(row.data or {}, active=False, gone=True)
 
 
 def save_jabber(session, run, items, keep_groups=False, users_ok=False):

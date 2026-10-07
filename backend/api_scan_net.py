@@ -5,11 +5,14 @@ GET /api/scan/hosts — адреса из scan_hosts, по строке на а�
 (чем ответил, открытые порты), и какой ПК таблицы на этом адресе: по IP из таблицы
 или по MAC. Источники говорят разное — значения показываются все, у каждого —
 откуда оно (этап 28в); первым — то, что видно на самом деле (сеть, потом аренда),
-последним — привязка из настроек DHCP. Ничего не пишет.
+последним — привязка из настроек DHCP. Наблюдения по сроку не удаляются (этап 31):
+что старше срока «Актуальны» своего источника — stale (на странице серым); имя
+источника у значений — как их зовёт пользователь: Сканер, Leases, DHCP Config.
+Ничего не пишет.
 Сбор — POST /api/scan/sources/{dhcp|net}/collect. Смотреть — редактор и администратор.
 """
 import ipaddress
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -17,7 +20,7 @@ from pydantic import BaseModel
 
 import scan_collect
 from api_computers import load_locations, location_path
-from api_scan import SOURCES, RunOut, last_run_of, load_source
+from api_scan import SOURCES, RunOut, fresh_days_of, last_run_of, load_source
 from auth import require_editor
 from db import get_db
 from models import Computer, ScanHost
@@ -37,6 +40,7 @@ class SeenOut(BaseModel):
     seen_at: datetime
     text: str                  # коротко: «аренда», «резерв», «ping, NetBIOS»
     details: list[str] = []    # подробности — для подсказки
+    stale: bool = False        # старше срока «Актуальны» — последнее известное
 
 
 class HostPc(BaseModel):
@@ -47,9 +51,10 @@ class HostPc(BaseModel):
 
 
 class ValueOut(BaseModel):
-    """Значение и кто его назвал: «Сеть», «DHCP: аренда», «DHCP: привязка»."""
+    """Значение и кто его назвал: «Сканер», «Leases», «DHCP Config»."""
     value: str
     sources: list[str]
+    stale: bool = False        # все, кто его назвал, — давно
 
 
 class HostOut(BaseModel):
@@ -62,6 +67,9 @@ class HostOut(BaseModel):
     ports: Optional[list[int]] = None   # открытые порты; None — не проверялись
     rfb: Optional[str] = None           # версия VNC на порту 5900
     seen_at: Optional[datetime] = None  # когда адрес был занят на самом деле (привязка не в счёт)
+    seen_by: Optional[str] = None       # кто видел последним: «Сканер» / «Leases»
+    stale: bool = False                 # всё, что видели на адресе, — давно (привязка не в счёт)
+    differ: bool = False                # источники сейчас называют разный MAC или имя
     computers: list[HostPc]
 
 
@@ -85,20 +93,22 @@ def moment(value):
         return None
 
 
-WHO = {"net": "Сеть", "dhcp": "DHCP: аренда", "conf": "DHCP: привязка"}
+WHO = {"net": "Сканер", "dhcp": "Leases", "conf": "DHCP Config"}
 # Сначала — что видно на самом деле; привязка из настроек — последней
 ORDER = ("net", "dhcp", "conf")
 
 
-def dhcp_seen(row):
+def dhcp_seen(row, stale=False):
     data = row.data or {}
     details = []
     text = "аренда" if data.get("active") else "аренда кончилась"
 
-    if data.get("state"):
+    if data.get("gone"):
+        details.append("в файле аренд уже нет")
+    elif data.get("state"):
         details.append("состояние: " + str(data["state"]))
 
-    return SeenOut(mac=row.mac, name=row.name, seen_at=row.seen_at, text=text, details=details)
+    return SeenOut(mac=row.mac, name=row.name, seen_at=row.seen_at, text=text, details=details, stale=stale)
 
 
 def conf_seen(row, elsewhere):
@@ -118,7 +128,7 @@ def conf_seen(row, elsewhere):
     return SeenOut(mac=row.mac, name=data.get("host"), seen_at=row.seen_at, text="привязка", details=details)
 
 
-def net_seen(row):
+def net_seen(row, stale=False):
     data = row.data or {}
     how = data.get("how") or []
     how = how if isinstance(how, list) else [how]
@@ -132,7 +142,7 @@ def net_seen(row):
 
     return SeenOut(
         mac=row.mac, name=row.name, seen_at=row.seen_at,
-        text=", ".join(HOW.get(item, str(item)) for item in how) or "ответил", details=details,
+        text=", ".join(HOW.get(item, str(item)) for item in how) or "ответил", details=details, stale=stale,
     )
 
 
@@ -147,19 +157,23 @@ def ports_of(row):
 
 
 def merge(values, same):
-    """[(значение, кто назвал)] → [ValueOut]: одинаковые значения — одной строкой."""
+    """[(значение, кто назвал, давно ли)] → [ValueOut]: одинаковые значения — одной
+    строкой; значение «давнее», если давно его называли все."""
     result = []
 
-    for value, who in values:
+    for value, who, stale in values:
         if not value:
             continue
 
         found = next((item for item in result if same(item.value, value)), None)
 
         if found is None:
-            result.append(ValueOut(value=value, sources=[who]))
-        elif who not in found.sources:
-            found.sources.append(who)
+            result.append(ValueOut(value=value, sources=[who], stale=stale))
+        else:
+            found.stale = found.stale and stale
+
+            if who not in found.sources:
+                found.sources.append(who)
 
     return result
 
@@ -197,24 +211,38 @@ def list_hosts(me=Depends(require_editor), session=Depends(get_db)):
 
     found = {}
     kinds = [kind for group in scan_collect.HOST_SOURCES.values() for kind in group]
-    seen_macs = {}   # MAC → адреса, где он виден на самом деле (сеть, аренда)
+    seen_macs = {}   # MAC → адреса, где он виден на самом деле (сеть, аренда) и недавно
+    moment_now = datetime.now(timezone.utc)
+    # Раньше этого времени — «давно» (срок «Актуальны» источника)
+    since = {
+        kind: moment_now - timedelta(days=fresh_days_of(load_source(session, kind), kind))
+        for kind in scan_collect.HOST_KINDS
+    }
+    old = {}         # адрес → виды строк, которые видели давно
 
     for row in session.query(ScanHost).filter(ScanHost.source.in_(kinds)):
         # Привязки, собранные до 28в, лежат строками dhcp с пометкой fixed
         fixed = row.source == CONF_SOURCE or bool((row.data or {}).get("fixed"))
         kind = "conf" if fixed else row.source
         found.setdefault(row.ip, {})[kind] = row
+        stale = not fixed and row.seen_at < since[row.source]
 
-        if not fixed and row.mac:
+        if stale:
+            old.setdefault(row.ip, set()).add(kind)
+
+        if not fixed and not stale and row.mac:
             seen_macs.setdefault(row.mac, set()).add(row.ip)
 
     hosts = []
 
     for ip, entry in found.items():
-        macs = merge([(entry[kind].mac, WHO[kind]) for kind in ORDER if kind in entry], lambda a, b: a == b)
+        stale = old.get(ip, set())
+        macs = merge(
+            [(entry[kind].mac, WHO[kind], kind in stale) for kind in ORDER if kind in entry], lambda a, b: a == b,
+        )
         names = merge(
             [
-                ((entry[kind].data or {}).get("host") if kind == "conf" else entry[kind].name, WHO[kind])
+                ((entry[kind].data or {}).get("host") if kind == "conf" else entry[kind].name, WHO[kind], kind in stale)
                 for kind in ORDER if kind in entry
             ],
             same_host,
@@ -235,18 +263,24 @@ def list_hosts(me=Depends(require_editor), session=Depends(get_db)):
             if "mac" in by and "conf" in by:
                 by.remove("conf")
 
-        real = [entry[kind].seen_at for kind in ("net", "dhcp") if kind in entry]
+        real = [(entry[kind].seen_at, kind) for kind in ("net", "dhcp") if kind in entry]
+        last = max(real) if real else None
+        # Давнее значение рядом с нынешним — не расхождение, а прошлое
+        fresh = [[value for value in values if not value.stale] or values for values in (macs, names)]
         elsewhere = sorted(seen_macs.get(conf.mac, set()) - {ip}, key=ip_key) if conf is not None and conf.mac else []
         net = entry.get("net")
 
         hosts.append(HostOut(
             ip=ip, mac=macs, name=names,
-            dhcp=dhcp_seen(entry["dhcp"]) if "dhcp" in entry else None,
+            dhcp=dhcp_seen(entry["dhcp"], "dhcp" in stale) if "dhcp" in entry else None,
             conf=conf_seen(conf, elsewhere) if conf is not None else None,
-            net=net_seen(net) if net is not None else None,
+            net=net_seen(net, "net" in stale) if net is not None else None,
             ports=ports_of(net),
             rfb=(net.data or {}).get("rfb") if net is not None else None,
-            seen_at=max(real) if real else None,
+            seen_at=last[0] if last else None,
+            seen_by=WHO[last[1]] if last else None,
+            stale=bool(real) and all(kind in stale for _, kind in real),
+            differ=any(len(values) > 1 for values in fresh),
             computers=[
                 HostPc(computer_id=computer_id, hostname=computers[computer_id]["hostname"],
                        place=computers[computer_id]["place"], by=sorted(set(by)))

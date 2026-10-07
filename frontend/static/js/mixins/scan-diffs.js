@@ -678,11 +678,17 @@ export default {
             return pop.d.name_field && !!pop.d.table && pop.d.kind !== "fill";
         },
 
-        async scanPopTake() {
+        // replace — VACUUM: не дописать, а заменить ячейку теми, кто с адреса ПК
+        async scanPopTake(replace) {
             const pop = this.scanPop;
             pop.busy = true;
             this.closeScanPop();
-            await this.acceptDiffs([pop.d]);
+            await this.acceptDiffs([pop.d], replace === true);
+        },
+
+        // Подсказка «что будет в ячейке»
+        diffResultTitle(value) {
+            return "Будет: " + String(value || "").split("\n").join(", ");
         },
 
         async scanPopLeave() {
@@ -855,15 +861,16 @@ export default {
             }
         },
 
-        async acceptDiffs(list) {
-            list = list.filter(function (d) { return d.can_take; });
+        // replace — взять второй вариант (VACUUM: заменить, а не дописать)
+        async acceptDiffs(list, replace) {
+            list = list.filter(function (d) { return d.can_take && (!replace || d.replace); });
             if (!list.length) {
                 return;
             }
             try {
                 const result = await this.diffPost("/api/scan/diffs/accept", {
                     items: list.map((d) => ({
-                        computer_id: d.computer_id, field: d.field, value: d.proposed, table: d.table,
+                        computer_id: d.computer_id, field: d.field, value: replace ? d.replace : d.proposed, table: d.table,
                         source: this.diffSourceShort(d)
                     }))
                 });

@@ -68,12 +68,14 @@ def test_hosts_page(admin, editor, reader, room):
     # Источники говорят разное — оба значения, у каждого — откуда; привязка — последней
     both = hosts["10.0.5.11"]
     assert both["mac"] == [
-        {"value": "D8:CB:8A:00:00:11", "sources": ["Сеть", "DHCP: аренда"]},
-        {"value": "D8:CB:8A:00:00:AA", "sources": ["DHCP: привязка"]},
+        {"value": "D8:CB:8A:00:00:11", "sources": ["Сканер", "Leases"], "stale": False},
+        {"value": "D8:CB:8A:00:00:AA", "sources": ["DHCP Config"], "stale": False},
     ]
     assert both["name"] == [
-        {"value": "PC-1", "sources": ["Сеть", "DHCP: аренда"]}, {"value": "buh-1", "sources": ["DHCP: привязка"]},
+        {"value": "PC-1", "sources": ["Сканер", "Leases"], "stale": False},
+        {"value": "buh-1", "sources": ["DHCP Config"], "stale": False},
     ]
+    assert both["differ"] and both["seen_by"] in ("Сканер", "Leases") and not both["stale"]
     assert both["dhcp"]["text"] == "аренда" and both["net"]["text"] == "ping, NetBIOS" and both["conf"]["text"] == "привязка"
     assert both["conf"]["details"] == ["host buh-1", "файл: /etc/dhcp/a.conf"]
     assert "DNS: pc-1.corp.lan" in both["net"]["details"]
@@ -84,7 +86,8 @@ def test_hosts_page(admin, editor, reader, room):
     fixed = hosts["10.0.5.12"]
     assert fixed["conf"]["text"] == "привязка" and fixed["dhcp"] is None and fixed["net"] is None
     assert fixed["seen_at"] is None and fixed["ports"] is None
-    assert fixed["name"] == [{"value": "pc-2", "sources": ["DHCP: привязка"]}]
+    assert fixed["name"] == [{"value": "pc-2", "sources": ["DHCP Config"], "stale": False}]
+    assert not fixed["stale"] and not fixed["differ"] and fixed["seen_by"] is None
     assert [(c["computer_id"], c["by"]) for c in fixed["computers"]] == [(second, ["conf"])]
 
     # MAC привязки на самом деле виден на другом адресе

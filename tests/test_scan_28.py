@@ -81,14 +81,17 @@ def test_parse_leases():
 def test_build_fresh_only():
     items, stats = scan_dhcp.build(LEASES, 30)
     by_ip = {item["ip"]: item for item in items}
-    # Аренда, кончившаяся 40 дней назад, не берётся; 3 дня назад — берётся
-    assert set(by_ip) == {"10.0.5.11", "10.0.5.13", "10.0.5.200", "10.0.5.201", "10.0.5.202"}
+    # Аренда, кончившаяся 40 дней назад, тоже сохраняется (этап 31: давнее не удаляется,
+    # а помечается) — «свежей» не считается
+    assert set(by_ip) == {"10.0.5.11", "10.0.5.12", "10.0.5.13", "10.0.5.200", "10.0.5.201", "10.0.5.202"}
+    assert by_ip["10.0.5.12"]["seen_at"] < NOW - timedelta(days=39) and by_ip["10.0.5.12"]["data"]["active"] is False
     assert stats == {"total": 6, "fresh": 5, "active": 1, "stale": 1, "fixed": 3, "no_mac": 0}
     assert by_ip["10.0.5.11"]["data"]["active"] is True and "source" not in by_ip["10.0.5.11"]
     assert by_ip["10.0.5.200"]["data"] == {"fixed": True, "host": "printer-1"} and by_ip["10.0.5.200"]["name"] is None
     # Привязка из настроек — строкой своего вида, отдельно от аренд
     assert by_ip["10.0.5.200"]["source"] == scan_dhcp.CONF_SOURCE
-    assert len(scan_dhcp.build(LEASES, 2)[0]) == 4
+    items, stats = scan_dhcp.build(LEASES, 2)
+    assert len(items) == 6 and stats["fresh"] == 4 and stats["stale"] == 2
 
 
 def test_build_lease_and_binding_on_one_address():
@@ -380,14 +383,28 @@ def test_dhcp_key_install_and_collect(admin, editor, room, ssh_port):
     _, diffs = diffs_of(editor)
     assert (first, "mac") not in diffs
 
-    # Файл сменился — в базе копия нового; сбой — прежние записи остаются
+    # Давняя аренда сохранена, но в предложения не идёт; в «Сети» она помечена
+    assert set(saved) == {"10.0.5.11", "10.0.5.12", "10.0.5.13"}
+    second = add_pc(editor, room["room"], "pc-2", ip="10.0.5.12")
+    _, diffs = diffs_of(editor)
+    assert (second, "mac") not in diffs
+    page = {h["ip"]: h for h in ok(editor.get("/api/scan/hosts"))["hosts"]}
+    assert page["10.0.5.12"]["stale"] and page["10.0.5.12"]["dhcp"]["stale"] and page["10.0.5.12"]["mac"][0]["stale"]
+    assert not page["10.0.5.11"]["stale"] and not page["10.0.5.200"]["stale"]
+
+    # Файл сменился — прежние аренды не удаляются (этап 31), но уже не действуют;
+    # привязки из настроек — копия файла; сбой — всё остаётся как было
     Ssh.files = {scan_dhcp.DEFAULT_PATH: lease("10.0.5.50", "d8:cb:8a:00:00:50", "pc-50")}
     assert collect(admin, "dhcp")["status"] == "ok"
-    assert set(hosts("dhcp")) == {"10.0.5.50"}
+    saved = hosts("dhcp")
+    assert set(saved) == {"10.0.5.11", "10.0.5.12", "10.0.5.13", "10.0.5.50"}
+    assert saved["10.0.5.11"].data["active"] is False and saved["10.0.5.11"].data["gone"] is True
+    assert saved["10.0.5.11"].mac == "D8:CB:8A:00:00:11" and saved["10.0.5.50"].data["active"] is True
+    assert hosts(scan_dhcp.CONF_SOURCE) == {}
     Ssh.files = {}
     run = collect(admin, "dhcp")
     assert run["status"] == "error" and "не прочитать" in run["message"]
-    assert set(hosts("dhcp")) == {"10.0.5.50"}
+    assert set(hosts("dhcp")) == {"10.0.5.11", "10.0.5.12", "10.0.5.13", "10.0.5.50"}
 
 
 # ---------- Что сеть знает о ПК ----------
@@ -617,7 +634,8 @@ def test_net_collect(admin, editor, room, monkeypatch):
     assert diffs[(first, "mac")]["kind"] == "fill" and diffs[(first, "mac")]["sources"][0]["title"] == "Сеть"
     assert diffs[(second, "mac")]["kind"] == "unsure"
 
-    # Адрес замолчал — наблюдение остаётся, пока не устареет; устарело — удаляется
+    # Адрес замолчал — наблюдение остаётся и когда устареет (этап 31: ПК может быть
+    # выключен месяцами): в «Сети» — пометка stale, предложений по нему нет
     del alive["10.0.7.1"]
     session = SessionLocal()
     session.query(ScanHost).filter(ScanHost.ip == "10.0.7.2").update({"seen_at": NOW - timedelta(days=30)})
@@ -626,7 +644,13 @@ def test_net_collect(admin, editor, room, monkeypatch):
     monkeypatch.setattr(scan_net, "arp_table", lambda: {})
     alive.pop("10.0.7.2")
     assert collect(admin, "net")["status"] == "ok"
-    assert set(hosts("net")) == {"10.0.7.1"}
+    saved = hosts("net")
+    assert set(saved) == {"10.0.7.1", "10.0.7.2"} and saved["10.0.7.2"].mac == "D8:CB:8A:00:07:02"
+    page = {h["ip"]: h for h in ok(editor.get("/api/scan/hosts"))["hosts"]}
+    assert page["10.0.7.2"]["stale"] and page["10.0.7.2"]["net"]["stale"] and not page["10.0.7.1"]["stale"]
+    assert [c["computer_id"] for c in page["10.0.7.2"]["computers"]] == [second]
+    _, diffs = diffs_of(editor)
+    assert (second, "mac") not in diffs and (first, "mac") in diffs
 
 
 # ---------- Расписание ----------

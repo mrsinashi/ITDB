@@ -4,9 +4,10 @@
 // GLPI / GSIT). ПК ищется только по IP. Красным — пользователя уже нет, а в группе
 // он остался; оранжевым — не входит ни в одну группу.
 //
-// Данные — /api/scan/jabber (собирает сервер: кнопка обновления на панели страницы,
+// Данные — /api/scan/jabber (собирает сервер: «Сканировать» над таблицей (admin),
 // «Собрать» у Jabber на «Подключениях» или «Собрать» на «Проверке»). Пока идёт
-// сбор — полоса «просмотрено из» над таблицей.
+// сбор — полоса «просмотрено из» над таблицей. Кнопка на панели — перечитать страницу.
+// Этап 31: давно не подключавшиеся (stale) и давний последний IP (ip_stale) — серым.
 
 import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
 
@@ -96,10 +97,7 @@ export default {
 
         vacuumRefreshTitle() {
             if (this.vacuumProgress) {
-                return "Собираю…";
-            }
-            if (!this.isAdmin) {
-                return "Обновить";
+                return "Сканирую…";
             }
             const block = this.scanCollectBlock("jabber");
             const info = this.scanRunInfo("jabber");
@@ -143,13 +141,10 @@ export default {
             }
         },
 
+        // «Сканировать»: собрать из Jabber заново (admin)
         refreshVacuum() {
-            if (this.isAdmin) {
-                if (!this.scanCollectBlock("jabber")) {
-                    this.collectScan("jabber");
-                }
-            } else {
-                this.loadVacuum();
+            if (this.isAdmin && !this.scanCollectBlock("jabber")) {
+                this.collectScan("jabber");
             }
         },
 
@@ -185,7 +180,7 @@ export default {
         },
 
         vacuumIpTitle(u, a) {
-            const parts = [a.client || "", !u.online && u.last_seen_at ? this.formatTime(u.last_seen_at) : ""].filter(Boolean);
+            const parts = [a.client || "", !u.online && u.last_seen_at ? this.formatTime(u.last_seen_at) : "", u.ip_stale ? "давно" : ""].filter(Boolean);
             return parts.join(" · ") || null;
         }
     }

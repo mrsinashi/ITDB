@@ -98,6 +98,7 @@ class DiffOut(BaseModel):
                           # partial — в таблице записана часть («≈», не расхождение)
     unsure: str = ""      # почему неточно — для подсказки
     note: str = ""        # коротко, что меняется (VACUUM: кого добавить, кого убрать)
+    replace: str = ""     # VACUUM: вместо того, что в ячейке, — только те, кто сейчас с адреса ПК
     name_field: bool      # поле-название: можно «в таблице своё»
     can_take: bool = True  # можно «взять из сканера» (HOSTNAME — только сообщить)
     sources: list[DiffSource]
@@ -317,6 +318,8 @@ def jabber_rows(computers, record_ips, state, vacuum):
       назад), а в VACUUM ПК его нет. Логин уже записан у другого ПК — «неточно».
     - Заменить: в ячейке логин, которого в Jabber нет, но на вид он тот же, что
       у человека с адреса ПК (латинская буква вместо русской), — вместо него.
+    - Второй вариант — заменить всю ячейку теми, кто с адреса ПК (источник["replace"]):
+      за ПК теперь сидит другой человек (этап 31). Выбирает пользователь.
     Из ячейки сканер никого не убирает: давно не подключавшиеся и удалённые
     только выделяются (vacuum_stale, vacuum_missing)."""
     by_ip, names = state["by_ip"], state["names"]
@@ -370,12 +373,14 @@ def jabber_rows(computers, record_ips, state, vacuum):
             "вместо «" + "», «".join(table[login] for login in drop) + "» — там латинские буквы" if drop else "",
         ) if part)
         dates = [state["seen"][login] for login in add if state["seen"].get(login)]
+        # Только те, кого Jabber видит с адреса ПК; то же, что «добавить», — не вариант
+        only = vacuum_text(sorted((names.get(login, login) for login in at_pc[computer_id]), key=str.lower)) or ""
         result.append((
             computer_id, table_text, proposed, "unsure" if unsure else ("diff" if table else "fill"), unsure, note,
             {
                 "source": "jabber", "title": SOURCES["jabber"]["title"], "source_id": None,
                 "checked_at": max(dates) if dates else None, "state": "key", "by": ["ip"],
-                "value": proposed,
+                "value": proposed, "replace": only if table and only != proposed else "",
             },
         ))
 
@@ -503,7 +508,7 @@ def compute(session, with_rejected=False):
     items = []
     rejected = 0
 
-    def add(computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note=""):
+    def add(computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note="", replace=""):
         nonlocal rejected
         reject = rejects.get((computer_id, field, key_of(raw)))
 
@@ -516,7 +521,7 @@ def compute(session, with_rejected=False):
         items.append({
             "id": f"{computer_id}:{field}", "computer_id": computer_id, "field": field,
             "table": table or "", "proposed": proposed, "raw": raw,
-            "kind": diff_kind, "unsure": unsure, "note": note, "name_field": field in NAME_FIELDS,
+            "kind": diff_kind, "unsure": unsure, "note": note, "replace": replace, "name_field": field in NAME_FIELDS,
             "can_take": field not in INFO_FIELDS or not table,
             "sources": sources,
             "rejected_by": reject.user_name if reject else None,
@@ -558,8 +563,9 @@ def compute(session, with_rejected=False):
         jabber, seen_at = jabber_rows(computers, record_ips, state, vacuum)
 
         for computer_id, table, proposed, diff_kind, unsure, note, src in jabber:
+            replace = src.pop("replace", "")
             # Ключ отклонения — что предлагается: изменится состав — предложит снова
-            add(computer_id, "vacuum", table, proposed, proposed or "—", diff_kind, unsure, [src], note)
+            add(computer_id, "vacuum", table, proposed, proposed or "—", diff_kind, unsure, [src], note, replace)
 
         kinds = kinds + ["jabber"]
 

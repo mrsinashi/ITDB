@@ -209,7 +209,7 @@ const app = Vue.createApp({
             // Страница «Vacuum» — пользователи Jabber (/api/scan/jabber)
             vacuum: { data: null, loading: false, error: "", filter: "all" },
             // Вкладка «Сеть»: адреса из DHCP и прохода подсетей (/api/scan/hosts)
-            net: { data: null, loading: false, error: "", filter: "all" },
+            net: { data: null, loading: false, error: "", filter: "all", source: null },
             // Общие настройки (/api/settings): VNC по умолчанию
             appSettings: { vnc_default: "tight" },
             undone: [],          // что отменил Ctrl+Z — для возврата Ctrl+Y
@@ -271,6 +271,7 @@ const app = Vue.createApp({
             fieldDefsLoading: false,
             selectedRows: [],
             selectAnchorId: null,   // строка, от которой идёт Shift+клик
+            activeRowId: null,      // последняя нажатая строка: Enter — VNC, Alt+P — ping, Alt+R — RDP
             dupVersion: 0,          // пересчитаны дубли — пересчитать заливку ячеек
             altDown: false,         // зажат Alt — клик копирует значение
             copyHint: null,         // подсветка значения под курсором при Alt
@@ -281,6 +282,7 @@ const app = Vue.createApp({
     async mounted() {
         window.itdbTable = this;
         this.hoverRowEl = null;
+        this.activeRowEl = null;
         this.lastMouseX = undefined;
         this.lastMouseY = undefined;
         this.rafId = null;

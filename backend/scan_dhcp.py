@@ -163,9 +163,11 @@ def build(files, fresh_days, now=None):
 
         if is_active:
             active += 1
-        elif last is None or last < since:
+        elif last is None:
             stale += 1
-            continue
+            continue   # ни начала, ни конца — когда адрес был занят, неизвестно
+        elif last < since:
+            stale += 1   # давняя аренда сохраняется: в «Сети» — серым, в предложения не идёт
 
         items[lease["ip"]] = {
             "ip": lease["ip"], "mac": lease["mac"], "name": lease["name"], "seen_at": last,
@@ -190,7 +192,8 @@ def build(files, fresh_days, now=None):
         }
 
     stats = {
-        "total": len(leases) + len(fixed), "fresh": len(items) + len(fixed), "active": active, "stale": stale,
+        "total": len(leases) + len(fixed), "fresh": len(leases) - no_mac - stale + len(fixed), "active": active,
+        "stale": stale,
         "fixed": len(fixed), "no_mac": no_mac,
     }
     return list(items.values()) + list(fixed.values()), stats

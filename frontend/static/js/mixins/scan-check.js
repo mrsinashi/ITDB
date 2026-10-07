@@ -657,9 +657,9 @@ export default {
 
         // ---------- Действия ----------
 
-        async checkTake(list) {
+        async checkTake(list, replace) {
             if (list.length) {
-                await this.acceptDiffs(list);
+                await this.acceptDiffs(list, replace);
             }
         },
 

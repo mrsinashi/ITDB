@@ -1,9 +1,13 @@
 // Подключение к ПК по VNC через внешнее приложение (этап 28б): ссылки
 // itdb://vnc/tight/IP и itdb://vnc/ultra/IP. Обработчик протокола itdb:// — отдельное
 // приложение на компьютере пользователя. Двойной клик по значению TightVNC / UltraVNC
-// (Таблица, карточка ПК, подробности «Проверки») — подключение этим VNC; Enter при
-// одной выбранной строке Таблицы — тем, что записан у ПК, а если не записан — тем,
-// что выбран по умолчанию в Справочниках (блок «Тип VNC»).
+// (Таблица, карточка ПК, подробности «Проверки») — подключение этим VNC; Enter —
+// тем, что записан у ПК, а если не записан — тем, что выбран по умолчанию в
+// Справочниках (блок «Тип VNC»).
+// Enter, Alt+P (itdb://ping/IP) и Alt+R (itdb://rdp/IP) работают с последним ПК, по
+// строке которого нажали мышью (выделять строку не нужно); открыта карточка — с её ПК.
+// Строка отмечена полоской слева (класс row-active ставится прямо в DOM: данные Vue
+// не меняются — таблица на каждый клик не перерисовывается).
 
 import { apiFetch } from "../util.js";
 
@@ -54,6 +58,12 @@ export default {
     computed: {
         vncKinds() {
             return VNC_KINDS;
+        }
+    },
+
+    updated() {
+        if (this.view === "table") {
+            this.markActiveRow();
         }
     },
 
@@ -150,17 +160,60 @@ export default {
             }
         },
 
-        // Enter при одной выбранной строке Таблицы
-        vncConnectSelected() {
-            if (this.selectedRows.length !== 1) {
-                return false;
+        // Запомнить строку, по которой нажали (Enter, Alt+P, Alt+R — к этому ПК)
+        setActiveRow(row) {
+            this.activeRowId = row ? row.id : null;
+            this.markActiveRow();
+        },
+
+        // Полоска у запомненной строки; Vue мог сбросить класс, перерисовав строку
+        markActiveRow() {
+            const table = this.$refs.table;
+            const id = this.activeRowId;
+            let el = this.activeRowEl;
+            if (el && (!el.isConnected || el.dataset.id !== String(id))) {
+                el.classList.remove("row-active");
+                el = null;
             }
-            const id = this.selectedRows[0];
-            const row = this.rows.find(function (r) { return r.id === id; });
+            if (!el && table && id !== null && id !== undefined) {
+                el = table.querySelector('tbody tr[data-id="' + id + '"]');
+            }
+            if (el && !el.classList.contains("row-active")) {
+                el.classList.add("row-active");
+            }
+            this.activeRowEl = el || null;
+        },
+
+        // ПК для Enter / Alt+P / Alt+R: открытая карточка, иначе последняя нажатая
+        // строка, иначе единственная выбранная
+        activePc() {
+            if (this.card) {
+                return this.card;
+            }
+            let id = this.activeRowId;
+            if ((id === null || id === undefined) && this.selectedRows.length === 1) {
+                id = this.selectedRows[0];
+            }
+            return this.rows.find(function (r) { return r.id === id; }) || null;
+        },
+
+        // what: vnc / ping / rdp. Ответ — нашёлся ли ПК
+        connectActive(what) {
+            const row = this.activePc();
             if (!row) {
                 return false;
             }
-            this.vncConnect(row, null);
+            if (what === "vnc") {
+                this.vncConnect(row, null);
+                return true;
+            }
+            const ip = firstIp(row.ip);
+            if (!ip) {
+                this.toastError("У ПК нет IP.");
+                return true;
+            }
+            launch("itdb://" + what + "/" + ip);
+            this.toast((what === "rdp" ? "RDP" : "Ping") + ": " + (row.hostname || ip) + " (" + ip + ")");
             return true;
         }
     }
