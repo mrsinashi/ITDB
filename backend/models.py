@@ -30,6 +30,12 @@ class Location(Base):
     note = Column(Text, nullable=True)
     archived = Column(Boolean, nullable=False, server_default="false")
 
+    # Правило имён ПК (этап 35): часть имени узла; «только своя» — части узлов
+    # выше не добавляются; одно место — имя без номера
+    name_part = Column(Text, nullable=True)
+    name_own = Column(Boolean, nullable=False, server_default="false")
+    name_single = Column(Boolean, nullable=False, server_default="false")
+
 
 class Computer(Base):
     __tablename__ = "computers"
@@ -445,7 +451,8 @@ class ScanHost(Base):
 class AppSetting(Base):
     """Общая настройка программы (этап 26д): key → value (JSON): «antivirus» — вид
     столбца «Антивирусы», «table_marks» — выделения в Таблице, «schedule» —
-    расписание сборов (этап 28). Нет строки — значения по умолчанию."""
+    расписание сборов (этап 28), «name_keep» — ПК со своим именем не по правилу
+    (этап 35). Нет строки — значения по умолчанию."""
     __tablename__ = "app_settings"
 
     key = Column(Text, primary_key=True)

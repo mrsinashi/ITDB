@@ -99,6 +99,9 @@
     /* Перетаскивание столбца: призрак столбца за курсором */
     --col-drag-tint: rgba(0, 0, 0, 0.05);
     --col-drag-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+    /* Имя по правилу (этап 35): блочок под HOSTNAME; ПК не по правилу — число блочком */
+    --name-chip-bg: #cfe9e3;
+    --name-bad-bg: #ffd6d6;
 
     /* Общие */
     --text: #222;
@@ -5473,4 +5476,190 @@ html.col-dragging * {
     width: 2px;
     pointer-events: none;
     background: var(--brand);
+}
+
+/* ============================================================
+   Имена ПК по правилам (этап 35): вкладка «Имена ПК» в Справочниках,
+   блочок с именем по правилу под HOSTNAME в Таблице
+   ============================================================ */
+/* Таблица правил и «Свои имена» — рядом, каждая прокручивается в своей рамке */
+.nr-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+}
+.nr-layout > .users-wrap {
+    align-self: stretch;
+    flex: none;
+}
+/* Справа — плашка в один значок */
+.nr-layout > .nr-wrap {
+    margin-right: 44px;
+}
+.nr-layout > .nr-keep-wrap {
+    flex: 0 1 auto;
+    min-width: 200px;
+}
+/* Ширина — по таблице: место под полосу прокрутки есть всегда, иначе с ней
+   появлялась бы и полоса снизу */
+.nr-layout .history-scroll {
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+}
+.nr-table,
+.nr-keep {
+    width: auto;
+}
+.nr-table td.nr-loc {
+    padding-right: 24px;
+}
+.nr-table .node-icon {
+    display: inline-block;
+    margin-right: 5px;
+    vertical-align: -2px;
+}
+.nr-table .nr-code {
+    margin-right: 6px;
+    font-weight: 600;
+}
+/* Адрес — строка-группа, как в Дереве */
+.nr-table tr.nr-building td {
+    background: var(--gray-group);
+    border-bottom-color: var(--group-line);
+}
+.nr-table tr.nr-building td.nr-loc {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.nr-table tr.nr-building .node-icon {
+    color: #9b1c1c;
+}
+.nr-table tr.nr-focus td {
+    background: var(--search-hit-bg);
+}
+.nr-table td.nr-c {
+    width: 1%;
+    text-align: center;
+}
+.nr-table th.nr-c {
+    text-align: center;
+}
+.nr-table td.nr-c input[type="checkbox"] {
+    margin: 0;
+    vertical-align: -2px;
+    accent-color: var(--brand);
+}
+/* Пустые галочки — только у строки под курсором: видно, где включено */
+.nr-table td.nr-c input[type="checkbox"]:not(:checked) {
+    visibility: hidden;
+}
+.nr-table tbody tr:hover td.nr-c input[type="checkbox"]:not(:disabled),
+.nr-table tbody tr.is-hover td.nr-c input[type="checkbox"]:not(:disabled) {
+    visibility: visible;
+}
+/* Часть имени — поле во всю ячейку, выглядит как текст ячейки */
+.nr-table td.nr-part {
+    width: 110px;
+    min-width: 110px;
+    padding: 0;
+}
+.nr-input {
+    display: block;
+    width: 100%;
+    height: 24px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 3px 8px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    outline: none;
+}
+.nr-input:not([readonly]):hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+.nr-input:not([readonly]):focus {
+    background: #fff;
+    box-shadow: inset 0 0 0 1px var(--brand);
+}
+.nr-table td.nr-rule {
+    min-width: 120px;
+}
+.nr-table td.nr-rule.head {
+    color: var(--text-secondary);
+}
+.nr-table td.nr-rule.long {
+    color: var(--danger-strong);
+}
+.nr-table .nr-n,
+.nr-table .nr-none {
+    color: var(--text-muted);
+}
+.nr-table td.nr-pcs {
+    min-width: 44px;
+    font-variant-numeric: tabular-nums;
+}
+/* ПК не по правилу — число блочком: клик — они в Таблице */
+.nr-table a.nr-bad {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 0 5px;
+    border-radius: var(--radius);
+    background: var(--name-bad-bg);
+    color: var(--text-strong);
+    font-size: 11px;
+    line-height: 16px;
+    text-decoration: none;
+}
+.nr-table a.nr-bad:hover {
+    filter: brightness(0.94);
+}
+.nr-table td.nr-sug {
+    min-width: 130px;
+}
+.nr-table button.nr-chip:hover {
+    background: #dedede;
+}
+.nr-table button.nr-chip:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+/* Свои имена */
+.nr-keep-wrap {
+    margin-right: 0;
+}
+.nr-keep td.nr-host a {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+}
+.nr-keep td.nr-host a:hover {
+    text-decoration: underline;
+}
+.nr-keep td.nr-path {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.nr-keep td.nr-c {
+    width: 1%;
+    padding: 2px 4px;
+}
+.nr-keep .nr-unkeep:hover {
+    color: var(--danger-strong);
+}
+/* Блочок имени по правилу — в ячейке HOSTNAME и в карточке у блочка */
+.scan-chip.name-chip {
+    background: var(--name-chip-bg);
+    font-weight: 400;
+}
+.name-pop .np-rule {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+}
+.name-pop .np-rule:hover {
+    text-decoration: underline;
 }

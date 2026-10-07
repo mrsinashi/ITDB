@@ -187,8 +187,11 @@ export default {
         // Фильтр по дереву, фильтры по столбцам (mixins/col-filters.js), поиск
         filteredRows() {
             const rows = this.searchRows(this.applyColFilters(this.locationRows, null));
-            // Значок-воронка у кнопки «Значения сканера»: только строки с предложениями
-            return this.scanOnlyOn ? rows.filter((row) => this.rowHasScanChip(row)) : rows;
+            // Значок-воронка у кнопки «Значения сканера»: только строки с предложениями;
+            // у кнопки «Имена по правилам» — только ПК с именем не по правилу
+            return this.scanOnlyOn || this.nameOnlyOn
+                ? rows.filter((row) => (this.scanOnlyOn && this.rowHasScanChip(row)) || (this.nameOnlyOn && this.rowHasNameChip(row)))
+                : rows;
         },
 
         displayRows() {
@@ -429,10 +432,13 @@ export default {
         },
 
         recalcWidths() {
-            // Блочки значений сканера в ячейках — ширина столбца и под них (этап 26в)
+            // Блочки значений сканера в ячейках — ширина столбца и под них (этап 26в),
+            // у HOSTNAME — и блочок имени по правилу (этап 35)
             const scanChip = (row, field) => {
                 const d = this.scanChipShown(row, field);
-                return d ? this.scanChipText(d) : null;
+                const name = field === "hostname" ? this.nameChip(row, { field: field }) : null;
+                const text = d ? this.scanChipText(d) : null;
+                return name && (!text || name.length > text.length) ? name : text;
             };
             // Блочок повтора и антивируса шире текста, выделенные логины VACUUM — жирные
             const avBold = !!this.avSettings && this.avSettings.statuses.some(function (st) { return st.bold; });
@@ -951,6 +957,7 @@ export default {
                 checkSel: this.$refs.checkSelWrap,
                 checkFields: this.$refs.checkFieldsWrap,
                 namesHelp: this.$refs.namesHelpWrap,
+                namingHelp: this.$refs.namingHelpWrap,
                 historyFilter: this.$refs.historyFilterWrap,
                 colFilter: this.$refs.colFilterPanel,
                 colFilterList: this.$refs.colFilterListWrap

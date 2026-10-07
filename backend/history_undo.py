@@ -37,6 +37,7 @@ from api_computers import (
     vacuum_text,
 )
 from api_locations import check_can_archive, check_duplicate, clean, validate_name_code
+from api_naming import RULE_FIELDS, set_rule
 from api_users import ROLES, check_login_free, clean_login, clean_text, end_sessions
 from history_log import choice_title, column_label
 from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, User
@@ -44,9 +45,15 @@ from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, P
 # Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ — столбец)
 Ref = namedtuple("Ref", "entity entity_id entity_key")
 
-# Поля узла дерева, которые можно вернуть
-LOCATION_VALUE_FIELDS = {"name", "code", "archived"}
-LOCATION_LABELS = {"name": "Название", "code": "Код", "archived": "Архив"}
+# Поля узла дерева, которые можно вернуть (с этапа 35 — и правило имён ПК)
+LOCATION_VALUE_FIELDS = {"name", "code", "archived", "name_part", "name_own", "name_single"}
+LOCATION_LABELS = {
+    "name": "Название", "code": "Код", "archived": "Архив",
+    "name_part": "Часть имени ПК", "name_own": "Только своя часть", "name_single": "Одно место",
+}
+
+# Правило имён ПК у узла (этап 35)
+NAME_RULE_FIELDS = set(RULE_FIELDS.values())
 
 # Галочки оформления значения и столбца
 STYLE_FLAGS = {"bold", "italic", "underline", "strike", "chip"}
@@ -382,6 +389,9 @@ def set_location_value(session, location, field, value):
 
         location.archived = bool(value)
         return {"archived": {"old": old, "new": bool(value)}}
+
+    if field in NAME_RULE_FIELDS:
+        return set_rule(location, field, value)
 
     value = clean(value)
     name = value if field == "name" else location.name

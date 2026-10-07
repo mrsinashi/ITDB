@@ -179,7 +179,8 @@ export default {
             this.ensureTree();
             // По умолчанию — узел, выбранный фильтром из дерева
             const locationId = this.locationFilter ? this.locationFilter.id : null;
-            this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "" };
+            // autoName — имя по правилу в поле HOSTNAME (пока его не поменяли руками, этап 35)
+            this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "", autoName: "" };
             this.newComputerError = "";
             if (locationId) {
                 this.newComputer.seat_no = this.nextSeatNo(locationId);
@@ -266,6 +267,7 @@ export default {
                 form.hostname = "";
                 form.ip = "";
                 form.seat_no = this.nextSeatNo(form.location_id);
+                this.refreshNewComputerName();
                 this.$nextTick(() => this.focusNewComputer("hostname"));
             } catch (e) {
                 this.newComputerError = String(e.message || e);

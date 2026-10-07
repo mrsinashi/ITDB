@@ -6,6 +6,7 @@
 //   columns.js         — столбцы с сервера (GET /api/columns) в вид для таблицы, подписи полей, дубли
 //   widths.js          — автоширина столбцов
 //   tree-utils.js      — значки и ширина колонки дерева
+//   naming.js          — имена ПК по правилам узлов дерева: проверка, новое имя, «по таблице»
 //   shortcuts.js       — сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
 //   alt-copy.js        — Alt + клик: копирование значения во всех таблицах, кроме главной
 //   mixins/            — методы и вычисляемые значения по разделам:
@@ -24,7 +25,8 @@
 //                        nav (адреса страниц, Ctrl+Z / Ctrl+Y),
 //                        vnc (подключение к ПК через внешнее приложение, itdb://vnc/…),
 //                        print (печать Таблицы: окно с настройками и листом),
-//                        table-fit (масштаб по ширине окна), col-order (порядок столбцов перетаскиванием)
+//                        table-fit (масштаб по ширине окна), col-order (порядок столбцов перетаскиванием),
+//                        naming (имена ПК по правилам: вкладка Справочников, проверка в Таблице)
 //   route.js           — адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        — tree-node, tree-form, style-controls, location-picker, count-select
 //
@@ -62,6 +64,7 @@ import vnc from "./mixins/vnc.js";
 import print from "./mixins/print.js";
 import tableFit from "./mixins/table-fit.js";
 import colOrder from "./mixins/col-order.js";
+import naming from "./mixins/naming.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -70,7 +73,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, naming],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -160,6 +163,14 @@ const app = Vue.createApp({
             treeQuery: "",
             choicesQuery: "",
             choicesPos: 0,
+            // Справочники: вкладка «Оформление» (styles) или «Имена ПК» (names, этап 35)
+            choicesTab: "styles",
+            namesQuery: "",
+            namesHover: null,    // строка «Имён ПК» под курсором — плашка действий
+            nameDraft: null,     // часть имени, которую сейчас вводят: { id узла, raw, part }
+            nameFocusId: null,   // узел, к которому перешли из Таблицы (подсвечен)
+            nameSaving: false,
+            nameKeep: {},        // «своё имя»: id ПК → { name, location_id, by, at }
             treeWidth: 480,
             treeHover: null,
             treeScrollbar: 0,
@@ -242,6 +253,10 @@ const app = Vue.createApp({
             scanMarks: [],       // /api/scan/marks — вид пометок по ситуациям
             tableMarks: [],      // /api/table-marks — вид выделений значений в Таблице (этап 26к)
             scanOnlyRows: false, // воронка у кнопки «Значения сканера»: только строки с предложениями
+            // Этап 35: имена по правилам в Таблице (кнопка на панели)
+            nameCheck: false,
+            nameOnlyRows: false, // воронка у кнопки: только ПК с именем не по правилу
+            namePop: null,       // карточка у блочка с именем по правилу
             valueEdit: null,     // правка значения ПК в подробностях «Проверки»
             diffs: {
                 items: [],          // /api/scan/diffs (и отклонённые — с rejected_by)

@@ -161,7 +161,8 @@ export const ENTITY_LABELS = {
     scan_marks: "Пометка сканера",
     scan_antivirus: "Антивирусы",
     table_marks: "Выделение",
-    app_settings: "Настройка"
+    app_settings: "Настройка",
+    naming: "Имя ПК"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -221,7 +222,8 @@ export const SIMPLE_FIELD_LABELS = {
     show: "Показывать",
     hidden: "Не показывать",
     name: "Название",   // своё название антивируса (этап 26е)
-    vnc_default: "VNC"
+    vnc_default: "VNC",
+    name_keep: "Своё имя"   // имя ПК не по правилу (этап 35)
 };
 // Не отменяются и не открывают «Историю значения»
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];
@@ -233,7 +235,11 @@ export const LOCATION_FIELD_LABELS = {
     kind: "Тип",
     parent_id: "Родитель",
     archived: "Архив",
-    created: "Создан"
+    created: "Создан",
+    // Правило имён ПК (этап 35)
+    name_part: "Часть имени ПК",
+    name_own: "Только своя часть",
+    name_single: "Одно место"
 };
 
 export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";

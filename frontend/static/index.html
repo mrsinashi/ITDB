@@ -161,6 +161,7 @@
                                     <button @click="startSwap" :disabled="selectedRows.length !== 2" :title="selectedRows.length !== 2 ? 'Выбери два ПК' : 'Меняются расположение и № места'">Поменять местами</button>
                                     <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить значения…</button>
                                     <button @click="openAction('scan')" :disabled="!selectedScanCount" :title="selectedScanCount ? null : 'Сканер ничего не предлагает'">Принять изменения…<span v-if="selectedScanCount" class="dd-count">{{ selectedScanCount }}</span></button>
+                                    <button @click="renameSelectedByRule" :disabled="!selectedNameFixes.length" :title="selectedNameFixes.length ? 'Имена по правилам узлов' : 'Имена уже по правилу'">Переименовать по правилу<span v-if="selectedNameFixes.length" class="dd-count">{{ selectedNameFixes.length }}</span></button>
                                     <div class="dd-sep"></div>
                                     <button @click="setArchived(selectedRows.slice(), true)">В архив</button>
                                 </template>
@@ -233,6 +234,12 @@
                     </span>
                     <!-- Только строки с предложениями: значок без кнопки, есть только при включённой кнопке -->
                     <span v-if="scanOverlay" class="scan-only" :class="{ on: scanOnlyRows }" :title="scanOnlyRows ? 'Показать все строки' : 'Только строки с предложениями'" @click="scanOnlyRows = !scanOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
+                    <!-- Имена по правилам (этап 35): под HOSTNAME — блочок с именем по правилу у ПК, названных иначе -->
+                    <button class="btn icon-only" :class="{ active: nameCheck, 'has-badge': nameCheck && nameBadCount > 0 }" @click="toggleNameCheck"
+                        :title="nameCheck ? 'Не по правилу: ' + nameBadCount : 'Имена по правилам'">
+                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg><span v-if="nameCheck && nameBadCount > 0 && buttonCounts" class="btn-badge">{{ nameBadBadge }}</span>
+                    </button>
+                    <span v-if="nameCheck" class="scan-only" :class="{ on: nameOnlyRows }" :title="nameOnlyRows ? 'Показать все строки' : 'Только не по правилу'" @click="nameOnlyRows = !nameOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                     <!-- Архив: без выбранных строк — показать архив / вернуться к таблице,
                          с выбранными — убрать их в архив (в архиве — вернуть) -->
                     <button class="btn icon-only" :class="{ active: showArchive }" :disabled="archiveSaving" @click="onArchiveButton" :title="archiveButtonTitle">
@@ -269,7 +276,8 @@
                 <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions"
                     placeholder="Расположение: начни вводить адрес, отделение или кабинет" @pick="onNewComputerLocation"></location-picker>
                 <input ref="nc-seat" class="input ab-seat" v-model="newComputer.seat_no" placeholder="№ места" title="№ Места — только число" @keydown.enter="submitNewComputer">
-                <input ref="nc-hostname" class="input ab-host" v-model="newComputer.hostname" placeholder="HOSTNAME" spellcheck="false" @keydown.enter="submitNewComputer">
+                <input ref="nc-hostname" class="input ab-host" v-model="newComputer.hostname" placeholder="HOSTNAME" spellcheck="false" @keydown.enter="submitNewComputer"
+                    :title="newComputer.hostname && newComputer.hostname === newComputer.autoName ? 'Имя по правилу' : null">
                 <input ref="nc-ip" class="input ab-ip" v-model="newComputer.ip" placeholder="IP" spellcheck="false" @keydown.enter="submitNewComputer">
                 <button class="btn btn-primary icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewComputer" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
@@ -351,6 +359,9 @@
                                     :class="{ open: scanPop && scanPop.row.id === row.id && scanPop.col.field === col.field }"
                                     :style="scanChipStyle(scanCellMark(row, col))" :title="scanChipTitle(scanCellDiff(row, col))"
                                     @mousedown.stop @dblclick.stop @click.stop="openScanPop(row, col, $event)">{{ scanChipText(scanCellDiff(row, col)) }}</button>
+                                <button v-if="nameChip(row, col) && !isEditing(row, col)" type="button" class="scan-chip name-chip"
+                                    :class="{ open: namePop && namePop.row.id === row.id }" :title="nameChipTitle(row)"
+                                    @mousedown.stop @dblclick.stop @click.stop="openNamePop(row, $event)">{{ nameChip(row, col) }}</button>
                                 <template v-if="isEditing(row, col)">
                                     <location-picker v-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
                                         placeholder="Расположение…" @pick="onCellLocationPick(row, $event)" @cancel="cancelEdit"></location-picker>
@@ -467,15 +478,41 @@
         <section v-if="user && view === 'choices'" class="view">
             <div class="toolbar">
                 <div class="tb-left">
-                    <span v-if="!choicesQuery.trim()">Оформление столбцов и значений таблицы</span>
-                    <span v-else class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter — следующий)</template></span>
+                    <!-- Вкладки (этап 35): оформление таблицы и правила имён ПК -->
+                    <nav class="tb-tabs">
+                        <a href="#choices" :class="{ active: choicesTab === 'styles' }" @click="navClick($event, () => setChoicesTab('styles'))" title="Оформление столбцов и значений">Оформление</a>
+                        <a href="#choices/names" :class="{ active: choicesTab === 'names' }" @click="navClick($event, () => setChoicesTab('names'))" title="Правила имён компьютеров">Имена ПК</a>
+                    </nav>
+                    <template v-if="choicesTab === 'styles'">
+                        <span v-if="choicesQuery.trim()" class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter — следующий)</template></span>
+                    </template>
+                    <span v-else class="tb-count">{{ namesCountText }}</span>
                 </div>
-                <span class="tb-search">
+                <span v-if="choicesTab === 'styles'" class="tb-search">
                     <input v-model="choicesQuery" placeholder="Поиск: раздел и значение, например «ЦП 101»" autocomplete="off"
                         @keydown.enter.prevent="nextChoicesBlock" @keydown.esc.prevent="onSearchEsc($event, 'choicesQuery')">
                     <span v-if="choicesQuery" class="clear" title="Очистить (Esc)" @click="choicesQuery = ''">×</span>
                 </span>
+                <span v-else class="tb-search">
+                    <input v-model="namesQuery" placeholder="Поиск: расположение, часть, имя" autocomplete="off"
+                        @keydown.esc.prevent="onSearchEsc($event, 'namesQuery')">
+                    <span v-if="namesQuery" class="clear" title="Очистить (Esc)" @click="namesQuery = ''">×</span>
+                </span>
                 <div class="tb-right">
+                    <template v-if="choicesTab === 'names'">
+                        <!-- Все предложения «по таблице» разом -->
+                        <button v-if="canEdit" class="btn icon-only" :class="{ 'has-badge': nameSuggestions.size > 0 }" :disabled="!nameLearnItems.length || nameSaving" @click="learnAllNames"
+                            :title="nameLearnItems.length ? 'Взять из таблицы' : 'Правила и таблица совпадают'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg><span v-if="nameSuggestions.size && buttonCounts" class="btn-badge">{{ nameSuggestions.size > 99 ? 99 : nameSuggestions.size }}</span></button>
+                        <span class="dropdown-wrap" ref="namingHelpWrap">
+                            <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namingHelp' }" @click="toggleMenu('namingHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+                            <div v-if="openMenu === 'namingHelp'" class="dropdown right attached names-help">
+                                <p>Имя ПК — части узлов по пути через «-» и номер: <b>ter-proc-1</b>.</p>
+                                <p>«Только своя» — без частей выше, «Одно место» — без номера.</p>
+                                <p>«По таблице» — как названы ПК сейчас; клик — взять.</p>
+                            </div>
+                        </span>
+                        <span class="tb-divider"></span>
+                    </template>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
                         <div v-if="openMenu === 'page'" class="dropdown right attached">
@@ -484,7 +521,7 @@
                     </span>
                 </div>
             </div>
-            <div class="page choices-page" :class="{ 'accent-head': accentHeaders.choices }">
+            <div v-if="choicesTab === 'styles'" class="page choices-page" :class="{ 'accent-head': accentHeaders.choices }">
                 <!-- Блок на каждый столбец таблицы, в том же порядке: первая строка —
                      оформление столбца целиком, ниже — значения (из справочника и из данных). -->
                 <div class="st-grid">
@@ -646,6 +683,67 @@
                                 <td><label title="Показывать всегда"><input type="checkbox" :checked="m.always" :disabled="!canEdit || !m.enabled" @change="updateScanMark(m.kind, { always: $event.target.checked })"> Без кнопки</label></td>
                             </tr>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Имена ПК (этап 35): правило — у узлов дерева. Часть вводится прямо в ячейке,
+                 «Имя» меняется сразу; «По таблице» — как названы ПК сейчас (клик — взять) -->
+            <div v-else class="history-page nr-page">
+                <div class="nr-layout">
+                    <div class="users-wrap nr-wrap" @mouseleave="namesHover = null">
+                        <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
+                            <div class="history-scroll" @scroll="namesHover = null">
+                                <table class="history-table users-table nr-table" :class="{ 'accent-head': accentHeaders.choices }">
+                                    <colgroup><col><col class="nrc-part"><col class="nrc-flag"><col class="nrc-flag"><col class="nrc-rule"><col class="nrc-pcs"><col v-if="canEdit" class="nrc-sug"></colgroup>
+                                    <thead>
+                                        <tr><th>Расположение</th><th>Часть</th><th class="nr-c" title="Не добавлять части узлов выше">Только своя</th><th class="nr-c" title="Имя без номера">Одно место</th><th>Имя</th><th class="nr-c">ПК</th><th v-if="canEdit">По таблице</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="!namesRows.length" class="h-empty"><td :colspan="canEdit ? 7 : 6">{{ treeLoading ? "Загрузка…" : (treeRoots.length ? "Ничего не найдено." : "Расположений пока нет.") }}</td></tr>
+                                        <tr v-for="r in namesRows" :key="r.node.id" :data-id="r.node.id" :class="['nr-' + r.node.kind, { 'is-hover': namesHover && namesHover.node.id === r.node.id, 'nr-focus': nameFocusId === r.node.id }]"
+                                            @mouseenter="setNamesHover(r.node, $event.currentTarget)">
+                                            <td class="nr-loc" :style="{ paddingLeft: (8 + r.level * 18) + 'px' }"><svg class="node-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" v-html="kindIcon(r.node.kind)"></svg><span v-if="r.code" class="nr-code">{{ r.code }}</span>{{ r.name }}</td>
+                                            <td class="nr-part"><input class="nr-input" :value="nameDraft && nameDraft.id === r.node.id ? nameDraft.raw : (r.node.name_part || '')" :readonly="!canEdit" maxlength="15" spellcheck="false" autocomplete="off"
+                                                @focus="canEdit && onNamePartFocus(r.node)" @input="onNamePartInput(r.node, $event.target.value)" @keydown="onNamePartKeydown" @blur="finishNamePart(r.node, $event)"></td>
+                                            <td class="nr-c"><input v-if="r.level > 0" type="checkbox" :checked="r.node.name_own" :disabled="!canEdit || nameSaving" @change="toggleNameFlag(r.node, 'own')"></td>
+                                            <td class="nr-c"><input v-if="r.entry.leaf || r.node.name_single" type="checkbox" :checked="r.node.name_single" :disabled="!canEdit || nameSaving" @change="toggleNameFlag(r.node, 'single')"></td>
+                                            <td class="nr-rule" :class="{ head: !r.entry.leaf, long: nameTooLong(r.entry) }" :title="nameRowTitle(r)"><template v-if="r.entry.start">{{ r.entry.start }}<span v-if="!r.entry.leaf" class="nr-n">-…</span><span v-else-if="!r.entry.single" class="nr-n">-N</span></template><span v-else-if="r.entry.leaf" class="nr-none">—</span></td>
+                                            <td class="nr-c nr-pcs"><template v-if="nameNodeStats.get(r.node.id).total">{{ nameNodeStats.get(r.node.id).total }}</template><a v-if="nameNodeStats.get(r.node.id).bad" class="nr-bad" :href="pageHref('table', { loc: r.node.id })" title="Не по правилу — показать в таблице"
+                                                @click="navClick($event, () => showNamesInTable(r.node, true))">{{ nameNodeStats.get(r.node.id).bad }}</a></td>
+                                            <td v-if="canEdit" class="nr-sug"><button v-if="nameSuggestions.get(r.node.id)" type="button" class="scan-chip nr-chip" :disabled="nameSaving"
+                                                :title="nameSuggestions.get(r.node.id).title + ' — взять'" @click="applyNameSuggestion(r.node)">{{ nameSuggestions.get(r.node.id).text }}</button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div v-if="namesHover" class="tree-actions" :style="{ top: namesHover.top + 'px', height: namesHover.height + 'px' }">
+                            <span class="na-box">
+                                <a class="icon-btn" :href="pageHref('table', { loc: namesHover.node.id })" title="Показать в таблице" @click="navClick($event, () => showNamesInTable(namesHover.node, false))">
+                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.5h12M6 6.5V13"/></svg>
+                                </a>
+                            </span>
+                        </div>
+                    </div>
+                    <!-- ПК со своим именем: не по правилу, и так и надо -->
+                    <div v-if="nameKeepRows.length" class="users-wrap nr-keep-wrap">
+                        <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
+                            <div class="history-scroll">
+                                <table class="history-table users-table nr-keep" :class="{ 'accent-head': accentHeaders.choices }">
+                                    <thead>
+                                        <tr><th>Своё имя</th><th>Расположение</th><th v-if="canEdit" class="nr-c"></th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="k in nameKeepRows" :key="k.row.id">
+                                            <td class="nr-host"><a :href="pageHref('table', { pc: k.row.id })" :title="'Оставил ' + k.by" @click="navClick($event, () => openNameKeepPc(k.row))">{{ k.row.hostname }}</a></td>
+                                            <td class="nr-path" :title="k.path">{{ k.place }}</td>
+                                            <td v-if="canEdit" class="nr-c"><span class="icon-btn danger nr-unkeep" title="Снова по правилу" @click="setNameKeepFor([k.row.id], false)">✕</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1583,6 +1681,25 @@
                         <button class="btn" :disabled="scanPop.busy" @click="scanPopSaveOwn" title="Записать как правильное (Enter)">Записать</button>
                     </div>
                 </template>
+            </div>
+        </teleport>
+
+        <!-- ================= Имя по правилу: что сделать (этап 35) ================= -->
+        <teleport to="body">
+            <div v-if="namePop" ref="namePop" class="scan-pop name-pop" :class="{ placed: namePop.placed }" :style="{ left: namePop.left + 'px', top: namePop.top + 'px' }">
+                <div class="sp-head">
+                    <span class="sp-title" :title="namePop.path">HOSTNAME<span class="sp-host">{{ namePop.place }}</span></span>
+                    <span class="sp-close" title="Закрыть (Esc)" @mousedown.stop @click="closeNamePop">✕</span>
+                </div>
+                <table class="sp-values">
+                    <tr><td class="sp-label">В таблице</td><td class="sp-v"><span v-if="namePop.row.hostname">{{ namePop.row.hostname }}</span><span v-else class="sp-empty">пусто</span></td></tr>
+                    <tr><td class="sp-label">По правилу</td><td class="sp-v"><span class="scan-chip name-chip">{{ namePop.check.expected }}</span></td></tr>
+                </table>
+                <div class="sp-why">Правило: <a href="#choices/names" class="np-rule" title="Изменить правило" @click.prevent="namePopRule">{{ nameRuleText(namePop.check.entry) }}</a></div>
+                <div v-if="canEdit" class="sp-actions">
+                    <button class="btn btn-primary" :disabled="namePop.busy" @click="namePopRename">Переименовать</button>
+                    <button class="btn" :disabled="namePop.busy || !namePop.row.hostname" :title="namePop.row.hostname ? 'Это имя не по правилу — так и надо' : 'Имени нет'" @click="namePopKeep">Оставить своё</button>
+                </div>
             </div>
         </teleport>
 

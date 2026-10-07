@@ -14,6 +14,7 @@ from api_export import router as export_router
 from api_history import router as history_router
 from api_import import router as import_router
 from api_locations import router as locations_router
+from api_naming import router as naming_router
 from auth import get_current_user
 from db import engine
 from import_apply import router as import_apply_router
@@ -147,6 +148,12 @@ app.include_router(
 
 app.include_router(
     columns_router,
+    dependencies=[Depends(get_current_user)],
+)
+
+# Правила имён ПК (этап 35): смотреть — все, менять — редактор и администратор
+app.include_router(
+    naming_router,
     dependencies=[Depends(get_current_user)],
 )
 

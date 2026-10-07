@@ -154,6 +154,10 @@ export default {
                 this.loadAvSettings();
                 this.loadTableMarks();
                 this.loadAppSettings();
+                if (this.choicesTab === "names") {
+                    this.ensureTree();
+                    this.loadNameKeep();
+                }
             } else if (view === "users") {
                 this.loadUsers();
             } else if (view === "vacuum") {
