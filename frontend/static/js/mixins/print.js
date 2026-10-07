@@ -21,6 +21,15 @@ const PX_PER_MM = 96 / 25.4;
 const FONT_PX = 12;
 // Запас ширины: чтобы текст на бумаге не упёрся в край столбца
 const FONT_SAFE = 0.985;
+// Отступ ячейки слева и справа: на экране 6px, на листе меньше — столбцы уже, текст крупнее
+const SCREEN_PAD = 6;
+const PRINT_PAD = 3;
+const MIN_COL = 16;
+
+// Ширина столбца на листе (до уменьшения по ширине листа)
+function printWidth(col) {
+    return Math.max(MIN_COL, col.width - 2 * (SCREEN_PAD - PRINT_PAD));
+}
 
 function esc(text) {
     return String(text === null || text === undefined ? "" : text)
@@ -64,10 +73,6 @@ function rgbOf(value) {
     }
     colorCache.set(value, result);
     return result;
-}
-
-function luma(rgb) {
-    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
 }
 
 function cssRgb(rgb) {
@@ -207,20 +212,13 @@ export default {
         // ---------- Лист ----------
 
         // Оформление значения для листа: цвета — числами (переменные программы в
-        // листе не действуют), ч/б — фон оттенком серого, текст чёрным (на тёмном
-        // фоне — белым); зачёркивание — по настройке. under — фон под значением
-        printStyle(style, opt, under) {
+        // листе не действуют). Ч/б — без фона и цвета: чёрный текст на белом (серое
+        // на сером на бумаге не читается); жирный, курсив, зачёркивание остаются.
+        // Зачёркивание — по настройке
+        printStyle(style, opt) {
             const out = [];
-            let bg = style ? rgbOf(style.backgroundColor) : null;
-            let fg = style ? rgbOf(style.color) : null;
-            if (opt.bw) {
-                if (bg) {
-                    const g = Math.round(luma(bg));
-                    bg = [g, g, g];
-                }
-                const base = bg || under;
-                fg = base && luma(base) < 128 ? [255, 255, 255] : (fg || bg ? [0, 0, 0] : null);
-            }
+            const bg = style && !opt.bw ? rgbOf(style.backgroundColor) : null;
+            const fg = style && !opt.bw ? rgbOf(style.color) : null;
             if (bg) {
                 out.push("background-color:" + cssRgb(bg));
             }
@@ -256,9 +254,9 @@ export default {
                 backgroundColor: this.cellFillOf(row, col),
                 fontWeight: col.bold || (look && look.bold) ? "700" : null,
                 fontStyle: look && look.italic ? "italic" : null
-            }, opt, null);
+            }, opt);
             const line = (text, style) => {
-                const st = this.printStyle(style, opt, td.bg);
+                const st = this.printStyle(style, opt);
                 return "<span class=\"l" + (st.bg ? " chip" : "") + "\"" + (st.css ? " style=\"" + st.css + "\"" : "") + ">" + esc(text) + "</span>";
             };
             let html = "";
@@ -270,7 +268,7 @@ export default {
             } else {
                 const value = row[col.field];
                 if (value !== null && value !== undefined && value !== "") {
-                    const st = this.printStyle(this.cellTextStyle(row, col), opt, td.bg);
+                    const st = this.printStyle(this.cellTextStyle(row, col), opt);
                     html = "<span class=\"" + (col.note ? "n" : "t") + "\"" + (st.css ? " style=\"" + st.css + "\"" : "") + ">" + esc(value) + "</span>";
                 }
             }
@@ -288,7 +286,7 @@ export default {
             const paperH = dlg.landscape ? size[0] : size[1];
             const marginCm = parseMargin(dlg.margin);
             const margin = (marginCm === null ? parseMargin(DEFAULTS.margin) : marginCm) * 10;
-            const total = cols.reduce(function (sum, col) { return sum + col.width; }, 0) + 1;
+            const total = cols.reduce(function (sum, col) { return sum + printWidth(col); }, 0) + 1;
             const avail = Math.max(50, Math.floor((paperW - 2 * margin) * PX_PER_MM) - 2);
             const scale = Math.min(1, avail / total);
             dlg.scale = scale;
@@ -304,20 +302,24 @@ export default {
                 "table{border-collapse:collapse;table-layout:fixed;width:" + (total * scale).toFixed(2) + "px}",
                 "thead{display:" + (dlg.headers ? "table-header-group" : "table-row-group") + "}",
                 "tr{break-inside:avoid;page-break-inside:avoid}",
-                "th,td{border:1px solid " + grid + ";padding:.22em .5em;overflow:hidden;vertical-align:middle;text-align:left;font-weight:400}",
+                "th,td{border:1px solid " + grid + ";padding:.1em " + (PRINT_PAD / FONT_PX) + "em;overflow:hidden;vertical-align:middle;text-align:left;font-weight:400}",
                 "th{background:" + headBg + ";border-color:" + headLine + ";font-weight:600;text-align:center;white-space:nowrap}",
                 "td.c{text-align:center}",
                 // Перенос — как на экране: узкий столбец значение переносит, а не режет
                 ".l,.t,.n{white-space:pre-wrap;overflow-wrap:break-word}",
                 ".l{display:block}",
-                ".l.chip{display:table;border-radius:3px;padding:0 .42em;margin:0 -.42em}",
-                "td.c .l.chip{margin:0 auto}",
+                // Блочок — как на экране: его край там же, где начинается обычный текст,
+                // текст в нём сдвинут вправо. Не display:table — у него отступ не действует
+                // (border-collapse наследуется от таблицы листа)
+                ".l.chip{width:fit-content;max-width:100%;box-sizing:border-box;border-radius:3px;padding:0 .42em}",
+                ".l.chip+.l.chip{margin-top:1px}",
+                "td.c .l.chip{margin-left:auto;margin-right:auto}",
                 "@media screen{html{background:#8f8f8f}body{padding:14px}" +
                     ".sheet{box-sizing:border-box;width:" + paperW + "mm;min-height:" + paperH + "mm;padding:" + margin + "mm;margin:0 auto;" +
                     "background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}}"
             ].join("\n");
             const head = cols.map(function (col) { return "<th>" + esc(col.headerName) + "</th>"; }).join("");
-            const widths = cols.map(function (col) { return "<col style=\"width:" + (col.width * scale).toFixed(2) + "px\">"; }).join("");
+            const widths = cols.map(function (col) { return "<col style=\"width:" + (printWidth(col) * scale).toFixed(2) + "px\">"; }).join("");
             const body = dlg.rows.map((row) => {
                 return "<tr>" + cols.map((col) => this.printCell(row, col, opt)).join("") + "</tr>";
             }).join("\n");
