@@ -96,6 +96,9 @@
     --saved-bg: #d5efd5;
     --sticky-shadow: 3px 0 4px rgba(0, 0, 0, 0.12);
     --host-color: #0645ad;
+    /* Перетаскивание столбца: призрак столбца за курсором */
+    --col-drag-tint: rgba(0, 0, 0, 0.05);
+    --col-drag-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
 
     /* Общие */
     --text: #222;
@@ -5429,4 +5432,45 @@ html.no-radius .tm-sample.chip {
    каждого закреплённого столбца сверху тень цветом схемы. Только в шапке */
 html.ctrl-down .data-table thead:hover th.sticky {
     background-image: linear-gradient(to bottom, color-mix(in srgb, var(--brand-dark) 75%, transparent), color-mix(in srgb, var(--brand) 28%, transparent) 4px, transparent 9px);
+}
+
+/* Порядок столбцов — перетаскивание шапки (mixins/col-order.js): столбец «в руке» —
+   полупрозрачный призрак за курсором, его шапка в таблице приглушена; куда встанет —
+   линия цвета схемы между столбцами */
+html.col-dragging,
+html.col-dragging * {
+    cursor: grabbing !important;
+}
+.data-table th.col-drag-src {
+    background: var(--grid-head-sorted-bg);
+    color: var(--text-muted);
+}
+.col-drag-ghost {
+    position: fixed;
+    z-index: 300;
+    box-sizing: border-box;
+    pointer-events: none;
+    border: 1px solid var(--frame-gray);
+    background: var(--col-drag-tint);
+    box-shadow: var(--col-drag-shadow);
+}
+.col-drag-ghost .cdg-head {
+    box-sizing: border-box;
+    padding: 0 6px;
+    background: var(--grid-head-sorted-bg);
+    box-shadow: inset 0 -1px 0 var(--grid-head-line-h);
+    color: var(--grid-head-text);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.col-drop-mark {
+    position: fixed;
+    z-index: 301;
+    width: 2px;
+    pointer-events: none;
+    background: var(--brand);
 }

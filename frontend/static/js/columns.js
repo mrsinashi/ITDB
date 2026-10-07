@@ -252,6 +252,9 @@ export const HIDDEN_COLUMNS2_KEY = "itdb.hiddenColumns2.v1";
 // масштаб таблицы по ширине окна (кнопка на панели)
 export const PINNED_COLUMNS_KEY = "itdb.pinnedColumns.v1";
 export const TABLE_FIT_KEY = "itdb.tableFit.v1";
+// Порядок столбцов (перетаскивание шапки) — у каждого вида свой; нет записи — как с сервера
+export const COLUMN_ORDER_KEY = "itdb.columnOrder.v1";
+export const COLUMN_ORDER2_KEY = "itdb.columnOrder2.v1";
 export const ROOM_PARTS = ["room_code", "room_name"];
 export const ROOM_COLUMN = {
     field: "room", headerName: "Кабинет", cardLabel: "Кабинет",
@@ -271,6 +274,25 @@ export function mergeRoomHidden(list) {
     const rest = hidden.filter(function (field) { return ROOM_PARTS.indexOf(field) === -1; });
     const both = ROOM_PARTS.every(function (field) { return hidden.indexOf(field) !== -1; });
     return both && rest.indexOf(ROOM_COLUMN.field) === -1 ? rest.concat([ROOM_COLUMN.field]) : rest;
+}
+
+// Столбцы в сохранённом порядке (список полей). Столбца нет в списке (новое польз.
+// поле, новый встроенный) — встаёт за тем, за кем стоит по умолчанию
+export function orderColumns(cols, order) {
+    const byField = new Map(cols.map(function (col) { return [col.field, col]; }));
+    const result = [];
+    order.forEach(function (field) {
+        const col = byField.get(field);
+        if (col && result.indexOf(col) === -1) {
+            result.push(col);
+        }
+    });
+    cols.forEach(function (col, i) {
+        if (result.indexOf(col) === -1) {
+            result.splice(i ? result.indexOf(cols[i - 1]) + 1 : 0, 0, col);
+        }
+    });
+    return result;
 }
 
 export function roomText(row) {

@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
 import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, setCtrlDown } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, orderColumns, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
@@ -45,9 +45,9 @@ export default {
             return statusIndex >= 0 ? base.slice(0, statusIndex).concat(extra).concat(base.slice(statusIndex)) : base.concat(extra);
         },
 
-        // Все столбцы Таблицы (и скрытые) — для меню «Столбцы». «Каб» и «Кабинет» —
+        // Все столбцы Таблицы (и скрытые) в порядке по умолчанию. «Каб» и «Кабинет» —
         // одним столбцом «Кабинет» («[214] Процедурная») в обоих видах (28в)
-        allColumns() {
+        defaultColumns() {
             const self = this;
             const all = this.baseColumns;
             const manual = self.manualWidths[ROOM_COLUMN.field];
@@ -60,6 +60,14 @@ export default {
                     result.push(room);
                 }
             });
+            return result;
+        },
+
+        // Все столбцы Таблицы (и скрытые) — для меню «Столбцы»: в порядке текущего вида
+        // (перетаскивание шапки, mixins/col-order.js)
+        allColumns() {
+            const order = this.columnOrderNow;
+            const result = order ? orderColumns(this.defaultColumns, order) : this.defaultColumns.slice();
             // Закрепление своё (Ctrl+клик по шапке) — вместо заданного в описании столбцов
             const pinned = this.pinnedColumns;
             if (pinned) {
@@ -312,8 +320,12 @@ export default {
             this.tableLoading = false;
         },
 
-        // Клик по шапке — сортировка, с Ctrl — закрепить столбец / снять закрепление
+        // Клик по шапке — сортировка, с Ctrl — закрепить столбец / снять закрепление.
+        // Столбец только что перетаскивали — это не клик
         onHeadClick(event, col) {
+            if (this.colDragDone) {
+                return;
+            }
             if (event.ctrlKey || event.metaKey) {
                 this.togglePin(col);
             } else {

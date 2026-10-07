@@ -23,7 +23,8 @@
 //                        scan-net (вкладка «Сеть»: что собрали DHCP и проход подсетей),
 //                        nav (адреса страниц, Ctrl+Z / Ctrl+Y),
 //                        vnc (подключение к ПК через внешнее приложение, itdb://vnc/…),
-//                        print (печать Таблицы: окно с настройками и листом)
+//                        print (печать Таблицы: окно с настройками и листом),
+//                        table-fit (масштаб по ширине окна), col-order (порядок столбцов перетаскиванием)
 //   route.js           — адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        — tree-node, tree-form, style-controls, location-picker, count-select
 //
@@ -31,7 +32,7 @@
 
 import "./settings.js";
 import { loadJson } from "./util.js";
-import { HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN_KEY, TABLE_FIT_KEY, TABLE_VIEW_KEY, mergeRoomHidden } from "./columns.js";
+import { COLUMN_ORDER_KEY, COLUMN_ORDER2_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN_KEY, TABLE_FIT_KEY, TABLE_VIEW_KEY, mergeRoomHidden } from "./columns.js";
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
 import "./alt-copy.js";
@@ -60,6 +61,7 @@ import nav from "./mixins/nav.js";
 import vnc from "./mixins/vnc.js";
 import print from "./mixins/print.js";
 import tableFit from "./mixins/table-fit.js";
+import colOrder from "./mixins/col-order.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -68,7 +70,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -123,6 +125,9 @@ const app = Vue.createApp({
             stuckEdge: null,
             // Закреплённые столбцы: список полей; null — как в описании столбцов (HOSTNAME, IP)
             pinnedColumns: loadJson(PINNED_COLUMNS_KEY, null),
+            // Порядок столбцов основного и второго вида: список полей; null — как с сервера
+            columnOrder: loadJson(COLUMN_ORDER_KEY, null),
+            columnOrder2: loadJson(COLUMN_ORDER2_KEY, null),
             // Масштаб таблицы по ширине окна: включён ли, сам масштаб и отступ слева
             tableFit: loadJson(TABLE_FIT_KEY, false) === true,
             tableZoom: 1,

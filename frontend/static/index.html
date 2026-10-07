@@ -213,6 +213,7 @@
                                 Искать и в скрытых столбцах
                             </label>
                             <button @click="showAllColumns" :disabled="hiddenColumnCount === 0">Показать все</button>
+                            <button @click="resetColumnOrder" :disabled="!columnOrderChanged">Исходный порядок</button>
                         </div>
                     </span>
                     <span class="tb-divider"></span>
@@ -323,7 +324,7 @@
                             <th v-for="col in columns" :key="'th-' + col.field" :data-field="col.field"
                                 :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field }"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
-                                @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
+                                @mousedown="onHeadMouseDown($event, col)" @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
                                 <!-- Подпись по центру; справа всегда место под воронку: не хватает — подпись левее -->
                                 <span class="th-in"><span class="th-pad"></span><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
                                 <span class="th-filter" :class="{ on: isColFiltered(col.field) }" :title="isColFiltered(col.field) ? 'Изменить фильтр' : 'Фильтр'" @click.stop="openColFilter(col, $event)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
