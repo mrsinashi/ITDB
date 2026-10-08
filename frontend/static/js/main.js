@@ -228,7 +228,7 @@ const app = Vue.createApp({
                 data: null,      // { glpi, gsit } – ответы /api/scan/records
                 loading: false,
                 error: "",
-                filter: "todo",  // todo / unknown / diff / ok / none / rejected / all
+                filter: "all",   // all / todo / unknown / diff / ok / none / rejected
                 fields: [],      // «Фильтр»: только строки с предложениями по этим полям
                 pair: null,      // «ещё у N ПК»: { field, table, raw }
                 open: null,      // ключ раскрытой строки (одна)
@@ -273,6 +273,7 @@ const app = Vue.createApp({
                 jabber: {},         // кого Jabber видит с адреса ПК: id ПК → логины
                 net: {},            // что о ПК видно в сети (DHCP, проход подсетей): id ПК → { ip, mac, hostname }
                 verified: {},       // ПК, проверенные и GLPI / GSIT, и сетью: id ПК → чем
+                checked: {},        // …проверенные одним из них (этап 38)
                 loading: false,
                 error: "",
             },

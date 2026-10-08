@@ -1,5 +1,6 @@
 // Выделения значений в Таблице (этап 26к): повтор, имя на ПК другое (по сканеру),
-// логина нет в Jabber, логин давно не подключался, срок прошёл. Вид каждого –
+// логина нет в Jabber, логин давно не подключался, срок прошёл, ПК проверен (этапы 28б,
+// 38: и сетью, и GLPI / GSIT или одним способом). Вид каждого –
 // в Справочниках («Выделения в Таблице», GET / PATCH /api/table-marks); фон – всегда
 // блочком у самого значения. Выделение кладётся поверх оформления из Справочников.
 
@@ -7,8 +8,8 @@ import { apiFetch } from "../util.js";
 import { decoration } from "../columns.js";
 
 // Порядок наложения, если у значения несколько выделений: следующее поверх
-const MARK_ORDER = ["verified", "dup", "stale", "gone", "hostname", "overdue"];
-const SAMPLES = { dup: "10.0.2.11", hostname: "ter-201-1", gone: "ivanov", stale: "petrova", overdue: "01.09.2026", verified: "ter-201-2" };
+const MARK_ORDER = ["checked", "verified", "dup", "stale", "gone", "hostname", "overdue"];
+const SAMPLES = { dup: "10.0.2.11", hostname: "ter-201-1", gone: "ivanov", stale: "petrova", overdue: "01.09.2026", verified: "ter-201-2", checked: "ter-201-3" };
 // Пока настройки не загружены – вид по умолчанию (как на сервере)
 const DEFAULTS = [
     { kind: "dup", label: "Повтор", bg_color: "#ffd6d6", chip: true },
@@ -16,7 +17,8 @@ const DEFAULTS = [
     { kind: "gone", label: "Нет в Jabber", color: "#cc0000", bold: true },
     { kind: "stale", label: "Давно не подключался", color: "#b35c00", bold: true },
     { kind: "overdue", label: "Срок прошёл", color: "#cc0000", bold: true },
-    { kind: "verified", label: "Проверен сетью и GLPI / GSIT" }
+    { kind: "verified", label: "Проверен сетью и GLPI / GSIT" },
+    { kind: "checked", label: "Проверен одним способом", bg_color: "#e3f1e3", chip: true }
 ];
 
 export default {

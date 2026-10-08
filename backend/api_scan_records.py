@@ -279,11 +279,10 @@ def links_for(session, kind, source_id):
     return session.query(ScanLink).filter(ScanLink.source == kind, ScanLink.source_id == source_id).all()
 
 
-@router.post("/records/{kind}/{source_id}/link")
-def link_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_admin), session=Depends(get_db)):
-    """«Это этот ПК»: запись сопоставляется с ним, что бы ни говорили признаки."""
-    record = load_record(session, kind, source_id)
-    computer = load_computer(session, payload.computer_id)
+def save_link(session, me, kind, record, computer):
+    """«Это этот ПК»: запись сопоставляется с ним, что бы ни говорили признаки
+    (и из Таблицы – «Привязать», этап 38)."""
+    source_id = record.source_id
 
     if computer.archived:
         raise HTTPException(status_code=400, detail=f"{host_of(computer)} в архиве: сначала верни его из архива.")
@@ -304,15 +303,11 @@ def link_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(requi
         title=record.name, user_name=me["login"],
     ))
     log_decision(session, kind, record, me, {"link": {"old": old, "new": host_of(computer)}})
-    session.commit()
-    return {"ok": True}
 
 
-@router.post("/records/{kind}/{source_id}/reject")
-def reject_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_admin), session=Depends(get_db)):
+def save_reject(session, me, kind, record, computer):
     """«Это не этот ПК»: его больше не предлагать для этой записи."""
-    record = load_record(session, kind, source_id)
-    computer = load_computer(session, payload.computer_id)
+    source_id = record.source_id
 
     for link in links_for(session, kind, source_id):
         if link.computer_id == computer.id:
@@ -324,6 +319,20 @@ def reject_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(req
         title=record.name, user_name=me["login"],
     ))
     log_decision(session, kind, record, me, {"reject": {"old": None, "new": host_of(computer)}})
+
+
+@router.post("/records/{kind}/{source_id}/link")
+def link_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_admin), session=Depends(get_db)):
+    """«Это этот ПК» (save_link)."""
+    save_link(session, me, kind, load_record(session, kind, source_id), load_computer(session, payload.computer_id))
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/records/{kind}/{source_id}/reject")
+def reject_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_admin), session=Depends(get_db)):
+    """«Это не этот ПК» (save_reject)."""
+    save_reject(session, me, kind, load_record(session, kind, source_id), load_computer(session, payload.computer_id))
     session.commit()
     return {"ok": True}
 

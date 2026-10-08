@@ -673,8 +673,8 @@ def test_diffs_unsure_and_partial(admin, editor, room, glpi_url):
 
 def test_marks_settings(admin, editor, reader):
     marks = ok(reader.get("/api/scan/marks"))
-    assert [m["kind"] for m in marks] == ["diff", "fill", "unsure", "partial"]
-    assert marks[0]["label"] == "Замена" and marks[3]["enabled"] is False
+    assert [m["kind"] for m in marks] == ["diff", "fill", "unsure", "partial", "link"]
+    assert marks[0]["label"] == "Замена" and marks[3]["enabled"] is False and marks[4]["label"] == "Привязка записи"
 
     assert reader.patch("/api/scan/marks/diff", json={"bold": True}).status_code == 403
     assert editor.patch("/api/scan/marks/diff", json={"color": "red"}).status_code == 400

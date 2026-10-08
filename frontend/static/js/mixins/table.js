@@ -99,7 +99,7 @@ export default {
         },
 
         // Столбцы на экране: видимые и при кнопке «Имена по правилам» – «По правилу»
-        // слева от HOSTNAME (этап 36; закреплён, если закреплён HOSTNAME). Его нет в
+        // справа от HOSTNAME (этапы 36, 38; закреплён, если закреплён HOSTNAME). Его нет в
         // меню «Столбцы», печати, порядке; не сортируется, не фильтруется, не правится
         viewColumns() {
             const cols = this.columns;
@@ -114,7 +114,7 @@ export default {
                 width: manual !== undefined ? manual : (this.autoWidths[NAME_RULE_COLUMN.field] || 100)
             });
             const list = cols.slice();
-            list.splice(Math.max(at, 0), 0, rule);
+            list.splice(at + 1, 0, rule);
             return list;
         },
 
@@ -580,7 +580,8 @@ export default {
                 if (kinds.length || href || chip) {
                     special = true;
                 }
-                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", m.verified ? "Проверен: " + m.verified.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                const checked = m.verified || m.checked;
+                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", checked ? "Проверен: " + checked.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
                 const style = Object.assign({}, chip ? {
                     backgroundColor: look.bg_color,
                     color: look.color,
@@ -618,6 +619,7 @@ export default {
             let stale;
             let host = null;
             let verified = null;
+            let checked = null;
             if (col.field === "vacuum") {
                 const login = String(line).trim().toLowerCase();
                 gone = this.vacuumMissingSet.has(login);
@@ -626,10 +628,11 @@ export default {
                 }
             } else if (col.field === "hostname") {
                 host = this.wrongHostname(row.id);
-                // Проверен и GLPI / GSIT, и сетью (чем именно – в подсказке)
+                // Проверен и GLPI / GSIT, и сетью или одним из них (этап 38; чем – в подсказке)
                 verified = host ? null : (this.diffs.verified[row.id] || null);
+                checked = host || verified ? null : (this.diffs.checked[row.id] || null);
             }
-            return dup || gone || stale !== undefined || host || overdue || verified ? { dup: dup, gone: gone, stale: stale, host: host, overdue: overdue, verified: verified } : null;
+            return dup || gone || stale !== undefined || host || overdue || verified || checked ? { dup: dup, gone: gone, stale: stale, host: host, overdue: overdue, verified: verified, checked: checked } : null;
         },
 
         // Виды выделений (как в Справочниках) по итогу lineMarks
@@ -637,13 +640,14 @@ export default {
             if (!m) {
                 return [];
             }
-            return [m.verified ? "verified" : "", m.dup ? "dup" : "", m.host ? "hostname" : "", m.gone ? "gone" : "", m.stale !== undefined ? "stale" : "", m.overdue ? "overdue" : ""].filter(Boolean);
+            return [m.checked ? "checked" : "", m.verified ? "verified" : "", m.dup ? "dup" : "", m.host ? "hostname" : "", m.gone ? "gone" : "", m.stale !== undefined ? "stale" : "", m.overdue ? "overdue" : ""].filter(Boolean);
         },
 
-        // Имя этого ПК по сканеру другое (и «оставить как есть» не нажато) – это имя; иначе null
+        // Имя этого ПК по сканеру другое (и «оставить как есть» не нажато) – это имя и откуда
+        // («pc-7 · GLPI №12»); иначе null
         wrongHostname(computerId) {
             const d = (this.diffIndex.get(computerId) || {}).hostname;
-            return d && d.can_take === false ? String(d.proposed || "").split("\n")[0] : null;
+            return d && d.can_take === false ? String(d.proposed || "").split("\n")[0] + " · " + this.diffSourceShort(d) : null;
         },
 
         vacuumMarkTitle(m) {

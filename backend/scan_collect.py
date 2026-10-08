@@ -340,10 +340,11 @@ def save_jabber(session, run, items, keep_groups=False, users_ok=False):
 
 def computers_for_match(session):
     rows = session.query(
-        Computer.id, Computer.hostname, Computer.mac, Computer.serial, Computer.glpi_id, Computer.gsit_id, Computer.archived,
+        Computer.id, Computer.hostname, Computer.ip, Computer.mac, Computer.serial, Computer.glpi_id, Computer.gsit_id,
+        Computer.archived,
     ).all()
     return [
-        {"id": r.id, "hostname": r.hostname, "mac": r.mac, "serial": r.serial, "glpi_id": r.glpi_id,
+        {"id": r.id, "hostname": r.hostname, "ip": r.ip, "mac": r.mac, "serial": r.serial, "glpi_id": r.glpi_id,
          "gsit_id": r.gsit_id, "archived": r.archived}
         for r in rows
     ]
@@ -358,7 +359,7 @@ def match(session, kind, records=None):
     данным таблицы и решениям администратора. ({source_id: итог}, Index)."""
     if records is None:
         records = [
-            {"source_id": r.source_id, "name": r.name, "keys": r.keys or {}, "dup_of": r.dup_of}
+            {"source_id": r.source_id, "name": r.name, "keys": r.keys or {}, "dup_of": r.dup_of, "data": r.data}
             for r in session.query(ScanRecord).filter(ScanRecord.source == kind)
         ]
 

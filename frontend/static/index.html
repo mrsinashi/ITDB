@@ -234,7 +234,7 @@
                     </span>
                     <!-- Только строки с предложениями: значок без кнопки, есть только при включённой кнопке -->
                     <span v-if="scanOverlay" class="scan-only" :class="{ on: scanOnlyRows }" :title="scanOnlyRows ? 'Показать все строки' : 'Только строки с предложениями'" @click="scanOnlyRows = !scanOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
-                    <!-- Имена по правилам (этапы 35, 36): слева от HOSTNAME – столбец «По правилу» с именем у ПК, названных иначе -->
+                    <!-- Имена по правилам (этапы 35, 36, 38): справа от HOSTNAME – столбец «По правилу» с именем у ПК, названных иначе -->
                     <button class="btn icon-only" :class="{ active: nameCheck, 'has-badge': nameCheck && nameBadCount > 0 }" @click="toggleNameCheck"
                         :title="nameCheck ? 'Не по правилу: ' + nameBadCount : 'Имена по правилам'">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg><span v-if="nameCheck && nameBadCount > 0 && buttonCounts" class="btn-badge">{{ nameBadBadge }}</span>
@@ -1706,7 +1706,7 @@
 
         <!-- ================= Значение сканера: что сделать (этап 26в) ================= -->
         <teleport to="body">
-            <div v-if="scanPop" ref="scanPop" class="scan-pop" :class="{ placed: scanPop.placed }" :style="{ left: scanPop.left + 'px', top: scanPop.top + 'px' }"
+            <div v-if="scanPop" ref="scanPop" class="scan-pop" :class="{ placed: scanPop.placed, 'link-pop': scanPop.d.kind === 'link' }" :style="{ left: scanPop.left + 'px', top: scanPop.top + 'px' }"
 >
                 <div class="sp-head" @mousedown.prevent="startScanPopDrag">
                     <span class="sp-title">{{ scanPop.col.headerName }}<span class="sp-host">{{ scanPop.row.hostname || "" }}</span></span>
@@ -1716,9 +1716,23 @@
                     <tr><td class="sp-label">В таблице</td><td class="sp-v"><span v-if="scanPop.d.table">{{ scanPop.d.table }}</span><span v-else class="sp-empty">пусто</span></td></tr>
                     <tr><td class="sp-label">Сканер</td><td class="sp-v"><span class="scan-chip" :style="scanChipStyle(scanMarkByKind[scanPop.d.kind] || {})">{{ scanChipText(scanPop.d) }}</span><span v-if="scanPop.d.proposed && scanPop.d.raw !== scanPop.d.proposed" class="sp-raw">в источнике: {{ scanPop.d.raw.split("\n").join(", ") }}</span></td></tr>
                 </table>
+                <!-- «Привязать?» (этап 38): запись и этот ПК по полям -->
+                <table v-if="scanPop.d.kind === 'link' && scanPop.d.compare.length" class="sp-compare">
+                    <tr><th></th><th>В таблице</th><th></th><th>{{ diffSourceShort(scanPop.d) }}</th></tr>
+                    <tr v-for="c in scanPop.d.compare" :key="c.field" :class="{ same: c.mark === '=' }">
+                        <td class="sp-label">{{ diffFieldLabel(c.field) }}</td>
+                        <td class="sp-v"><span v-if="c.table">{{ c.table }}</span><span v-else class="sp-empty">пусто</span></td>
+                        <td class="sp-mark" :class="{ ne: c.mark === '≠' }" :title="linkCompareTitle(c)">{{ c.mark }}</td>
+                        <td class="sp-v"><span v-if="c.source">{{ c.source }}</span><span v-else class="sp-empty">пусто</span></td>
+                    </tr>
+                </table>
                 <div class="sp-why"><span class="sp-from">{{ diffSourceShort(scanPop.d) }}</span><span v-for="(t, ti) in diffTrust(scanPop.d)" :key="ti" :class="{ bad: t.bad }"> · {{ t.text }}</span></div>
                 <div v-if="!scanPop.d.can_take" class="sp-info">Имя на ПК другое.</div>
-                <template v-if="canEdit">
+                <div v-if="canEdit && scanPop.d.kind === 'link'" class="sp-actions sp-last">
+                    <button class="btn btn-primary" :disabled="scanPop.busy" title="Это этот ПК: номер – в столбец, сканер предложит остальное" @click="scanPopLink(true)">Привязать</button>
+                    <button class="btn" :disabled="scanPop.busy" title="Больше не предлагать этому ПК" @click="scanPopLink(false)">Не этот ПК</button>
+                </div>
+                <template v-else-if="canEdit">
                     <div class="sp-actions">
                         <!-- VACUUM: дописать к тем, кто в ячейке, или заменить их (этап 31) -->
                         <template v-if="scanPop.d.can_take && scanPop.d.replace">
@@ -1804,9 +1818,9 @@
                                         <span class="scan-chip" :style="scanChipStyle(scanMarkByKind[cardScanDiff(r).kind] || {})">{{ scanChipText(cardScanDiff(r)) }}</span>
                                         <span class="cs-src">{{ diffSourceShort(cardScanDiff(r)) }}<template v-if="cardScanDiff(r).kind === 'unsure'"> · <span class="cs-unsure">неточно</span></template></span>
                                         <template v-if="canEdit">
-                                            <svg v-if="cardScanDiff(r).can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)])"><title>{{ cardScanDiff(r).replace ? "Добавить" : "Взять из сканера" }}</title><path d="M20 6 9 17l-5-5"/></svg>
+                                            <svg v-if="cardScanDiff(r).can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)])"><title>{{ cardScanDiff(r).kind === "link" ? "Привязать" : cardScanDiff(r).replace ? "Добавить" : "Взять из сканера" }}</title><path d="M20 6 9 17l-5-5"/></svg>
                                             <svg v-if="cardScanDiff(r).can_take && cardScanDiff(r).replace" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)], true)"><title>Заменить: {{ cardScanDiff(r).replace.split("\n").join(", ") }}</title><path d="M14 4a2 2 0 0 1 2-2"/><path d="M16 10a2 2 0 0 1-2-2"/><path d="M20 2a2 2 0 0 1 2 2"/><path d="M22 8a2 2 0 0 1-2 2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a3 3 0 0 1 3-3h1"/><rect x="2" y="14" width="8" height="8" rx="2"/></svg>
-                                            <svg class="act-ico act-no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="rejectDiffs([cardScanDiff(r)])"><title>Оставить как есть</title><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                            <svg class="act-ico act-no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="rejectDiffs([cardScanDiff(r)])"><title>{{ cardScanDiff(r).kind === "link" ? "Не этот ПК" : "Оставить как есть" }}</title><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                         </template>
                                     </div>
                                 </td>

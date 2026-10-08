@@ -11,6 +11,8 @@
     --brand-rgb: 138, 40, 40;       /* для полупрозрачных подсветок */
     --brand-accent: #A73636;        /* линия режима правки, значки */
     --brand-focus: #b98080;         /* рамка поля в фокусе */
+    --cb-brand-hover: #7d2828;       /* флажок цвета схемы без «Закруглений»: под курсором */
+    --cb-brand-press: #c64f4f;       /* …и в момент нажатия (как у Chrome) */
 
     /* Серые плоскости: шапки, группы, подписи – одна шкала для всех разделов */
     --gray-head: #f0f0f0;           /* шапка таблиц и панель (как у главной таблицы) */
@@ -132,6 +134,8 @@ html[data-theme="green"] {
     --brand-rgb: 46, 94, 62;
     --brand-accent: #417B54;
     --brand-focus: #7fa98c;
+    --cb-brand-hover: #2e563b;
+    --cb-brand-press: #54a06d;
     --nav-bg: #2e5e3e;
     --nav-hover-bg: #3a6c4a;
     --nav-active-bg: #4a7d5a;
@@ -143,6 +147,8 @@ html[data-theme="blue"] {
     --brand-rgb: 35, 61, 102;
     --brand-accent: #345485;
     --brand-focus: #7890b8;
+    --cb-brand-hover: #243b5d;
+    --cb-brand-press: #446dad;
     --nav-bg: #233d66;
     --nav-hover-bg: #2e4b77;
     --nav-active-bg: #3d5a87;
@@ -154,6 +160,8 @@ html[data-theme="graphite"] {
     --brand-rgb: 49, 54, 60;
     --brand-accent: #4A5057;
     --brand-focus: #8f98a2;
+    --cb-brand-hover: #303439;
+    --cb-brand-press: #646c75;
     --nav-bg: #31363c;
     --nav-hover-bg: #3d434a;
     --nav-active-bg: #4c535b;
@@ -165,6 +173,8 @@ html[data-theme="teal"] {
     --brand-rgb: 31, 92, 99;
     --brand-accent: #3f8a92;
     --brand-focus: #317A83;
+    --cb-brand-hover: #22545a;
+    --cb-brand-press: #40a0ac;
     --nav-bg: #1f5c63;
     --nav-hover-bg: #2a6a72;
     --nav-active-bg: #3a7b83;
@@ -4283,6 +4293,52 @@ button.scan-chip {
 .scan-pop .sp-actions .btn.sp-wide {
     flex: 1 0 100%;
 }
+/* «Привязать?» (этап 38): запись и ПК по полям – как подробности «Проверки»: одинаковое
+   приглушено, «≠» красным; кнопки – последние, снизу отступ */
+.scan-pop.link-pop {
+    width: 420px;
+}
+.scan-pop .sp-compare {
+    width: 100%;
+    margin: 4px 0 6px;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.scan-pop .sp-compare th {
+    padding: 2px 10px 2px 0;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.scan-pop .sp-compare td {
+    padding: 1px 10px 1px 0;
+    vertical-align: top;
+    line-height: 16px;
+}
+.scan-pop .sp-compare td:first-child {
+    padding-left: 10px;
+}
+.scan-pop .sp-compare td.sp-v {
+    width: 50%;
+}
+.scan-pop .sp-compare tr.same td.sp-v {
+    color: var(--text-muted);
+}
+.scan-pop .sp-compare td.sp-mark {
+    width: 1%;
+    padding-right: 6px;
+    text-align: center;
+    color: var(--text-secondary);
+    cursor: default;
+}
+.scan-pop .sp-compare td.sp-mark.ne {
+    color: var(--danger);
+    font-weight: 600;
+}
+.scan-pop .sp-actions.sp-last {
+    padding-bottom: 10px;
+}
 .scan-pop .sp-all {
     display: flex;
     align-items: center;
@@ -5466,10 +5522,16 @@ html.no-radius .nr-table .nr-suf {
     overflow-y: scroll;
 }
 
-/* Закреплённые столбцы (Ctrl+клик по шапке): зажат Ctrl и курсор на шапке – у шапки
-   каждого закреплённого столбца сверху тень цветом схемы. Только в шапке */
+/* Закреплённые столбцы (Ctrl+клик по шапке): зажат Ctrl и курсор на шапке – шапки
+   закреплённых столбцов цветом выделения системы, текст – цветом выделенного текста
+   (этап 38, вместо тени цвета схемы). Только в шапке */
 html.ctrl-down .data-table thead:hover th.sticky {
-    background-image: linear-gradient(to bottom, color-mix(in srgb, var(--brand-dark) 75%, transparent), color-mix(in srgb, var(--brand) 28%, transparent) 4px, transparent 9px);
+    background: Highlight;
+    color: HighlightText;
+}
+html.ctrl-down .data-table thead:hover th.sticky .sort-arrow,
+html.ctrl-down .data-table thead:hover th.sticky .th-filter {
+    color: inherit;
 }
 
 /* Порядок столбцов – перетаскивание шапки (mixins/col-order.js): столбец «в руке» –
@@ -5811,44 +5873,72 @@ html.col-dragging * {
 
 /* ============================================================
    Этап 37: «Закругления» выключены – флажки тоже квадратные. Обычный флажок
-   браузер рисует скруглённым всегда, поэтому свой рисунок; цвет – как был
-   (синий браузера, в меню и окне печати – цвет схемы)
+   браузер рисует скруглённым всегда, поэтому свой рисунок. Этап 38: рисунок и цвета –
+   как у Chrome (сверено по пикселям на 100% и 115%): галочка и черта на всю рамку
+   13×13, под курсором – темнее, в момент нажатия – светлее, отключённый – бледный;
+   цвет – синий браузера, в меню и окне печати – цвет схемы (--cb-on, --cb-hover,
+   --cb-press)
    ============================================================ */
 html.no-radius input[type="checkbox"] {
     --cb-on: #0075ff;
+    --cb-hover: #005cc8;
+    --cb-press: #3793ff;
     appearance: none;
     flex: none;
     width: 13px;
     height: 13px;
     box-sizing: border-box;
     border: 1px solid #767676;
-    background: #fff no-repeat center / 11px 11px;
+    background: #fff no-repeat 0 0 / 100% 100% border-box;
     vertical-align: -3px;
 }
-html.no-radius input[type="checkbox"]:hover {
+html.no-radius input[type="checkbox"]:enabled:hover {
     border-color: #4f4f4f;
+}
+html.no-radius input[type="checkbox"]:enabled:active {
+    border-color: #8d8d8d;
 }
 html.no-radius input[type="checkbox"]:checked,
 html.no-radius input[type="checkbox"]:indeterminate {
     border-color: var(--cb-on);
     background-color: var(--cb-on);
 }
+html.no-radius input[type="checkbox"]:checked:enabled:hover,
+html.no-radius input[type="checkbox"]:indeterminate:enabled:hover {
+    border-color: var(--cb-hover);
+    background-color: var(--cb-hover);
+}
+html.no-radius input[type="checkbox"]:checked:enabled:active,
+html.no-radius input[type="checkbox"]:indeterminate:enabled:active {
+    border-color: var(--cb-press);
+    background-color: var(--cb-press);
+}
 html.no-radius input[type="checkbox"]:checked {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 11'%3E%3Cpath d='M2 5.6 4.4 8 9 3' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Cpath d='M2.6 6.5 5.2 9.1 10.4 2.6' fill='none' stroke='%23fff' stroke-width='2.08'/%3E%3C/svg%3E");
 }
 html.no-radius input[type="checkbox"]:indeterminate {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 11'%3E%3Cpath d='M2.5 5.5h6' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3C/svg%3E");
-}
-html.no-radius input[type="checkbox"]:checked:hover,
-html.no-radius input[type="checkbox"]:indeterminate:hover {
-    filter: brightness(0.9);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Crect x='2.5' y='5.5' width='8' height='2' rx='1' fill='%23fff'/%3E%3C/svg%3E");
 }
 html.no-radius input[type="checkbox"]:disabled {
-    opacity: 0.5;
+    border-color: rgb(189 189 189 / 70%);
+    background-color: rgb(245 245 245 / 68%);
+    background-clip: padding-box;
+}
+html.no-radius input[type="checkbox"]:checked:disabled,
+html.no-radius input[type="checkbox"]:indeterminate:disabled {
+    background-color: rgb(196 196 196 / 78%);
+}
+html.no-radius input[type="checkbox"]:checked:disabled {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Cpath d='M2.6 6.5 5.2 9.1 10.4 2.6' fill='none' stroke='%23fff' stroke-width='2.08' stroke-opacity='.6'/%3E%3C/svg%3E");
+}
+html.no-radius input[type="checkbox"]:indeterminate:disabled {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Crect x='2.5' y='5.5' width='8' height='2' rx='1' fill='%23fff' fill-opacity='.6'/%3E%3C/svg%3E");
 }
 html.no-radius .settings-card .nc-check input,
 html.no-radius .dropdown label input,
 html.no-radius .cf-menu .cf-item input,
 html.no-radius .pr-opts .pr-check input {
     --cb-on: var(--brand);
+    --cb-hover: var(--cb-brand-hover);
+    --cb-press: var(--cb-brand-press);
 }

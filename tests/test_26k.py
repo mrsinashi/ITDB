@@ -42,7 +42,7 @@ def test_collect_skips_usb_interface(admin, glpi_url):
 
 def test_table_marks(admin, editor, reader):
     marks = ok(reader.get("/api/table-marks"))
-    assert [m["kind"] for m in marks] == ["dup", "hostname", "gone", "stale", "overdue", "verified"]
+    assert [m["kind"] for m in marks] == ["dup", "hostname", "gone", "stale", "overdue", "verified", "checked"]
     by = {m["kind"]: m for m in marks}
     assert by["dup"]["bg_color"] == "#ffd6d6" and by["dup"]["bold"] is False
     assert by["hostname"]["color"] == "#cc0000" and by["hostname"]["bold"] is True

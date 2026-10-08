@@ -222,7 +222,7 @@ export default {
 
         // Переставить столбец на место index среди столбцов на экране (счёт – до
         // перестановки). Скрытые столбцы остаются, где были; «По правилу» (этап 36) – не
-        // столбец: место перед ним – это место перед HOSTNAME
+        // столбец: место рядом с ним – это место сразу после HOSTNAME
         moveColumn(field, at) {
             const shown = this.viewColumns;
             const index = at - shown.filter(function (col, i) { return col.virtual && i < at; }).length;

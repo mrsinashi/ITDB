@@ -30,6 +30,13 @@
 несколько; «в таблице часть» (partial, «≈») – отдаётся для пометок, но не
 расхождение (не в счётчике); у источника – как сопоставлен (state, by) и что
 предлагает (value) – признаки, можно ли верить.
+Этап 38: запись, которую сопоставление только предлагает привязать к ПК («привязать?»:
+совпало имя, номер или IP), – предложение вида link: её номер в столбец GLPI / GSIT
+(серым блочком) и сравнение записи с ПК (compare). «Привязать» (/link) – «это этот ПК» и
+номер в столбец, дальше сканер предлагает этому ПК всё остальное; «Не этот ПК»
+(/not-this) – запись этому ПК больше не предлагается. Проверен ПК (verified – и записью,
+и сетью; checked – одним из них) – только по актуальным данным: запись проверена в
+источнике не раньше срока «Актуальны».
 """
 import ipaddress
 import re
@@ -47,7 +54,7 @@ from api_computers import (
     user_field_keys_of, vacuum_text,
 )
 from api_scan import SOURCES, fresh_days_of, load_source
-from api_scan_records import save_alias, web_url_of
+from api_scan_records import load_computer, load_record, save_alias, save_link, save_reject, web_url_of
 from auth import get_current_user, require_editor
 from db import get_db
 from history_log import log_change
@@ -105,6 +112,8 @@ class DiffOut(BaseModel):
     same_pair: int        # ещё у скольких ПК такая же пара «таблица – сканер»
     rejected_by: Optional[str] = None
     rejected_at: Optional[datetime] = None
+    # «привязать?» (kind link, этап 38): запись и ПК по полям – [{field, table, source, mark}]
+    compare: list[dict] = []
 
 
 class AntivirusOut(BaseModel):
@@ -129,6 +138,8 @@ class DiffsOut(BaseModel):
     net: dict[int, dict[str, list[str]]] = {}
     # ПК, проверенные и GLPI / GSIT, и сетью: id ПК → чем («GLPI», «Сеть»; этап 28б)
     verified: dict[int, list[str]] = {}
+    # ПК, проверенные одним из них (этап 38): id ПК → чем
+    checked: dict[int, list[str]] = {}
 
 
 def enabled_kinds(session):
@@ -137,15 +148,15 @@ def enabled_kinds(session):
     return [kind for kind in scan_collect.RECORD_KINDS if kind in enabled]
 
 
-def matched_records(session, kinds, computers):
+def matched_records(session, kinds, computers, states=("key", "link")):
     """Записи включённых источников, сопоставленные с рабочими ПК по признаку
-    или вручную: (kind, source_id, итог сопоставления, запись)."""
+    или вручную (states; «привязать?» – name): (kind, source_id, итог сопоставления, запись)."""
     for kind in kinds:
         matches, _ = scan_collect.match(session, kind)
         records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
 
         for source_id, item in matches.items():
-            if item["state"] in ("key", "link") and item["computer_id"] in computers:
+            if item["state"] in states and item["computer_id"] in computers:
                 yield kind, source_id, item, records[source_id]
 
 
@@ -419,7 +430,8 @@ def host_observations(session):
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
     которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
-    подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью) по всем включённым источникам. Одно поле ПК – одна строка;
+    подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью, ПК,
+    проверенные одним из них) по всем включённым источникам. Одно поле ПК – одна строка;
     если источники предлагают разное – «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
@@ -431,19 +443,29 @@ def compute(session, with_rejected=False):
 
     rows = {}   # (ПК, поле) → {row из compare, sources: [...]}
     antivirus = {}
-    in_records = defaultdict(list)  # ПК → источники записей, уверенно сопоставленных с ним
+    fresh_records = {}  # ПК → источники актуальных записей, уверенно сопоставленных с ним
+    moment = datetime.now(timezone.utc)
+    fresh_since = {kind: moment - timedelta(days=fresh_days_of(load_source(session, kind), kind)) for kind in kinds}
+    offers = []         # «привязать?»: (kind, source_id, итог сопоставления, запись)
     record_ips = defaultdict(set)   # IP → ПК, с которыми сопоставлены записи с этим IP
     numbers = {     # номера записей GLPI / GSIT, записанные в таблице
         row[0]: dict(zip(ID_FIELDS.values(), row[1:]))
         for row in session.query(Computer.id, *(getattr(Computer, field) for field in ID_FIELDS.values()))
     }
 
-    for kind, source_id, item, record in matched_records(session, kinds, computers):
+    for kind, source_id, item, record in matched_records(session, kinds, computers, ("key", "link", "name")):
+        if item["state"] == "name":
+            offers.append((kind, source_id, item, record))
+            continue
+
         computer_id = item["computer_id"]
         values = (record.data or {}).get("values") or {}
 
-        if SOURCES[kind]["title"] not in in_records[computer_id]:
-            in_records[computer_id].append(SOURCES[kind]["title"])
+        if record.checked_at and record.checked_at >= fresh_since[kind]:
+            found = fresh_records.setdefault(computer_id, [])
+
+            if SOURCES[kind]["title"] not in found:
+                found.append(SOURCES[kind]["title"])
 
         antivirus.setdefault(computer_id, {}).setdefault(kind, []).extend(av_entries(kind, record))
         source = {
@@ -470,18 +492,36 @@ def compute(session, with_rejected=False):
             entry["rows"].append(row)
             entry["sources"].append(dict(source, value=row["source"]))
 
+    # «Привязать?» (этап 38): номер записи – в столбец GLPI / GSIT, к нему – сравнение
+    # записи с ПК, чтобы было видно, тот ли это ПК
+    offered = {}
+
+    for kind, source_id, item, record in offers:
+        computer_id = item["computer_id"]
+        values = (record.data or {}).get("values") or {}
+        offered[(computer_id, ID_FIELDS[kind])] = {
+            "table": clean_text((numbers.get(computer_id) or {}).get(ID_FIELDS[kind])),
+            "value": str(source_id),
+            "source": {
+                "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id, "checked_at": record.checked_at,
+                "state": "name", "by": item["by"], "value": str(source_id),
+            },
+            "note": item["note"] or "Совпадает только имя",
+            "compare": [
+                {"field": row["field"], "table": row["itdb"], "source": row["source"], "mark": row["mark"]}
+                for row in scan_collect.compare_record(names, values, computers[computer_id])
+                if row["itdb"] or row["raw"]
+            ],
+        }
+
     # Сеть (этап 28): MAC, IP и имя – там, где записи GLPI / GSIT об этом поле молчат
     hosts, host_kinds = host_observations(session)
     net_seen = {}
-    verified = {}
+    net_found = {}
 
     if hosts:
         proposals, net_seen = host_rows(computers, hosts)
-        # Проверен и записью GLPI / GSIT, и сетью (этап 28б)
-        verified = {
-            computer_id: in_records[computer_id] + [HOST_TITLES.get(kind, kind) for kind in found]
-            for computer_id, found in confirmed(computers, hosts).items() if in_records.get(computer_id)
-        }
+        net_found = confirmed(computers, hosts)
 
         for proposal in proposals:
             computer_id, field = proposal["computer_id"], proposal["field"]
@@ -505,10 +545,19 @@ def compute(session, with_rejected=False):
                 "rows": [row], "sources": [dict(proposal["source"], value=row["source"])], "unsure": proposal["unsure"],
             }
 
+    # Проверен и записью GLPI / GSIT, и сетью (этап 28б) или одним из них (этап 38) –
+    # по актуальным данным
+    verified, checked = {}, {}
+
+    for computer_id in set(fresh_records) | set(net_found):
+        titles = fresh_records.get(computer_id, []) + [HOST_TITLES.get(kind, kind) for kind in net_found.get(computer_id, [])]
+        both = computer_id in fresh_records and computer_id in net_found
+        (verified if both else checked)[computer_id] = titles
+
     items = []
     rejected = 0
 
-    def add(computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note="", replace=""):
+    def add(computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note="", replace="", compare=None):
         nonlocal rejected
         reject = rejects.get((computer_id, field, key_of(raw)))
 
@@ -526,6 +575,7 @@ def compute(session, with_rejected=False):
             "sources": sources,
             "rejected_by": reject.user_name if reject else None,
             "rejected_at": reject.at if reject else None,
+            "compare": compare or [],
         })
 
     for (computer_id, field), entry in rows.items():
@@ -549,6 +599,10 @@ def compute(session, with_rejected=False):
             continue
 
         add(computer_id, field, row["itdb"], row["source"], row["raw"], diff_kind, unsure, entry["sources"])
+
+    for (computer_id, field), offer in offered.items():
+        add(computer_id, field, offer["table"], offer["value"], offer["value"], "link", "", [offer["source"]],
+            offer["note"], compare=offer["compare"])
 
     missing = []
     seen_at = {}
@@ -596,7 +650,7 @@ def compute(session, with_rejected=False):
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
 
     result.sort(key=lambda d: ((d.hostname or "").lower(), d.computer_id, order.get(d.field, 99)))
-    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen, verified
+    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen, verified, checked
 
 
 def record_links(session):
@@ -618,7 +672,9 @@ def list_diffs(
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    items, rejected_count, kinds, antivirus, missing, seen_at, stale, net_seen, verified = compute(session, with_rejected=rejected)
+    items, rejected_count, kinds, antivirus, missing, seen_at, stale, net_seen, verified, checked = compute(
+        session, with_rejected=rejected,
+    )
     return DiffsOut(
         items=items,
         computers=len({d.computer_id for d in items if not d.rejected_by and d.kind != "partial"}),
@@ -631,6 +687,7 @@ def list_diffs(
         jabber=seen_at,
         net=net_seen,
         verified=verified,
+        checked=checked,
     )
 
 
@@ -711,6 +768,52 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
     batch.finish(session)
     session.commit()
     return {"accepted": accepted, "skipped": skipped}
+
+
+class LinkIn(BaseModel):
+    computer_id: int
+    source: str           # glpi / gsit
+    source_id: int
+    table: str = ""       # номер в таблице, когда смотрели
+
+
+@router.post("/link")
+def link(payload: LinkIn, me=Depends(require_editor), session=Depends(get_db)):
+    """«Привязать» в Таблице (этап 38): запись – этому ПК («это этот ПК», как на
+    «Проверке»), её номер – в столбец GLPI / GSIT обычной правкой (если номер в таблице
+    за это время не поменяли). Дальше сканер предлагает этому ПК всё остальное."""
+    record = load_record(session, payload.source, payload.source_id)
+    computer = session.query(Computer).filter(Computer.id == payload.computer_id).with_for_update().first()
+
+    if computer is None:
+        raise HTTPException(status_code=404, detail="ПК не найден.")
+
+    save_link(session, me, payload.source, record, computer)
+    field = ID_FIELDS[payload.source]
+    number = str(record.source_id)
+    now_value = clean_text(getattr(computer, field))
+
+    if now_value != number and key_of(now_value) == key_of(payload.table):
+        batch = ChangeBatch(me["login"])
+        changes = apply_fields(session, computer, {field: number}, user_field_keys_of(session), batch)
+
+        for change in changes.values():
+            change["scan"] = f"{SOURCES[payload.source]['title']} №{number}"
+
+        save_changes(session, computer, changes, me["login"])
+        batch.finish(session)
+
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/not-this")
+def not_this(payload: LinkIn, me=Depends(require_editor), session=Depends(get_db)):
+    """«Не этот ПК» в Таблице (этап 38): запись этому ПК больше не предлагается."""
+    record = load_record(session, payload.source, payload.source_id)
+    save_reject(session, me, payload.source, record, load_computer(session, payload.computer_id))
+    session.commit()
+    return {"ok": True}
 
 
 class BoardIn(BaseModel):
@@ -810,6 +913,7 @@ MARK_LABELS = {
     "fill": "Новые значения",
     "unsure": "Неточно",
     "partial": "Добавление значений",
+    "link": "Привязка записи",
 }
 MARK_FIELDS = ("color", "bg_color", "bold", "italic", "strike", "frame", "enabled", "always")
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")

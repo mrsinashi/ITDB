@@ -32,6 +32,13 @@
 // название модели уходит в столбец «Мат. плата» (у этого ПК и у всех с таким
 // названием). С расхождениями приходят ссылки на записи GLPI / GSIT (links) и
 // логины VACUUM, которых нет в Jabber (vacuum_missing).
+//
+// Этап 38: запись, которую сопоставление только предлагает привязать к ПК, – блочок
+// вида link (серый) с её номером в столбце GLPI / GSIT; в карточке у блочка – запись и
+// ПК по полям (d.compare), «Привязать» (/link: это этот ПК + номер в столбец, дальше
+// сканер предлагает остальное) и «Не этот ПК» (/not-this). Разом («Принять
+// изменения…») не привязывается. Другое имя ПК (HOSTNAME в таблице есть) блочком не
+// показывается: имя выделено, что на ПК – в подсказке.
 
 import { decoration } from "../columns.js";
 import { apiFetch } from "../util.js";
@@ -80,7 +87,7 @@ export default {
         scanChipVersion() {
             return Array.from(this.scanShownKinds).sort().join(",") + "|" +
                 (this.diffs.vacuumMissing || []).join(",") + "|" + Object.keys(this.diffs.vacuumStale || {}).join(",") + "|" +
-                Object.keys(this.diffs.verified || {}).join(",") + "|" +
+                Object.keys(this.diffs.verified || {}).join(",") + "|" + Object.keys(this.diffs.checked || {}).join(",") + "|" +
                 this.diffs.items.map(function (d) { return d.id + (d.rejected_by ? "-" : ":") + d.proposed; }).join("|");
         },
 
@@ -309,6 +316,7 @@ export default {
                 this.diffs.jabber = data.jabber || {};
                 this.diffs.net = data.net || {};
                 this.diffs.verified = data.verified || {};
+                this.diffs.checked = data.checked || {};
             } catch (e) {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
@@ -316,10 +324,11 @@ export default {
             }
         },
 
-        // Можно взять разом: значение берётся, и такие блочки в Таблице вообще показываются
+        // Можно взять разом: значение берётся, и такие блочки в Таблице вообще показываются;
+        // привязку записи – только по одной, посмотрев на сравнение (этап 38)
         diffTakeable(d) {
             const mark = this.scanMarkByKind[d.kind];
-            return d.can_take && (!mark || mark.enabled);
+            return d.can_take && d.kind !== "link" && (!mark || mark.enabled);
         },
 
         async loadScanMarks() {
@@ -509,7 +518,13 @@ export default {
             }
             const entry = this.diffIndex.get(row.id);
             const d = entry ? entry[field] : null;
-            return d && this.scanShownKinds.has(d.kind) ? d : null;
+            return d && this.scanShownKinds.has(d.kind) && !this.scanChipHidden(d) ? d : null;
+        },
+
+        // Другое имя ПК при записанном в таблице блочком не показывается (этап 38): имя
+        // выделено («Имя на ПК другое»), что на ПК – в подсказке у имени
+        scanChipHidden(d) {
+            return d.field === "hostname" && !d.can_take;
         },
 
         scanCellDiff(row, col) {
@@ -523,7 +538,7 @@ export default {
                 return null;
             }
             const d = this.scanCellDiff(row, col);
-            if (!d || !this.scanShownKinds.has(d.kind)) {
+            if (!d || !this.scanShownKinds.has(d.kind) || this.scanChipHidden(d)) {
                 return null;
             }
             return this.scanMarkByKind[d.kind] || null;
@@ -557,6 +572,9 @@ export default {
         },
 
         scanChipTitle(d) {
+            if (d.kind === "link") {
+                return "Привязать " + this.diffSourceShort(d) + "? · " + d.note;
+            }
             if (!d.can_take) {
                 return "Имя на ПК · " + this.diffSourceShort(d);
             }
@@ -733,6 +751,31 @@ export default {
             }
         },
 
+        // «Привязать?» (этап 38): «Привязать» – запись этому ПК, «Не этот ПК» – больше не предлагать
+        async scanPopLink(yes) {
+            const pop = this.scanPop;
+            pop.busy = true;
+            this.closeScanPop();
+            await (yes ? this.acceptDiffs([pop.d]) : this.rejectDiffs([pop.d]));
+        },
+
+        // Сравнение записи с ПК в карточке у блочка: отметка и её подсказка
+        linkCompareTitle(c) {
+            return { "=": "Совпадает", "≈": "В таблице часть", "≠": "Отличается" }[c.mark] || null;
+        },
+
+        async linkDiffs(list, yes) {
+            let done = 0;
+            for (const d of list) {
+                const s = d.sources[0];
+                await this.diffPost("/api/scan/diffs/" + (yes ? "link" : "not-this"), {
+                    computer_id: d.computer_id, source: s.source, source_id: s.source_id, table: d.table
+                });
+                done += 1;
+            }
+            return done;
+        },
+
         // «Это материнская плата»: название – в «Мат. плату» этому ПК и всем с таким названием
         async scanPopBoard() {
             const pop = this.scanPop;
@@ -770,7 +813,7 @@ export default {
         scanSuggestFor(rowId, field) {
             const entry = this.diffIndex.get(rowId);
             const d = entry ? entry[field] : null;
-            if (!d || d.kind === "partial" || !d.can_take || !d.proposed || d.proposed.includes("\n")) {
+            if (!d || d.kind === "partial" || d.kind === "link" || !d.can_take || !d.proposed || d.proposed.includes("\n")) {
                 return [];
             }
             return [{ key: "scan:" + d.proposed.toLowerCase(), value: d.proposed, count: this.diffSourceShort(d), scan: true }];
@@ -807,7 +850,7 @@ export default {
             if (manual) {
                 parts.push({ text: "ПК привязан вручную" });
             }
-            if (by.size) {
+            if (by.size && d.kind !== "link") {
                 parts.push({ text: "ПК по " + KEY_ORDER.filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
             }
             if (d.sources.length > 1) {
@@ -861,9 +904,23 @@ export default {
             }
         },
 
-        // replace – взять второй вариант (VACUUM: заменить, а не дописать)
+        // replace – взять второй вариант (VACUUM: заменить, а не дописать). Привязка
+        // записи (этап 38) – своим запросом
         async acceptDiffs(list, replace) {
-            list = list.filter(function (d) { return d.can_take && (!replace || d.replace); });
+            const links = list.filter(function (d) { return d.kind === "link"; });
+            list = list.filter(function (d) { return d.kind !== "link" && d.can_take && (!replace || d.replace); });
+            if (links.length) {
+                try {
+                    const done = await this.linkDiffs(links, true);
+                    this.toast("Привязано: " + done, "success");
+                } catch (e) {
+                    this.toastError(e.message || e);
+                }
+                if (!list.length) {
+                    await this.afterDiffChange();
+                    return;
+                }
+            }
             if (!list.length) {
                 return;
             }
@@ -904,6 +961,21 @@ export default {
         },
 
         async rejectDiffs(list, back) {
+            const links = list.filter(function (d) { return d.kind === "link"; });
+            if (links.length) {
+                try {
+                    await this.linkDiffs(links, false);
+                    this.toast("Не этот ПК: " + links.length, "success");
+                    await this.loadDiffs();
+                    this.reloadCheckIfShown();
+                } catch (e) {
+                    this.toastError(e.message || e);
+                }
+                list = list.filter(function (d) { return d.kind !== "link"; });
+                if (!list.length) {
+                    return;
+                }
+            }
             try {
                 const result = await this.diffPost("/api/scan/diffs/" + (back ? "unreject" : "reject"), {
                     items: list.map(function (d) { return { computer_id: d.computer_id, field: d.field, raw: d.raw }; })
@@ -1009,7 +1081,7 @@ export default {
         },
 
         scanLegendSample(kind) {
-            return { diff: "8", fill: "Win 10", unsure: "TightVNC", partial: "10.0.9.5" }[kind] || "…";
+            return { diff: "8", fill: "Win 10", unsure: "TightVNC", partial: "10.0.9.5", link: "157" }[kind] || "…";
         },
 
         scanMarkHint(kind) {
@@ -1017,7 +1089,8 @@ export default {
                 diff: "замена",
                 fill: "новое значение",
                 unsure: "неточно – проверь сам",
-                partial: "добавление значений"
+                partial: "добавление значений",
+                link: "привязать запись GLPI / GSIT?"
             }[kind] || "";
         },
 

@@ -3,8 +3,8 @@
 //
 // Строка – ПК, с которым сопоставлены записи источников (по признаку или вручную),
 // или запись, которую не удалось уверенно связать с ПК («привязать?», конфликт,
-// нет в таблице). Фильтры: «Нужно решить» (по умолчанию), «Не узнал ПК»,
-// «Предлагает другое», «В порядке», «Нет в таблице», «Отклонённые», «Все».
+// нет в таблице). Фильтры: «Все» (по умолчанию, этап 38 – как в «Сети»), «Нужно
+// решить», «Не узнал ПК», «Предлагает другое», «В порядке», «Нет в таблице», «Отклонённые».
 // Клик по строке – подробности: поле | в таблице | GLPI | GSIT | что предлагается,
 // у каждого предложения ✓ / ✕, «ещё у N ПК» – такие же пары разом. Выделение – как
 // в Таблице (Ctrl / Shift + клик, Ctrl+A, Esc), «Выбрано: N ▾» – действия над
@@ -31,13 +31,13 @@ const ICONS = {
 };
 
 export const CHECK_FILTERS = [
+    { key: "all", label: "Все" },
     { key: "todo", label: "Нужно решить" },
-    { key: "unknown", label: "Не узнал ПК", title: "Совпало только имя или признаки противоречат" },
+    { key: "unknown", label: "Не узнал ПК", title: "Совпало только имя или IP, или признаки противоречат" },
     { key: "diff", label: "Предлагает другое" },
     { key: "ok", label: "В порядке" },
     { key: "none", label: "Нет в таблице" },
-    { key: "rejected", label: "Отклонённые", title: "Оставлено как в таблице" },
-    { key: "all", label: "Все" }
+    { key: "rejected", label: "Отклонённые", title: "Оставлено как в таблице" }
 ];
 
 function inFilter(row, filter) {
@@ -122,9 +122,10 @@ export default {
                     rows.push({ key: kind + ":" + r.source_id, pcId: pcId, recs: { [kind]: r }, state: r.state, record: r });
                 });
             });
-            // ПК, о которых знает только Jabber (VACUUM, IP по адресу)
+            // ПК, о которых знает только Jabber (VACUUM, IP по адресу). «Привязать?» (link,
+            // этап 38) – это строка самой записи, не ПК
             this.diffAllIndex.forEach(function (fields, pcId) {
-                if (!byPc.has(pcId)) {
+                if (!byPc.has(pcId) && Object.values(fields).some(function (d) { return d.kind !== "link"; })) {
                     const d = Object.values(fields)[0];
                     const row = { key: "pc:" + pcId, pcId: pcId, recs: {}, state: "ok", record: null, brief: { hostname: d.hostname, place: d.place } };
                     byPc.set(pcId, row);
@@ -139,7 +140,7 @@ export default {
                 row.rejected = [];
                 Object.keys(fields).forEach(function (field) {
                     const d = fields[field];
-                    if (d.kind !== "partial") {
+                    if (d.kind !== "partial" && d.kind !== "link") {
                         (d.rejected_by ? row.rejected : row.diffs).push(d);
                     }
                 });

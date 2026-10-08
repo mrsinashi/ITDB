@@ -15,13 +15,17 @@
    - совпал только GLPI ID при разных именах – «привязать?» (name): номер мог
      остаться от другой системы;
    - признаков нет, совпало только имя – «привязать?» (name);
-   - два сопоставления на один ПК – оба конфликт;
+   - ни признаков, ни имени, но IP записи записан только у одного ПК, у которого нет
+     номера записи этого источника, – тоже «привязать?» (name, by = ["ip"], этап 38).
+     IP, который есть у нескольких записей, не в счёт; ПК с другим MAC / серийным – нет;
+   - два сопоставления на один ПК – оба конфликт; «привязать?» по IP рядом с другим
+     сопоставлением этого ПК – нет в ITDB (IP – признак слабый);
    - ничего – нет в ITDB (none).
 UUID в ITDB не хранится: он только склеивает дубли внутри источника.
 """
 from collections import defaultdict
 
-from scan_normalize import clean_serial, norm_mac
+from scan_normalize import clean_serial, norm_mac, usable_ipv4
 
 # Признак на стольких записях и больше – общий, не признак
 SHARED_LIMIT = 3
@@ -118,8 +122,18 @@ def short_host(name):
     return (name or "").strip().lower().split(".")[0]
 
 
+def ips_of(text):
+    """IPv4-адреса из значения через перенос строки (как в таблице и в записи)."""
+    return {ip for ip in (usable_ipv4(line) for line in str(text or "").splitlines()) if ip}
+
+
+def record_ips(record):
+    """IP записи источника: из её значений (data.values.ip)."""
+    return ips_of(((record.get("data") or {}).get("values") or {}).get("ip"))
+
+
 class Index:
-    """ПК ITDB по признакам. computers – [{"id", "hostname", "mac", "serial",
+    """ПК ITDB по признакам. computers – [{"id", "hostname", "ip", "mac", "serial",
     "glpi_id", "gsit_id", "archived"}]."""
 
     def __init__(self, computers):
@@ -128,9 +142,11 @@ class Index:
         self.by_serial = defaultdict(set)
         self.by_id = {kind: defaultdict(set) for kind in ID_FIELDS}
         self.by_name = defaultdict(set)
+        self.by_ip = defaultdict(set)
         self.macs = {}
         self.serials = {}
         self.record_ids = set()     # номера записей источника (строками) – задаёт match_all
+        self.shared_ips = set()     # IP, которые есть у нескольких записей, – задаёт match_all
 
         for c in computers:
             macs = {norm_mac(line) for line in (c.get("mac") or "").splitlines()}
@@ -157,6 +173,9 @@ class Index:
             if short_host(c.get("hostname")):
                 self.by_name[short_host(c.get("hostname"))].add(c["id"])
 
+            for ip in ips_of(c.get("ip")):
+                self.by_ip[ip].add(c["id"])
+
         # Архив – только для пояснения «есть в архиве»
         self.archived_by_key = defaultdict(set)
 
@@ -180,6 +199,27 @@ class Index:
     def active(self, computer_id):
         c = self.computers.get(computer_id)
         return c is not None and not c.get("archived")
+
+    def by_record_ip(self, record, kind):
+        """ПК, у которого записан IP записи (этап 38): один, без номера записи этого
+        источника (или номер устарел – такой записи нет); IP, общий у нескольких записей
+        или ПК, не в счёт. Нет такого – None."""
+        found = set()
+
+        for ip in record_ips(record) - self.shared_ips:
+            owners = self.by_ip.get(ip, set())
+
+            if len(owners) > 1:
+                return None
+
+            found |= owners
+
+        if len(found) != 1:
+            return None
+
+        computer_id = next(iter(found))
+        number = str(self.computers[computer_id].get(ID_FIELDS.get(kind, "")) or "").strip()
+        return None if number and number in self.record_ids else computer_id
 
 
 def contradictions(index, computer_id, record, kind, hits):
@@ -283,6 +323,15 @@ def match_one(index, record, kind, links):
 
         return {"state": "name", "computer_id": computer_id, "candidates": [computer_id], "by": [], "note": None}
 
+    # Только IP (этап 38): «привязать?», если больше ничто не мешает
+    computer_id = index.by_record_ip(record, kind)
+
+    if computer_id is not None and computer_id not in rejected and not contradictions(index, computer_id, record, kind, set()):
+        return {
+            "state": "name", "computer_id": computer_id, "candidates": [computer_id], "by": ["ip"],
+            "note": "Совпадает только IP",
+        }
+
     # Нет в ITDB; подсказать, если такой есть в архиве
     archived = set()
 
@@ -304,6 +353,14 @@ def match_all(records, computers, links, kind):
     (уже без общих признаков), links – [{"source_id", "computer_id", "action"}]."""
     index = Index(computers)
     index.record_ids = {str(record["source_id"]) for record in records if not record.get("dup_of")}
+    ip_records = defaultdict(int)
+
+    for record in records:
+        if not record.get("dup_of"):
+            for ip in record_ips(record):
+                ip_records[ip] += 1
+
+    index.shared_ips = {ip for ip, count in ip_records.items() if count > 1}
     links_by = defaultdict(list)
 
     for link in links:
@@ -341,7 +398,16 @@ def match_all(records, computers, links, kind):
 
         host = index.host(computer_id)
         strong = [s for s in source_ids if result[s]["state"] in ("key", "link")]
-        weak = [s for s in source_ids if result[s]["state"] == "name"]
+        weak = [s for s in source_ids if result[s]["state"] == "name" and result[s]["by"] != ["ip"]]
+        by_ip = [s for s in source_ids if result[s]["state"] == "name" and result[s]["by"] == ["ip"]]
+
+        # По одному IP – только если на этот ПК больше никто не указывает
+        for source_id in by_ip:
+            if strong or weak or len(by_ip) > 1:
+                result[source_id] = {
+                    "state": "none", "computer_id": None, "candidates": [], "by": [],
+                    "note": f"IP как у {host}, но на него указывает и другая запись",
+                }
 
         if len(strong) > 1:
             for source_id in strong:
