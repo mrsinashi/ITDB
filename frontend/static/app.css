@@ -1106,11 +1106,6 @@ select.input {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.sug-list .sug-value.val-chip {
-    padding: 0 5px;
-    margin-left: -5px;
-    border-radius: var(--radius);
-}
 .sug-list .sug-count {
     margin-left: auto;
     font-size: 11px;
@@ -1313,10 +1308,15 @@ select.input {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.cf-menu .cf-value.val-chip {
+/* Блочок – как в ячейке и в Справочниках: поля 0 5px, строка 17px, край блочка – там,
+   где начинается обычный текст (этап 40: был сдвинут влево и обтягивал текст). Высота
+   строки списка та же: блочок заходит в её поля */
+.cf-menu .cf-value.val-chip,
+.sug-list .sug-value.val-chip {
     padding: 0 5px;
-    margin-left: -5px;
+    margin: -1.5px 0;
     border-radius: var(--radius);
+    line-height: 17px;
 }
 .cf-menu .cf-value.cf-empty {
     color: var(--menu-muted);
@@ -5412,10 +5412,12 @@ html.no-radius .nr-table .nr-suf {
 }
 
 /* ============================================================
-   Этапы 31, 36: последняя нажатая строка Таблицы (Enter – VNC, Alt+P – ping,
+   Этапы 31, 36, 40: последняя нажатая строка Таблицы (Enter – VNC, Alt+P – ping,
    Alt+R – RDP идут к этому ПК) – полоска у левого края видимой части строки, и при
-   прокрутке вправо. Отдельный элемент над таблицей (placeRowMark); под шапкой
-   таблицы прячется, над закреплёнными столбцами – видна
+   прокрутке вправо. Полоска – в подписи таблицы (caption) нулевого размера, липкой
+   слева: при прокрутке её двигает браузер, как закреплённые столбцы, а не скрипт
+   (прыжки, этап 40). Место по высоте – placeRowMark. Над закреплёнными столбцами
+   (3) – видна, шапка (4, она в разметке позже) – закрывает
    ============================================================ */
 :root {
     --row-active-bar: #555;
@@ -5423,13 +5425,21 @@ html.no-radius .nr-table .nr-suf {
 .table-wrap {
     position: relative;
 }
+.data-table caption.row-mark-rail {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    width: 0;
+    height: 0;
+    padding: 0;
+}
 .row-mark {
     display: none;
     position: absolute;
     left: 0;
     top: 0;
-    width: 3px;
-    z-index: 4;
+    /* 3px экрана и в масштабе по ширине окна */
+    width: calc(3 * var(--px));
     background: var(--row-active-bar);
     pointer-events: none;
 }

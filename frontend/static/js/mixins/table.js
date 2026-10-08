@@ -90,11 +90,13 @@ export default {
             });
         },
 
-        // Видимые столбцы
+        // Видимые столбцы; при кнопке «Значения сканера» – и скрытые, где есть его блочки
+        // (этап 40: пока кнопка включена)
         columns() {
             const hidden = this.hiddenNow;
+            const open = this.scanOpenFields;
             return this.allColumns.filter(function (col) {
-                return hidden.indexOf(col.field) === -1;
+                return hidden.indexOf(col.field) === -1 || open.has(col.field);
             });
         },
 
@@ -124,7 +126,8 @@ export default {
         },
 
         hiddenColumnCount() {
-            return this.allColumns.length - this.columns.length;
+            const hidden = this.hiddenNow;
+            return this.allColumns.filter(function (col) { return hidden.indexOf(col.field) !== -1; }).length;
         },
 
         hasManualWidths() {
@@ -1259,7 +1262,6 @@ export default {
             }
             this.rafId = requestAnimationFrame(() => {
                 this.rafId = null;
-                this.placeRowMark();
                 this.updateStickyShadow();
                 this.refreshHoverFromPoint();
                 if (this.copyHint) {

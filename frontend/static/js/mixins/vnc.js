@@ -4,13 +4,16 @@
 // (Таблица, карточка ПК, подробности «Проверки») – подключение этим VNC; Enter –
 // тем, что записан у ПК, а если не записан – тем, что выбран по умолчанию в
 // Справочниках (блок «Тип VNC»).
-// Enter, Alt+P (itdb://ping/IP) и Alt+R (itdb://rdp/IP) работают с последним ПК, по
-// строке которого нажали мышью (выделять строку не нужно); открыта карточка – с её ПК.
-// Строка отмечена полоской слева (элемент .row-mark над таблицей ставится прямо в DOM:
-// данные Vue не меняются – таблица на каждый клик не перерисовывается). Полоска видна
-// и при прокрутке вправо; строку скрыли поиском или фильтром – она забыта (этап 36).
+// Alt+P (itdb://ping/IP) и Alt+R (itdb://rdp/IP) работают с последним ПК, по строке
+// которого нажали мышью (выделять строку не нужно); открыта карточка – с её ПК.
+// Enter (этап 40) – только к строке с полоской: по строке нажали и больше ни по чему
+// (карточка, кнопки, поля, меню); иначе подключения нет, а полоска снимается.
+// Строка отмечена полоской слева (элемент .row-mark ставится прямо в DOM: данные Vue
+// не меняются – таблица на каждый клик не перерисовывается). Полоска – в «подписи»
+// таблицы, липкой у левого края: при прокрутке её ведёт сам браузер, как закреплённые
+// столбцы (этап 40); строку скрыли поиском или фильтром – она забыта (этап 36).
 
-import { apiFetch } from "../util.js";
+import { apiFetch, isTypingTarget } from "../util.js";
 
 export const VNC_KINDS = [
     { key: "tight", label: "TightVNC" },
@@ -60,6 +63,10 @@ export default {
         vncKinds() {
             return VNC_KINDS;
         }
+    },
+
+    mounted() {
+        document.addEventListener("mousedown", this.onMarkMouseDown, true);
     },
 
     updated() {
@@ -192,31 +199,69 @@ export default {
             this.placeRowMark();
         },
 
-        // Полоска – отдельный элемент над таблицей: у левого края видимой части, и при
-        // прокрутке вправо (этап 36). Меняется на каждую прокрутку – прямо в стиль
+        // Полоска – в «подписи» таблицы (caption), липкой у левого края видимой части:
+        // при прокрутке её двигает браузер, место по высоте – от верха таблицы (этап 40).
+        // Ставится заново, только когда меняется строка или вид таблицы, не на прокрутку.
+        // В масштабе «По ширине окна» подпись тоже в масштабе – размеры делятся на него
         placeRowMark() {
             const mark = this.$refs.rowMark;
-            const wrap = this.$refs.tableWrap;
-            const table = this.$refs.table;
             const tr = this.activeRowEl;
-            if (!mark || !wrap || !table) {
+            if (!mark) {
                 return;
             }
             if (!tr || !tr.isConnected) {
                 mark.style.display = "none";
                 return;
             }
-            const box = wrap.getBoundingClientRect();
+            const zoom = this.tableFit ? this.tableZoom : 1;
+            const rail = mark.parentNode.getBoundingClientRect();
             const row = tr.getBoundingClientRect();
-            const left = table.getBoundingClientRect().left - box.left;
             mark.style.display = "block";
-            mark.style.top = (row.top - box.top + wrap.scrollTop) + "px";
-            mark.style.height = Math.max(0, row.height - 1) + "px";
-            mark.style.left = (wrap.scrollLeft + Math.max(0, left)) + "px";
+            mark.style.top = (row.top - rail.top) / zoom + "px";
+            mark.style.height = Math.max(0, row.height - 1) / zoom + "px";
         },
 
-        // ПК для Enter / Alt+P / Alt+R: открытая карточка, иначе последняя нажатая
-        // строка, иначе единственная выбранная
+        // Нажатие мыши не по ячейке строки Таблицы (кнопки, поля, карточка, меню, шапка,
+        // блочок в ячейке) – полоска снимается: Enter после этого не подключает (этап 40).
+        // Полоса прокрутки таблицы – не в счёт; по ячейке полоску ставит onCellMouseDown
+        onMarkMouseDown(event) {
+            if (this.activeRowId === null || this.activeRowId === undefined) {
+                return;
+            }
+            const target = event.target;
+            if (target === this.$refs.tableWrap) {
+                return;
+            }
+            const td = target.closest ? target.closest("td") : null;
+            const table = this.$refs.table;
+            if (td && table && table.contains(td) && !target.closest("button, input, textarea, select, .loc-pick")) {
+                return;
+            }
+            this.setActiveRow(null);
+        },
+
+        // Enter в Таблице: подключение к строке с полоской, если после нажатия по ней ничего
+        // другого не трогали; иначе подключения нет, полоска снимается (этап 40)
+        onTableEnter(event) {
+            const row = this.activeRowId === null || this.activeRowId === undefined ? null
+                : this.rows.find((r) => r.id === this.activeRowId) || null;
+            const target = event.target;
+            const free = !event.defaultPrevented && !isTypingTarget(document.activeElement) &&
+                !(target && target.closest && target.closest("button, .dropdown, .cf-menu, .scan-pop, .add-bar, .card-overlay")) &&
+                !this.editingRowId && !this.cardEditKey && !this.editingHostname && !this.openMenu && !this.scanPop &&
+                !this.namePop && !this.actionBar && !this.newComputer && !this.showArchive;
+            if (row && free) {
+                event.preventDefault();
+                this.vncConnect(row, null);
+                return;
+            }
+            if (row) {
+                this.setActiveRow(null);
+            }
+        },
+
+        // ПК для Alt+P / Alt+R: открытая карточка, иначе последняя нажатая строка, иначе
+        // единственная выбранная
         activePc() {
             if (this.card) {
                 return this.card;
@@ -228,15 +273,11 @@ export default {
             return this.rows.find(function (r) { return r.id === id; }) || null;
         },
 
-        // what: vnc / ping / rdp. Ответ – нашёлся ли ПК
+        // what: ping / rdp. Ответ – нашёлся ли ПК
         connectActive(what) {
             const row = this.activePc();
             if (!row) {
                 return false;
-            }
-            if (what === "vnc") {
-                this.vncConnect(row, null);
-                return true;
             }
             const ip = firstIp(row.ip);
             if (!ip) {

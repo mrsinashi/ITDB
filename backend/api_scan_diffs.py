@@ -438,6 +438,18 @@ def compare_rows(compared):
     ]
 
 
+def link_note(item, compare):
+    """Пояснение у «привязать?»: совпало больше одного – сколько («Совпадает: 4», этап 40),
+    а не «Совпадает только IP»: табличка в карточке показывает и остальное. Номер записи
+    в таблице (сопоставление по нему) – тоже совпадение."""
+    same = sum(1 for row in compare if row["mark"] == "=") + (1 if "id" in (item["by"] or []) else 0)
+
+    if same > 1:
+        return f"Совпадает: {same}"
+
+    return item["note"] or "Совпадает только имя"
+
+
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
     которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
@@ -513,6 +525,7 @@ def compute(session, with_rejected=False):
     for kind, source_id, item, record in offers:
         computer_id = item["computer_id"]
         values = (record.data or {}).get("values") or {}
+        compare = compare_rows(scan_collect.compare_record(names, values, computers[computer_id]))
         offered[(computer_id, ID_FIELDS[kind])] = {
             "table": clean_text((numbers.get(computer_id) or {}).get(ID_FIELDS[kind])),
             "value": str(source_id),
@@ -520,8 +533,8 @@ def compute(session, with_rejected=False):
                 "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id, "checked_at": record.checked_at,
                 "state": "name", "by": item["by"], "value": str(source_id),
             },
-            "note": item["note"] or "Совпадает только имя",
-            "compare": compare_rows(scan_collect.compare_record(names, values, computers[computer_id])),
+            "note": link_note(item, compare),
+            "compare": compare,
         }
 
     # Сеть (этап 28): MAC, IP и имя – там, где записи GLPI / GSIT об этом поле молчат
@@ -545,6 +558,11 @@ def compute(session, with_rejected=False):
             # MAC из сети дописывается к записанным, а не заменяет их
             if field == "mac" and lines_of(table):
                 row["source"] = "\n".join(lines_of(table) + [proposal["value"]])
+                row["mark"] = "≠"
+
+            # IP: в таблице часть адресов, где ПК виден, – дописать недостающие (этап 40);
+            # это предложение, а не «в таблице часть»
+            if field == "ip" and row["mark"] == "≈":
                 row["mark"] = "≠"
 
             if row["mark"] in ("=", "≈"):

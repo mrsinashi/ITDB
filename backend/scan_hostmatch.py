@@ -2,9 +2,12 @@
 (scan_hosts: адрес – MAC – имя) → предложения MAC, IP и имени.
 
 Чтобы данные чужого устройства не попали ПК:
-- по MAC (надёжно): MAC наблюдения записан у одного ПК таблицы – это он. Если его
-  видно только на адресах, которых в таблице нет, – предлагается IP; если машина
-  называет себя иначе – имя (в таблице пусто – заполнить, иначе только сообщить);
+- по MAC (надёжно): MAC наблюдения записан у одного ПК таблицы – это он. Адреса ПК –
+  все, где этот MAC виден сейчас (у каждого источника – последний сбор, где он был:
+  у ПК бывает несколько адресов в разных подсетях, этап 40). Видно только на
+  адресах, которых в таблице нет, – предлагается заменить IP; часть адресов в
+  таблице есть – дописать недостающие; если машина называет себя иначе – имя (в
+  таблице пусто – заполнить, иначе только сообщить);
 - по IP (слабее): адрес записан у одного ПК, MAC с этого адреса в таблице нет.
   MAC предлагается, если машина на адресе называет себя как ПК (NetBIOS, имя из
   аренды DHCP); имя неизвестно, а MAC у ПК пуст – «неточно»; имя другое, MAC
@@ -41,6 +44,12 @@ def same_name(table, seen):
         return False
 
     return a == b or (len(b) == NETBIOS_LEN and a.startswith(b))
+
+
+def ip_order(ip):
+    """Адреса по порядку чисел: 10.0.5.9 раньше 10.0.5.10."""
+    parts = str(ip).split(".")
+    return [int(part) for part in parts] if all(part.isdigit() for part in parts) else [999, str(ip)]
 
 
 def is_fixed(obs):
@@ -112,6 +121,7 @@ def host_rows(computers, hosts):
     pc_ips, pc_macs, ip_owner, mac_owner = table_owners(computers)
 
     latest_by_mac = {}   # MAC → самое свежее наблюдение (действующая аренда – свежее ушедшей)
+    by_mac_source = defaultdict(list)
     by_ip = defaultdict(list)
 
     fixed_by_ip = {}     # адрес → привязка из настроек DHCP
@@ -129,8 +139,20 @@ def host_rows(computers, hosts):
         by_ip[obs["ip"]].append(obs)
         mac = obs.get("mac")
 
-        if mac and (mac not in latest_by_mac or obs["seen_at"] > latest_by_mac[mac]["seen_at"]):
-            latest_by_mac[mac] = obs
+        if mac:
+            by_mac_source[(mac, obs["source"])].append(obs)
+
+            if mac not in latest_by_mac or obs["seen_at"] > latest_by_mac[mac]["seen_at"]:
+                latest_by_mac[mac] = obs
+
+    # Где MAC виден сейчас (этап 40): у каждого источника – адреса его последнего сбора с
+    # этим MAC (проход подсетей – одно время у всех адресов, действующие аренды – время
+    # сбора). Прежний адрес после смены аренды или переезда – давнее, не в счёт
+    current_by_mac = defaultdict(list)
+
+    for (mac, _), found in by_mac_source.items():
+        last = max(obs["seen_at"] for obs in found)
+        current_by_mac[mac].extend(obs for obs in found if obs["seen_at"] == last)
 
     proposals = []
     seen = defaultdict(lambda: {"ip": [], "mac": [], "hostname": []})
@@ -142,7 +164,10 @@ def host_rows(computers, hosts):
 
     # --- по MAC ---
     for computer_id, macs in pc_macs.items():
-        found = [latest_by_mac[mac] for mac in macs if mac in latest_by_mac and mac_owner.get(mac) == {computer_id}]
+        found = [
+            obs for mac in macs if mac in latest_by_mac and mac_owner.get(mac) == {computer_id}
+            for obs in current_by_mac[mac]
+        ]
 
         if not found:
             continue
@@ -154,12 +179,19 @@ def host_rows(computers, hosts):
             note(computer_id, "mac", obs["mac"])
             note(computer_id, "hostname", obs.get("name"))
 
-        ips = sorted({obs["ip"] for obs in found})
+        ips = sorted({obs["ip"] for obs in found}, key=ip_order)
+        new = [ip for ip in ips if ip not in pc_ips[computer_id]]
 
-        if not pc_ips[computer_id] & set(ips):
-            moved.add(computer_id)
+        if new:
+            if pc_ips[computer_id] & set(ips):
+                # Часть адресов в таблице есть – дописать недостающие, записанные не убирать
+                value = "\n".join(lines(computers[computer_id].get("ip")) + new)
+            else:
+                moved.add(computer_id)
+                value = "\n".join(ips)
+
             proposals.append({
-                "computer_id": computer_id, "field": "ip", "value": "\n".join(ips), "unsure": "",
+                "computer_id": computer_id, "field": "ip", "value": value, "unsure": "",
                 "source": source_of(found[0], ["mac"], "\n".join(ips)),
             })
 

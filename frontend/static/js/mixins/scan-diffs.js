@@ -91,6 +91,31 @@ export default {
                 this.diffs.items.map(function (d) { return d.id + (d.rejected_by ? "-" : ":") + d.proposed; }).join("|");
         },
 
+        // Скрытые столбцы, где виден блочок сканера у строк Таблицы (фильтр по дереву и
+        // столбцам): при включённой кнопке «Значения сканера» они показываются, пока она
+        // включена (этап 40). Набор скрытых при этом не меняется
+        scanOpenFields() {
+            const fields = new Set();
+            const hidden = this.hiddenNow;
+            if (!this.scanOverlay || this.showArchive || !hidden.length) {
+                return fields;
+            }
+            const kinds = this.scanShownKinds;
+            const found = this.diffs.items.filter((d) => {
+                return !d.rejected_by && hidden.indexOf(d.field) !== -1 && kinds.has(d.kind) && !this.scanChipHidden(d);
+            });
+            if (!found.length) {
+                return fields;
+            }
+            const ids = new Set(this.applyColFilters(this.locationRows, null).map(function (row) { return row.id; }));
+            found.forEach(function (d) {
+                if (ids.has(d.computer_id)) {
+                    fields.add(d.field);
+                }
+            });
+            return fields;
+        },
+
         // Воронка у кнопки «Значения сканера»: в таблице только строки с предложениями
         scanOnlyOn() {
             return this.scanOnlyRows && this.scanOverlay;

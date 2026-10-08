@@ -334,9 +334,9 @@
 
             <!-- Таблица уже окна – по центру (отступ слева – целым числом пикселей, иначе линии мылятся) -->
             <div class="table-wrap" :class="{ fit: tableFit, 'fit-scroll': tableFit && tableFitScroll }" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
-                <!-- Полоска у последней нажатой строки (этапы 31, 36): у левого края видимой части -->
-                <div ref="rowMark" class="row-mark"></div>
                 <table class="data-table" :class="{ 'sticky-stuck': !!stuckEdge, 'alt-copy': altDown }" ref="table" :style="tableStyle">
+                    <!-- Полоска у последней нажатой строки (этапы 31, 36, 40): подпись таблицы липкая у левого края видимой части -->
+                    <caption class="row-mark-rail"><div ref="rowMark" class="row-mark"></div></caption>
                     <colgroup>
                         <col v-for="col in viewColumns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
                     </colgroup>
@@ -345,6 +345,7 @@
                             <th v-for="col in viewColumns" :key="'th-' + col.field" :data-field="col.field"
                                 :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field, 'th-virtual': col.virtual }"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
+                                :title="scanOpenFields.has(col.field) && isColumnHidden(col.field) ? 'Скрытый столбец: виден со значениями сканера' : null"
                                 @mousedown="onHeadMouseDown($event, col)" @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
                                 <!-- Подпись по центру; справа всегда место под воронку: не хватает – подпись левее -->
                                 <span class="th-in"><span class="th-pad"></span><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
@@ -1661,13 +1662,13 @@
             <div v-if="openMenu === 'colFilter' && colFilterMenu" ref="colFilterPanel" class="cf-menu" :style="colFilterMenuStyle">
                 <input ref="colFilterInput" class="cf-search" v-model="colFilterMenu.query" placeholder="Найти значение" spellcheck="false" autocomplete="off"
                     :title="colFilterMenuTitle + '. Enter – показать только найденные'" @keydown.enter.prevent="onColFilterEnter">
-                <!-- «Антивирусы»: сверху – состояния -->
+                <!-- Сверху – состояния: у «Антивирусов» – антивирусов, у остальных – выделения значений (этап 40) -->
                 <div v-if="colFilterStates.length" class="cf-states">
-                    <label v-for="st in colFilterStates" :key="'cfs-' + st.kind" class="cf-item">
-                        <input type="checkbox" :checked="st.checked" @change="toggleAvState(st.kind)">
-                        <span class="cf-value" :class="{ 'val-chip': !!(st.style || {}).backgroundColor }" :style="st.style">{{ st.label }}</span>
-                        <span class="cf-only" title="Только это состояние" @click.prevent.stop="setAvStates([st.kind])">только</span>
-                        <span class="cf-count" title="ПК с антивирусом в этом состоянии">{{ st.count }}</span>
+                    <label v-for="st in colFilterStates" :key="'cfs-' + st.kind" class="cf-item" :title="st.title">
+                        <input type="checkbox" :checked="st.checked" @change="toggleColState(st.kind)">
+                        <span class="cf-value" :class="{ 'val-chip': st.chip }" :style="st.style">{{ st.label }}</span>
+                        <span class="cf-only" title="Только это" @click.prevent.stop="setColStates([st.kind])">только</span>
+                        <span class="cf-count" title="Число ПК">{{ st.count }}</span>
                     </label>
                 </div>
                 <label class="cf-item cf-all" v-if="colFilterShown.length">

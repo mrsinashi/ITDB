@@ -47,7 +47,7 @@ export default {
             }
             this.fitObserver = new ResizeObserver(() => {
                 this.updateTableFit();
-                // Таблица уже окна стоит по центру – полоска нажатой строки за ней (этап 36)
+                // Масштаб по ширине окна поменялся – полоска нажатой строки в нём же (этап 40)
                 this.placeRowMark();
             });
             this.fitObserver.observe(wrap);

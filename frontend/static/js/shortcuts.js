@@ -151,19 +151,22 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
+    // Enter – VNC: только к строке с полоской, по которой нажали и больше ничего не трогали;
+    // иначе полоска снимается (этап 40). Поле ввода, кнопка, карточка – их Enter, не VNC
+    if (vm.view === "table" && event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+        vm.onTableEnter(event);
+        return;
+    }
     if (vm.view !== "table" || event.defaultPrevented || isTypingTarget(document.activeElement)) {
         return;
     }
-    // Enter – VNC, Alt+P – ping, Alt+R – RDP: к ПК, по строке которого нажали последним
-    // (выделять не нужно); открыта карточка – к её ПК
-    const plainEnter = event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+    // Alt+P – ping, Alt+R – RDP: к ПК, по строке которого нажали последним (выделять не
+    // нужно); открыта карточка – к её ПК
     const altKey = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-    const what = plainEnter ? "vnc" : (altKey && event.code === "KeyP" ? "ping" : (altKey && event.code === "KeyR" ? "rdp" : null));
+    const what = altKey && event.code === "KeyP" ? "ping" : (altKey && event.code === "KeyR" ? "rdp" : null);
     if (what) {
         if (!vm.editingRowId && !vm.cardEditKey && !vm.editingHostname && !vm.openMenu && !vm.scanPop && !vm.actionBar &&
-            !vm.newComputer && !vm.showArchive &&
-            !(plainEnter && event.target.closest && event.target.closest("button, .dropdown, .cf-menu, .scan-pop, .add-bar")) &&
-            vm.connectActive(what)) {
+            !vm.newComputer && !vm.showArchive && vm.connectActive(what)) {
             event.preventDefault();
         }
         return;

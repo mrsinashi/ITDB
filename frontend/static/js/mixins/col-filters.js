@@ -14,6 +14,11 @@
 // «Антивирусы» (этап 26з): в списке сверху – ещё и состояния (работает, базы
 // устарели, выключен); filter.statesOff – снятые состояния. ПК виден, если у него
 // есть антивирус в отмеченном состоянии с отмеченным названием.
+//
+// Остальные столбцы (этап 40) – так же, по выделению значения: выделения Таблицы
+// (повтор, проверен, нет в Jabber, срок прошёл… – Справочники), блочок сканера (по
+// ситуации, и когда кнопка «Значения сканера» выключена) и «Обычные» – без них.
+// ПК виден, если у значения есть отмеченное выделение (и значение отмечено ниже).
 
 import { matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
 import { columnTitle, dateKey, ipSubnetKey, isOverdue } from "../columns.js";
@@ -21,6 +26,11 @@ import { columnTitle, dateKey, ipSubnetKey, isOverdue } from "../columns.js";
 export const EMPTY_KEY = "";
 const EMPTY_LABEL = "(пусто)";
 const AV_STATES = ["on", "old", "off"];
+// Выделения значения в порядке Справочников, блочки сканера – «scan-<ситуация>»
+const MARK_STATES = ["dup", "hostname", "gone", "stale", "overdue", "verified", "checked"];
+const SCAN_STATES = ["diff", "fill", "unsure", "partial", "link"].map(function (kind) { return "scan-" + kind; });
+const PLAIN_STATE = "none";
+const VALUE_STATES = MARK_STATES.concat(SCAN_STATES, [PLAIN_STATE]);
 
 // Значения ячейки для фильтра: [{ key, value }]; пустая – [{ key: "" }]
 function valuesOf(row, col) {
@@ -166,25 +176,47 @@ export default {
             return { left: p.left + "px", top: p.top + "px", width: p.width + "px" };
         },
 
-        // Состояния антивирусов в списке фильтра (только у столбца «Антивирусы»):
-        // [{ kind, label, count, checked, style }]
+        // Состояния в списке фильтра: у «Антивирусов» – состояния антивирусов, у остальных
+        // столбцов (этап 40) – выделения значений, какие есть в столбце (и снятые), и
+        // «Обычные»; выделений нет – списка нет. [{ kind, label, count, checked, style, chip }]
         colFilterStates() {
             const menu = this.colFilterMenu;
             const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
-            if (!col || !col.scanOnly || !this.avSettings) {
+            if (!col || (col.scanOnly && !this.avSettings)) {
                 return [];
             }
             const rows = this.searchRows(this.applyColFilters(this.locationRows, col.field));
             const counts = {};
             rows.forEach((row) => {
-                const seen = new Set(this.avItems(row).map(function (a) { return a.status; }));
+                const seen = col.scanOnly ? new Set(this.avItems(row).map(function (a) { return a.status; })) : this.valueStates(row, col);
                 seen.forEach(function (kind) { counts[kind] = (counts[kind] || 0) + 1; });
             });
             const off = (this.colFilters[col.field] || {}).statesOff || [];
-            return this.avSettings.statuses.filter(function (st) { return st.show; }).map((st) => ({
-                kind: st.kind, label: st.label, count: counts[st.kind] || 0,
-                checked: off.indexOf(st.kind) === -1, style: this.avStatusStyle(st)
-            }));
+            if (col.scanOnly) {
+                return this.avSettings.statuses.filter(function (st) { return st.show; }).map((st) => {
+                    const style = this.avStatusStyle(st);
+                    return {
+                        kind: st.kind, label: st.label, count: counts[st.kind] || 0,
+                        checked: off.indexOf(st.kind) === -1, style: style, chip: !!(style || {}).backgroundColor
+                    };
+                });
+            }
+            const list = VALUE_STATES.filter(function (kind) {
+                return kind !== PLAIN_STATE && (counts[kind] || off.indexOf(kind) !== -1);
+            });
+            if (!list.length) {
+                return [];
+            }
+            list.push(PLAIN_STATE);
+            return list.map((kind) => {
+                const style = this.valueStateStyle(kind);
+                return {
+                    kind: kind, label: this.valueStateLabel(kind), count: counts[kind] || 0,
+                    checked: off.indexOf(kind) === -1, style: style,
+                    chip: !!style && !!(style.backgroundColor || style.boxShadow),
+                    title: kind === PLAIN_STATE ? "Без выделений и значений сканера" : this.valueStateLabel(kind)
+                };
+            });
         },
 
         colFilterMenuTitle() {
@@ -213,9 +245,68 @@ export default {
             }
             return rows.filter((row) => {
                 return active.every((f) => {
-                    return f.col.scanOnly ? this.avRowPasses(row, f) : rowPasses(row, f.col, f.filter, f.set);
+                    return f.col.scanOnly ? this.avRowPasses(row, f) : rowPasses(row, f.col, f.filter, f.set) && this.statesPass(row, f);
                 });
             });
+        },
+
+        // Выделения значения ячейки (этап 40): виды выделений Таблицы по всем строкам
+        // ячейки и блочок сканера («scan-diff»…); нет ничего – «none». Блочок – если его
+        // ситуация включена в Справочниках, и когда кнопка «Значения сканера» выключена
+        valueStates(row, col) {
+            void this.dupVersion; // дубли считаются вне Vue – зависимость вручную
+            const kinds = new Set();
+            const value = row[col.field];
+            if ((col.dup || col.date || col.field === "vacuum" || col.field === "hostname") &&
+                value !== null && value !== undefined && String(value).trim() !== "") {
+                const lines = col.multiline ? String(value).split("\n") : [String(value)];
+                lines.forEach((line) => {
+                    this.lineMarkKinds(this.lineMarks(row, col, line)).forEach(function (kind) { kinds.add(kind); });
+                });
+            }
+            const entry = row.archived ? null : this.diffIndex.get(row.id);
+            const d = entry ? entry[col.field] : null;
+            const mark = d ? this.scanMarkByKind[d.kind] : null;
+            if (mark && mark.enabled && !this.scanChipHidden(d)) {
+                kinds.add("scan-" + d.kind);
+            }
+            if (!kinds.size) {
+                kinds.add(PLAIN_STATE);
+            }
+            return kinds;
+        },
+
+        // Подпись и вид выделения – как в Справочниках
+        valueStateLabel(kind) {
+            if (kind === PLAIN_STATE) {
+                return "Обычные";
+            }
+            const m = kind.indexOf("scan-") === 0 ? this.scanMarkByKind[kind.slice(5)] : this.tableMarkMap[kind];
+            return m ? m.label : kind;
+        },
+
+        valueStateStyle(kind) {
+            if (kind === PLAIN_STATE) {
+                return null;
+            }
+            if (kind.indexOf("scan-") === 0) {
+                const mark = this.scanMarkByKind[kind.slice(5)];
+                return mark ? this.scanChipStyle(mark) : null;
+            }
+            return this.markStyle(kind);
+        },
+
+        // Отметки выделений: у значения есть отмеченное (снятых нет – фильтра нет)
+        statesPass(row, f) {
+            if (!f.statesOff.length) {
+                return true;
+            }
+            for (const kind of this.valueStates(row, f.col)) {
+                if (f.statesOff.indexOf(kind) === -1) {
+                    return true;
+                }
+            }
+            return false;
         },
 
         isColFiltered(field) {
@@ -330,18 +421,26 @@ export default {
             return (this.colFilters[field] || {}).statesOff || [];
         },
 
-        // Состояния антивирусов: оставить только allowed (все – фильтра по состоянию нет)
-        setAvStates(allowed) {
+        // Все состояния столбца: у «Антивирусов» – свои, у остальных – выделения значений
+        colStatesOf(col) {
+            return col && col.scanOnly ? AV_STATES : VALUE_STATES;
+        },
+
+        // Состояния открытого столбца: оставить только allowed (все – фильтра по ним нет)
+        setColStates(allowed) {
             const field = this.colFilterMenu.field;
-            const off = AV_STATES.filter(function (kind) { return allowed.indexOf(kind) === -1; });
+            const col = this.allColumns.find(function (c) { return c.field === field; });
+            const off = this.colStatesOf(col).filter(function (kind) { return allowed.indexOf(kind) === -1; });
             const old = this.colFilters[field];
             this.setColFilter(field, old ? { exclude: old.exclude, keys: old.keys, labels: old.labels } : null, off);
         },
 
-        toggleAvState(kind) {
-            const off = this.colFilterStatesOff(this.colFilterMenu.field);
-            const allowed = AV_STATES.filter(function (k) { return k === kind ? off.indexOf(k) !== -1 : off.indexOf(k) === -1; });
-            this.setAvStates(allowed);
+        toggleColState(kind) {
+            const field = this.colFilterMenu.field;
+            const col = this.allColumns.find(function (c) { return c.field === field; });
+            const off = this.colFilterStatesOff(field);
+            const allowed = this.colStatesOf(col).filter(function (k) { return k === kind ? off.indexOf(k) !== -1 : off.indexOf(k) === -1; });
+            this.setColStates(allowed);
         },
 
         // Отметить / снять значения открытого столбца
@@ -420,15 +519,24 @@ export default {
             }
         },
 
-        // Отмеченные состояния антивирусов словами: «выключен, базы устарели»
-        avStatesText(item) {
+        // Отмеченные состояния словами: «выключен, базы устарели»; у выделений значений
+        // (этап 40) – отмеченные, если их меньше, иначе «кроме повтор»
+        statesText(item) {
             const off = item.statesOff || [];
             if (!off.length) {
                 return "";
             }
             const labels = this.avStatusMap;
-            return AV_STATES.filter(function (kind) { return off.indexOf(kind) === -1; })
-                .map(function (kind) { return (labels[kind] ? labels[kind].label : kind).toLowerCase(); }).join(", ") || "ничего";
+            if (item.col.scanOnly) {
+                return AV_STATES.filter(function (kind) { return off.indexOf(kind) === -1; })
+                    .map(function (kind) { return (labels[kind] ? labels[kind].label : kind).toLowerCase(); }).join(", ") || "ничего";
+            }
+            const allowed = VALUE_STATES.filter(function (kind) { return off.indexOf(kind) === -1; });
+            const text = (list) => list.map((kind) => this.valueStateLabel(kind).toLowerCase()).join(", ");
+            if (!allowed.length) {
+                return "ничего";
+            }
+            return allowed.length <= off.length ? text(allowed) : "кроме " + text(off);
         },
 
         // Текст плашки: «OS: Win 7, Win 10», «Статус: кроме списан», «ИНВ: (пусто)»,
@@ -438,7 +546,7 @@ export default {
             const names = item.filter.keys.map(function (key) {
                 return key === EMPTY_KEY ? EMPTY_LABEL : (labels[key] || key);
             });
-            const states = this.avStatesText(item);
+            const states = this.statesText(item);
             if (states && item.filter.exclude && !names.length) {
                 return item.col.headerName + ": " + states;
             }
@@ -458,7 +566,7 @@ export default {
             const names = item.filter.keys.map(function (key) {
                 return key === EMPTY_KEY ? EMPTY_LABEL : (labels[key] || key);
             });
-            const states = this.avStatesText(item);
+            const states = this.statesText(item);
             if (states && item.filter.exclude && !names.length) {
                 return "«" + columnTitle(item.col) + "»: " + states;
             }
