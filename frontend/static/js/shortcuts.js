@@ -96,6 +96,10 @@ window.addEventListener("keydown", function (event) {
     // где бы ни был фокус; открытый список выбора расположения закрывается
     // своим Esc раньше (он не пропускает событие дальше)
     if (event.key === "Escape" && !event.defaultPrevented && !vm.card) {
+        if (vm.view === "table" && vm.newRoom) {
+            vm.closeNewRoom();
+            return;
+        }
         if (vm.view === "table" && vm.newComputer) {
             vm.closeNewComputer();
             return;
@@ -120,6 +124,12 @@ window.addEventListener("keydown", function (event) {
             vm.scanLinkBar = null;
             return;
         }
+    }
+    // «Имена ПК»: Esc — снять выбор узла (справа — снова «Своё имя»)
+    if (vm.view === "choices" && vm.choicesTab === "names" && vm.nameSelId !== null && event.key === "Escape" &&
+        !event.defaultPrevented && !vm.openMenu && !isTypingTarget(document.activeElement)) {
+        vm.nameSelId = null;
+        return;
     }
     // История: Ctrl+A — выделить все видимые записи, Esc — снять выделение
     if (vm.view === "history" && !vm.card && !event.defaultPrevented && !isTypingTarget(document.activeElement)) {

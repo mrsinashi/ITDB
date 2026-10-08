@@ -209,12 +209,36 @@ def create_location(
     validate_name_code(kind, name, code)
     check_duplicate(session, kind, parent_id, name, code)
 
+    sort = next_sort(session, parent_id)
+    before_id = payload.get("before_id")
+
+    # Новый кабинет при добавлении ПК (этап 36) — перед узлом before_id (по номеру
+    # кабинета), узлы с ним и дальше сдвигаются; без before_id — в конец
+    if before_id is not None:
+        try:
+            before = session.get(Location, int(before_id))
+        except (TypeError, ValueError):
+            before = None
+
+        if not before or before.archived or before.parent_id != parent_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Узел, перед которым добавить, не найден.",
+            )
+
+        sort = before.sort
+
+        session.query(Location).filter(
+            Location.parent_id == parent_id if parent_id is not None else Location.parent_id.is_(None),
+            Location.sort >= sort,
+        ).update({Location.sort: Location.sort + 1}, synchronize_session=False)
+
     location = Location(
         parent_id=parent_id,
         kind=kind,
         name=name or code,
         code=code,
-        sort=next_sort(session, parent_id),
+        sort=sort,
     )
     session.add(location)
     session.flush()

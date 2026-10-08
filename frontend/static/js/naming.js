@@ -5,10 +5,11 @@
 // Начало имени узла — части по пути от адреса через «-»: отделение ter, кабинет
 // proc → ter-proc, у ПК в нём — ter-proc-1. Без частей на всём пути правила нет.
 //
-// ПК по правилу, если имя — начало имени узла и номер (ter-proc-7: номер любой,
-// № места с ним совпадать не обязан), у одного места — само начало. Иначе ПК
-// предлагается имя: с № места, если такое свободно, или следующее после самого
-// большого номера. «Своё имя» действует, пока у ПК то же имя и то же расположение.
+// Номер в имени — по порядку ПК сверху вниз, как в Таблице (узлы по дереву, в узле —
+// по № места; этап 36): ter-proc-1, ter-proc-2… У узлов с одним началом имён
+// (eko2 на два кабинета) счёт сквозной. ПК по правилу, если имя — ровно такое; у
+// одного места — само начало. «Своё имя» действует, пока у ПК то же имя и то же
+// расположение; такие ПК в счёт не входят.
 //
 // «По таблице»: как названы ПК сейчас → правила узлов. У узла — самое частое
 // начало имён его ПК; у отделения — ещё и первая часть, общая для большинства
@@ -35,18 +36,22 @@ export function parseHost(name) {
     return m ? { base: m[1], num: Number(m[2]) } : { base: key, num: null };
 }
 
-// Узлы дерева → id → { node, parentId, level, start (начало имени), above (начало
-// узла выше), single, leaf }. draft — { id, part }: часть, которую сейчас вводят
+// Узлы дерева → id → { node, parentId, level, order (порядок в дереве), start (начало
+// имени), above (начало узла выше), part, own, single, leaf }. draft — { id, part, own,
+// single }: правило, которое сейчас вводят (части может не быть — как у узла)
 export function namingIndex(roots, draft) {
     const index = new Map();
+    let order = 0;
     const walk = function (nodes, parentId, above, level) {
         nodes.forEach(function (node) {
-            const part = draft && draft.id === node.id ? draft.part : (node.name_part || "");
-            const start = node.name_own ? part : joinParts(above, part);
+            const mine = draft && draft.id === node.id ? draft : {};
+            const part = mine.part !== undefined ? mine.part : (node.name_part || "");
+            const own = mine.own !== undefined ? mine.own : !!node.name_own;
+            const start = own ? part : joinParts(above, part);
             const children = node.children || [];
             index.set(node.id, {
-                node: node, parentId: parentId, level: level, start: start, above: above,
-                single: !!node.name_single, leaf: !children.length
+                node: node, parentId: parentId, level: level, order: order++, start: start, above: above,
+                part: part, own: own, single: mine.single !== undefined ? mine.single : !!node.name_single, leaf: !children.length
             });
             walk(children, node.id, start, level + 1);
         });
@@ -60,86 +65,80 @@ export function ruleText(entry) {
     return entry && entry.start ? entry.start + (entry.single ? "" : "-N") : "";
 }
 
-// Подходит ли имя под правило узла (null — правила нет)
-export function matchesRule(entry, hostname) {
-    if (!entry || !entry.start) {
-        return null;
-    }
-    const key = hostKey(hostname);
-    if (entry.single) {
-        return key === entry.start;
-    }
-    const head = entry.start + "-";
-    return key.indexOf(head) === 0 && /^\d+$/.test(key.slice(head.length));
-}
-
 export function keepValid(keep, row) {
     const k = keep && keep[row.id];
     return !!k && k.name === row.hostname && k.location_id === row.location_id;
 }
 
-export function takenNames(rows) {
-    const taken = new Set();
-    rows.forEach(function (row) {
-        if (!row.archived && row.hostname) {
-            taken.add(hostKey(row.hostname));
-        }
-    });
-    return taken;
+// № места для порядка: без номера — в конце узла
+function seatOf(row) {
+    const n = Number(row.seat_no);
+    return row.seat_no !== null && row.seat_no !== undefined && row.seat_no !== "" && Number.isFinite(n) ? n : Infinity;
 }
 
-// Имя по правилу для ПК с № места seat: с № места, если свободно, иначе — следующий номер
-export function freeName(entry, seat, taken) {
-    if (entry.single) {
-        return entry.start;
-    }
-    const head = entry.start + "-";
-    const n = Number(seat);
-    if (Number.isInteger(n) && n > 0 && !taken.has(head + n)) {
-        return head + n;
-    }
-    let max = 0;
-    taken.forEach(function (name) {
-        if (name.indexOf(head) === 0 && /^\d+$/.test(name.slice(head.length))) {
-            max = Math.max(max, Number(name.slice(head.length)));
-        }
-    });
-    return head + (max + 1);
-}
-
-// Проверка имён: id ПК → { entry, ok, kept, expected }; ПК без правила в карте нет.
-// Предлагаемые имена не повторяются: занятые и уже предложенные пропускаются
-export function checkNames(rows, index, keep) {
-    const result = new Map();
-    const taken = takenNames(rows);
-    const pending = [];
-    rows.forEach(function (row) {
-        if (row.archived) {
+// ПК, которые считаются по порядку: start → [{ row, order, pos }] сверху вниз
+function countedRows(rows, index, keep) {
+    const groups = new Map();
+    rows.forEach(function (row, pos) {
+        const entry = row.archived ? null : index.get(row.location_id);
+        if (!entry || !entry.start || entry.single || keepValid(keep, row)) {
             return;
         }
-        const entry = index.get(row.location_id);
+        let list = groups.get(entry.start);
+        if (!list) {
+            groups.set(entry.start, list = []);
+        }
+        list.push({ row: row, order: entry.order, seat: seatOf(row), pos: pos });
+    });
+    groups.forEach(function (list) {
+        list.sort(function (a, b) {
+            return a.order - b.order || a.seat - b.seat || a.pos - b.pos;
+        });
+    });
+    return groups;
+}
+
+// Проверка имён: id ПК → { entry, ok, kept, expected, num }; ПК без правила в карте нет.
+// rows — в порядке Таблицы (с сервера): он решает при одинаковом № места
+export function checkNames(rows, index, keep) {
+    const result = new Map();
+    rows.forEach(function (row) {
+        const entry = row.archived ? null : index.get(row.location_id);
         if (!entry || !entry.start) {
             return;
         }
         const kept = keepValid(keep, row);
-        const ok = kept || (!!row.hostname && matchesRule(entry, row.hostname));
-        const item = { entry: entry, ok: ok, kept: kept, expected: null };
-        result.set(row.id, item);
-        if (!ok) {
-            pending.push([row, item]);
-        }
+        const expected = kept ? null : (entry.single ? entry.start : null);
+        result.set(row.id, { entry: entry, ok: kept || (!!expected && hostKey(row.hostname) === expected), kept: kept, expected: expected, num: null });
     });
-    pending.forEach(function (pair) {
-        pair[1].expected = freeName(pair[1].entry, pair[0].seat_no, taken);
-        taken.add(pair[1].expected);
+    countedRows(rows, index, keep).forEach(function (list, start) {
+        list.forEach(function (x, i) {
+            const item = result.get(x.row.id);
+            item.num = i + 1;
+            item.expected = start + "-" + (i + 1);
+            item.ok = hostKey(x.row.hostname) === item.expected;
+        });
     });
     return result;
 }
 
-// Имя нового ПК в узле (нет правила — "")
-export function newName(index, locationId, seat, rows) {
+// Имя нового ПК в узле на месте seat (нет правила — ""): номер — сколько ПК с тем же
+// началом выше него и + 1. Место занято — он встаёт на него, остальные сдвигаются
+export function newName(index, locationId, seat, rows, keep) {
     const entry = index.get(locationId);
-    return entry && entry.start ? freeName(entry, seat, takenNames(rows)) : "";
+    if (!entry || !entry.start) {
+        return "";
+    }
+    if (entry.single) {
+        return entry.start;
+    }
+    const list = countedRows(rows, index, keep).get(entry.start) || [];
+    const n = Number(seat);
+    const at = String(seat || "").trim() && Number.isFinite(n) ? n : Infinity;
+    const before = list.filter(function (x) {
+        return x.order < entry.order || (x.order === entry.order && (at === Infinity || x.seat < at));
+    }).length;
+    return entry.start + "-" + (before + 1);
 }
 
 // Как названы ПК узлов сейчас: id узла → { base, single, count, total } — самое

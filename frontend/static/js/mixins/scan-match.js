@@ -9,7 +9,7 @@
 // конфликт, нет в ITDB, дубль. Решения администратора: «это этот ПК», «не этот
 // ПК», «забыть».
 
-import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
+import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 
 const POLL_MS = 1000;
 const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net"];
@@ -122,9 +122,10 @@ export default {
         },
 
         scanNamesShown() {
-            const words = searchWords(this.scanMatchQuery);
-            return this.scanNames.items.filter((n) => {
-                return !words.length || matchesAllWords(searchNorm([this.scanFieldLabel(n.field), n.source, n.table].join(" ")), words);
+            const texts = this.scanNames.items.map((n) => searchNorm([this.scanFieldLabel(n.field), n.source, n.table].join(" ")));
+            const words = searchWordsIn(this.scanMatchQuery, texts);
+            return this.scanNames.items.filter(function (n, i) {
+                return !words.length || matchesAllWords(texts[i], words);
             });
         },
 

@@ -9,7 +9,7 @@
 // сбор — полоса «просмотрено из» над таблицей. Кнопка на панели — перечитать страницу.
 // Этап 31: давно не подключавшиеся (stale) и давний последний IP (ip_stale) — серым.
 
-import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
+import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 
 export const VACUUM_FILTERS = [
     { key: "all", label: "Все" },
@@ -67,7 +67,7 @@ export default {
         },
 
         vacuumShown() {
-            const words = searchWords(this.vacuumQuery);
+            const words = searchWordsIn(this.vacuumQuery, this.vacuumUsers.map(function (u) { return u.search; }));
             return this.vacuumUsers.filter((u) => {
                 return inVacuumFilter(u, this.vacuum.filter) && (!words.length || matchesAllWords(u.search, words));
             });

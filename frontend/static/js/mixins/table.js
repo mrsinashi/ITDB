@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
-import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, setCtrlDown } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, orderColumns, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown } from "../util.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, orderColumns, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
@@ -98,9 +98,29 @@ export default {
             });
         },
 
-        // Столбцы для расчёта ширины: встроенные и общий «Кабинет»
+        // Столбцы на экране: видимые и при кнопке «Имена по правилам» — «По правилу»
+        // слева от HOSTNAME (этап 36; закреплён, если закреплён HOSTNAME). Его нет в
+        // меню «Столбцы», печати, порядке; не сортируется, не фильтруется, не правится
+        viewColumns() {
+            const cols = this.columns;
+            if (!this.nameCheck) {
+                return cols;
+            }
+            const at = cols.findIndex(function (col) { return col.field === "hostname"; });
+            const host = at === -1 ? null : cols[at];
+            const manual = this.manualWidths[NAME_RULE_COLUMN.field];
+            const rule = Object.assign({}, NAME_RULE_COLUMN, {
+                sticky: !!host && !!host.sticky,
+                width: manual !== undefined ? manual : (this.autoWidths[NAME_RULE_COLUMN.field] || 100)
+            });
+            const list = cols.slice();
+            list.splice(Math.max(at, 0), 0, rule);
+            return list;
+        },
+
+        // Столбцы для расчёта ширины: встроенные, общий «Кабинет» и «По правилу»
         widthColumns() {
-            return this.builtinColumns.concat([ROOM_COLUMN]);
+            return this.builtinColumns.concat(this.nameCheck ? [ROOM_COLUMN, NAME_RULE_COLUMN] : [ROOM_COLUMN]);
         },
 
         hiddenColumnCount() {
@@ -142,7 +162,7 @@ export default {
         // Map id строки → { поле: цвет }. Строки без заливки в карту не входят.
         cellFills() {
             const map = new Map();
-            const cols = this.columns;
+            const cols = this.viewColumns;
             this.displayRows.forEach((row) => {
                 let fills = null;
                 cols.forEach((col) => {
@@ -170,7 +190,7 @@ export default {
 
         nextColField() {
             const next = {};
-            const cols = this.columns;
+            const cols = this.viewColumns;
             for (let i = 0; i + 1 < cols.length; i++) {
                 next[cols[i].field] = cols[i + 1].field;
             }
@@ -178,7 +198,7 @@ export default {
         },
 
         totalWidth() {
-            const base = this.columns.reduce(function (sum, col) {
+            const base = this.viewColumns.reduce(function (sum, col) {
                 return sum + col.width;
             }, 0);
             return base;
@@ -326,7 +346,7 @@ export default {
         // Клик по шапке — сортировка, с Ctrl — закрепить столбец / снять закрепление.
         // Столбец только что перетаскивали — это не клик
         onHeadClick(event, col) {
-            if (this.colDragDone) {
+            if (this.colDragDone || col.virtual) {
                 return;
             }
             if (event.ctrlKey || event.metaKey) {
@@ -433,12 +453,13 @@ export default {
 
         recalcWidths() {
             // Блочки значений сканера в ячейках — ширина столбца и под них (этап 26в),
-            // у HOSTNAME — и блочок имени по правилу (этап 35)
+            // в «По правилу» — блочок имени по правилу или «своё» (этап 36)
             const scanChip = (row, field) => {
+                if (field === NAME_RULE_COLUMN.field) {
+                    return this.nameChip(row) || (this.nameKept(row) ? "своё" : null);
+                }
                 const d = this.scanChipShown(row, field);
-                const name = field === "hostname" ? this.nameChip(row, { field: field }) : null;
-                const text = d ? this.scanChipText(d) : null;
-                return name && (!text || name.length > text.length) ? name : text;
+                return d ? this.scanChipText(d) : null;
             };
             // Блочок повтора и антивируса шире текста, выделенные логины VACUUM — жирные
             const avBold = !!this.avSettings && this.avSettings.statuses.some(function (st) { return st.bold; });
@@ -464,6 +485,9 @@ export default {
             };
             if (col.note) {
                 cls["note-cell"] = true;
+            }
+            if (col.virtual) {
+                cls["name-rule-cell"] = true;
             }
             if (col.field === this.stuckEdge) {
                 cls["sticky-edge"] = true;
@@ -807,7 +831,7 @@ export default {
 
         stickyLeft(col) {
             let left = 0;
-            for (const c of this.columns) {
+            for (const c of this.viewColumns) {
                 if (c.field === col.field) {
                     break;
                 }
@@ -1044,19 +1068,13 @@ export default {
 
         // Строки, в которых нашлись все слова поиска по базе
         searchRows(rows) {
-            const words = searchWords(this.quickFilter);
-            if (!words.length) {
+            if (!searchWords(this.quickFilter).length) {
                 return rows;
             }
             const fields = (this.searchHidden ? this.allColumns : this.columns).map(function (col) {
                 return col.field;
             });
-            // Число среди нескольких слов («хир орд 3») ищется целиком: это № места,
-            // № кабинета или отдельное число внутри текста («Win 10»). Иначе «3»
-            // находилось бы в каждом IP 10.0.3.x, в этаже, в кабинете 301.
-            // Одно слово — как раньше, кусок где угодно (часть ИНВ, IP).
-            const whole = words.length > 1;
-            return rows.filter(function (row) {
+            const rowTexts = rows.map(function (row) {
                 const texts = [];
                 fields.forEach(function (field) {
                     const value = row[field];
@@ -1064,6 +1082,21 @@ export default {
                         texts.push({ field: field, text: searchNorm(value) });
                     }
                 });
+                return texts;
+            });
+            // Слово, которого нет нигде, — в другой раскладке («[bh» → «хир»)
+            const words = searchWordsIn(this.quickFilter, function (w) {
+                return rowTexts.some(function (texts) {
+                    return texts.some(function (t) { return t.text.indexOf(w) !== -1; });
+                });
+            });
+            // Число среди нескольких слов («хир орд 3») ищется целиком: это № места,
+            // № кабинета или отдельное число внутри текста («Win 10»). Иначе «3»
+            // находилось бы в каждом IP 10.0.3.x, в этаже, в кабинете 301.
+            // Одно слово — как раньше, кусок где угодно (часть ИНВ, IP).
+            const whole = words.length > 1;
+            return rows.filter(function (row, i) {
+                const texts = rowTexts[i];
                 return words.every(function (w) {
                     if (whole && /^\d+$/.test(w)) {
                         return texts.some(function (t) {
@@ -1222,6 +1255,7 @@ export default {
             }
             this.rafId = requestAnimationFrame(() => {
                 this.rafId = null;
+                this.placeRowMark();
                 this.updateStickyShadow();
                 this.refreshHoverFromPoint();
                 if (this.copyHint) {
@@ -1240,7 +1274,7 @@ export default {
             const scrollLeft = wrap.scrollLeft / (this.tableZoom || 1);
             let loose = 0;
             let edge = null;
-            for (const col of this.columns) {
+            for (const col of this.viewColumns) {
                 if (!col.sticky) {
                     loose += col.width;
                 } else if (scrollLeft > 0 && scrollLeft >= loose - 0.5) {
@@ -1509,7 +1543,7 @@ export default {
                 return null;
             }
             const tr = td.parentElement;
-            const col = this.columns[td.cellIndex];
+            const col = this.viewColumns[td.cellIndex];
             const id = Number(tr.dataset.id);
             const row = this.displayRows.find(function (r) { return r.id === id; });
             if (!col || !row) {

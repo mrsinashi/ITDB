@@ -5320,19 +5320,24 @@ html.no-radius .tm-sample.chip {
 }
 
 /* ============================================================
-   Этап 31: последняя нажатая строка Таблицы (Enter — VNC, Alt+P — ping,
-   Alt+R — RDP идут к этому ПК) — полоска у левого края строки
+   Этапы 31, 36: последняя нажатая строка Таблицы (Enter — VNC, Alt+P — ping,
+   Alt+R — RDP идут к этому ПК) — полоска у левого края видимой части строки, и при
+   прокрутке вправо. Отдельный элемент над таблицей (placeRowMark); под шапкой
+   таблицы прячется, над закреплёнными столбцами — видна
    ============================================================ */
 :root {
     --row-active-bar: #555;
 }
-.data-table tbody tr.row-active td:first-child::before {
-    content: "";
+.table-wrap {
+    position: relative;
+}
+.row-mark {
+    display: none;
     position: absolute;
     left: 0;
     top: 0;
-    bottom: 1px;
     width: 3px;
+    z-index: 4;
     background: var(--row-active-bar);
     pointer-events: none;
 }
@@ -5479,10 +5484,11 @@ html.col-dragging * {
 }
 
 /* ============================================================
-   Имена ПК по правилам (этап 35): вкладка «Имена ПК» в Справочниках,
-   блочок с именем по правилу под HOSTNAME в Таблице
+   Имена ПК по правилам (этапы 35, 36): вкладка «Имена ПК» в Справочниках,
+   столбец «По правилу» в Таблице
    ============================================================ */
-/* Таблица правил и «Свои имена» — рядом, каждая прокручивается в своей рамке */
+/* Таблица правил и справа — ПК выбранного узла («Своё имя», если не выбран); каждая
+   прокручивается в своей рамке */
 .nr-layout {
     flex: 1 1 auto;
     min-height: 0;
@@ -5497,9 +5503,10 @@ html.col-dragging * {
 .nr-layout > .nr-wrap {
     margin-right: 44px;
 }
-.nr-layout > .nr-keep-wrap {
+.nr-layout > .nr-side-wrap {
     flex: 0 1 auto;
-    min-width: 200px;
+    min-width: 260px;
+    margin-right: 0;
 }
 /* Ширина — по таблице: место под полосу прокрутки есть всегда, иначе с ней
    появлялась бы и полоса снизу */
@@ -5508,7 +5515,8 @@ html.col-dragging * {
     scrollbar-gutter: stable;
 }
 .nr-table,
-.nr-keep {
+.nr-keep,
+.nr-pcs-table {
     width: auto;
 }
 .nr-table td.nr-loc {
@@ -5535,67 +5543,86 @@ html.col-dragging * {
 .nr-table tr.nr-building .node-icon {
     color: #9b1c1c;
 }
-.nr-table tr.nr-focus td {
-    background: var(--search-hit-bg);
+/* Выбранный узел (справа — его ПК) — как раскрытая строка «Проверки» */
+.nr-table tr.nr-sel td,
+.nr-table tr.nr-sel.is-hover td {
+    background: var(--sm-open-bg);
 }
-.nr-table td.nr-c {
+.nr-table td.nr-c,
+.nr-pcs-table td.nr-c,
+.nr-keep td.nr-c {
     width: 1%;
     text-align: center;
 }
-.nr-table th.nr-c {
+.nr-table th.nr-c,
+.nr-pcs-table th.nr-c {
     text-align: center;
 }
-.nr-table td.nr-c input[type="checkbox"] {
-    margin: 0;
-    vertical-align: -2px;
-    accent-color: var(--brand);
+/* Имя ПК из частей: серое начало от узлов выше, своя часть — поле по ширине
+   текста, серый номер. Серое под курсором — с подложкой (клик — убрать / вернуть),
+   убранное — зачёркнуто */
+.nr-table td.nr-name {
+    min-width: 150px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    white-space: nowrap;
 }
-/* Пустые галочки — только у строки под курсором: видно, где включено */
-.nr-table td.nr-c input[type="checkbox"]:not(:checked) {
-    visibility: hidden;
+.nr-table .nr-pre,
+.nr-table .nr-suf {
+    padding: 1px 0;
+    border-radius: 2px;
+    color: var(--text-muted);
 }
-.nr-table tbody tr:hover td.nr-c input[type="checkbox"]:not(:disabled),
-.nr-table tbody tr.is-hover td.nr-c input[type="checkbox"]:not(:disabled) {
-    visibility: visible;
+.nr-table .nr-pre.edit,
+.nr-table .nr-suf.edit {
+    cursor: pointer;
 }
-/* Часть имени — поле во всю ячейку, выглядит как текст ячейки */
-.nr-table td.nr-part {
-    width: 110px;
-    min-width: 110px;
-    padding: 0;
+.nr-table .nr-pre.edit:hover,
+.nr-table .nr-suf.edit:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--text-secondary);
+}
+.nr-table .nr-pre.off,
+.nr-table .nr-suf.off {
+    text-decoration: line-through;
+    opacity: 0.7;
 }
 .nr-input {
-    display: block;
-    width: 100%;
-    height: 24px;
+    display: inline-block;
+    field-sizing: content;
+    min-width: 3px;
+    height: 21px;
     box-sizing: border-box;
     margin: 0;
-    padding: 3px 8px;
+    padding: 0 1px;
     border: none;
+    border-radius: 2px;
     background: transparent;
     color: var(--text);
     font: inherit;
     outline: none;
+    vertical-align: baseline;
 }
 .nr-input:not([readonly]):hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(0, 0, 0, 0.06);
 }
 .nr-input:not([readonly]):focus {
+    padding: 0 3px;
     background: #fff;
     box-shadow: inset 0 0 0 1px var(--brand);
 }
-.nr-table td.nr-rule {
-    min-width: 120px;
-}
-.nr-table td.nr-rule.head {
-    color: var(--text-secondary);
-}
-.nr-table td.nr-rule.long {
-    color: var(--danger-strong);
-}
-.nr-table .nr-n,
-.nr-table .nr-none {
+.nr-input::placeholder {
     color: var(--text-muted);
+}
+/* Пустая часть вне правки — без места: «ter-1», а не «ter -1» */
+.nr-input.nr-empty:not(:focus) {
+    min-width: 0;
+    padding: 0;
+}
+.nr-table td.nr-name.long .nr-input,
+.nr-table td.nr-name.long .nr-pre,
+.nr-table td.nr-name.long .nr-suf {
+    color: var(--danger-strong);
 }
 .nr-table td.nr-pcs {
     min-width: 44px;
@@ -5616,9 +5643,6 @@ html.col-dragging * {
 .nr-table a.nr-bad:hover {
     filter: brightness(0.94);
 }
-.nr-table td.nr-sug {
-    min-width: 130px;
-}
 .nr-table button.nr-chip:hover {
     background: #dedede;
 }
@@ -5626,16 +5650,65 @@ html.col-dragging * {
     opacity: 0.5;
     cursor: default;
 }
-/* Свои имена */
-.nr-keep-wrap {
-    margin-right: 0;
+/* ПК выбранного узла: шапка-группа с узлом и «Переименовать: N» */
+.nr-pcs-table tr.nr-sel-head td {
+    padding: 2px 4px 2px 8px;
+    background: var(--gray-group);
+    border-bottom-color: var(--group-line);
 }
-.nr-keep td.nr-host a {
+.nr-pcs-table .nr-sel-in {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 21px;
+}
+.nr-pcs-table .nr-sel-title {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.nr-pcs-table .nr-rename-all {
+    margin-left: auto;
+    padding: 0 8px;
+    line-height: 19px;
+    font-size: 12px;
+}
+.nr-pcs-table .nr-sel-close {
+    margin-left: auto;
+}
+.nr-pcs-table .nr-rename-all + .nr-sel-close {
+    margin-left: 0;
+}
+/* Кабинеты ниже выбранного узла — строками-подзаголовками */
+.nr-pcs-table tr.nr-sub td {
+    background: var(--surface-alt);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.nr-pcs-table td.nr-seat {
+    font-variant-numeric: tabular-nums;
+}
+.nr-pcs-table td.nr-want {
+    min-width: 110px;
+}
+.nr-pcs-table .nr-ok,
+.nr-pcs-table .nr-none {
+    color: var(--text-muted);
+}
+.nr-pcs-table button.name-chip:hover {
+    filter: brightness(0.94);
+}
+.nr-pcs-table button.name-chip.open {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+/* Имя ПК — ссылкой на карточку, как в «Своём имени» */
+.nr-keep td.nr-host a,
+.nr-pcs-table td.nr-host a {
     color: inherit;
     font-weight: 600;
     text-decoration: none;
 }
-.nr-keep td.nr-host a:hover {
+.nr-keep td.nr-host a:hover,
+.nr-pcs-table td.nr-host a:hover {
     text-decoration: underline;
 }
 .nr-keep td.nr-path {
@@ -5644,13 +5717,19 @@ html.col-dragging * {
     text-overflow: ellipsis;
 }
 .nr-keep td.nr-c {
-    width: 1%;
     padding: 2px 4px;
 }
-.nr-keep .nr-unkeep:hover {
+.nr-unkeep:hover {
     color: var(--danger-strong);
 }
-/* Блочок имени по правилу — в ячейке HOSTNAME и в карточке у блочка */
+/* «своё» — ПК с именем не по правилу, так и надо */
+.name-kept {
+    color: var(--text-muted);
+}
+.name-kept .nr-unkeep {
+    margin-left: 4px;
+}
+/* Блочок имени по правилу — в столбце «По правилу», справа на вкладке и в карточке */
 .scan-chip.name-chip {
     background: var(--name-chip-bg);
     font-weight: 400;
@@ -5662,4 +5741,41 @@ html.col-dragging * {
 }
 .name-pop .np-rule:hover {
     text-decoration: underline;
+}
+/* Столбец «По правилу» в Таблице: блочок в строку, шапка не нажимается */
+.data-table th.th-virtual {
+    cursor: default;
+}
+.data-table td.name-rule-cell .scan-chip {
+    margin-top: 0;
+}
+.data-table td.name-rule-cell .name-kept {
+    font-weight: 400;
+}
+
+/* ============================================================
+   Новый кабинет из строки «Новый компьютер» (этап 36): в списке расположений —
+   «＋ кабинет» у отделения и этажа под курсором и «＋ 315 …» внизу, когда кабинет
+   не нашёлся; строка «Новый кабинет в:» — под строкой нового ПК
+   ============================================================ */
+.loc-list .ll-item.ll-new b {
+    font-weight: 600;
+}
+.loc-list .ll-item.ll-first {
+    margin-top: 3px;
+    box-shadow: 0 -1px 0 var(--menu-border);
+}
+.loc-list .ll-item.ll-first:first-child {
+    margin-top: 0;
+    box-shadow: none;
+}
+.loc-list .ll-add {
+    float: right;
+    margin-left: 12px;
+    padding: 0 5px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+.loc-list .ll-add:hover {
+    background: rgba(0, 0, 0, 0.12);
 }

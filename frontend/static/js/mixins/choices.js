@@ -1,6 +1,6 @@
 // Страница «Справочники»: значения, оформление столбцов и значений, пользовательские поля.
 
-import { apiFetch, matchesAllWords, searchNorm, searchWords, splitMulti } from "../util.js";
+import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
 import { ROOM_COLUMN, ROOM_STYLE_FIELDS, columnTitle, decoration, ipSubnetKey, styleKey } from "../columns.js";
 
 const NO_STYLE = {};
@@ -15,7 +15,14 @@ export default {
         // Значение найдено, если все слова есть в «название раздела + значение»
         // и хотя бы одно — в самом значении.
         choicesMatch() {
-            const words = searchWords(this.choicesQuery);
+            const texts = [];
+            if (searchWords(this.choicesQuery).length) {
+                this.styleBlocks.forEach(function (b) {
+                    texts.push(searchNorm(b.label));
+                    (b.values || []).forEach(function (v) { texts.push(searchNorm(v.value)); });
+                });
+            }
+            const words = searchWordsIn(this.choicesQuery, texts);
             const res = { words: words, blocks: [], blockSet: new Set(), valueSet: new Set(), hits: 0, pos: 0, current: null };
             if (!words.length) {
                 return res;

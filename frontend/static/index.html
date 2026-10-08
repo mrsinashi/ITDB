@@ -234,7 +234,7 @@
                     </span>
                     <!-- Только строки с предложениями: значок без кнопки, есть только при включённой кнопке -->
                     <span v-if="scanOverlay" class="scan-only" :class="{ on: scanOnlyRows }" :title="scanOnlyRows ? 'Показать все строки' : 'Только строки с предложениями'" @click="scanOnlyRows = !scanOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
-                    <!-- Имена по правилам (этап 35): под HOSTNAME — блочок с именем по правилу у ПК, названных иначе -->
+                    <!-- Имена по правилам (этапы 35, 36): слева от HOSTNAME — столбец «По правилу» с именем у ПК, названных иначе -->
                     <button class="btn icon-only" :class="{ active: nameCheck, 'has-badge': nameCheck && nameBadCount > 0 }" @click="toggleNameCheck"
                         :title="nameCheck ? 'Не по правилу: ' + nameBadCount : 'Имена по правилам'">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg><span v-if="nameCheck && nameBadCount > 0 && buttonCounts" class="btn-badge">{{ nameBadBadge }}</span>
@@ -273,15 +273,26 @@
             <!-- Новый компьютер: строка под панелью. Остальные поля — потом в таблице или карточке -->
             <div v-if="newComputer" class="add-bar">
                 <span class="ab-title">Новый компьютер:</span>
-                <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions"
-                    placeholder="Расположение: начни вводить адрес, отделение или кабинет" @pick="onNewComputerLocation"></location-picker>
+                <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions" can-add-room
+                    placeholder="Расположение: начни вводить адрес, отделение или кабинет" @pick="onNewComputerLocation" @add-room="openNewRoom"></location-picker>
                 <input ref="nc-seat" class="input ab-seat" v-model="newComputer.seat_no" placeholder="№ места" title="№ Места — только число" @keydown.enter="submitNewComputer">
                 <input ref="nc-hostname" class="input ab-host" v-model="newComputer.hostname" placeholder="HOSTNAME" spellcheck="false" @keydown.enter="submitNewComputer"
                     :title="newComputer.hostname && newComputer.hostname === newComputer.autoName ? 'Имя по правилу' : null">
-                <input ref="nc-ip" class="input ab-ip" v-model="newComputer.ip" placeholder="IP" spellcheck="false" @keydown.enter="submitNewComputer">
+                <input ref="nc-ip" class="input ab-ip" v-model="newComputer.ip" placeholder="IP" spellcheck="false" @keydown.enter="submitNewComputer" @input="onIpInput($event, newComputer, 'ip')">
                 <button class="btn btn-primary icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewComputer" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newComputerError" class="ab-error">{{ newComputerError }}</span>
+            </div>
+            <!-- Новый кабинет (этап 36): «＋ кабинет» в списке расположений нового ПК -->
+            <div v-if="newComputer && newRoom" class="add-bar room-bar">
+                <span class="ab-title">Новый кабинет в:</span>
+                <location-picker ref="nr-parent" class="ab-loc ab-loc-short" input-class="input" :value="newRoom.parent_id" :options="roomParentOptions"
+                    placeholder="Отделение или этаж" @pick="onNewRoomParent"></location-picker>
+                <input ref="nr-code" class="input ab-seat" v-model="newRoom.code" placeholder="№ каб." title="Номер кабинета" spellcheck="false" @keydown.enter="submitNewRoom">
+                <input ref="nr-name" class="input ab-host" v-model="newRoom.name" placeholder="Название" spellcheck="false" @keydown.enter="submitNewRoom">
+                <button class="btn btn-primary icon-only" :disabled="newRoom.saving" @click="submitNewRoom" title="Добавить кабинет (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn icon-only" @click="closeNewRoom" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <span v-if="newRoom.error" class="ab-error">{{ newRoom.error }}</span>
             </div>
 
             <!-- Действие с выбранными строками: строка под панелью, как «Новый компьютер» -->
@@ -323,26 +334,30 @@
 
             <!-- Таблица уже окна — по центру (отступ слева — целым числом пикселей, иначе линии мылятся) -->
             <div class="table-wrap" :class="{ fit: tableFit }" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
+                <!-- Полоска у последней нажатой строки (этапы 31, 36): у левого края видимой части -->
+                <div ref="rowMark" class="row-mark"></div>
                 <table class="data-table" :class="{ 'sticky-stuck': !!stuckEdge, 'alt-copy': altDown }" ref="table" :style="tableStyle">
                     <colgroup>
-                        <col v-for="col in columns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
+                        <col v-for="col in viewColumns" :key="'col-' + col.field" :data-field="col.field" :style="{ width: col.width + 'px' }">
                     </colgroup>
                     <thead>
                         <tr>
-                            <th v-for="col in columns" :key="'th-' + col.field" :data-field="col.field"
-                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field }"
+                            <th v-for="col in viewColumns" :key="'th-' + col.field" :data-field="col.field"
+                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field, 'th-virtual': col.virtual }"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
                                 @mousedown="onHeadMouseDown($event, col)" @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
                                 <!-- Подпись по центру; справа всегда место под воронку: не хватает — подпись левее -->
                                 <span class="th-in"><span class="th-pad"></span><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
+                                <template v-if="!col.virtual">
                                 <span class="th-filter" :class="{ on: isColFiltered(col.field) }" :title="isColFiltered(col.field) ? 'Изменить фильтр' : 'Фильтр'" @click.stop="openColFilter(col, $event)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                                 <span class="resize-handle" @mousedown.stop.prevent="startResize($event, col)" @click.stop></span>
+                                </template>
                             </th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="row in displayRows" :key="row.id" :data-id="row.id" :class="{ 'row-selected': selectedSet.has(row.id) }">
-                            <td v-for="col in columns" :key="col.field"
+                            <td v-for="col in viewColumns" :key="col.field"
                                 :class="cellClass(row, col)"
                                 :style="cellTdStyle(row, col)"
                                 @mousedown="onCellMouseDown($event, row)"
@@ -350,8 +365,14 @@
                                 @dblclick="startEdit(row, col)"
                                 @mouseenter="handleNoteEnter($event, row, col)"
                                 @mouseleave="hideNoteTooltip">
+                                <!-- «По правилу» (этап 36, кнопка «Имена по правилам»): имя по правилу у ПК, названного иначе -->
+                                <template v-if="col.virtual">
+                                    <button v-if="nameChip(row)" type="button" class="scan-chip name-chip" :class="{ open: namePop && namePop.row.id === row.id }"
+                                        :title="nameChipTitle(row)" @mousedown.stop @dblclick.stop @click.stop="openNamePop(row, $event)">{{ nameChip(row) }}</button>
+                                    <span v-else-if="nameKept(row)" class="name-kept" :title="'Своё имя · правило ' + nameChipTitle(row)">своё</span>
+                                </template>
                                 <!-- Антивирусы (этап 26д): строкой каждый, цвет — по состоянию (Справочники) -->
-                                <span v-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avCellStyle(a) || {}).backgroundColor }" :style="avCellStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
+                                <span v-else-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avCellStyle(a) || {}).backgroundColor }" :style="avCellStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
                                 <!-- Значения по строкам: повтор — блочком, логина нет в Jabber — красным, номер GLPI / GSIT — ссылкой -->
                                 <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><a v-else-if="p.card" class="cell-line host-link" :class="p.cls" :style="p.style" :href="p.card" draggable="false" :title="p.title" @click.prevent>{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :style="p.style" :title="p.title" @dblclick="onCellValueDblclick($event, row, col)">{{ p.text }}</span></template></span>
                                 <span v-else :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)" @dblclick="onCellValueDblclick($event, row, col)">{{ cellText(row, col) }}</span>
@@ -359,15 +380,12 @@
                                     :class="{ open: scanPop && scanPop.row.id === row.id && scanPop.col.field === col.field }"
                                     :style="scanChipStyle(scanCellMark(row, col))" :title="scanChipTitle(scanCellDiff(row, col))"
                                     @mousedown.stop @dblclick.stop @click.stop="openScanPop(row, col, $event)">{{ scanChipText(scanCellDiff(row, col)) }}</button>
-                                <button v-if="nameChip(row, col) && !isEditing(row, col)" type="button" class="scan-chip name-chip"
-                                    :class="{ open: namePop && namePop.row.id === row.id }" :title="nameChipTitle(row)"
-                                    @mousedown.stop @dblclick.stop @click.stop="openNamePop(row, $event)">{{ nameChip(row, col) }}</button>
                                 <template v-if="isEditing(row, col)">
                                     <location-picker v-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
                                         placeholder="Расположение…" @pick="onCellLocationPick(row, $event)" @cancel="cancelEdit"></location-picker>
                                     <textarea v-else-if="col.multiline" v-model="editValue"
                                         @keydown="handleEditKeydown($event, row, col)"
-                                        @input="onEditInput($event, col)"
+                                        @input="col.field === 'ip' && onIpInput($event, null, 'editValue'); onEditInput($event, col)"
                                         @blur="saveEdit(row, col)"
                                         :ref="'edit-' + row.id + '-' + col.field"
                                         class="cell-edit cell-edit-multi"></textarea>
@@ -506,9 +524,11 @@
                         <span class="dropdown-wrap" ref="namingHelpWrap">
                             <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namingHelp' }" @click="toggleMenu('namingHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
                             <div v-if="openMenu === 'namingHelp'" class="dropdown right attached names-help">
-                                <p>Имя ПК — части узлов по пути через «-» и номер: <b>ter-proc-1</b>.</p>
-                                <p>«Только своя» — без частей выше, «Одно место» — без номера.</p>
-                                <p>«По таблице» — как названы ПК сейчас; клик — взять.</p>
+                                <p>Имя ПК — начало от узлов выше, своя часть и номер: <b>ter-proc-1</b>.</p>
+                                <p>Номер — по порядку № места сверху вниз.</p>
+                                <p>Серое в имени — клик: убрать или вернуть.</p>
+                                <p>Клик по строке — её ПК справа.</p>
+                                <p>«В таблице» — как названы ПК сейчас; клик — взять.</p>
                             </div>
                         </span>
                         <span class="tb-divider"></span>
@@ -687,28 +707,30 @@
                 </div>
             </div>
 
-            <!-- Имена ПК (этап 35): правило — у узлов дерева. Часть вводится прямо в ячейке,
-                 «Имя» меняется сразу; «По таблице» — как названы ПК сейчас (клик — взять) -->
+            <!-- Имена ПК (этапы 35, 36): правило — у узлов дерева. Имя ПК собрано из частей:
+                 серое начало от узлов выше, своя часть (ввод прямо в имени), серый номер;
+                 клик по серому — убрать / вернуть. Клик по строке — справа ПК узла -->
             <div v-else class="history-page nr-page">
                 <div class="nr-layout">
                     <div class="users-wrap nr-wrap" @mouseleave="namesHover = null">
                         <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
                             <div class="history-scroll" @scroll="namesHover = null">
                                 <table class="history-table users-table nr-table" :class="{ 'accent-head': accentHeaders.choices }">
-                                    <colgroup><col><col class="nrc-part"><col class="nrc-flag"><col class="nrc-flag"><col class="nrc-rule"><col class="nrc-pcs"><col v-if="canEdit" class="nrc-sug"></colgroup>
                                     <thead>
-                                        <tr><th>Расположение</th><th>Часть</th><th class="nr-c" title="Не добавлять части узлов выше">Только своя</th><th class="nr-c" title="Имя без номера">Одно место</th><th>Имя</th><th class="nr-c">ПК</th><th v-if="canEdit">По таблице</th></tr>
+                                        <tr><th>Расположение</th><th>Имя ПК</th><th class="nr-c">ПК</th><th v-if="canEdit">В таблице</th></tr>
                                     </thead>
                                     <tbody>
-                                        <tr v-if="!namesRows.length" class="h-empty"><td :colspan="canEdit ? 7 : 6">{{ treeLoading ? "Загрузка…" : (treeRoots.length ? "Ничего не найдено." : "Расположений пока нет.") }}</td></tr>
-                                        <tr v-for="r in namesRows" :key="r.node.id" :data-id="r.node.id" :class="['nr-' + r.node.kind, { 'is-hover': namesHover && namesHover.node.id === r.node.id, 'nr-focus': nameFocusId === r.node.id }]"
-                                            @mouseenter="setNamesHover(r.node, $event.currentTarget)">
+                                        <tr v-if="!namesRows.length" class="h-empty"><td :colspan="canEdit ? 4 : 3">{{ treeLoading ? "Загрузка…" : (treeRoots.length ? "Ничего не найдено." : "Расположений пока нет.") }}</td></tr>
+                                        <tr v-for="r in namesRows" :key="r.node.id" :data-id="r.node.id" :class="['nr-' + r.node.kind, { 'is-hover': namesHover && namesHover.node.id === r.node.id, 'nr-sel': nameSelId === r.node.id }]"
+                                            @mouseenter="setNamesHover(r.node, $event.currentTarget)" @click="onNamesRowClick(r.node, $event)">
                                             <td class="nr-loc" :style="{ paddingLeft: (8 + r.level * 18) + 'px' }"><svg class="node-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" v-html="kindIcon(r.node.kind)"></svg><span v-if="r.code" class="nr-code">{{ r.code }}</span>{{ r.name }}</td>
-                                            <td class="nr-part"><input class="nr-input" :value="nameDraft && nameDraft.id === r.node.id ? nameDraft.raw : (r.node.name_part || '')" :readonly="!canEdit" maxlength="15" spellcheck="false" autocomplete="off"
-                                                @focus="canEdit && onNamePartFocus(r.node)" @input="onNamePartInput(r.node, $event.target.value)" @keydown="onNamePartKeydown" @blur="finishNamePart(r.node, $event)"></td>
-                                            <td class="nr-c"><input v-if="r.level > 0" type="checkbox" :checked="r.node.name_own" :disabled="!canEdit || nameSaving" @change="toggleNameFlag(r.node, 'own')"></td>
-                                            <td class="nr-c"><input v-if="r.entry.leaf || r.node.name_single" type="checkbox" :checked="r.node.name_single" :disabled="!canEdit || nameSaving" @change="toggleNameFlag(r.node, 'single')"></td>
-                                            <td class="nr-rule" :class="{ head: !r.entry.leaf, long: nameTooLong(r.entry) }" :title="nameRowTitle(r)"><template v-if="r.entry.start">{{ r.entry.start }}<span v-if="!r.entry.leaf" class="nr-n">-…</span><span v-else-if="!r.entry.single" class="nr-n">-N</span></template><span v-else-if="r.entry.leaf" class="nr-none">—</span></td>
+                                            <td class="nr-name" :class="{ long: nameTooLong(r.entry) }" :title="nameRowTitle(r)"><span v-if="r.entry.above" class="nr-pre" :class="{ off: r.entry.own, edit: canEdit }" :title="canEdit ? namePrefixTitle(r.entry) : null"
+                                                @click="toggleNameFlag(r.node, 'own')">{{ namePrefixText(r) }}</span><input class="nr-input" :class="{ 'nr-empty': !namePartValue(r) }" :value="namePartValue(r)" :readonly="!canEdit" maxlength="15" spellcheck="false" autocomplete="off"
+                                                :size="Math.max(1, namePartValue(r).length)" :placeholder="namePartActive(r) ? 'часть' : ''"
+                                                :title="canEdit ? 'Своя часть имени' : null"
+                                                @focus="canEdit && onNamePartFocus(r.node)" @input="onNamePartInput(r.node, $event.target.value)" @keydown="onNamePartKeydown" @blur="finishNamePart(r.node, $event)"><span v-if="r.entry.start || r.entry.single" class="nr-suf"
+                                                :class="{ off: r.entry.single, edit: canEdit && (r.entry.leaf || r.entry.single) }" :title="nameSuffixTitle(r)"
+                                                @click="(r.entry.leaf || r.entry.single) && toggleNameFlag(r.node, 'single')">{{ nameSuffixText(r) }}</span></td>
                                             <td class="nr-c nr-pcs"><template v-if="nameNodeStats.get(r.node.id).total">{{ nameNodeStats.get(r.node.id).total }}</template><a v-if="nameNodeStats.get(r.node.id).bad" class="nr-bad" :href="pageHref('table', { loc: r.node.id })" title="Не по правилу — показать в таблице"
                                                 @click="navClick($event, () => showNamesInTable(r.node, true))">{{ nameNodeStats.get(r.node.id).bad }}</a></td>
                                             <td v-if="canEdit" class="nr-sug"><button v-if="nameSuggestions.get(r.node.id)" type="button" class="scan-chip nr-chip" :disabled="nameSaving"
@@ -726,8 +748,44 @@
                             </span>
                         </div>
                     </div>
-                    <!-- ПК со своим именем: не по правилу, и так и надо -->
-                    <div v-if="nameKeepRows.length" class="users-wrap nr-keep-wrap">
+                    <!-- ПК выбранного узла: как названы сейчас и как должны (меняется при вводе части) -->
+                    <div v-if="nameSelEntry" class="users-wrap nr-side-wrap">
+                        <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
+                            <div class="history-scroll">
+                                <table class="history-table users-table nr-pcs-table" :class="{ 'accent-head': accentHeaders.choices }">
+                                    <thead>
+                                        <tr><th class="nr-c">№</th><th>HOSTNAME</th><th>По правилу</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="nr-sel-head">
+                                            <td colspan="3"><span class="nr-sel-in"><span class="nr-sel-title" :title="(treeIndex[nameSelId] || {}).path">{{ nameSelTitle }}</span>
+                                                <button v-if="canEdit && nameSelFixes.length" class="btn nr-rename-all" @click="renameNodeByRule" title="Все ПК узла — по правилу">Переименовать: {{ nameSelFixes.length }}</button>
+                                                <span class="icon-btn nr-sel-close" title="Закрыть (Esc)" @click="nameSelId = null">✕</span></span></td>
+                                        </tr>
+                                        <tr v-if="!nameSelRows.length" class="h-empty"><td colspan="3">ПК нет.</td></tr>
+                                        <template v-for="item in nameSelRows" :key="item.key">
+                                            <tr v-if="item.group" class="nr-sub"><td colspan="3" :title="item.path">{{ item.title }}</td></tr>
+                                            <tr v-else>
+                                                <td class="nr-c nr-seat">{{ item.row.seat_no }}</td>
+                                                <td class="nr-host"><a :href="pageHref('table', { pc: item.row.id })" @click="navClick($event, () => openNameKeepPc(item.row))">{{ item.row.hostname || "—" }}</a></td>
+                                                <td class="nr-want">
+                                                    <template v-if="item.check">
+                                                        <span v-if="item.check.kept" class="name-kept" :title="'Своё имя · правило ' + nameRuleText(item.check.entry)">своё<span v-if="canEdit" class="icon-btn danger nr-unkeep" title="Снова по правилу" @click="setNameKeepFor([item.row.id], false)">✕</span></span>
+                                                        <button v-else-if="!item.check.ok" type="button" class="scan-chip name-chip" :class="{ open: namePop && namePop.row.id === item.row.id }"
+                                                            :title="'Правило: ' + nameRuleText(item.check.entry)" @click="openNamePop(item.row, $event)">{{ item.check.expected }}</button>
+                                                        <span v-else class="nr-ok" title="По правилу">✓</span>
+                                                    </template>
+                                                    <span v-else class="nr-none" title="Правила нет">—</span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Ничего не выбрано — ПК со своим именем: не по правилу, и так и надо -->
+                    <div v-else-if="nameKeepRows.length" class="users-wrap nr-side-wrap nr-keep-wrap">
                         <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
                             <div class="history-scroll">
                                 <table class="history-table users-table nr-keep" :class="{ 'accent-head': accentHeaders.choices }">
@@ -1737,7 +1795,7 @@
                                         <location-picker v-if="cardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="card.location_id" :options="locationOptions"
                                             placeholder="Расположение…" @pick="onCardLocationPick" @cancel="cardEditKey = null"></location-picker>
                                         <textarea v-else-if="cardEditCol(r).multiline" ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
-                                            @keydown="onCardEditKeydown($event, r)" @input="growCardEditor($event.target)" @blur="saveCardEdit(r)"></textarea>
+                                            @keydown="onCardEditKeydown($event, r)" @input="cardEditCol(r).field === 'ip' && onIpInput($event, null, 'cardEditValue'); growCardEditor($event.target)" @blur="saveCardEdit(r)"></textarea>
                                         <input v-else ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onCardEditKeydown($event, r)" @input="onSuggestInput($event.target.value)" @blur="saveCardEdit(r)">
                                     </template>

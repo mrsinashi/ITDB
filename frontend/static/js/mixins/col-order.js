@@ -28,7 +28,7 @@ export default {
         // повели мышь в сторону — перетаскивание столбца. Всё, что меняется на каждое
         // движение, — прямо в стилях элементов, в данные — только итог
         onHeadMouseDown(event, col) {
-            if (event.button !== 0 || this._colDrag || event.target.closest(".resize-handle, .th-filter")) {
+            if (event.button !== 0 || this._colDrag || col.virtual || event.target.closest(".resize-handle, .th-filter")) {
                 return;
             }
             const drag = {
@@ -220,10 +220,13 @@ export default {
             step();
         },
 
-        // Переставить столбец на место index среди видимых (счёт — до перестановки).
-        // Скрытые столбцы остаются, где были
-        moveColumn(field, index) {
-            const visible = this.columns.map(function (col) { return col.field; });
+        // Переставить столбец на место index среди столбцов на экране (счёт — до
+        // перестановки). Скрытые столбцы остаются, где были; «По правилу» (этап 36) — не
+        // столбец: место перед ним — это место перед HOSTNAME
+        moveColumn(field, at) {
+            const shown = this.viewColumns;
+            const index = at - shown.filter(function (col, i) { return col.virtual && i < at; }).length;
+            const visible = shown.filter(function (col) { return !col.virtual; }).map(function (col) { return col.field; });
             const order = this.allColumns.map(function (col) { return col.field; });
             order.splice(order.indexOf(field), 1);
             if (index < visible.length) {

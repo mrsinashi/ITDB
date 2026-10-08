@@ -1,7 +1,10 @@
 // Таблица: новый компьютер и смена расположения, архив, действия с выбранными строками.
 
-import { apiFetch, searchNorm } from "../util.js";
+import { apiFetch, fixIpTyping, searchNorm } from "../util.js";
 import { LOCATION_FIELDS } from "../columns.js";
+
+// Куда можно добавить кабинет
+const ROOM_PARENTS = ["department", "floor"];
 
 export default {
     computed: {
@@ -65,6 +68,11 @@ export default {
             };
             walk(this.treeRoots);
             return list;
+        },
+
+        // Место нового кабинета: отделения и этажи
+        roomParentOptions() {
+            return this.locationOptions.filter(function (o) { return ROOM_PARENTS.indexOf(o.kind) !== -1; });
         },
     },
 
@@ -182,6 +190,7 @@ export default {
             // autoName — имя по правилу в поле HOSTNAME (пока его не поменяли руками, этап 35)
             this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "", autoName: "" };
             this.newComputerError = "";
+            this.newRoom = null;
             if (locationId) {
                 this.newComputer.seat_no = this.nextSeatNo(locationId);
             }
@@ -191,6 +200,7 @@ export default {
         closeNewComputer() {
             this.newComputer = null;
             this.newComputerError = "";
+            this.newRoom = null;
         },
 
         focusNewComputer(which) {
@@ -224,6 +234,94 @@ export default {
             }
             this.newComputerError = "";
             this.$nextTick(() => this.focusNewComputer("hostname"));
+        },
+
+        // IP при вводе (новый ПК, ячейка, карточка): «ю», «/», набранные «,» и «б» —
+        // точка (этап 36). target[key] — значение поля (null — this)
+        onIpInput(event, target, key) {
+            const fixed = fixIpTyping(event.target, event);
+            if (fixed !== null) {
+                (target || this)[key] = fixed;
+            }
+        },
+
+        // ---------- Новый кабинет из строки «Новый компьютер» (этап 36) ----------
+        // В списке расположений — «＋ кабинет»: строка под строкой нового ПК. Место —
+        // найденное в списке, иначе отделение или этаж выбранного расположения
+
+        openNewRoom(data) {
+            let parentId = data.parentId;
+            const entry = !parentId && this.newComputer ? this.treeIndex[this.newComputer.location_id] : null;
+            if (entry) {
+                parentId = entry.node.kind === "room" ? entry.node.parent_id : (ROOM_PARENTS.indexOf(entry.node.kind) !== -1 ? entry.node.id : null);
+            }
+            this.newRoom = { parent_id: parentId || null, code: data.code || "", name: data.name || "", error: "", saving: false };
+            this.$nextTick(() => this.focusNewRoom(!parentId ? "parent" : (data.code || data.name ? "name" : "code")));
+        },
+
+        closeNewRoom() {
+            this.newRoom = null;
+            this.$nextTick(() => this.focusNewComputer("location"));
+        },
+
+        focusNewRoom(which) {
+            const el = this.$refs["nr-" + which];
+            const input = el && (el.$el ? el.$el.querySelector("input") : el);
+            if (input) {
+                input.focus();
+            }
+        },
+
+        onNewRoomParent(parentId) {
+            if (this.newRoom) {
+                this.newRoom.parent_id = parentId;
+                this.newRoom.error = "";
+                this.$nextTick(() => this.focusNewRoom("code"));
+            }
+        },
+
+        async submitNewRoom() {
+            const form = this.newRoom;
+            if (!form || form.saving) {
+                return;
+            }
+            const code = form.code.trim();
+            const name = form.name.trim();
+            if (!form.parent_id) {
+                form.error = "Выбери отделение или этаж.";
+                this.focusNewRoom("parent");
+                return;
+            }
+            if (!code && !name) {
+                form.error = "Нужен номер или название.";
+                this.focusNewRoom("code");
+                return;
+            }
+            // Среди соседей — по номеру: перед первым кабинетом с большим номером
+            const parent = this.treeIndex[form.parent_id];
+            const next = code && parent ? (parent.node.children || []).find(function (child) {
+                return child.kind === "room" && child.code && child.code.localeCompare(code, "ru", { numeric: true, sensitivity: "base" }) > 0;
+            }) : null;
+            form.saving = true;
+            form.error = "";
+            try {
+                const response = await apiFetch("/api/locations", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ parent_id: form.parent_id, kind: "room", code: code, name: name, before_id: next ? next.id : null })
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const id = (await response.json()).id;
+                await this.loadTree();
+                this.newRoom = null;
+                this.toast("Кабинет добавлен: " + [code, name].filter(Boolean).join(" "), "success");
+                this.onNewComputerLocation(id);
+            } catch (e) {
+                form.error = String(e.message || e);
+                form.saving = false;
+            }
         },
 
         async submitNewComputer() {

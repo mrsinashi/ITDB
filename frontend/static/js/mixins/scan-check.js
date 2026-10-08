@@ -16,7 +16,7 @@
 // Этап 28: кнопка «Фильтр» — по атрибутам (у каких полей есть предложения);
 // в подробностях — столбец «Сеть» (что видно по DHCP и проходу подсетей).
 
-import { apiFetch, searchNorm, searchWords, matchesAllWords, clickSelect } from "../util.js";
+import { apiFetch, searchNorm, searchWordsIn, matchesAllWords, clickSelect } from "../util.js";
 
 export const CHECK_SOURCES = ["glpi", "gsit"];
 const COMPARE_FIELDS = ["hostname", "ip", "vacuum", "mac", "serial", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "vnc", "glpi_id", "gsit_id"];
@@ -169,7 +169,7 @@ export default {
         },
 
         checkShown() {
-            const words = searchWords(this.scanMatchQuery);
+            const words = searchWordsIn(this.scanMatchQuery, this.checkRows.map(function (row) { return row.search; }));
             const pair = this.check.pair;
             const fields = this.check.fields;
             return this.checkRows.filter((row) => {

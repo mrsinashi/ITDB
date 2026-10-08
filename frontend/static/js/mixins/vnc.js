@@ -6,8 +6,9 @@
 // Справочниках (блок «Тип VNC»).
 // Enter, Alt+P (itdb://ping/IP) и Alt+R (itdb://rdp/IP) работают с последним ПК, по
 // строке которого нажали мышью (выделять строку не нужно); открыта карточка — с её ПК.
-// Строка отмечена полоской слева (класс row-active ставится прямо в DOM: данные Vue
-// не меняются — таблица на каждый клик не перерисовывается).
+// Строка отмечена полоской слева (элемент .row-mark над таблицей ставится прямо в DOM:
+// данные Vue не меняются — таблица на каждый клик не перерисовывается). Полоска видна
+// и при прокрутке вправо; строку скрыли поиском или фильтром — она забыта (этап 36).
 
 import { apiFetch } from "../util.js";
 
@@ -64,6 +65,16 @@ export default {
     updated() {
         if (this.view === "table") {
             this.markActiveRow();
+        }
+    },
+
+    watch: {
+        // Строку скрыли поиском или фильтром — она больше не «последняя нажатая» (этап 36)
+        displayRows(rows) {
+            const id = this.activeRowId;
+            if (id !== null && id !== undefined && !rows.some(function (r) { return r.id === id; })) {
+                this.setActiveRow(null);
+            }
         }
     },
 
@@ -166,22 +177,42 @@ export default {
             this.markActiveRow();
         },
 
-        // Полоска у запомненной строки; Vue мог сбросить класс, перерисовав строку
+        // Полоска у запомненной строки; Vue мог перерисовать строку
         markActiveRow() {
             const table = this.$refs.table;
             const id = this.activeRowId;
             let el = this.activeRowEl;
             if (el && (!el.isConnected || el.dataset.id !== String(id))) {
-                el.classList.remove("row-active");
                 el = null;
             }
             if (!el && table && id !== null && id !== undefined) {
                 el = table.querySelector('tbody tr[data-id="' + id + '"]');
             }
-            if (el && !el.classList.contains("row-active")) {
-                el.classList.add("row-active");
-            }
             this.activeRowEl = el || null;
+            this.placeRowMark();
+        },
+
+        // Полоска — отдельный элемент над таблицей: у левого края видимой части, и при
+        // прокрутке вправо (этап 36). Меняется на каждую прокрутку — прямо в стиль
+        placeRowMark() {
+            const mark = this.$refs.rowMark;
+            const wrap = this.$refs.tableWrap;
+            const table = this.$refs.table;
+            const tr = this.activeRowEl;
+            if (!mark || !wrap || !table) {
+                return;
+            }
+            if (!tr || !tr.isConnected) {
+                mark.style.display = "none";
+                return;
+            }
+            const box = wrap.getBoundingClientRect();
+            const row = tr.getBoundingClientRect();
+            const left = table.getBoundingClientRect().left - box.left;
+            mark.style.display = "block";
+            mark.style.top = (row.top - box.top + wrap.scrollTop) + "px";
+            mark.style.height = Math.max(0, row.height - 1) + "px";
+            mark.style.left = (wrap.scrollLeft + Math.max(0, left)) + "px";
         },
 
         // ПК для Enter / Alt+P / Alt+R: открытая карточка, иначе последняя нажатая

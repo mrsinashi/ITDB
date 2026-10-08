@@ -1,6 +1,6 @@
 // Страница «Дерево»: узлы, поиск, форма узла, ширина колонки.
 
-import { apiFetch, highlightParts, matchesAllWords, searchWords } from "../util.js";
+import { apiFetch, highlightParts, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
 import { kindLabels } from "../columns.js";
 import { computeTreeWidth, treeNodeTexts } from "../tree-utils.js";
 
@@ -12,7 +12,19 @@ export default {
             // хирургии). Найденным считается верхний узел, на котором путь
             // впервые собрал все слова; его потомки видны под ним.
             const q = this.treeQuery.trim();
-            const words = searchWords(q);
+            // Слово, которого нет ни в одном пути, — в другой раскладке
+            const paths = [];
+            const collect = (nodes, parentPath) => {
+                nodes.forEach((node) => {
+                    const path = parentPath + " / " + [node.code, node.name, treeNodeTexts(node).name].filter(Boolean).join(" ");
+                    paths.push(searchNorm(path));
+                    collect(node.children || [], path);
+                });
+            };
+            if (searchWords(q).length) {
+                collect(this.treeRoots, "");
+            }
+            const words = searchWordsIn(q, paths);
             const self = new Set();
             const anc = new Set();
             if (words.length) {

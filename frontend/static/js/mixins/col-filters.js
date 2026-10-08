@@ -15,7 +15,7 @@
 // устарели, выключен); filter.statesOff — снятые состояния. ПК виден, если у него
 // есть антивирус в отмеченном состоянии с отмеченным названием.
 
-import { matchesAllWords, searchNorm, searchWords, splitMulti } from "../util.js";
+import { matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
 import { columnTitle, dateKey, ipSubnetKey, isOverdue } from "../columns.js";
 
 export const EMPTY_KEY = "";
@@ -133,12 +133,13 @@ export default {
         // Что видно в списке с учётом поиска по значениям
         colFilterShown() {
             const menu = this.colFilterMenu;
-            const words = menu ? searchWords(menu.query) : [];
-            if (!words.length) {
+            if (!menu || !searchWords(menu.query).length) {
                 return this.colFilterOptions;
             }
-            return this.colFilterOptions.filter(function (o) {
-                return !o.empty && matchesAllWords(searchNorm(o.value), words);
+            const texts = this.colFilterOptions.map(function (o) { return o.empty ? "" : searchNorm(o.value); });
+            const words = searchWordsIn(menu.query, texts);
+            return this.colFilterOptions.filter(function (o, i) {
+                return !o.empty && matchesAllWords(texts[i], words);
             });
         },
 
@@ -224,6 +225,9 @@ export default {
         // Открыть список значений под шапкой столбца (воронка или правый клик).
         // Повторный клик по той же воронке — закрыть.
         openColFilter(col, event) {
+            if (col.virtual) {
+                return;
+            }
             const th = event.currentTarget.closest("th");
             if (this.openMenu === "colFilter" && this.colFilterMenu && this.colFilterMenu.field === col.field && event.type === "click") {
                 this.closeMenus();

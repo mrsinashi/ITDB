@@ -242,6 +242,15 @@ export const LOCATION_FIELD_LABELS = {
     name_single: "Одно место"
 };
 
+// «По правилу» (этап 36): при кнопке «Имена по правилам» — слева от HOSTNAME имя по
+// правилу у ПК, названных иначе. Не столбец данных: его нет в меню, печати и выгрузке
+export const NAME_RULE_COLUMN = {
+    field: "name_rule",
+    headerName: "По правилу",
+    virtual: true,
+    editable: false
+};
+
 export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
 // Столбцы, скрытые по умолчанию, которые уже были скрыты один раз: если
 // пользователь их показал, при следующей загрузке они не прячутся снова

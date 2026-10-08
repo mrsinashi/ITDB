@@ -11,7 +11,7 @@
 //                                  Enter берёт выбранное (true — клавиша занята);
 //   closeSuggest()               — при сохранении и отмене.
 
-import { matchesAllWords, searchNorm, searchWords } from "../util.js";
+import { matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
 
 export default {
     computed: {
@@ -21,12 +21,13 @@ export default {
             if (!s) {
                 return [];
             }
-            const words = s.filtering ? searchWords(s.query) : [];
-            if (!words.length) {
+            if (!s.filtering || !searchWords(s.query).length) {
                 return s.options;
             }
-            return s.options.filter(function (o) {
-                return matchesAllWords(searchNorm(o.value), words);
+            const texts = s.options.map(function (o) { return searchNorm(o.value); });
+            const words = searchWordsIn(s.query, texts);
+            return s.options.filter(function (o, i) {
+                return matchesAllWords(texts[i], words);
             });
         },
 

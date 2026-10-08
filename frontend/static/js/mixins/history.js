@@ -1,6 +1,6 @@
 // Страница «История».
 
-import { apiFetch, matchesAllWords, searchWords, splitMulti } from "../util.js";
+import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
 import { isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 
 // Сколько записей истории загружать сразу и по «Показать ещё»
@@ -9,11 +9,10 @@ const HISTORY_PAGE = 200;
 export default {
     computed: {
         filteredHistory() {
-            const words = searchWords(this.historyQuery);
-            if (!words.length) {
+            if (!searchWords(this.historyQuery).length) {
                 return this.historyItems;
             }
-            return this.historyItems.filter((item) => {
+            const texts = this.historyItems.map((item) => {
                 const parts = [
                     item.title,
                     item.user_name,
@@ -24,8 +23,12 @@ export default {
                     const ch = item.changes[field] || {};
                     parts.push(field, this.fieldLabel(item.entity, field), this.displayValue(ch.old), this.displayValue(ch.new));
                 });
-                const text = parts.filter(function (p) { return p !== null && p !== undefined; }).join("\n");
-                return matchesAllWords(text, words);
+                return searchNorm(parts.filter(function (p) { return p !== null && p !== undefined; }).join("\n"));
+            });
+            // Слово, которого нет ни в одной записи, — в другой раскладке
+            const words = searchWordsIn(this.historyQuery, texts);
+            return this.historyItems.filter(function (item, i) {
+                return matchesAllWords(texts[i], words);
             });
         },
 

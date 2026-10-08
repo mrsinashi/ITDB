@@ -82,6 +82,67 @@ export function matchesAllWords(text, words) {
     return words.every(function (w) { return t.indexOf(w) !== -1; });
 }
 
+// ---------- Не та раскладка (этап 36) ----------
+// Клавиши английской и русской раскладки: «[bh» — это «хир», «еук» — «ter»
+const LAYOUT_EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,./`";
+const LAYOUT_RU = "йцукенгшщзхъфывапролджэячсмитьбю.ё";
+const TO_RU = new Map();
+const TO_EN = new Map();
+for (let i = 0; i < LAYOUT_EN.length; i++) {
+    TO_RU.set(LAYOUT_EN[i], LAYOUT_RU[i]);
+    TO_EN.set(LAYOUT_RU[i], LAYOUT_EN[i]);
+}
+
+// Слово, набранное в другой раскладке (строчными); "" — если менять нечего
+export function otherLayout(word) {
+    const map = /[а-яё]/.test(word) ? TO_EN : (/[a-z]/.test(word) ? TO_RU : null);
+    if (!map) {
+        return "";
+    }
+    let out = "";
+    for (const ch of word) {
+        out += map.get(ch) || ch;
+    }
+    return out !== word ? searchNorm(out) : "";
+}
+
+// Слова поиска; слово, которого нет ни в одном тексте, ищется в другой раскладке.
+// texts — тексты для поиска (уже searchNorm) или функция «есть ли слово где-нибудь»
+export function searchWordsIn(query, texts) {
+    const has = typeof texts === "function" ? texts : function (w) {
+        return texts.some(function (t) { return t.indexOf(w) !== -1; });
+    };
+    return searchWords(query).map(function (w) {
+        if (has(w)) {
+            return w;
+        }
+        const alt = otherLayout(w);
+        return alt && has(alt) ? alt : w;
+    });
+}
+
+// IP при вводе: «ю», «/» и набранные «,» / «б» — это точка: 10ю0ю3ю5 → 10.0.3.5.
+// Запятая, вставленная из буфера, — по-прежнему разделитель адресов.
+// Ответ — исправленный текст или null, если править нечего
+export function fixIpTyping(el, event) {
+    const value = el.value;
+    let fixed = value.replace(/[юЮ/]/g, ".");
+    const caret = el.selectionStart;
+    const typed = event && event.inputType === "insertText" && event.data ? event.data : "";
+    if (/[,бБ]/.test(typed) && caret !== null && caret >= typed.length) {
+        const from = caret - typed.length;
+        fixed = fixed.slice(0, from) + fixed.slice(from, caret).replace(/[,бБ]/g, ".") + fixed.slice(caret);
+    }
+    if (fixed === value) {
+        return null;
+    }
+    el.value = fixed;
+    if (caret !== null) {
+        el.setSelectionRange(caret, caret);
+    }
+    return fixed;
+}
+
 
 // Разбивка строки на части для подсветки найденного (любое из слов)
 export function highlightParts(text, words) {

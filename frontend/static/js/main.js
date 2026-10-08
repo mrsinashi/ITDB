@@ -144,6 +144,8 @@ const app = Vue.createApp({
             sortDir: null,
             // Форма «+ Компьютер» под панелью
             newComputer: null,
+            // Новый кабинет из списка расположений нового ПК: { parent_id, code, name, error, saving } (этап 36)
+            newRoom: null,
             // Строка действия с выбранными: переместить / заменить / изменить поле
             actionBar: null,
             // Окно печати таблицы (mixins/print.js): строки, столбцы и настройки листа
@@ -168,9 +170,9 @@ const app = Vue.createApp({
             namesQuery: "",
             namesHover: null,    // строка «Имён ПК» под курсором — плашка действий
             nameDraft: null,     // часть имени, которую сейчас вводят: { id узла, raw, part }
-            nameFocusId: null,   // узел, к которому перешли из Таблицы (подсвечен)
             nameSaving: false,
             nameKeep: {},        // «своё имя»: id ПК → { name, location_id, by, at }
+            nameSelId: null,     // узел, выбранный на вкладке «Имена ПК»: справа — его ПК (этап 36)
             treeWidth: 480,
             treeHover: null,
             treeScrollbar: 0,

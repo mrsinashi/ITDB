@@ -8,7 +8,7 @@
 // удаляется, а показывается серым. Данные — /api/scan/hosts; собирает сервер
 // («Собрать» на «Проверке», расписание).
 
-import { apiFetch, searchNorm, searchWords, matchesAllWords } from "../util.js";
+import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 
 export const NET_FILTERS = [
     { key: "all", label: "Все" },
@@ -89,7 +89,7 @@ export default {
         },
 
         netShown() {
-            const words = searchWords(this.scanMatchQuery);
+            const words = searchWordsIn(this.scanMatchQuery, this.netHosts.map(function (h) { return h.search; }));
             const source = this.net.source;
             return this.netHosts.filter((h) => {
                 return inNetFilter(h, this.net.filter) && (!source || h[source]) && (!words.length || matchesAllWords(h.search, words));
