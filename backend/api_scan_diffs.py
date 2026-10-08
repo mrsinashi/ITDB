@@ -1,35 +1,35 @@
 """Режим «Расхождения» (этап 26): где данные сканера отличаются от таблицы.
 
-Расхождение — поле ПК, сопоставленного с записью включённого источника по
+Расхождение – поле ПК, сопоставленного с записью включённого источника по
 признаку или вручную (state key / link), у которого значение сканера (в
 названиях таблицы, scan_values) отличается («≠») или в таблице пусто, а у
-сканера есть. «≈» (в таблице записана часть, например один MAC из двух) —
+сканера есть. «≈» (в таблице записана часть, например один MAC из двух) –
 не расхождение. Считается на лету, ничего не хранится, кроме решений:
 
-- «Принять» — значение пишется в ПК обычной правкой (История, пометка
-  источника «scan»); если значение в таблице за это время изменилось — не
+- «Принять» – значение пишется в ПК обычной правкой (История, пометка
+  источника «scan»); если значение в таблице за это время изменилось – не
   пишется;
-- «Отклонить» — этому ПК это значение не предлагать, пока источник отдаёт то же
+- «Отклонить» – этому ПК это значение не предлагать, пока источник отдаёт то же
   (scan_rejects); отклонённые можно показать и вернуть;
-- «В таблице своё» — пара «значение источника — значение таблицы» не
+- «В таблице своё» – пара «значение источника – значение таблицы» не
   расхождение ни у одного ПК, но и не «одно и то же» (scan_aliases kind keep,
   через /api/scan/names).
 
-Смотреть (пометки в Таблице) — все; решения — editor и admin (как правка таблицы).
-Этап 26е: HOSTNAME в таблице — каким имя должно быть, поэтому другое имя у
+Смотреть (пометки в Таблице) – все; решения – editor и admin (как правка таблицы).
+Этап 26е: HOSTNAME в таблице – каким имя должно быть, поэтому другое имя у
 источника только сообщается (can_take = False: взять нельзя, можно «оставить»;
-в таблице пусто — взять можно). Jabber предлагает VACUUM — см. jabber_rows
-(этап 26ж: ПК — только по IP; этап 26з: из ячейки сканер никого не убирает — кто
+в таблице пусто – взять можно). Jabber предлагает VACUUM – см. jabber_rows
+(этап 26ж: ПК – только по IP; этап 26з: из ячейки сканер никого не убирает – кто
 давно не подключался, отдаётся отдельно, vacuum_stale, и только выделяется).
-Этап 26ж: номера записей — в столбцы GLPI и GSIT (ID_FIELDS); «это материнская
-плата» — название модели из источника уходит в столбец «Мат. плата» (/board).
+Этап 26ж: номера записей – в столбцы GLPI и GSIT (ID_FIELDS); «это материнская
+плата» – название модели из источника уходит в столбец «Мат. плата» (/board).
 Этап 28: сеть (аренды DHCP и проход подсетей, scan_hosts) предлагает MAC, IP и
-имя — scan_hostmatch.py; о поле, про которое уже говорит запись GLPI / GSIT,
+имя – scan_hostmatch.py; о поле, про которое уже говорит запись GLPI / GSIT,
 сеть молчит (записи главнее).
-Этап 26б: «неточно» (unsure) — источники предлагают разное или VNC-серверов
-несколько; «в таблице часть» (partial, «≈») — отдаётся для пометок, но не
-расхождение (не в счётчике); у источника — как сопоставлен (state, by) и что
-предлагает (value) — признаки, можно ли верить.
+Этап 26б: «неточно» (unsure) – источники предлагают разное или VNC-серверов
+несколько; «в таблице часть» (partial, «≈») – отдаётся для пометок, но не
+расхождение (не в счётчике); у источника – как сопоставлен (state, by) и что
+предлагает (value) – признаки, можно ли верить.
 """
 import ipaddress
 import re
@@ -65,12 +65,12 @@ MAX_ITEMS = 5000
 # Поля, которые сканер может предложить: из GLPI / GSIT, VACUUM из Jabber и
 # номера записей GLPI / GSIT
 DIFF_FIELDS = COMPARE_FIELDS + ["vacuum"] + list(ID_FIELDS.values())
-# Только сообщить, не брать: HOSTNAME в таблице — каким имя должно быть (26е)
+# Только сообщить, не брать: HOSTNAME в таблице – каким имя должно быть (26е)
 INFO_FIELDS = ("hostname",)
 # Jabber: последний адрес годится столько дней, сколько задано у подключения
-# («Актуальны», по умолчанию 7); кто не подключался дольше — «давно не в сети»:
+# («Актуальны», по умолчанию 7); кто не подключался дольше – «давно не в сети»:
 # в ячейке VACUUM выделяется, но сканер его не убирает (просьба 02.10)
-# Больше людей с одного адреса — сервер или терминал: VACUUM по нему не предлагать
+# Больше людей с одного адреса – сервер или терминал: VACUUM по нему не предлагать
 JABBER_MAX_LOGINS = 3
 
 
@@ -79,8 +79,8 @@ class DiffSource(BaseModel):
     title: str
     source_id: Optional[int] = None   # у Jabber номера записи нет
     checked_at: Optional[datetime]
-    state: str = "key"          # key — по признаку, link — вручную
-    by: list[str] = []          # признаки: id, mac, serial; у Jabber — ip
+    state: str = "key"          # key – по признаку, link – вручную
+    by: list[str] = []          # признаки: id, mac, serial; у Jabber – ip
     value: str = ""             # что предлагает этот источник (в названиях таблицы)
 
 
@@ -93,23 +93,23 @@ class DiffOut(BaseModel):
     table: str            # как в таблице
     proposed: str         # как предлагает сканер (в названиях таблицы)
     raw: str              # как в источнике
-    kind: str             # diff — отличается, fill — в таблице пусто, unsure — неточно
+    kind: str             # diff – отличается, fill – в таблице пусто, unsure – неточно
                           # (источники расходятся или VNC-серверов несколько),
-                          # partial — в таблице записана часть («≈», не расхождение)
-    unsure: str = ""      # почему неточно — для подсказки
+                          # partial – в таблице записана часть («≈», не расхождение)
+    unsure: str = ""      # почему неточно – для подсказки
     note: str = ""        # коротко, что меняется (VACUUM: кого добавить, кого убрать)
-    replace: str = ""     # VACUUM: вместо того, что в ячейке, — только те, кто сейчас с адреса ПК
+    replace: str = ""     # VACUUM: вместо того, что в ячейке, – только те, кто сейчас с адреса ПК
     name_field: bool      # поле-название: можно «в таблице своё»
-    can_take: bool = True  # можно «взять из сканера» (HOSTNAME — только сообщить)
+    can_take: bool = True  # можно «взять из сканера» (HOSTNAME – только сообщить)
     sources: list[DiffSource]
-    same_pair: int        # ещё у скольких ПК такая же пара «таблица — сканер»
+    same_pair: int        # ещё у скольких ПК такая же пара «таблица – сканер»
     rejected_by: Optional[str] = None
     rejected_at: Optional[datetime] = None
 
 
 class AntivirusOut(BaseModel):
     name: str
-    status: str           # on — работает, old — базы устарели, off — выключен
+    status: str           # on – работает, old – базы устарели, off – выключен
     version: Optional[str] = None
     source: str           # «GLPI №12»
 
@@ -122,7 +122,7 @@ class DiffsOut(BaseModel):
     antivirus: dict[int, list[AntivirusOut]] = {}   # столбец «Антивирусы» (этап 26д)
     links: dict[str, str] = {}      # столбец с номером записи → начало ссылки на неё (GLPI, GSIT)
     vacuum_missing: list[str] = []  # логины из таблицы, которых в Jabber нет (строчными)
-    # логины из таблицы, давно не подключавшиеся: логин → сколько дней (None — никогда)
+    # логины из таблицы, давно не подключавшиеся: логин → сколько дней (None – никогда)
     vacuum_stale: dict[str, Optional[int]] = {}
     jabber: dict[int, list[str]] = {}   # кого Jabber видит с адреса ПК: id ПК → логины
     # что о ПК видно в сети (DHCP, проход подсетей): id ПК → {ip, mac, hostname: [значения]}
@@ -132,7 +132,7 @@ class DiffsOut(BaseModel):
 
 
 def enabled_kinds(session):
-    """Включённые источники записей о ПК — в порядке главенства (GLPI, потом GSIT)."""
+    """Включённые источники записей о ПК – в порядке главенства (GLPI, потом GSIT)."""
     enabled = {s.kind for s in session.query(ScanSource).filter(ScanSource.enabled == True)}  # noqa: E712
     return [kind for kind in scan_collect.RECORD_KINDS if kind in enabled]
 
@@ -224,11 +224,11 @@ def jabber_fresh(session):
 
 def jabber_state(session):
     """Что известно о пользователях Jabber:
-    by_ip — {IP: {логины}}: в сети — адреса ресурсов, не в сети — последний адрес,
+    by_ip – {IP: {логины}}: в сети – адреса ресурсов, не в сети – последний адрес,
             если был в сети не раньше срока «Актуальны» (адреса по DHCP меняются);
-    seen — {логин: когда был в сети}; names — {логин: как пишется};
-    stale — не подключались дольше срока; gone — таких пользователей нет.
-    stale и gone — только если получали список пользователей (listed)."""
+    seen – {логин: когда был в сети}; names – {логин: как пишется};
+    stale – не подключались дольше срока; gone – таких пользователей нет.
+    stale и gone – только если получали список пользователей (listed)."""
     since = datetime.now(timezone.utc) - jabber_fresh(session)
     users = session.query(ScanJabberUser).all()
     listed = any(user.registered is not None for user in users)
@@ -287,7 +287,7 @@ def vacuum_missing(state, vacuum):
 
 def vacuum_stale(state, vacuum):
     """Логины из ячеек VACUUM, давно не подключавшиеся: {логин: сколько дней};
-    None — не подключался никогда."""
+    None – не подключался никогда."""
     now = datetime.now(timezone.utc)
     table = {login for logins in vacuum.values() for login in logins}
     result = {}
@@ -312,13 +312,13 @@ def jabber_rows(computers, record_ips, state, vacuum):
     """Предложения VACUUM из Jabber: ([(ПК, таблица, предлагается, вид, почему
     неточно, пояснение, источник)], {ПК: кого Jabber видит с его адреса}).
 
-    ПК — только по IP (этап 26ж): тот, у кого этот адрес в таблице или в записи
-    GLPI / GSIT, сопоставленной с ним; адрес у двух ПК — не понять, чей, — пропуск.
+    ПК – только по IP (этап 26ж): тот, у кого этот адрес в таблице или в записи
+    GLPI / GSIT, сопоставленной с ним; адрес у двух ПК – не понять, чей, – пропуск.
     - Добавить: кто в Jabber с адреса ПК (сейчас или не раньше срока «Актуальны»
-      назад), а в VACUUM ПК его нет. Логин уже записан у другого ПК — «неточно».
+      назад), а в VACUUM ПК его нет. Логин уже записан у другого ПК – «неточно».
     - Заменить: в ячейке логин, которого в Jabber нет, но на вид он тот же, что
-      у человека с адреса ПК (латинская буква вместо русской), — вместо него.
-    - Второй вариант — заменить всю ячейку теми, кто с адреса ПК (источник["replace"]):
+      у человека с адреса ПК (латинская буква вместо русской), – вместо него.
+    - Второй вариант – заменить всю ячейку теми, кто с адреса ПК (источник["replace"]):
       за ПК теперь сидит другой человек (этап 31). Выбирает пользователь.
     Из ячейки сканер никого не убирает: давно не подключавшиеся и удалённые
     только выделяются (vacuum_stale, vacuum_missing)."""
@@ -357,7 +357,7 @@ def jabber_rows(computers, record_ips, state, vacuum):
         if not add:
             continue
 
-        # Опечатка в таблице: такого логина в Jabber нет, а на вид он — как у пришедшего
+        # Опечатка в таблице: такого логина в Jabber нет, а на вид он – как у пришедшего
         looks = {lookalike_key(login) for login in add}
         drop = sorted(login for login in table if login not in names and lookalike_key(login) in looks)
         kept = [text for login, text in table.items() if login not in drop]
@@ -370,10 +370,10 @@ def jabber_rows(computers, record_ips, state, vacuum):
         unsure = "; ".join(elsewhere)
         note = "; ".join(part for part in (
             "с IP этого ПК: " + ", ".join(names.get(login, login) for login in add),
-            "вместо «" + "», «".join(table[login] for login in drop) + "» — там латинские буквы" if drop else "",
+            "вместо «" + "», «".join(table[login] for login in drop) + "» – там латинские буквы" if drop else "",
         ) if part)
         dates = [state["seen"][login] for login in add if state["seen"].get(login)]
-        # Только те, кого Jabber видит с адреса ПК; то же, что «добавить», — не вариант
+        # Только те, кого Jabber видит с адреса ПК; то же, что «добавить», – не вариант
         only = vacuum_text(sorted((names.get(login, login) for login in at_pc[computer_id]), key=str.lower)) or ""
         result.append((
             computer_id, table_text, proposed, "unsure" if unsure else ("diff" if table else "fill"), unsure, note,
@@ -419,8 +419,8 @@ def host_observations(session):
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
     которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
-    подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью) по всем включённым источникам. Одно поле ПК — одна строка;
-    если источники предлагают разное — «неточно»."""
+    подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью) по всем включённым источникам. Одно поле ПК – одна строка;
+    если источники предлагают разное – «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
     names = scan_collect.load_names(session, computers)
@@ -450,7 +450,7 @@ def compute(session, with_rejected=False):
             "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id,
             "checked_at": record.checked_at, "state": item["state"], "by": item["by"],
         }
-        # Номер записи — в столбец GLPI / GSIT (этап 26ж)
+        # Номер записи – в столбец GLPI / GSIT (этап 26ж)
         number = clean_text((numbers.get(computer_id) or {}).get(ID_FIELDS[kind]))
 
         if number != str(source_id):
@@ -470,7 +470,7 @@ def compute(session, with_rejected=False):
             entry["rows"].append(row)
             entry["sources"].append(dict(source, value=row["source"]))
 
-    # Сеть (этап 28): MAC, IP и имя — там, где записи GLPI / GSIT об этом поле молчат
+    # Сеть (этап 28): MAC, IP и имя – там, где записи GLPI / GSIT об этом поле молчат
     hosts, host_kinds = host_observations(session)
     net_seen = {}
     verified = {}
@@ -535,9 +535,9 @@ def compute(session, with_rejected=False):
         unsure = entry.get("unsure", "")
 
         if len(proposals) > 1:
-            unsure = "источники предлагают разное: " + "; ".join(f"{s['title']} — {s['value']}" for s in entry["sources"])
+            unsure = "источники предлагают разное: " + "; ".join(f"{s['title']} – {s['value']}" for s in entry["sources"])
         elif field == "vnc" and len(row["source"].splitlines()) > 1:
-            unsure = "установлено несколько VNC — какой из них сервер, по программам не понять"
+            unsure = "установлено несколько VNC – какой из них сервер, по программам не понять"
 
         if "≠" in marks or (unsure and not row["itdb"]):
             diff_kind = "unsure" if unsure else "diff"
@@ -564,14 +564,14 @@ def compute(session, with_rejected=False):
 
         for computer_id, table, proposed, diff_kind, unsure, note, src in jabber:
             replace = src.pop("replace", "")
-            # Ключ отклонения — что предлагается: изменится состав — предложит снова
-            add(computer_id, "vacuum", table, proposed, proposed or "—", diff_kind, unsure, [src], note, replace)
+            # Ключ отклонения – что предлагается: изменится состав – предложит снова
+            add(computer_id, "vacuum", table, proposed, proposed or "–", diff_kind, unsure, [src], note, replace)
 
         kinds = kinds + ["jabber"]
 
     kinds = kinds + host_kinds
 
-    # «Ещё у N ПК»: та же пара «в таблице — у сканера» в том же поле
+    # «Ещё у N ПК»: та же пара «в таблице – у сканера» в том же поле
     pairs = {}
 
     for entry in items:
@@ -642,7 +642,7 @@ class AcceptItem(BaseModel):
     field: str
     value: str            # что записать (как показано: в названиях таблицы)
     table: str = ""       # что было в таблице, когда смотрели
-    source: str = ""      # «GLPI №12» — пометка в Истории
+    source: str = ""      # «GLPI №12» – пометка в Истории
 
 
 class AcceptIn(BaseModel):
@@ -693,7 +693,7 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
             else:
                 now_value = getattr(computer, item.field) or ""
 
-            # Другое имя у источника только сообщается: в таблице — каким оно должно быть
+            # Другое имя у источника только сообщается: в таблице – каким оно должно быть
             if key_of(now_value) != key_of(item.table) or (item.field in INFO_FIELDS and now_value.strip()):
                 skipped.append(f"{computer.hostname or computer.id}: {COLUMNS_BY_KEY[item.field].short}")
                 continue
@@ -717,13 +717,13 @@ class BoardIn(BaseModel):
     computer_id: int
     raw: str              # название модели, как в источнике
     value: str            # как писать в «Мат. плате»
-    source: str = ""      # «GLPI №12» — пометка в Истории
+    source: str = ""      # «GLPI №12» – пометка в Истории
 
 
 @router.post("/board")
 def to_board(payload: BoardIn, me=Depends(require_editor), session=Depends(get_db)):
     """«Это материнская плата»: название, которое источник отдаёт как модель ПК,
-    записывается этому ПК в «Мат. плату» и закрепляется — у всех ПК оно будет
+    записывается этому ПК в «Мат. плату» и закрепляется – у всех ПК оно будет
     предлагаться в этот столбец, а не в «Модель». Если в «Модели» этого ПК
     записана эта же плата, она оттуда убирается."""
     raw, value = clean_text(payload.raw), clean_text(payload.value)
@@ -804,7 +804,7 @@ def unreject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_
 
 marks_router = APIRouter(prefix="/api/scan/marks", tags=["scan"])
 
-# Названия ситуаций — как в «Принять изменения…» (просьба 02.10)
+# Названия ситуаций – как в «Принять изменения…» (просьба 02.10)
 MARK_LABELS = {
     "diff": "Замена",
     "fill": "Новые значения",
@@ -829,7 +829,7 @@ class MarkOut(BaseModel):
 
 
 class MarkUpdate(BaseModel):
-    """None — не менять; у цветов "" — убрать."""
+    """None – не менять; у цветов "" – убрать."""
     color: Optional[str] = None
     bg_color: Optional[str] = None
     bold: Optional[bool] = None
@@ -853,7 +853,7 @@ def list_marks(me=Depends(get_current_user), session=Depends(get_db)):
 
 @marks_router.patch("/{kind}", response_model=MarkOut)
 def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), session=Depends(get_db)):
-    """Вид пометки — общий для всех, как оформление в Справочниках."""
+    """Вид пометки – общий для всех, как оформление в Справочниках."""
     mark = session.get(ScanMark, kind)
 
     if mark is None:
@@ -867,7 +867,7 @@ def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), sess
             value = (value or "").strip() or None
 
             if value is not None and not COLOR_RE.match(value):
-                raise HTTPException(status_code=400, detail="Цвет — в виде #RRGGBB.")
+                raise HTTPException(status_code=400, detail="Цвет – в виде #RRGGBB.")
 
         changes[field] = {"old": getattr(mark, field), "new": value}
         setattr(mark, field, value)
@@ -883,9 +883,9 @@ av_router = APIRouter(prefix="/api/scan/antivirus", tags=["scan"])
 
 AV_KEY = "antivirus"
 AV_STYLE_FIELDS = ("color", "bg_color", "bold", "italic", "underline", "strike", "chip", "show")
-# Начальный вид (26е): блочком с фоном по состоянию, как значения в Справочниках —
+# Начальный вид (26е): блочком с фоном по состоянию, как значения в Справочниках –
 # зелёный, оранжевый, красный (миграция a3d7c1e5f9b2 переводит и прежний вид 26д)
-# С 28б — те же кнопки, что у значений Справочников: Ч, З и «фон блочком» (chip)
+# С 28б – те же кнопки, что у значений Справочников: Ч, З и «фон блочком» (chip)
 AV_PLAIN = {"color": None, "bold": False, "italic": False, "underline": False, "strike": False, "chip": True, "show": True}
 AV_DEFAULTS = {
     "on": {**AV_PLAIN, "bg_color": "#cdebd0"},
@@ -918,11 +918,11 @@ class AvSettingsOut(BaseModel):
 
 class AvRename(BaseModel):
     source: str             # название, как в GLPI / GSIT
-    name: str = ""          # как показывать; "" — как в источнике
+    name: str = ""          # как показывать; "" – как в источнике
 
 
 class AvUpdate(BaseModel):
-    """Вид состояния kind (None — не менять; у цветов "" — убрать) или список hidden."""
+    """Вид состояния kind (None – не менять; у цветов "" – убрать) или список hidden."""
     kind: Optional[str] = None
     color: Optional[str] = None
     bg_color: Optional[str] = None
@@ -987,7 +987,7 @@ def get_av_settings(me=Depends(get_current_user), session=Depends(get_db)):
 
 @av_router.patch("", response_model=AvSettingsOut)
 def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=Depends(get_db)):
-    """Вид столбца — общий для всех, как оформление в Справочниках."""
+    """Вид столбца – общий для всех, как оформление в Справочниках."""
     settings = av_settings(session)
     data = payload.model_dump(exclude_none=True)
     kind = data.pop("kind", None)
@@ -1006,7 +1006,7 @@ def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=De
                 value = (value or "").strip() or None
 
                 if value is not None and not COLOR_RE.match(value):
-                    raise HTTPException(status_code=400, detail="Цвет — в виде #RRGGBB.")
+                    raise HTTPException(status_code=400, detail="Цвет – в виде #RRGGBB.")
 
             changes[field] = {"old": status[field], "new": value}
             status[field] = value
@@ -1026,7 +1026,7 @@ def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=De
             raise HTTPException(status_code=400, detail="Не указано название антивируса.")
 
         if len(name) > AV_NAME_LEN:
-            raise HTTPException(status_code=400, detail=f"Название — не длиннее {AV_NAME_LEN} знаков.")
+            raise HTTPException(status_code=400, detail=f"Название – не длиннее {AV_NAME_LEN} знаков.")
 
         old = settings["names"].get(key)
         names = dict(settings["names"])

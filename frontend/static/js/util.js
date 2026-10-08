@@ -23,7 +23,7 @@ export function saveJson(key, value) {
     }
 }
 
-// Зажат Ctrl — класс на странице: по нему шапка Таблицы показывает закреплённые столбцы
+// Зажат Ctrl – класс на странице: по нему шапка Таблицы показывает закреплённые столбцы
 export function setCtrlDown(on) {
     const root = document.documentElement;
     if (root.classList.contains("ctrl-down") !== !!on) {
@@ -56,7 +56,7 @@ export function splitMulti(value) {
         .filter(Boolean);
 }
 
-// «Иванов Иван Иванович» → «Иванов И.И.»; без ФИО — логин (панель, этап 22)
+// «Иванов Иван Иванович» → «Иванов И.И.»; без ФИО – логин (панель, этап 22)
 export function shortName(fullName, login) {
     const words = String(fullName || "").trim().split(/\s+/).filter(Boolean);
     if (!words.length) {
@@ -83,7 +83,7 @@ export function matchesAllWords(text, words) {
 }
 
 // ---------- Не та раскладка (этап 36) ----------
-// Клавиши английской и русской раскладки: «[bh» — это «хир», «еук» — «ter»
+// Клавиши английской и русской раскладки: «[bh» – это «хир», «еук» – «ter»
 const LAYOUT_EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,./`";
 const LAYOUT_RU = "йцукенгшщзхъфывапролджэячсмитьбю.ё";
 const TO_RU = new Map();
@@ -93,7 +93,7 @@ for (let i = 0; i < LAYOUT_EN.length; i++) {
     TO_EN.set(LAYOUT_RU[i], LAYOUT_EN[i]);
 }
 
-// Слово, набранное в другой раскладке (строчными); "" — если менять нечего
+// Слово, набранное в другой раскладке (строчными); "" – если менять нечего
 export function otherLayout(word) {
     const map = /[а-яё]/.test(word) ? TO_EN : (/[a-z]/.test(word) ? TO_RU : null);
     if (!map) {
@@ -106,8 +106,15 @@ export function otherLayout(word) {
     return out !== word ? searchNorm(out) : "";
 }
 
-// Слова поиска; слово, которого нет ни в одном тексте, ищется в другой раскладке.
-// texts — тексты для поиска (уже searchNorm) или функция «есть ли слово где-нибудь»
+// Часть IP, набранная с «,», «/», «ю» или «б» вместо точки: «10,0/3» → «10.0.3»;
+// не похоже на IP – ""
+export function ipDots(word) {
+    return /^[\d.,/юб]*\d[\d.,/юб]*$/.test(word) && /[,/юб]/.test(word) ? word.replace(/[,/юб]/g, ".") : "";
+}
+
+// Слова поиска; слово, которого нет ни в одном тексте, ищется в другой раскладке,
+// а часть IP – с точками (этап 37). texts – тексты для поиска (уже searchNorm) или
+// функция «есть ли слово где-нибудь»
 export function searchWordsIn(query, texts) {
     const has = typeof texts === "function" ? texts : function (w) {
         return texts.some(function (t) { return t.indexOf(w) !== -1; });
@@ -117,16 +124,21 @@ export function searchWordsIn(query, texts) {
             return w;
         }
         const alt = otherLayout(w);
-        return alt && has(alt) ? alt : w;
+        if (alt && has(alt)) {
+            return alt;
+        }
+        const ip = ipDots(w);
+        return ip && has(ip) ? ip : w;
     });
 }
 
-// IP при вводе: «ю», «/» и набранные «,» / «б» — это точка: 10ю0ю3ю5 → 10.0.3.5.
-// Запятая, вставленная из буфера, — по-прежнему разделитель адресов.
-// Ответ — исправленный текст или null, если править нечего
-export function fixIpTyping(el, event) {
+// IP при вводе: «ю», «/» и набранные «,» / «б» – это точка: 10ю0ю3ю5 → 10.0.3.5.
+// Запятая, вставленная из буфера, – по-прежнему разделитель адресов. cidr – подсеть:
+// «/» – это маска, не точка (этап 37).
+// Ответ – исправленный текст или null, если править нечего
+export function fixIpTyping(el, event, cidr) {
     const value = el.value;
-    let fixed = value.replace(/[юЮ/]/g, ".");
+    let fixed = value.replace(cidr ? /[юЮ]/g : /[юЮ/]/g, ".");
     const caret = el.selectionStart;
     const typed = event && event.inputType === "insertText" && event.data ? event.data : "";
     if (/[,бБ]/.test(typed) && caret !== null && caret >= typed.length) {
@@ -174,13 +186,13 @@ export function highlightParts(text, words) {
     return parts.length ? parts : [{ t: text, m: false }];
 }
 
-// Фокус в поле ввода — там Ctrl+A, Esc и т. п. работают по-своему
+// Фокус в поле ввода – там Ctrl+A, Esc и т. п. работают по-своему
 export function isTypingTarget(el) {
     return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 }
 
-// Выделение в списке по клику: Ctrl — добавить/убрать, Shift — диапазон от
-// прошлой строки, Ctrl+Shift — добавить диапазон. single — обычный клик
+// Выделение в списке по клику: Ctrl – добавить/убрать, Shift – диапазон от
+// прошлой строки, Ctrl+Shift – добавить диапазон. single – обычный клик
 // выбирает одну строку (в окне), иначе только запоминает её (как в таблице).
 export function clickSelect(selected, ids, anchor, id, event, single) {
     const ctrl = event.ctrlKey || event.metaKey;

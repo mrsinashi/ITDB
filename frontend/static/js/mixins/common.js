@@ -50,7 +50,7 @@ export default {
             return pad2(d.getDate()) + "." + pad2(d.getMonth() + 1) + "." + d.getFullYear();
         },
 
-        // Время для таблицы истории: «чч:мм:сс» (дата — в строке дня)
+        // Время для таблицы истории: «чч:мм:сс» (дата – в строке дня)
         formatClock(value) {
             const d = new Date(value);
             if (!value || isNaN(d.getTime())) {
@@ -190,7 +190,7 @@ export default {
             }
         },
 
-        // Значение в Истории с учётом поля: роль — словами
+        // Значение в Истории с учётом поля: роль – словами
         historyValue(entity, field, value) {
             if (entity === "users" && field === "role" && value) {
                 return ROLE_LABELS[value] || value;
@@ -198,14 +198,20 @@ export default {
             return this.displayValue(value);
         },
 
-        // Цвет из оформления — рядом со значением образец
+        // То же, где рядом нет стрелки «было → стало»: пустое – словом
+        historyValueText(entity, field, value) {
+            return this.historyValue(entity, field, value) || "пусто";
+        },
+
+        // Цвет из оформления – рядом со значением образец
         isColorChange(entity, field) {
             return (entity === "choices" || entity === "column_styles" || entity === "scan_marks" || entity === "scan_antivirus" || entity === "table_marks") && (field === "color" || field === "bg_color" || field === "frame");
         },
 
+        // Пустое – пусто: «→ proc» понятнее, чем с тире (этап 37)
         displayValue(value) {
             if (value === null || value === undefined) {
-                return "—";
+                return "";
             }
             if (typeof value === "boolean") {
                 return value ? "да" : "нет";
@@ -216,7 +222,7 @@ export default {
             return String(value);
         },
 
-        // withArchive — ещё лист «Архив» с ПК из архива
+        // withArchive – ещё лист «Архив» с ПК из архива
         async downloadExport(withArchive) {
             try {
                 const response = await apiFetch("/api/export/computers.xlsx" + (withArchive ? "?archive=true" : ""));

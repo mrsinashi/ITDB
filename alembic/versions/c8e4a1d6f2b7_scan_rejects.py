@@ -1,4 +1,4 @@
-"""scan_rejects — отклонённые значения сканера (этап 26)
+"""scan_rejects – отклонённые значения сканера (этап 26)
 
 Revision ID: c8e4a1d6f2b7
 Revises: b5d1f3a8c9e2

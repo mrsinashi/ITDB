@@ -1,15 +1,15 @@
 // Сканирование (этап 24, страница только у администратора): подключения к
-// источникам данных (GLPI, GSIT, Jabber; с этапа 28 — DHCP по SSH и «Сеть») и
+// источникам данных (GLPI, GSIT, Jabber; с этапа 28 – DHCP по SSH и «Сеть») и
 // подсети для сетевого сканирования.
 //
 // Форма источника правится прямо в блоке: «Сохранить» отправляет только
 // изменённое, «Проверить подключение» проверяет то, что сейчас в форме (даже
-// несохранённое). Пароли и токены с сервера не приходят — только «сохранён»;
-// пустое поле — не менять, «✕» у сохранённого — удалить при сохранении.
-// Подсети — таблица; новая и «Изменить» — строкой прямо в таблице (этап 26д), как у
-// пользователей; при вводе подсети — список подсетей /24 с ПК из базы, которых нет в списке.
+// несохранённое). Пароли и токены с сервера не приходят – только «сохранён»;
+// пустое поле – не менять, «✕» у сохранённого – удалить при сохранении.
+// Подсети – таблица; новая и «Изменить» – строкой прямо в таблице (этап 26д), как у
+// пользователей; при вводе подсети – список подсетей /24 с ПК из базы, которых нет в списке.
 
-import { apiFetch } from "../util.js";
+import { apiFetch, fixIpTyping } from "../util.js";
 
 const SOURCE_TEXT_FIELDS = ["url", "domain", "login"];
 const SECRET_FIELDS = ["password", "user_token", "app_token"];
@@ -21,7 +21,7 @@ export default {
             return "Источников включено: " + on + " из " + this.scanSources.length + " · Подсетей: " + this.scanSubnets.length;
         },
 
-        // Строки таблицы подсетей: правка — на месте строки, новая — последней строкой
+        // Строки таблицы подсетей: правка – на месте строки, новая – последней строкой
         subnetsView() {
             const bar = this.subnetBar;
             const rows = this.scanSubnets.map(function (sn) {
@@ -37,7 +37,7 @@ export default {
         scanNetText() {
             const list = this.scanSubnets.filter(function (sn) { return sn.scan; });
             if (!list.length) {
-                return "нет — отметь «Сканировать»";
+                return "нет – отметь «Сканировать»";
             }
             const size = list.reduce(function (sum, sn) { return sum + sn.size; }, 0);
             return list.length + ", адресов: " + size;
@@ -103,7 +103,7 @@ export default {
                 verify_tls: s.verify_tls,
                 fresh_days: s.fresh_days,
                 path: s.path || "",
-                // DHCP: файлы настроек — строками «Конфиг N»; пустая строка — место для первого
+                // DHCP: файлы настроек – строками «Конфиг N»; пустая строка – место для первого
                 configs: s.configs && s.configs.length ? s.configs.slice() : [""],
                 names: s.names,
                 ports: s.ports,
@@ -121,7 +121,7 @@ export default {
             return this.scanSources.find(function (s) { return s.kind === kind; });
         },
 
-        // Изменённые поля формы — то, что уйдёт на сервер
+        // Изменённые поля формы – то, что уйдёт на сервер
         scanChanges(kind) {
             const s = this.scanSource(kind);
             const f = this.scanForms[kind];
@@ -232,10 +232,10 @@ export default {
                 this.toast(saved.title + ": настройки сохранены", "success");
                 // Ключ на сервере читает файлы, записанные при его установке
                 if (saved.has_key && ("path" in body || "configs" in body)) {
-                    this.toast(saved.title + ": файлы изменены — поставь ключ заново", "info", 7000);
+                    this.toast(saved.title + ": файлы изменены – поставь ключ заново", "info", 7000);
                 }
                 if (this.schedule.items.length) {
-                    this.loadSchedule(true);   // «выключен» в расписании — по источнику
+                    this.loadSchedule(true);   // «выключен» в расписании – по источнику
                 }
             } catch (e) {
                 f.error = e.message || String(e);
@@ -274,7 +274,7 @@ export default {
                 } else {
                     f.result = result;
                 }
-                // Удачная проверка — сообщением (под формой — только ошибки)
+                // Удачная проверка – сообщением (под формой – только ошибки)
                 if (result.ok) {
                     this.toast(this.scanSource(kind).title + ": " + result.message, "success");
                 }
@@ -308,7 +308,7 @@ export default {
         },
 
         // Число в шапке: ПК в GLPI / GSIT, пользователи Jabber, аренды DHCP, ответившие
-        // адреса сети — по последнему сбору
+        // адреса сети – по последнему сбору
         scanSourceCount(kind) {
             const run = this.scanRunOf(kind);
             const st = run && run.status === "ok" ? run.stats || {} : null;
@@ -326,20 +326,20 @@ export default {
                 return { placeholder: "http://jabber.lan:5280", title: "Адрес любой страницы веб-админки ejabberd" };
             }
             if (s.form === "ssh") {
-                return { placeholder: "192.168.0.5", title: "Имя или IP сервера DHCP (SSH); порт — через двоеточие" };
+                return { placeholder: "192.168.0.5", title: "Имя или IP сервера DHCP (SSH); порт – через двоеточие" };
             }
             return { placeholder: "https://glpi.lan", title: "Адрес " + s.title + ", как в браузере" };
         },
 
         scanFreshTitle(s) {
             return {
-                jabber: "Кто не подключался дольше — выделяется в VACUUM, на странице Vacuum — серым",
-                ssh: "Аренды старше — в «Сети» серым, в предложения не идут",
-                net: "Адреса, молчащие дольше, — в «Сети» серым, в предложения не идут"
+                jabber: "Кто не подключался дольше – выделяется в VACUUM, на странице Vacuum – серым",
+                ssh: "Аренды старше – в «Сети» серым, в предложения не идут",
+                net: "Адреса, молчащие дольше, – в «Сети» серым, в предложения не идут"
             }[s.form] || "Записи старше не берутся";
         },
 
-        // DHCP: ещё одна строка «Конфиг N» («+» — в последней строке)
+        // DHCP: ещё одна строка «Конфиг N» («+» – в последней строке)
         addScanConfig(kind, event) {
             const table = event.currentTarget.closest("table");
             this.scanForms[kind].configs.push("");
@@ -361,7 +361,7 @@ export default {
             return body;
         },
 
-        // Строка для ~/.ssh/authorized_keys — в буфер обмена
+        // Строка для ~/.ssh/authorized_keys – в буфер обмена
         async copyScanKey(kind) {
             const f = this.scanForms[kind];
             f.keyBusy = true;
@@ -377,7 +377,7 @@ export default {
                 }
                 const key = await response.json();
                 this.scanSource(kind).has_key = true;
-                await this.copyText(key.line, "Ключ скопирован — строка для authorized_keys");
+                await this.copyText(key.line, "Ключ скопирован – строка для authorized_keys");
             } catch (e) {
                 f.error = e.message || String(e);
             } finally {
@@ -490,6 +490,15 @@ export default {
             });
         },
 
+        // «ю», «б», набранная «,» – точка, как у IP (этап 37)
+        onCidrInput(event) {
+            const fixed = fixIpTyping(event.target, event, true);
+            if (fixed !== null && this.subnetBar) {
+                this.subnetBar.cidr = fixed;
+            }
+            this.onSuggestInput(event.target.value);
+        },
+
         onCidrKeydown(event) {
             if (this.suggest && event.key === "Escape") {
                 event.preventDefault();   // Esc закрывает только список, строка остаётся
@@ -556,7 +565,7 @@ export default {
                 await this.loadScanSubnets();
                 if (bar.kind === "new") {
                     this.toast("Добавлена подсеть: " + saved.cidr, "success");
-                    // Строка остаётся открытой для следующей; назначение и адрес — те же
+                    // Строка остаётся открытой для следующей; назначение и адрес – те же
                     this.subnetBar = { kind: "new", cidr: "", purpose: bar.purpose, location_id: bar.location_id, scan: bar.scan, note: "", error: "", saving: false, plate: null };
                     this.showEditRow("subnetBar", "sb-cidr");
                 } else {

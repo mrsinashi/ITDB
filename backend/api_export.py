@@ -14,7 +14,7 @@ from models import FieldDef
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
-# Встроенные столбцы — из общего описания (порядок и подписи как в таблице)
+# Встроенные столбцы – из общего описания (порядок и подписи как в таблице)
 COLUMNS = [
     {
         "field": column.key,
@@ -64,7 +64,7 @@ def fill_sheet(ws, rows, columns):
             value = row.get(column["field"])
 
             if column.get("date") and value:
-                # В строках таблицы дата — текст «15.10.2026», в Excel — настоящая дата
+                # В строках таблицы дата – текст «15.10.2026», в Excel – настоящая дата
                 value = datetime.strptime(value, "%d.%m.%Y").date()
 
             cell = ws.cell(row=row_index, column=col_index, value=value)
@@ -78,12 +78,12 @@ def fill_sheet(ws, rows, columns):
     ws.freeze_panes = "A2"
 
 
-# Антивирусы в выгрузке — строками, состояние словами (в Таблице — цветом)
-AV_SUFFIX = {"on": "", "old": " — базы устарели", "off": " — выключен"}
+# Антивирусы в выгрузке – строками, состояние словами (в Таблице – цветом)
+AV_SUFFIX = {"on": "", "old": " – базы устарели", "off": " – выключен"}
 
 
 def fill_antivirus(session, rows):
-    """Столбец «Антивирусы» берётся из сканера (этап 26д): как в Таблице —
+    """Столбец «Антивирусы» берётся из сканера (этап 26д): как в Таблице –
     только показываемые состояния и названия."""
     antivirus = computer_antivirus(session)
     settings = av_settings(session)
@@ -95,7 +95,7 @@ def fill_antivirus(session, rows):
 
 @router.get("/computers.xlsx")
 def export_computers(archive: bool = False, session=Depends(get_db)):
-    """Рабочие ПК; archive=true — ещё лист «Архив» с ПК из архива."""
+    """Рабочие ПК; archive=true – ещё лист «Архив» с ПК из архива."""
     columns = get_export_columns(session)
 
     wb = Workbook()

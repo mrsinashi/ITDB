@@ -1,5 +1,5 @@
 """Сканирование, этап 24: подключения к источникам (пароли зашифрованы, проверка
-подключения) и подсети. Всё — только администратор.
+подключения) и подсети. Всё – только администратор.
 
 GLPI и веб-админку Jabber изображает маленький HTTP-сервер в этом же процессе."""
 import base64
@@ -27,7 +27,7 @@ def basic(login, password):
 
 
 class FakeHandler(BaseHTTPRequestHandler):
-    """GLPI (apirest.php) и веб-админка ejabberd — ровно то, что нужно проверке."""
+    """GLPI (apirest.php) и веб-админка ejabberd – ровно то, что нужно проверке."""
 
     def log_message(self, *args):
         pass
@@ -146,7 +146,7 @@ def test_save_password_encrypted(admin, editor):
     token = json.loads(stored)["password"]
     assert Fernet(KEY.encode()).decrypt(token.encode()).decode() == "s3cret-Пароль"
 
-    # История: пароль — «задан новый», сам пароль нигде
+    # История: пароль – «задан новый», сам пароль нигде
     items = history_of(admin, "scan_sources")
     assert items[0]["title"] == "GLPI"
     changes = items[0]["changes"]
@@ -179,7 +179,7 @@ def test_no_key(admin, monkeypatch):
     assert response.status_code == 400
     assert "ITDB_SECRET_KEY" in response.json()["detail"]
 
-    # Без пароля — сохраняется
+    # Без пароля – сохраняется
     ok(admin.patch("/api/scan/sources/glpi", json={"url": "http://glpi"}))
 
 
@@ -197,7 +197,7 @@ def test_source_validation(admin):
     assert admin.patch("/api/scan/sources/glpi", json={"fresh_days": 0}).status_code == 400
     assert admin.patch("/api/scan/sources/glpi", json={"fresh_days": 61}).status_code == 400
     assert admin.patch("/api/scan/sources/nope", json={"url": "http://x"}).status_code == 404
-    # У Jabber нет токенов — лишнее игнорируется; срок «давно не в сети» — свой, до года
+    # У Jabber нет токенов – лишнее игнорируется; срок «давно не в сети» – свой, до года
     saved = ok(admin.patch("/api/scan/sources/jabber", json={"url": "http://j:5280", "user_token": "t", "fresh_days": 90}))
     assert saved["secrets"] == {"password": False}
     assert saved["fresh_days"] == 90
@@ -222,11 +222,11 @@ def test_check_glpi(admin, fake):
     assert "неверный логин" in bad["message"]
     assert ok(admin.get("/api/scan/sources"))["sources"][0]["check_ok"] is True
 
-    # Адрес изменили — прошлая проверка сброшена
+    # Адрес изменили – прошлая проверка сброшена
     ok(admin.patch("/api/scan/sources/glpi", json={"url": fake + "/other"}))
     assert ok(admin.get("/api/scan/sources"))["sources"][0]["checked_at"] is None
 
-    # Токен пользователя вместо пароля; адрес — сразу …/apirest.php
+    # Токен пользователя вместо пароля; адрес – сразу …/apirest.php
     by_token = ok(admin.post("/api/scan/sources/glpi/check", json={"url": fake + "/glpi/apirest.php", "user_token": "tok"}))
     assert by_token["ok"] is True, by_token
 
@@ -247,7 +247,7 @@ def test_check_errors(admin, fake):
 
 
 def test_check_jabber(admin, fake):
-    # Адрес любой страницы админки — домен возьмётся из него; логин без @ — допишется
+    # Адрес любой страницы админки – домен возьмётся из него; логин без @ – допишется
     saved = ok(admin.patch("/api/scan/sources/jabber", json={
         "url": fake + "/admin/server/jabber.test/shared-roster/", "login": "admin", "password": "pw",
     }))
@@ -280,7 +280,7 @@ def test_subnets(admin, editor):
     data = ok(admin.get("/api/scan/subnets"))
     by_cidr = {s["cidr"]: s for s in data["subnets"]}
     assert list(by_cidr) == ["10.0.5.0/24", "192.168.89.0/24", "192.168.89.192/26"]
-    # ПК — в самой узкой подсети: .200 — только в /26
+    # ПК – в самой узкой подсети: .200 – только в /26
     assert by_cidr["192.168.89.0/24"]["computers"] == 2
     assert by_cidr["192.168.89.192/26"]["computers"] == 1
     assert by_cidr["192.168.89.192/26"]["note"] == "принтеры"
@@ -298,7 +298,7 @@ def test_subnets(admin, editor):
     assert admin.post("/api/scan/subnets", json={"cidr": "10.1.0.0/24", "purpose": "x"}).status_code == 400
     assert admin.post("/api/scan/subnets", json={"cidr": "10.1.0.0/24", "location_id": room}).status_code == 400
 
-    # Правка и удаление — в Истории
+    # Правка и удаление – в Истории
     ok(admin.patch(f"/api/scan/subnets/{printers['id']}", json={"purpose": "mixed", "scan": False}))
     ok(admin.patch(f"/api/scan/subnets/{created['id']}", json={"clear_location": True}))
     ok(admin.delete(f"/api/scan/subnets/{printers['id']}"))

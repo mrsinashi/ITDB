@@ -1,4 +1,4 @@
-"""Вход, сессия и роли: reader только читает, импорт — только admin."""
+"""Вход, сессия и роли: reader только читает, импорт – только admin."""
 import pytest
 
 from conftest import add_computer, ok

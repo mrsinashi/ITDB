@@ -1,9 +1,9 @@
 """Выделения значений в Таблице (этап 26к): как показывать значение, когда с ним
-что-то не так, — повтор, логина нет в Jabber, логин давно не подключался, имя на
-ПК другое (по сканеру), дата просрочена, — или наоборот, всё в порядке: ПК проверен
-и GLPI / GSIT, и сетью (этап 28б; по умолчанию не выделяется). Вид — общий для всех,
+что-то не так, – повтор, логина нет в Jabber, логин давно не подключался, имя на
+ПК другое (по сканеру), дата просрочена, – или наоборот, всё в порядке: ПК проверен
+и GLPI / GSIT, и сетью (этап 28б; по умолчанию не выделяется). Вид – общий для всех,
 настраивается в Справочниках, как оформление значений; хранится в app_settings
-(«table_marks»), нет строки — вид по умолчанию. Фон — блочком у самого значения или
+(«table_marks»), нет строки – вид по умолчанию. Фон – блочком у самого значения или
 (chip = False) на всю ячейку."""
 import re
 from datetime import datetime, timezone
@@ -25,7 +25,7 @@ COLORS = ("color", "bg_color")
 FLAGS = ("bold", "italic", "underline", "strike", "chip")
 PLAIN = {"color": None, "bg_color": None, "bold": False, "italic": False, "underline": False, "strike": False, "chip": True}
 
-# вид → (название, столбец-образец, вид по умолчанию); порядок — как в Справочниках
+# вид → (название, столбец-образец, вид по умолчанию); порядок – как в Справочниках
 MARKS = {
     "dup": ("Повтор", {"bg_color": "#ffd6d6"}),
     "hostname": ("Имя на ПК другое", {"color": "#cc0000", "bold": True}),
@@ -45,12 +45,12 @@ class MarkOut(BaseModel):
     italic: bool
     underline: bool
     strike: bool
-    chip: bool      # фон блочком у значения (иначе — на всю ячейку)
+    chip: bool      # фон блочком у значения (иначе – на всю ячейку)
     changed: bool   # вид не как по умолчанию
 
 
 class MarkUpdate(BaseModel):
-    """None — не менять; у цветов "" — убрать; reset — вернуть вид по умолчанию."""
+    """None – не менять; у цветов "" – убрать; reset – вернуть вид по умолчанию."""
     color: Optional[str] = None
     bg_color: Optional[str] = None
     bold: Optional[bool] = None
@@ -66,7 +66,7 @@ def default_of(kind):
 
 
 def marks(session):
-    """{вид: оформление} — сохранённое поверх вида по умолчанию."""
+    """{вид: оформление} – сохранённое поверх вида по умолчанию."""
     row = session.get(AppSetting, KEY)
     saved = (row.value if row else None) or {}
     result = {}
@@ -106,7 +106,7 @@ def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), sess
             value = (value or "").strip().lower() or None
 
             if value is not None and not COLOR_RE.match(value):
-                raise HTTPException(status_code=400, detail="Цвет — в виде #RRGGBB.")
+                raise HTTPException(status_code=400, detail="Цвет – в виде #RRGGBB.")
 
         if style[field] != value:
             changes[field] = {"old": style[field], "new": value}

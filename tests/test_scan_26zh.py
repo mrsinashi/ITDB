@@ -49,7 +49,7 @@ def test_users_page():
 
 
 def test_users_list_grows(admin, jabber_url, monkeypatch):
-    """Спрашиваем N, потом на шаг больше — пока пользователей прибавляется."""
+    """Спрашиваем N, потом на шаг больше – пока пользователей прибавляется."""
     monkeypatch.setattr(sj, "USERS_FIRST", 2)
     monkeypatch.setattr(sj, "USERS_STEP", 2)
     Ejabberd.users = {f"user{i}": "Никогда" for i in range(5)}
@@ -77,7 +77,7 @@ def test_users_marks_and_stale(admin, editor, reader, room, jabber_url):
     assert run["status"] == "ok" and run["message"] is None
     assert (run["stats"]["total"], run["stats"]["online"], run["stats"]["gone"], run["stats"]["no_group"]) == (7, 2, 1, 1)
 
-    # Страница «Vacuum»: удалённый, но в группе — убрать из группы; без группы — пометка
+    # Страница «Vacuum»: удалённый, но в группе – убрать из группы; без группы – пометка
     data = ok(editor.get("/api/scan/jabber"))
     users = {u["login"]: u for u in data["users"]}
     assert data["listed"] and set(users) == {"ivanov", "old_user", "never", "fresh", "stale2", "petrova", "lonely", "ghost"}
@@ -86,8 +86,8 @@ def test_users_marks_and_stale(admin, editor, reader, room, jabber_url):
     assert users["never"]["last_login_at"] is None and users["old_user"]["last_login_at"].startswith(ago(40)[:10])
     assert users["ivanov"]["online"] and users["ivanov"]["addresses"][0]["hosts"][0]["hostname"] == "pc-1"
 
-    # Таблица: из ячейки сканер никого не убирает (этап 26з) — кто давно не подключался
-    # и кого нет, только помечаются; новый с IP ПК — добавить
+    # Таблица: из ячейки сканер никого не убирает (этап 26з) – кто давно не подключался
+    # и кого нет, только помечаются; новый с IP ПК – добавить
     data, diffs = diffs_data(reader)
     d = diffs[(first, "vacuum")]
     assert d["table"] == "fresh\nghost\nivanov\nnever\nold_user\ntypo"
@@ -95,26 +95,26 @@ def test_users_marks_and_stale(admin, editor, reader, room, jabber_url):
     assert "petrova" in d["note"] and "old_user" not in d["note"]
     assert (second, "vacuum") not in diffs
     assert data["vacuum_missing"] == ["ghost", "typo"]
-    # Сколько дней не подключался; None — никогда
+    # Сколько дней не подключался; None – никогда
     assert data["vacuum_stale"] == {"never": None, "old_user": 40, "stale2": 8}
 
-    # Срок — в настройках подключения («Актуальны»)
+    # Срок – в настройках подключения («Актуальны»)
     ok(admin.patch("/api/scan/sources/jabber", json={"fresh_days": 30}))
     assert diffs_data(reader)[0]["vacuum_stale"] == {"never": None, "old_user": 40}
     ok(admin.patch("/api/scan/sources/jabber", json={"fresh_days": 7}))
 
-    # Отклонить — не предлагается
+    # Отклонить – не предлагается
     ok(editor.post("/api/scan/diffs/reject", json={"items": [{"computer_id": first, "field": "vacuum", "raw": diffs[(first, "vacuum")]["raw"]}]}))
     assert (first, "vacuum") not in diffs_data(editor)[1]
 
-    # Пользователя удалили из ejabberd и из групп — на странице его больше нет, в таблице — «нет в Jabber»
+    # Пользователя удалили из ejabberd и из групп – на странице его больше нет, в таблице – «нет в Jabber»
     del Ejabberd.users["fresh"]
     Ejabberd.groups = {"ИТ": [f"ivanov@{DOMAIN}"]}
     assert jabber_collect(admin)["status"] == "ok"
     assert "fresh" not in users_of(editor) and "ghost" not in users_of(editor)
     assert "fresh" in diffs_data(editor)[0]["vacuum_missing"]
 
-    # Список не получен — прежние пометки остаются
+    # Список не получен – прежние пометки остаются
     Ejabberd.users = None
     run = jabber_collect(admin)
     assert run["status"] == "ok" and "Список пользователей не получен" in run["message"]
@@ -141,11 +141,11 @@ def test_record_ids(admin, editor, room, glpi_url):
     assert data["links"] == {
         "glpi_id": f"{glpi_url}/front/computer.form.php?id=", "gsit_id": f"{glpi_url}/front/computer.form.php?id=",
     }
-    # Сопоставлен по MAC — номера записей предлагаются в столбцы GLPI и GSIT
+    # Сопоставлен по MAC – номера записей предлагаются в столбцы GLPI и GSIT
     d = diffs[(first, "glpi_id")]
     assert (d["kind"], d["table"], d["proposed"], d["sources"][0]["source"]) == ("fill", "", "11", "glpi")
     assert diffs[(first, "gsit_id")]["proposed"] == "11" and diffs[(first, "gsit_id")]["sources"][0]["source"] == "gsit"
-    # Номер GSIT в таблице — запись GSIT сопоставлена по нему (а GLPI с таким же номером — нет)
+    # Номер GSIT в таблице – запись GSIT сопоставлена по нему (а GLPI с таким же номером – нет)
     records = {r["source_id"]: r for r in ok(admin.get("/api/scan/records", params={"source": "gsit"}))["records"]}
     assert (records[22]["state"], records[22]["by"], records[22]["computer_id"]) == ("key", ["id"], by_id)
     records = {r["source_id"]: r for r in ok(admin.get("/api/scan/records", params={"source": "glpi"}))["records"]}
@@ -165,7 +165,7 @@ def test_record_ids(admin, editor, room, glpi_url):
 
 def test_stale_record_id(admin, editor, room, glpi_url):
     """Номер в таблице указывает на запись, которой в источнике уже нет (агент
-    поставили заново) — не конфликт: предлагается новый номер."""
+    поставили заново) – не конфликт: предлагается новый номер."""
     loc = room["room"]
     moved = add_pc(editor, loc, "pc-1", mac="D8:BB:C1:00:00:01", glpi_id="999")
     other = add_pc(editor, loc, "pc-2", mac="D8:BB:C1:00:00:02", glpi_id="33")
@@ -180,7 +180,7 @@ def test_stale_record_id(admin, editor, room, glpi_url):
     assert (records[11]["state"], records[11]["computer_id"]) == ("key", moved)
     d = diffs_data(editor)[1][(moved, "glpi_id")]
     assert (d["kind"], d["table"], d["proposed"]) == ("diff", "999", "11")
-    # Номер указывает на другую запись, которая есть, — противоречие
+    # Номер указывает на другую запись, которая есть, – противоречие
     assert records[22]["state"] == "conflict" and "GLPI ID" in records[22]["note"]
     assert (other, "glpi_id") not in diffs_data(editor)[1]
 
@@ -204,7 +204,7 @@ def test_route_values():
         "model": None, "motherboard": "H310M-K", "os": "Win 10",
     }
     assert route_values({"model": "HP ProDesk 400"}, names.boards) == {"model": "HP ProDesk 400"}
-    # «Плата» — не «разное» и не «одно и то же» для модели
+    # «Плата» – не «разное» и не «одно и то же» для модели
     assert names.compare("model", "ASUS PRIME H310M-K", "ЕГИСЗ")["mark"] == "≠"
 
 
@@ -227,7 +227,7 @@ def test_board(admin, editor, reader, room, glpi_url):
     assert editor.post("/api/scan/diffs/board", json=dict(body, value=" ")).status_code == 400
     ok(editor.post("/api/scan/diffs/board", json=body))
 
-    # Этому ПК — в «Мат. плату» (модель «ЕГИСЗ» остаётся), в Истории — пометка источника
+    # Этому ПК – в «Мат. плату» (модель «ЕГИСЗ» остаётся), в Истории – пометка источника
     row = get_row(editor, second)
     assert (row["motherboard"], row["model"]) == ("ASUS PRIME H310M-K", "ЕГИСЗ")
     history = ok(editor.get("/api/history", params={"entity": "computers", "entity_id": second}))["items"]
@@ -244,12 +244,12 @@ def test_board(admin, editor, reader, room, glpi_url):
     compare = {c["field"]: c for c in ok(admin.get("/api/scan/records", params={"source": "glpi"}))["records"][0]["compare"]}
     assert compare["motherboard"]["source"] == "ASUS PRIME H310M-K" and not compare["model"]["raw"]
 
-    # В «Модели» записана эта же плата — переносится
+    # В «Модели» записана эта же плата – переносится
     ok(editor.post("/api/scan/diffs/board", json=dict(body, computer_id=first)))
     row = get_row(editor, first)
     assert (row["motherboard"], row["model"]) == ("ASUS PRIME H310M-K", None)
 
-    # Плата — только у модели; удалить соответствие — снова предлагается как модель
+    # Плата – только у модели; удалить соответствие – снова предлагается как модель
     assert editor.post("/api/scan/names", json={"field": "os", "source": "a", "table": "b", "kind": "board"}).status_code == 400
     alias = [n for n in ok(admin.get("/api/scan/names")) if n["kind"] == "board"][0]
     ok(admin.delete(f"/api/scan/names/{alias['id']}"))
@@ -257,7 +257,7 @@ def test_board(admin, editor, reader, room, glpi_url):
 
 
 def test_own_value_is_same(admin, editor, room, glpi_url):
-    """«Своё» в карточке блочка: название — соответствие «одно и то же» для всех ПК."""
+    """«Своё» в карточке блочка: название – соответствие «одно и то же» для всех ПК."""
     loc = room["room"]
     first = add_pc(editor, loc, "pc-1", mac="D8:BB:C1:00:00:01", os="Astra")
     second = add_pc(editor, loc, "pc-2", mac="D8:BB:C1:00:00:02")

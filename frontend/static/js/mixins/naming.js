@@ -1,15 +1,15 @@
 // Имена ПК по правилам (этапы 35, 36): вкладка «Имена ПК» в Справочниках, проверка
-// имён в Таблице, имя нового ПК. Что считается — в js/naming.js.
+// имён в Таблице, имя нового ПК. Что считается – в js/naming.js.
 //
-// Вкладка: дерево строками, у каждого узла — имя его ПК, собранное из частей:
+// Вкладка: дерево строками, у каждого узла – имя его ПК, собранное из частей:
 // серое начало от узлов выше, своя часть (ввод прямо в имени) и серый номер; клик
-// по серому — убрать / вернуть («только своя», «одно место»). «В таблице» — как
-// названы ПК сейчас (клик — взять); «Взять из таблицы» на панели — всё разом.
-// Клик по строке — справа ПК узла: как названы и как должны (меняется при вводе).
-// Ничего не выбрано — справа ПК со «своим именем».
+// по серому – убрать / вернуть («только своя», «одно место»). «В таблице» – как
+// названы ПК сейчас (клик – взять); «Взять из таблицы» на панели – всё разом.
+// Клик по строке – справа ПК узла: как названы и как должны (меняется при вводе).
+// Ничего не выбрано – справа ПК со «своим именем».
 //
-// Таблица: кнопка на панели показывает слева от HOSTNAME столбец «По правилу» —
-// имя по правилу у ПК, названных иначе; клик — карточка: переименовать или оставить своё.
+// Таблица: кнопка на панели показывает слева от HOSTNAME столбец «По правилу» –
+// имя по правилу у ПК, названных иначе; клик – карточка: переименовать или оставить своё.
 
 import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
 import { KIND_ICONS, treeNodeTexts } from "../tree-utils.js";
@@ -28,12 +28,12 @@ function nodeTitle(entry) {
 
 export default {
     watch: {
-        // Блочки имён появились или пропали — пересчитать ширину столбцов
+        // Блочки имён появились или пропали – пересчитать ширину столбцов
         nameChipVersion() {
             this.recalcWidths();
         },
 
-        // Дерево догрузилось или правила поменялись — имя нового ПК тоже
+        // Дерево догрузилось или правила поменялись – имя нового ПК тоже
         namingIdx() {
             this.refreshNewComputerName();
         },
@@ -52,7 +52,7 @@ export default {
             return namingIndex(this.treeRoots, null);
         },
 
-        // То же с частью, которую сейчас вводят на вкладке, — имя меняется сразу
+        // То же с частью, которую сейчас вводят на вкладке, – имя меняется сразу
         namesEditIdx() {
             return this.nameDraft ? namingIndex(this.treeRoots, this.nameDraft) : this.namingIdx;
         },
@@ -167,7 +167,7 @@ export default {
             return nums;
         },
 
-        // Строки вкладки: узлы дерева по порядку; поиск — по пути, части и имени
+        // Строки вкладки: узлы дерева по порядку; поиск – по пути, части и имени
         // (видны найденные и узлы над ними)
         namesRows() {
             const texts = [];
@@ -188,7 +188,7 @@ export default {
             if (!searchWords(query).length) {
                 return list;
             }
-            // Слово, которого нет ни в одной строке, — в другой раскладке
+            // Слово, которого нет ни в одной строке, – в другой раскладке
             const words = searchWordsIn(query, texts);
             const keep = new Set();
             list.forEach(function (row) {
@@ -208,7 +208,7 @@ export default {
             return list.filter(function (row) { return keep.has(row.node.id); });
         },
 
-        // Выбранный узел вкладки (клик по строке): справа — его ПК
+        // Выбранный узел вкладки (клик по строке): справа – его ПК
         nameSelEntry() {
             return this.nameSelId === null ? null : (this.namesEditIdx.get(this.nameSelId) || null);
         },
@@ -217,8 +217,8 @@ export default {
             return nodeTitle(this.nameSelEntry);
         },
 
-        // ПК выбранного узла и ниже — в порядке Таблицы; узлы с ПК — строками-группами,
-        // если таких несколько. Имена — с тем, что сейчас вводят
+        // ПК выбранного узла и ниже – в порядке Таблицы; узлы с ПК – строками-группами,
+        // если таких несколько. Имена – с тем, что сейчас вводят
         nameSelRows() {
             const sel = this.nameSelEntry;
             if (!sel) {
@@ -328,13 +328,13 @@ export default {
             return this.nameDraft && this.nameDraft.id === r.node.id ? this.nameDraft.raw : (r.node.name_part || "");
         },
 
-        // Строка под курсором или в правке: у пустого поля — подсказка «часть»
+        // Строка под курсором или в правке: у пустого поля – подсказка «часть»
         namePartActive(r) {
             return this.canEdit && ((!!this.namesHover && this.namesHover.node.id === r.node.id) || (!!this.nameDraft && this.nameDraft.id === r.node.id));
         },
 
-        // Серое начало от узлов выше: «ter-» (без своей части — «ter», под курсором —
-        // «ter-» перед подсказкой «часть»); у «только своей» — зачёркнуто
+        // Серое начало от узлов выше: «ter-» (без своей части – «ter», под курсором –
+        // «ter-» перед подсказкой «часть»); у «только своей» – зачёркнуто
         namePrefixText(r) {
             return r.entry.above + (r.entry.part || this.namePartActive(r) ? "-" : "");
         },
@@ -342,11 +342,11 @@ export default {
         namePrefixTitle(entry) {
             const parent = this.namesEditIdx.get(entry.parentId);
             const from = parent ? "«" + nodeTitle(parent) + "»" : "выше";
-            return entry.own ? "Без начала от " + from + " — вернуть" : "Начало от " + from + " — убрать";
+            return entry.own ? "Без начала от " + from + " – вернуть" : "Начало от " + from + " – убрать";
         },
 
-        // Серый номер: у конечного узла — номера его ПК («-1…3»), одно место — зачёркнуто;
-        // у узла с детьми — «-…» (начало имён)
+        // Серый номер: у конечного узла – номера его ПК («-1…3»), одно место – зачёркнуто;
+        // у узла с детьми – «-…» (начало имён)
         nameSuffixText(r) {
             if (!r.entry.leaf) {
                 return "-…";
@@ -362,7 +362,7 @@ export default {
             if (!r.entry.leaf) {
                 return "Начало имён";
             }
-            return r.entry.single ? "Одно место, без номера — вернуть номер" : "Номер по № места — убрать";
+            return r.entry.single ? "Одно место, без номера – вернуть номер" : "Номер по № места – убрать";
         },
 
         nameRowTitle(r) {
@@ -382,8 +382,8 @@ export default {
             this.namesHover = { node: node, top: r.top - w.top, height: r.height };
         },
 
-        // Клик по строке — справа её ПК; ещё раз — снять. Клик в имени — в поле части
-        // (серые начало и номер, блочки и ссылки — свои)
+        // Клик по строке – справа её ПК; ещё раз – снять. Клик в имени – в поле части
+        // (серые начало и номер, блочки и ссылки – свои)
         onNamesRowClick(node, event) {
             if (event.target.closest("input, button, a, .nr-pre, .nr-suf")) {
                 return;
@@ -414,7 +414,7 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                // Узлы дерева — на месте, без перечитывания
+                // Узлы дерева – на месте, без перечитывания
                 (await response.json()).nodes.forEach((saved) => {
                     const entry = this.namingIdx.get(saved.id);
                     if (entry) {
@@ -433,7 +433,7 @@ export default {
             }
         },
 
-        // Черновик: raw — как набрано (в поле), part — для имени
+        // Черновик: raw – как набрано (в поле), part – для имени
         onNamePartFocus(node) {
             this.nameDraft = { id: node.id, raw: node.name_part || "", part: node.name_part || "" };
         },
@@ -469,7 +469,7 @@ export default {
             if (this.nameDraft === draft) {
                 this.nameDraft = null;
             }
-            // Не сохранилось — в поле снова то, что было
+            // Не сохранилось – в поле снова то, что было
             event.target.value = node.name_part || "";
         },
 
@@ -505,7 +505,7 @@ export default {
             return KIND_ICONS[kind] || KIND_ICONS.room;
         },
 
-        // Показать ПК узла в таблице с проверкой имён (onlyBad — только не по правилу)
+        // Показать ПК узла в таблице с проверкой имён (onlyBad – только не по правилу)
         showNamesInTable(node, onlyBad) {
             this.showLocationInTable(node);
             if (!this.nameCheck) {
@@ -617,7 +617,7 @@ export default {
             }
         },
 
-        // Как карточка у блочка сканера: справа от блочка, не помещается — слева
+        // Как карточка у блочка сканера: справа от блочка, не помещается – слева
         placeNamePop() {
             const pop = this.namePop;
             const el = this.$refs.namePop;
@@ -675,7 +675,7 @@ export default {
             }
         },
 
-        // Правило узла — на вкладке «Имена ПК», строка узла выбрана
+        // Правило узла – на вкладке «Имена ПК», строка узла выбрана
         namePopRule() {
             const pop = this.namePop;
             if (!pop) {
@@ -732,7 +732,7 @@ export default {
 
         // ---------- Новый компьютер ----------
 
-        // Имя по правилу — в поле HOSTNAME, пока его не поменяли руками
+        // Имя по правилу – в поле HOSTNAME, пока его не поменяли руками
         refreshNewComputerName() {
             const form = this.newComputer;
             if (!form) {

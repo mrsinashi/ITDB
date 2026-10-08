@@ -1,4 +1,4 @@
-"""computers.archived — архив компьютеров
+"""computers.archived – архив компьютеров
 
 Revision ID: e3b8f41a6c07
 Revises: d5a9e3c1f720

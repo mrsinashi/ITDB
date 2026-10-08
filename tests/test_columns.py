@@ -47,7 +47,7 @@ def test_row_has_every_column(editor, room):
     row = get_row(editor, computer_id)
 
     for column in COLUMNS:
-        # Столбцы из сканера (антивирусы) в строке ПК не хранятся — их дописывает фронт
+        # Столбцы из сканера (антивирусы) в строке ПК не хранятся – их дописывает фронт
         assert column.key in row or column.kind == "scan", column.key
 
 
@@ -113,7 +113,7 @@ def test_export_has_new_columns(reader, editor, room):
     assert values["Серийный"] == "SN-001"
     assert values["VNC"] == "tight"
     assert values["GLPI"] == "1234"
-    assert values["Временно до"].date() == date(2026, 10, 15)  # в Excel — дата, не текст
+    assert values["Временно до"].date() == date(2026, 10, 15)  # в Excel – дата, не текст
 
 
 def test_new_keys_reserved_for_user_fields(editor):
@@ -158,5 +158,5 @@ def test_suggest_flag(reader):
     columns = ok(reader.get("/api/columns"))["columns"]
     suggest = {column["key"] for column in columns if column["suggest"]}
 
-    # Подсказки — у столбцов с повторяющимися значениями в одну строку
+    # Подсказки – у столбцов с повторяющимися значениями в одну строку
     assert {"status", "type", "os", "model", "motherboard", "cpu", "ram", "gpu", "vnc", "gsit", "state", "label"} == suggest

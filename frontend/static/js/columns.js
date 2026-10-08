@@ -8,7 +8,7 @@ export function normalizeKey(value) {
 }
 
 // Дубли: поле → множество значений, встречающихся больше одного раза.
-// Какие поля проверять и какие из них многострочные — из описания столбцов.
+// Какие поля проверять и какие из них многострочные – из описания столбцов.
 let duplicateSets = {};
 
 export function buildDuplicateSets(rows, columns) {
@@ -39,13 +39,13 @@ export function buildDuplicateSets(rows, columns) {
     return sets;
 }
 
-// Одно значение (строка многострочной ячейки) — повтор?
+// Одно значение (строка многострочной ячейки) – повтор?
 export function isDuplicateLine(line, field) {
     const set = duplicateSets[field];
     return !!set && set.has(normalizeKey(line));
 }
 
-// Пересчитать дубли (после загрузки и правки строк); columns — встроенные столбцы
+// Пересчитать дубли (после загрузки и правки строк); columns – встроенные столбцы
 export function refreshDuplicates(rows, columns) {
     duplicateSets = buildDuplicateSets(rows, columns);
 }
@@ -63,7 +63,7 @@ export const kindLabels = {
 
 // Встроенные столбцы описаны на сервере (backend/api_columns.py, GET /api/columns).
 // Здесь описание переводится в вид, который ждут таблица, карточка и Справочники.
-// values: false — значения почти всегда уникальны, в «Справочниках»
+// values: false – значения почти всегда уникальны, в «Справочниках»
 // у такого столбца настраивается только оформление столбца целиком.
 export function toColumnDef(c) {
     const col = {
@@ -76,9 +76,9 @@ export function toColumnDef(c) {
         link: c.link,
         note: c.note,
         multiline: c.multiline,
-        // location: правка — выбор узла дерева (двойной клик)
+        // location: правка – выбор узла дерева (двойной клик)
         location: c.kind === "location",
-        // scan: только из сканера (антивирусы, этап 26д) — не правится
+        // scan: только из сканера (антивирусы, этап 26д) – не правится
         editable: c.kind !== "location" && c.kind !== "scan",
         scanOnly: c.kind === "scan",
         hiddenByDefault: c.hidden,
@@ -89,7 +89,7 @@ export function toColumnDef(c) {
         suggest: c.suggest,
         // В карточке всегда, даже пустое
         cardAlways: c.card_always,
-        // Дата «ДД.ММ.ГГГГ»: сортировка по дате, просроченная — красным жирным
+        // Дата «ДД.ММ.ГГГГ»: сортировка по дате, просроченная – красным жирным
         date: c.kind === "date",
         // GSIT / Сост. / Метка лежат в computers.extra под русскими ключами
         extraKey: c.extra_key
@@ -130,14 +130,14 @@ export function styleKey(field, line) {
     return String(line).trim().toLowerCase();
 }
 
-// Подчёркнутый и зачёркнутый — одним свойством CSS; ни того, ни другого — null
+// Подчёркнутый и зачёркнутый – одним свойством CSS; ни того, ни другого – null
 export function decoration(underline, strike) {
     return [underline ? "underline" : "", strike ? "line-through" : ""].filter(Boolean).join(" ") || null;
 }
 
 // Подписи полей в истории (ключ поля → как показывать): полные названия
 // столбцов и подписи записей, которые не столбцы (с сервера)
-// Подписи полей в Истории — как в карточке, без расшифровок в скобках (этап 19)
+// Подписи полей в Истории – как в карточке, без расшифровок в скобках (этап 19)
 export function buildFieldLabels(columns, historyLabels) {
     return Object.assign(
         {},
@@ -242,7 +242,7 @@ export const LOCATION_FIELD_LABELS = {
     name_single: "Одно место"
 };
 
-// «По правилу» (этап 36): при кнопке «Имена по правилам» — слева от HOSTNAME имя по
+// «По правилу» (этап 36): при кнопке «Имена по правилам» – слева от HOSTNAME имя по
 // правилу у ПК, названных иначе. Не столбец данных: его нет в меню, печати и выгрузке
 export const NAME_RULE_COLUMN = {
     field: "name_rule",
@@ -258,16 +258,16 @@ export const DEFAULT_HIDDEN_SEEN_KEY = "itdb.defaultHiddenSeen.v1";
 export const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
 
 // Второй вид таблицы (этап 28б, кнопка справа от поиска): свой набор столбцов.
-// «Каб» и «Кабинет» в Таблице — одним столбцом «Кабинет» («[214] Процедурная», как в
-// карточке): сначала только во втором виде, с 28в — в обоих. Оформляется он как
+// «Каб» и «Кабинет» в Таблице – одним столбцом «Кабинет» («[214] Процедурная», как в
+// карточке): сначала только во втором виде, с 28в – в обоих. Оформляется он как
 // «Кабинет» (название) из Справочников: STYLE_OF
 export const TABLE_VIEW_KEY = "itdb.tableView.v1";
 export const HIDDEN_COLUMNS2_KEY = "itdb.hiddenColumns2.v1";
-// Закреплённые столбцы (Ctrl+клик по шапке; нет записи — как в описании столбцов) и
+// Закреплённые столбцы (Ctrl+клик по шапке; нет записи – как в описании столбцов) и
 // масштаб таблицы по ширине окна (кнопка на панели)
 export const PINNED_COLUMNS_KEY = "itdb.pinnedColumns.v1";
 export const TABLE_FIT_KEY = "itdb.tableFit.v1";
-// Порядок столбцов (перетаскивание шапки) — у каждого вида свой; нет записи — как с сервера
+// Порядок столбцов (перетаскивание шапки) – у каждого вида свой; нет записи – как с сервера
 export const COLUMN_ORDER_KEY = "itdb.columnOrder.v1";
 export const COLUMN_ORDER2_KEY = "itdb.columnOrder2.v1";
 export const ROOM_PARTS = ["room_code", "room_name"];
@@ -279,11 +279,11 @@ export const ROOM_COLUMN = {
 export const VIEW2_COLUMNS = ["building", "department", "room", "hostname", "ip", "vacuum", "os", "type", "model", "cpu", "ram", "drive", "gpu"];
 
 // Чьё оформление из Справочников у общего столбца: столбец и значения названия
-// кабинета; у названия оформления столбца нет — номера
+// кабинета; у названия оформления столбца нет – номера
 export const ROOM_STYLE_FIELDS = ["room_name", "room_code"];
 
 // Скрытые столбцы основного вида, сохранённые до 28в: «Каб» и «Кабинет» были
-// порознь — общий «Кабинет» скрыт, если скрыты были оба
+// порознь – общий «Кабинет» скрыт, если скрыты были оба
 export function mergeRoomHidden(list) {
     const hidden = Array.isArray(list) ? list : [];
     const rest = hidden.filter(function (field) { return ROOM_PARTS.indexOf(field) === -1; });
@@ -292,7 +292,7 @@ export function mergeRoomHidden(list) {
 }
 
 // Столбцы в сохранённом порядке (список полей). Столбца нет в списке (новое польз.
-// поле, новый встроенный) — встаёт за тем, за кем стоит по умолчанию
+// поле, новый встроенный) – встаёт за тем, за кем стоит по умолчанию
 export function orderColumns(cols, order) {
     const byField = new Map(cols.map(function (col) { return [col.field, col]; }));
     const result = [];
@@ -333,9 +333,9 @@ export const LOCATION_FIELDS = ["building", "department", "floor", "room_code", 
 // Сортировка значений
 // ============================================================
 
-// Рамка ячейки под курсором для залитой ячейки — в тон заливки: тот же
+// Рамка ячейки под курсором для залитой ячейки – в тон заливки: тот же
 // оттенок темнее и чуть спокойнее (как бежевая рамка на бежевой строке).
-// fill — «#rrggbb» из Справочников или «var(--имя)» (дубль). Не цвет — null.
+// fill – «#rrggbb» из Справочников или «var(--имя)» (дубль). Не цвет – null.
 const frameCache = new Map();
 
 export function frameColorFor(fill) {
@@ -380,13 +380,13 @@ export function frameColorFor(fill) {
     return result;
 }
 
-// «15.10.2026» → 20261015 (для сравнения); не дата — null
+// «15.10.2026» → 20261015 (для сравнения); не дата – null
 export function dateKey(value) {
     const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(String(value || "").trim());
     return m ? Number(m[3] + m[2] + m[1]) : null;
 }
 
-// Дата уже прошла (сегодняшняя — ещё не просрочена)
+// Дата уже прошла (сегодняшняя – ещё не просрочена)
 export function isOverdue(value) {
     const key = dateKey(value);
     if (key === null) {

@@ -40,11 +40,11 @@ def test_cancel_middle_change_keeps_value(editor, room):
     cancel(editor, [{"id": items[1]["id"], "field": "os"}])
     assert get_row(editor, pc)["os"] == "C"
 
-    # Отменены все — значение исходное (до первого изменения)
+    # Отменены все – значение исходное (до первого изменения)
     cancel(editor, [{"id": items[0]["id"]}, {"id": items[2]["id"]}])
     assert get_row(editor, pc)["os"] is None
 
-    # Восстановить последнее — снова C
+    # Восстановить последнее – снова C
     cancel(editor, [{"id": items[0]["id"]}], cancel=False)
     assert get_row(editor, pc)["os"] == "C"
 
@@ -77,7 +77,7 @@ def test_cancel_one_field_of_record(editor, room):
     row = get_row(editor, pc)
     assert row["os"] is None and row["cpu"] == "i5"
 
-    # Запись отменена не целиком — видна и считается
+    # Запись отменена не целиком – видна и считается
     data = ok(editor.get("/api/history"))
     item = next(i for i in data["items"] if i["id"] == record["id"])
     assert item["cancelled"] is False
@@ -94,17 +94,17 @@ def test_revert_to_point_writes_record(editor, room):
     latest = history_of(editor, pc, "os")["items"][0]
     assert latest["old"] == "C" and latest["new"] == "A" and latest["revert"] is True
 
-    # Исходное значение — «было» первого изменения
+    # Исходное значение – «было» первого изменения
     ok(editor.post("/api/history/revert", json={"id": items[0]["id"], "field": "os", "initial": True}))
     assert get_row(editor, pc)["os"] is None
 
-    # То же значение ещё раз — не нужно
+    # То же значение ещё раз – не нужно
     response = editor.post("/api/history/revert", json={"id": items[0]["id"], "field": "os", "initial": True})
     assert response.status_code == 400
 
 
 def test_changed_outside_history_is_refused(editor, room):
-    """В старых записях расположение — путь текстом; узел переименовали —
+    """В старых записях расположение – путь текстом; узел переименовали –
     путь не найти, отмена не выполняется."""
     pc = add_computer(editor, room["room"], hostname="pc-1")
     other = add_location(editor, "room", "Процедурная", room["department"], code="202")
@@ -142,7 +142,7 @@ def test_legacy_location_path_resolved(editor, room):
     cancel(editor, [{"id": record_id}])
     assert get_row(editor, pc)["location_id"] == room["room"]
 
-    # Узел переименовали — старый путь уже не найти: восстановление отказывает
+    # Узел переименовали – старый путь уже не найти: восстановление отказывает
     ok(editor.patch(f"/api/locations/{other}", json={"name": "Другая"}))
     response = editor.post("/api/history/cancel", json={"items": [{"id": record_id}], "cancel": False})
     assert response.status_code == 400
@@ -201,7 +201,7 @@ def test_seat_revert_shifts_neighbours(editor, room):
     items = history_of(editor, second, "seat_no")["items"]   # 2 → 5; создан с № 2
     assert items[1]["new"] == 2
     result = ok(editor.post("/api/history/revert", json={"id": items[1]["id"], "field": "seat_no"}))
-    # № 2 занят первым ПК — он сдвинулся на 3
+    # № 2 занят первым ПК – он сдвинулся на 3
     assert result["shifted"] == [first]
     assert get_row(editor, second)["seat_no"] == 2
     assert get_row(editor, first)["seat_no"] == 3

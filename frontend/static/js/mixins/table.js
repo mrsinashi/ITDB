@@ -5,7 +5,7 @@ import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, NAME_
 import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
-// Порядок состояний антивируса при сортировке; AV_NONE — антивирусов нет
+// Порядок состояний антивируса при сортировке; AV_NONE – антивирусов нет
 const AV_RANK = { on: 0, old: 1, off: 2 };
 const AV_NONE = 9;
 
@@ -18,7 +18,7 @@ export default {
             });
         },
 
-        // Все столбцы как в описании с сервера (и скрытые): «Каб» и «Кабинет» — порознь.
+        // Все столбцы как в описании с сервера (и скрытые): «Каб» и «Кабинет» – порознь.
         // Для Справочников: оформление задаётся им, а не общему столбцу Таблицы
         baseColumns() {
             const self = this;
@@ -45,7 +45,7 @@ export default {
             return statusIndex >= 0 ? base.slice(0, statusIndex).concat(extra).concat(base.slice(statusIndex)) : base.concat(extra);
         },
 
-        // Все столбцы Таблицы (и скрытые) в порядке по умолчанию. «Каб» и «Кабинет» —
+        // Все столбцы Таблицы (и скрытые) в порядке по умолчанию. «Каб» и «Кабинет» –
         // одним столбцом «Кабинет» («[214] Процедурная») в обоих видах (28в)
         defaultColumns() {
             const self = this;
@@ -63,12 +63,12 @@ export default {
             return result;
         },
 
-        // Все столбцы Таблицы (и скрытые) — для меню «Столбцы»: в порядке текущего вида
+        // Все столбцы Таблицы (и скрытые) – для меню «Столбцы»: в порядке текущего вида
         // (перетаскивание шапки, mixins/col-order.js)
         allColumns() {
             const order = this.columnOrderNow;
             const result = order ? orderColumns(this.defaultColumns, order) : this.defaultColumns.slice();
-            // Закрепление своё (Ctrl+клик по шапке) — вместо заданного в описании столбцов
+            // Закрепление своё (Ctrl+клик по шапке) – вместо заданного в описании столбцов
             const pinned = this.pinnedColumns;
             if (pinned) {
                 result.forEach(function (col) { col.sticky = pinned.indexOf(col.field) !== -1; });
@@ -77,7 +77,7 @@ export default {
         },
 
         // Скрытые столбцы текущего вида. У второго вида набор свой; пока его не
-        // меняли — показаны только столбцы из VIEW2_COLUMNS
+        // меняли – показаны только столбцы из VIEW2_COLUMNS
         hiddenNow() {
             if (this.tableView !== 2) {
                 return this.hiddenColumns;
@@ -98,7 +98,7 @@ export default {
             });
         },
 
-        // Столбцы на экране: видимые и при кнопке «Имена по правилам» — «По правилу»
+        // Столбцы на экране: видимые и при кнопке «Имена по правилам» – «По правилу»
         // слева от HOSTNAME (этап 36; закреплён, если закреплён HOSTNAME). Его нет в
         // меню «Столбцы», печати, порядке; не сортируется, не фильтруется, не правится
         viewColumns() {
@@ -139,7 +139,7 @@ export default {
             return "Показано: " + this.displayedCount + " из " + this.rowCount + (this.showArchive ? " в архиве" : "");
         },
 
-        // В this.rows — все ПК, и рабочие, и из архива (признак archived)
+        // В this.rows – все ПК, и рабочие, и из архива (признак archived)
         activeRows() {
             return this.rows.filter(function (row) { return !row.archived; });
         },
@@ -158,7 +158,7 @@ export default {
             return new Set(this.selectedRows);
         },
 
-        // Заливка ячеек (фон из Справочников) — для линий сетки:
+        // Заливка ячеек (фон из Справочников) – для линий сетки:
         // Map id строки → { поле: цвет }. Строки без заливки в карту не входят.
         cellFills() {
             const map = new Map();
@@ -208,7 +208,7 @@ export default {
         filteredRows() {
             const rows = this.searchRows(this.applyColFilters(this.locationRows, null));
             // Значок-воронка у кнопки «Значения сканера»: только строки с предложениями;
-            // у кнопки «Имена по правилам» — только ПК с именем не по правилу
+            // у кнопки «Имена по правилам» – только ПК с именем не по правилу
             return this.scanOnlyOn || this.nameOnlyOn
                 ? rows.filter((row) => (this.scanOnlyOn && this.rowHasScanChip(row)) || (this.nameOnlyOn && this.rowHasNameChip(row)))
                 : rows;
@@ -222,7 +222,7 @@ export default {
             const field = this.sortField;
             const sortCol = this.allColumns.find(function (c) { return c.field === field; });
             const dir = this.sortDir === "asc" ? 1 : -1;
-            // Антивирусы — сначала по состоянию (работает, базы устарели, выключен), потом по названию
+            // Антивирусы – сначала по состоянию (работает, базы устарели, выключен), потом по названию
             if (sortCol && sortCol.scanOnly) {
                 const keys = new Map();
                 rows.forEach((row) => keys.set(row.id, this.avSortKey(row)));
@@ -230,7 +230,7 @@ export default {
                     const ka = keys.get(a.id);
                     const kb = keys.get(b.id);
                     if (ka.rank !== kb.rank) {
-                        // без антивирусов — всегда внизу
+                        // без антивирусов – всегда внизу
                         return ka.rank === AV_NONE ? 1 : kb.rank === AV_NONE ? -1 : (ka.rank - kb.rank) * dir;
                     }
                     return ka.text.localeCompare(kb.text, "ru", { numeric: true, sensitivity: "base" }) * dir;
@@ -252,14 +252,14 @@ export default {
             saveJson(SEARCH_HIDDEN_KEY, value);
         },
 
-        // Сняли выделение — меню действий больше не нужно
+        // Сняли выделение – меню действий больше не нужно
         "selectedRows.length"(count) {
             if (count === 0 && this.openMenu === "selection") {
                 this.closeMenus();
             }
         },
 
-        // Vue перерисовал класс строки — вернуть ей подсветку под курсором
+        // Vue перерисовал класс строки – вернуть ей подсветку под курсором
         selectedRows() {
             this.$nextTick(() => {
                 if (this.hoverRowEl) {
@@ -343,8 +343,8 @@ export default {
             this.tableLoading = false;
         },
 
-        // Клик по шапке — сортировка, с Ctrl — закрепить столбец / снять закрепление.
-        // Столбец только что перетаскивали — это не клик
+        // Клик по шапке – сортировка, с Ctrl – закрепить столбец / снять закрепление.
+        // Столбец только что перетаскивали – это не клик
         onHeadClick(event, col) {
             if (this.colDragDone || col.virtual) {
                 return;
@@ -391,7 +391,7 @@ export default {
         startResize(event, col) {
             const startX = event.clientX;
             const startWidth = col.width;
-            const zoom = this.tableZoom || 1;   // таблица в масштабе — путь мыши пересчитывается
+            const zoom = this.tableZoom || 1;   // таблица в масштабе – путь мыши пересчитывается
             const tableEl = this.$refs.table;
             if (!tableEl) {
                 return;
@@ -452,8 +452,8 @@ export default {
         },
 
         recalcWidths() {
-            // Блочки значений сканера в ячейках — ширина столбца и под них (этап 26в),
-            // в «По правилу» — блочок имени по правилу или «своё» (этап 36)
+            // Блочки значений сканера в ячейках – ширина столбца и под них (этап 26в),
+            // в «По правилу» – блочок имени по правилу или «своё» (этап 36)
             const scanChip = (row, field) => {
                 if (field === NAME_RULE_COLUMN.field) {
                     return this.nameChip(row) || (this.nameKept(row) ? "своё" : null);
@@ -461,7 +461,7 @@ export default {
                 const d = this.scanChipShown(row, field);
                 return d ? this.scanChipText(d) : null;
             };
-            // Блочок повтора и антивируса шире текста, выделенные логины VACUUM — жирные
+            // Блочок повтора и антивируса шире текста, выделенные логины VACUUM – жирные
             const avBold = !!this.avSettings && this.avSettings.statuses.some(function (st) { return st.bold; });
             const lineInfo = (row, col, line) => {
                 if (col.field === "antivirus") {
@@ -469,7 +469,7 @@ export default {
                 }
                 const ms = this.markStyle(this.lineMarkKinds(this.lineMarks(row, col, line)));
                 const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
-                return ms || chip ? { pad: (ms && ms.backgroundColor) || chip ? CHIP_PAD : 0, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» — запас не мешает
+                return ms || chip ? { pad: (ms && ms.backgroundColor) || chip ? CHIP_PAD : 0, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» – запас не мешает
             };
             this.autoWidths = computeAutoWidths(this.rows, this.widthColumns, this.tableFieldDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
@@ -501,9 +501,9 @@ export default {
             return cls;
         },
 
-        // Оформление ячейки целиком: столбец и поверх — первое оформленное значение.
-        // Фон блочком ячейку не оформляет (его строки рисует cellParts): тогда —
-        // только столбец, а если и у него блочок — ничего. Нет оформления — null
+        // Оформление ячейки целиком: столбец и поверх – первое оформленное значение.
+        // Фон блочком ячейку не оформляет (его строки рисует cellParts): тогда –
+        // только столбец, а если и у него блочок – ничего. Нет оформления – null
         cellLook(row, col) {
             const fieldStyles = this.choiceStyleMap[col.field];
             if (!fieldStyles && !this.tableColumnStyles[col.field]) {
@@ -529,7 +529,7 @@ export default {
             return look;
         },
 
-        // Фон блочком — в столбцах, где значение рисуется обычным текстом
+        // Фон блочком – в столбцах, где значение рисуется обычным текстом
         chipColumn(col) {
             return !col.note && !col.scanOnly && this.chipFields.has(col.field);
         },
@@ -549,12 +549,12 @@ export default {
             return Object.keys(style).length ? style : null;
         },
 
-        // Значения ячейки по строкам, если какое-то надо выделить (иначе null —
+        // Значения ячейки по строкам, если какое-то надо выделить (иначе null –
         // ячейка рисуется одним текстом): выделения Таблицы (повтор, имя на ПК
-        // другое, логин VACUUM, срок — вид из Справочников, фон — блочком у самого
-        // значения), фон из Справочников блочком, номер записи GLPI / GSIT — ссылкой
+        // другое, логин VACUUM, срок – вид из Справочников, фон – блочком у самого
+        // значения), фон из Справочников блочком, номер записи GLPI / GSIT – ссылкой
         cellParts(row, col) {
-            void this.dupVersion; // дубли считаются вне Vue — зависимость вручную
+            void this.dupVersion; // дубли считаются вне Vue – зависимость вручную
             const value = row[col.field];
             if (value === null || value === undefined || value === "" || this.isPending(row, col)) {
                 return null;
@@ -566,13 +566,13 @@ export default {
             if (!link && !chips && !marks) {
                 return null;
             }
-            // Имя ПК — всегда ссылкой на его карточку: средняя кнопка открывает её в новой вкладке
+            // Имя ПК – всегда ссылкой на его карточку: средняя кнопка открывает её в новой вкладке
             let special = host;
             const lines = col.multiline ? String(value).split("\n") : [String(value)];
             const parts = lines.map((line) => {
                 const m = this.lineMarks(row, col, line) || {};
                 const href = this.idLink(col.field, line);
-                // Фон из Справочников блочком: всё оформление значения — у его строки
+                // Фон из Справочников блочком: всё оформление значения – у его строки
                 const look = chips && line.trim() ? this.lineLook(col.field, line) : null;
                 const chip = !!look && look.chip;
                 const kinds = this.lineMarkKinds(m);
@@ -604,10 +604,10 @@ export default {
             return special ? parts : null;
         },
 
-        // Чем выделить значение (строку ячейки): dup — повтор; host — имя на ПК
-        // другое (по сканеру; само имя с ПК); у логина VACUUM: gone — такого
-        // пользователя в Jabber нет, stale — давно не подключался (сколько дней;
-        // null — никогда); overdue — срок прошёл. Нечего выделять — null
+        // Чем выделить значение (строку ячейки): dup – повтор; host – имя на ПК
+        // другое (по сканеру; само имя с ПК); у логина VACUUM: gone – такого
+        // пользователя в Jabber нет, stale – давно не подключался (сколько дней;
+        // null – никогда); overdue – срок прошёл. Нечего выделять – null
         lineMarks(row, col, line) {
             const overdue = !!col.date && isOverdue(line);
             if (row.archived) {
@@ -626,7 +626,7 @@ export default {
                 }
             } else if (col.field === "hostname") {
                 host = this.wrongHostname(row.id);
-                // Проверен и GLPI / GSIT, и сетью (чем именно — в подсказке)
+                // Проверен и GLPI / GSIT, и сетью (чем именно – в подсказке)
                 verified = host ? null : (this.diffs.verified[row.id] || null);
             }
             return dup || gone || stale !== undefined || host || overdue || verified ? { dup: dup, gone: gone, stale: stale, host: host, overdue: overdue, verified: verified } : null;
@@ -640,7 +640,7 @@ export default {
             return [m.verified ? "verified" : "", m.dup ? "dup" : "", m.host ? "hostname" : "", m.gone ? "gone" : "", m.stale !== undefined ? "stale" : "", m.overdue ? "overdue" : ""].filter(Boolean);
         },
 
-        // Имя этого ПК по сканеру другое (и «оставить как есть» не нажато) — это имя; иначе null
+        // Имя этого ПК по сканеру другое (и «оставить как есть» не нажато) – это имя; иначе null
         wrongHostname(computerId) {
             const d = (this.diffIndex.get(computerId) || {}).hostname;
             return d && d.can_take === false ? String(d.proposed || "").split("\n")[0] : null;
@@ -704,7 +704,7 @@ export default {
             return "Открыть в " + (field === "gsit_id" ? "GSIT" : "GLPI");
         },
 
-        // Клик по ссылке открывает запись; с Alt / Ctrl / Shift — как обычный клик по ячейке
+        // Клик по ссылке открывает запись; с Alt / Ctrl / Shift – как обычный клик по ячейке
         onIdLinkClick(event) {
             if (event.altKey || event.ctrlKey || event.shiftKey || event.metaKey) {
                 event.preventDefault();
@@ -714,7 +714,7 @@ export default {
         },
 
         // Цвет заливки ячейки: фон значения из Справочников поверх фона
-        // столбца; null — без заливки (повтор заливает только значение — cellParts)
+        // столбца; null – без заливки (повтор заливает только значение – cellParts)
         cellFillOf(row, col) {
             const marked = this.markFillOf(row, col);
             if (marked) {
@@ -728,7 +728,7 @@ export default {
         },
 
         // Фон выделения (повтор, проверен…), у которого выбрано «на всю ячейку»:
-        // по первому такому значению ячейки; нет — null
+        // по первому такому значению ячейки; нет – null
         markFillOf(row, col) {
             if (!this.markFillOn || !(col.dup || col.date || col.field === "vacuum" || col.field === "hostname")) {
                 return null;
@@ -753,7 +753,7 @@ export default {
 
         cellTdStyle(row, col) {
             const style = {};
-            // Оформление столбца и поверх — значения (фон блочком — у строк, cellParts)
+            // Оформление столбца и поверх – значения (фон блочком – у строк, cellParts)
             const look = this.cellLook(row, col);
             if (look) {
                 if (look.bold) style.fontWeight = "700";
@@ -765,12 +765,12 @@ export default {
             if (col.sticky) {
                 style.left = this.stickyLeft(col) + "px";
             }
-            // Заливка — как в Excel: фон идёт поверх линий сетки. У каждой
+            // Заливка – как в Excel: фон идёт поверх линий сетки. У каждой
             // ячейки свои линии справа и снизу; такая линия берёт цвет соседа
             // справа/снизу, если он залит (правый и нижний перекрывают левый
-            // и верхний), иначе — своей заливки. Серая линия у залитых не видна.
+            // и верхний), иначе – своей заливки. Серая линия у залитых не видна.
             // Синий слой выбранной строки подмешивается к цвету линии
-            // (--self-a — своя строка, --below-a — строка ниже).
+            // (--self-a – своя строка, --below-a – строка ниже).
             const fills = this.cellFills;
             const own = (fills.get(row.id) || {})[col.field];
             const right = (fills.get(row.id) || {})[this.nextColField[col.field]];
@@ -784,7 +784,7 @@ export default {
             if (right || own) {
                 style["--v-line"] = mix(right || own, "var(--self-a)");
             }
-            // Рамка ячейки под курсором — в тон заливки (заливка темнее), а не
+            // Рамка ячейки под курсором – в тон заливки (заливка темнее), а не
             // бежевая: у самой ячейки и у соседа слева, который рисует её левую линию
             const ownFrame = own && frameColorFor(own);
             const rightFrame = right && frameColorFor(right);
@@ -803,7 +803,7 @@ export default {
         },
 
         // Пока значение сохраняется, в ячейке уже новое (приглушённое),
-        // а не старое — без мигания «старое → новое».
+        // а не старое – без мигания «старое → новое».
         cellText(row, col) {
             const key = row.id + ":" + col.field;
             if (Object.prototype.hasOwnProperty.call(this.pendingCells, key)) {
@@ -966,7 +966,7 @@ export default {
         },
 
         onDocClickCloseMenu(event) {
-            // $el у корня с несколькими элементами — текстовый узел, поэтому ref
+            // $el у корня с несколькими элементами – текстовый узел, поэтому ref
             const refs = {
                 selection: this.$refs.selectionWrap,
                 columns: this.$refs.columnsWrap,
@@ -986,7 +986,7 @@ export default {
                 colFilter: this.$refs.colFilterPanel,
                 colFilterList: this.$refs.colFilterListWrap
             };
-            // Клик по воронке в шапке решает сам: та же — закрыть, другая — открыть её
+            // Клик по воронке в шапке решает сам: та же – закрыть, другая – открыть её
             if (this.openMenu === "colFilter" && event.target.closest(".th-filter")) {
                 return;
             }
@@ -1018,7 +1018,7 @@ export default {
             return this.hiddenNow.indexOf(field) !== -1;
         },
 
-        // Скрытые столбцы — у каждого вида таблицы свои
+        // Скрытые столбцы – у каждого вида таблицы свои
         setHiddenColumns(list) {
             if (this.tableView === 2) {
                 this.hiddenColumns2 = list;
@@ -1084,7 +1084,7 @@ export default {
                 });
                 return texts;
             });
-            // Слово, которого нет нигде, — в другой раскладке («[bh» → «хир»)
+            // Слово, которого нет нигде, – в другой раскладке («[bh» → «хир»)
             const words = searchWordsIn(this.quickFilter, function (w) {
                 return rowTexts.some(function (texts) {
                     return texts.some(function (t) { return t.text.indexOf(w) !== -1; });
@@ -1093,7 +1093,7 @@ export default {
             // Число среди нескольких слов («хир орд 3») ищется целиком: это № места,
             // № кабинета или отдельное число внутри текста («Win 10»). Иначе «3»
             // находилось бы в каждом IP 10.0.3.x, в этаже, в кабинете 301.
-            // Одно слово — как раньше, кусок где угодно (часть ИНВ, IP).
+            // Одно слово – как раньше, кусок где угодно (часть ИНВ, IP).
             const whole = words.length > 1;
             return rows.filter(function (row, i) {
                 const texts = rowTexts[i];
@@ -1115,7 +1115,7 @@ export default {
             });
         },
 
-        // Esc в поле поиска: сначала очищает, второй раз — убирает фокус
+        // Esc в поле поиска: сначала очищает, второй раз – убирает фокус
         onSearchEsc(event, prop) {
             if (this[prop]) {
                 this[prop] = "";
@@ -1188,7 +1188,7 @@ export default {
             }
         },
 
-        // Ответ — сохранилось ли (true / false)
+        // Ответ – сохранилось ли (true / false)
         async saveCellValue(row, col, value) {
             const pendingKey = row.id + ":" + col.field;
             this.pendingCells = Object.assign({}, this.pendingCells, { [pendingKey]: value });
@@ -1227,7 +1227,7 @@ export default {
                     this.flashCell(row.id, col.field);
                     data.shifted.forEach((id) => this.flashCell(id, "seat_no"));
                     if (data.shifted.length) {
-                        this.toast("№ места занят — сдвинуты следующие: " + data.shifted.length, "success");
+                        this.toast("№ места занят – сдвинуты следующие: " + data.shifted.length, "success");
                     }
                     this.reloadCardHistory(row.id);
                     return true;
@@ -1270,7 +1270,7 @@ export default {
                 return;
             }
             // Закреплённый столбец прилипает, когда уезжают все незакреплённые перед ним.
-            // Тень — у последнего из прилипших (закреплённые могут стоять не подряд)
+            // Тень – у последнего из прилипших (закреплённые могут стоять не подряд)
             const scrollLeft = wrap.scrollLeft / (this.tableZoom || 1);
             let loose = 0;
             let edge = null;
@@ -1317,7 +1317,7 @@ export default {
         },
         
         setHoverRow(tr) {
-        // Открыта карточка — подсвечена её строка, куда бы ни ушёл курсор
+        // Открыта карточка – подсвечена её строка, куда бы ни ушёл курсор
         if (this.card) {
             const wrap = this.$refs.tableWrap;
             tr = wrap ? wrap.querySelector('tbody tr[data-id="' + this.card.id + '"]') : null;
@@ -1332,10 +1332,10 @@ export default {
         },
 
         // Нажатие мыши. С Ctrl / Shift / Alt браузер не должен выделять текст
-        // (Shift+клик — от прошлого места до курсора, в Firefox Ctrl+клик
-        // выделяет ячейки таблицы). Внутри открытого редактора — как обычно.
+        // (Shift+клик – от прошлого места до курсора, в Firefox Ctrl+клик
+        // выделяет ячейки таблицы). Внутри открытого редактора – как обычно.
         // Обычное нажатие строку не выделяет, но запоминает её: следующий
-        // Shift+клик выделит строки от неё. Ctrl — выделение протягиванием.
+        // Shift+клик выделит строки от неё. Ctrl – выделение протягиванием.
         onCellMouseDown(event, row) {
             if (event.button !== 0 || event.target.closest(".cell-edit, .loc-pick")) {
                 return;
@@ -1361,8 +1361,8 @@ export default {
             }
         },
 
-        // Клик по ячейке: Alt — копировать значение под курсором,
-        // Shift — выделение диапазона, обычный клик по HOSTNAME — карточка.
+        // Клик по ячейке: Alt – копировать значение под курсором,
+        // Shift – выделение диапазона, обычный клик по HOSTNAME – карточка.
         // Ctrl+клик уже обработан при нажатии (startDragSelect).
         onCellClick(event, row, col) {
             if (event.target.closest(".cell-edit, .loc-pick")) {
@@ -1380,7 +1380,7 @@ export default {
                 return;
             }
             if (col.field === "hostname") {
-                // Протянули мышью, чтобы выделить кусок имени, — карточку не открываем
+                // Протянули мышью, чтобы выделить кусок имени, – карточку не открываем
                 const sel = window.getSelection ? String(window.getSelection()) : "";
                 if (!sel) {
                     this.openCard(row);
@@ -1389,12 +1389,12 @@ export default {
         },
 
         // ---------- Выделение строк (как в Проводнике) ----------
-        // Ctrl+клик — добавить/убрать строку, Ctrl+протягивание — добавить/убрать
-        // строки по пути; Shift+клик — строки от прошлой (выбранной или просто
-        // нажатой) до этой вместо прежнего выделения; Ctrl+Shift+клик — добавить их.
+        // Ctrl+клик – добавить/убрать строку, Ctrl+протягивание – добавить/убрать
+        // строки по пути; Shift+клик – строки от прошлой (выбранной или просто
+        // нажатой) до этой вместо прежнего выделения; Ctrl+Shift+клик – добавить их.
 
-        // Ctrl+нажатие: строка выделяется (или снимается), дальше — протягивание.
-        // Что делать со строками по пути, решает первая: была выбрана — снимаем.
+        // Ctrl+нажатие: строка выделяется (или снимается), дальше – протягивание.
+        // Что делать со строками по пути, решает первая: была выбрана – снимаем.
         startDragSelect(row) {
             const drag = {
                 startId: row.id,
@@ -1441,7 +1441,7 @@ export default {
             }
         },
 
-        // Строка под курсором во время протягивания (по высоте — даже если
+        // Строка под курсором во время протягивания (по высоте – даже если
         // курсор ушёл левее или правее таблицы)
         dragSelectAtPointer() {
             const drag = this._drag;
@@ -1459,7 +1459,7 @@ export default {
             }
         },
 
-        // У верхнего/нижнего края таблицы — прокрутка, пока держат мышь
+        // У верхнего/нижнего края таблицы – прокрутка, пока держат мышь
         dragAutoScroll() {
             const drag = this._drag;
             const wrap = this.$refs.tableWrap;
@@ -1516,7 +1516,7 @@ export default {
             this.selectAnchorId = row.id;
         },
 
-        // Ctrl+A — все видимые строки (с учётом поиска и фильтра по дереву)
+        // Ctrl+A – все видимые строки (с учётом поиска и фильтра по дереву)
         selectAllVisible() {
             this.selectedRows = this.displayRows.map(function (r) { return r.id; });
             if (this.selectedRows.length) {
@@ -1532,7 +1532,7 @@ export default {
 
         // ---------- Alt+клик: копирование ----------
         // В многострочной ячейке (несколько IP, MAC, дисков) копируется та
-        // строка значения, над которой курсор; в остальных — значение целиком.
+        // строка значения, над которой курсор; в остальных – значение целиком.
         // Пока Alt зажат, это значение подсвечено (copyHint).
 
         // Что скопирует клик в точке (x, y): { text, rect } или null
@@ -1555,7 +1555,7 @@ export default {
             }
             const text = String(value);
             const tdBox = td.getBoundingClientRect();
-            // Значения отдельными строками (повторы, ссылки) — та, что под курсором
+            // Значения отдельными строками (повторы, ссылки) – та, что под курсором
             const parts = Array.from(td.querySelectorAll(".cell-line"));
             if (parts.length) {
                 let near = null;
@@ -1578,7 +1578,7 @@ export default {
             }
             const range = document.createRange();
             const clip = function (rect) {
-                // Обрезанное многоточием примечание — не шире ячейки
+                // Обрезанное многоточием примечание – не шире ячейки
                 const left = Math.max(rect.left, tdRect.left + 2);
                 const right = Math.min(rect.right, tdRect.right - 2);
                 return { top: rect.top, bottom: rect.bottom, left: left, right: right, cellRight: tdRect.right };
@@ -1588,7 +1588,7 @@ export default {
                 range.selectNodeContents(node);
                 return { text: text.trim(), rect: clip(range.getBoundingClientRect()) };
             }
-            // Для каждой строки значения — её прямоугольник на экране;
+            // Для каждой строки значения – её прямоугольник на экране;
             // берём ту, что под курсором (или ближайшую по высоте).
             let best = null;
             let bestDist = Infinity;
@@ -1647,13 +1647,13 @@ export default {
             };
             const old = this.copyHint;
             if (old && old.text === hint.text && old.top === hint.top && old.left === hint.left) {
-                return; // то же значение — не сбрасывать зелёный «скопировано»
+                return; // то же значение – не сбрасывать зелёный «скопировано»
             }
             this.copyHint = hint;
         },
 
         // Второй щелчок двойного клика по HOSTNAME приходится уже на фон
-        // открывшейся карточки — он не должен её закрывать
+        // открывшейся карточки – он не должен её закрывать
         onCardOverlayClick(event) {
             if (event.detail > 1) {
                 return;

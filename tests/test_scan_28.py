@@ -1,7 +1,7 @@
 """Этап 28: DHCP по SSH (файл аренд, ключ ITDB), сеть (проход подсетей),
 предложения MAC / IP / имени из сети, расписание сборов.
 
-Сервер SSH изображает paramiko в этом же процессе — как старый OpenSSH: о
+Сервер SSH изображает paramiko в этом же процессе – как старый OpenSSH: о
 подписях не сообщает, по ключу выполняет только свою команду."""
 import socket
 import threading
@@ -82,20 +82,20 @@ def test_build_fresh_only():
     items, stats = scan_dhcp.build(LEASES, 30)
     by_ip = {item["ip"]: item for item in items}
     # Аренда, кончившаяся 40 дней назад, тоже сохраняется (этап 31: давнее не удаляется,
-    # а помечается) — «свежей» не считается
+    # а помечается) – «свежей» не считается
     assert set(by_ip) == {"10.0.5.11", "10.0.5.12", "10.0.5.13", "10.0.5.200", "10.0.5.201", "10.0.5.202"}
     assert by_ip["10.0.5.12"]["seen_at"] < NOW - timedelta(days=39) and by_ip["10.0.5.12"]["data"]["active"] is False
     assert stats == {"total": 6, "fresh": 5, "active": 1, "stale": 1, "fixed": 3, "no_mac": 0}
     assert by_ip["10.0.5.11"]["data"]["active"] is True and "source" not in by_ip["10.0.5.11"]
     assert by_ip["10.0.5.200"]["data"] == {"fixed": True, "host": "printer-1"} and by_ip["10.0.5.200"]["name"] is None
-    # Привязка из настроек — строкой своего вида, отдельно от аренд
+    # Привязка из настроек – строкой своего вида, отдельно от аренд
     assert by_ip["10.0.5.200"]["source"] == scan_dhcp.CONF_SOURCE
     items, stats = scan_dhcp.build(LEASES, 2)
     assert len(items) == 6 and stats["fresh"] == 4 and stats["stale"] == 2
 
 
 def test_build_lease_and_binding_on_one_address():
-    """На адресе и аренда, и привязка из файла настроек — остаются обе; файл привязки запоминается."""
+    """На адресе и аренда, и привязка из файла настроек – остаются обе; файл привязки запоминается."""
     conf = "subnet 10.0.5.0 netmask 255.255.255.0 {\n  host pc-1 { hardware ethernet d8:cb:8a:00:00:aa; fixed-address 10.0.5.11; }\n}"
     items, stats = scan_dhcp.build([("/var/lib/dhcpd/dhcpd.leases", LEASES), ("/etc/dhcp/sub5.conf", conf)], 30)
     on_address = [item for item in items if item["ip"] == "10.0.5.11"]
@@ -111,7 +111,7 @@ def test_read_command_and_split_files():
     assert command == "echo; echo '#ITDB-FILE /a/leases'; cat -- /a/leases; echo; echo '#ITDB-FILE /b/c.conf'; cat -- /b/c.conf"
     out = "\n#ITDB-FILE /a/leases\nlease 1\nno newline\n#ITDB-FILE /b/c.conf\nhost x {}\n"
     assert scan_ssh.split_files(out) == [("/a/leases", "lease 1\nno newline\n"), ("/b/c.conf", "host x {}\n")]
-    # Ключ на сервере — с прежней командой «cat»: меток нет
+    # Ключ на сервере – с прежней командой «cat»: меток нет
     assert scan_ssh.split_files("lease 1\n") == [(None, "lease 1\n")]
     assert scan_ssh.all_paths({"path": "/a/leases", "configs": ["/b/c.conf", " ", "/b/c.conf", "/d"]}) == ["/a/leases", "/b/c.conf", "/d"]
 
@@ -244,7 +244,7 @@ def ssh_port():
 
             try:
                 transport.start_server(server=FakeSsh())
-            except Exception:  # noqa: BLE001 — клиент оборвал соединение
+            except Exception:  # noqa: BLE001 – клиент оборвал соединение
                 pass
 
     threading.Thread(target=serve, daemon=True).start()
@@ -317,7 +317,7 @@ def test_dhcp_check_pins_host_key(admin, ssh_port):
     pinned = source(admin, "dhcp")["host_key"]
     assert pinned.startswith("SHA256:")
 
-    # Сервер предъявил другой ключ — отказ, пока отпечаток не забыт
+    # Сервер предъявил другой ключ – отказ, пока отпечаток не забыт
     old, Ssh.host_key = Ssh.host_key, paramiko.RSAKey.generate(2048)
 
     try:
@@ -330,7 +330,7 @@ def test_dhcp_check_pins_host_key(admin, ssh_port):
     finally:
         Ssh.host_key = old
 
-    # Неверный пароль и нет файла — понятные ошибки
+    # Неверный пароль и нет файла – понятные ошибки
     ok(admin.patch("/api/scan/sources/dhcp", json={"forget_host": True}))
     result = ok(admin.post("/api/scan/sources/dhcp/check", json={"password": "bad"}))
     assert not result["ok"] and "неверный логин или пароль" in result["message"] and not result["saved"]
@@ -358,7 +358,7 @@ def test_dhcp_key_install_and_collect(admin, editor, room, ssh_port):
     assert Ssh.authorized == [key["line"]]
     assert result["source"]["has_key"] and result["source"]["host_key"]
 
-    # Дальше — по ключу, пароль не хранится; старый сервер подписи rsa-sha2 не знает
+    # Дальше – по ключу, пароль не хранится; старый сервер подписи rsa-sha2 не знает
     result = ok(admin.post("/api/scan/sources/dhcp/check"))
     assert result["ok"] and "вход по ключу" in result["message"], result
 
@@ -392,8 +392,8 @@ def test_dhcp_key_install_and_collect(admin, editor, room, ssh_port):
     assert page["10.0.5.12"]["stale"] and page["10.0.5.12"]["dhcp"]["stale"] and page["10.0.5.12"]["mac"][0]["stale"]
     assert not page["10.0.5.11"]["stale"] and not page["10.0.5.200"]["stale"]
 
-    # Файл сменился — прежние аренды не удаляются (этап 31), но уже не действуют;
-    # привязки из настроек — копия файла; сбой — всё остаётся как было
+    # Файл сменился – прежние аренды не удаляются (этап 31), но уже не действуют;
+    # привязки из настроек – копия файла; сбой – всё остаётся как было
     Ssh.files = {scan_dhcp.DEFAULT_PATH: lease("10.0.5.50", "d8:cb:8a:00:00:50", "pc-50")}
     assert collect(admin, "dhcp")["status"] == "ok"
     saved = hosts("dhcp")
@@ -422,11 +422,11 @@ def test_same_name():
 def test_host_rows():
     computers = {
         1: {"hostname": "pc-1", "ip": "10.0.5.11", "mac": ""},                    # имя подтвердилось
-        2: {"hostname": "pc-2", "ip": "10.0.5.12", "mac": ""},                    # на адресе — другое имя
+        2: {"hostname": "pc-2", "ip": "10.0.5.12", "mac": ""},                    # на адресе – другое имя
         3: {"hostname": "pc-3", "ip": "10.0.5.13", "mac": ""},                    # имя неизвестно
         4: {"hostname": "pc-4", "ip": "10.0.5.14", "mac": "D8:CB:8A:00:00:14"},   # переехал на другой адрес
         5: {"hostname": "pc-5", "ip": "10.0.5.15", "mac": "D8:CB:8A:00:00:15"},   # всё совпадает, имя другое
-        6: {"hostname": "pc-6", "ip": "10.0.5.16", "mac": "D8:CB:8A:00:00:16"},   # на адресе — MAC ПК 4
+        6: {"hostname": "pc-6", "ip": "10.0.5.16", "mac": "D8:CB:8A:00:00:16"},   # на адресе – MAC ПК 4
         7: {"hostname": "pc-7", "ip": "10.0.5.17", "mac": "D8:CB:8A:00:00:17"},   # привязка: другой MAC, в сети не виден
         8: {"hostname": "pc-8", "ip": "10.0.5.18", "mac": "D8:CB:8A:00:00:18"},   # имя неизвестно, MAC есть
         9: {"hostname": "", "ip": "10.0.5.19", "mac": "D8:CB:8A:00:00:19"},       # имени в таблице нет
@@ -455,7 +455,7 @@ def test_host_rows():
 
 
 def test_host_rows_bindings_are_weakest():
-    """Привязка MAC — IP из настроек DHCP слабее всего, что видно на самом деле (этап 28в)."""
+    """Привязка MAC – IP из настроек DHCP слабее всего, что видно на самом деле (этап 28в)."""
     computers = {
         1: {"hostname": "pc-1", "ip": "10.0.5.11", "mac": ""},                    # host называется как ПК
         2: {"hostname": "pc-2", "ip": "10.0.5.12", "mac": ""},                    # host называется иначе
@@ -463,8 +463,8 @@ def test_host_rows_bindings_are_weakest():
         4: {"hostname": "pc-4", "ip": "10.0.5.14", "mac": ""},                    # на адресе виден другой MAC
         5: {"hostname": "pc-5", "ip": "10.0.5.15", "mac": ""},                    # MAC привязки виден на другом адресе
         6: {"hostname": "pc-6", "ip": "", "mac": "D8:CB:8A:00:00:66"},            # IP в таблице пуст
-        7: {"hostname": "pc-7", "ip": "10.0.5.77", "mac": "D8:CB:8A:00:00:67"},   # IP задан вручную — другой
-        8: {"hostname": "pc-8", "ip": "10.0.5.18", "mac": ""},                    # имя на адресе подтвердилось, MAC — из привязки
+        7: {"hostname": "pc-7", "ip": "10.0.5.77", "mac": "D8:CB:8A:00:00:67"},   # IP задан вручную – другой
+        8: {"hostname": "pc-8", "ip": "10.0.5.18", "mac": ""},                    # имя на адресе подтвердилось, MAC – из привязки
     }
     seen = [
         obs("10.0.5.11", "D8:CB:8A:00:0A:11", fixed=True, host="PC-1"),
@@ -484,7 +484,7 @@ def test_host_rows_bindings_are_weakest():
     assert set(got) == {(1, "mac"), (2, "mac"), (4, "mac"), (6, "ip"), (8, "mac")}
     assert got[(1, "mac")]["source"]["by"] == ["ip", "reserve"] and not got[(1, "mac")]["unsure"]
     assert got[(2, "mac")]["unsure"] and got[(2, "mac")]["value"] == "D8:CB:8A:00:0A:12"
-    # На адресе виден настоящий MAC — предлагается он, а не привязка
+    # На адресе виден настоящий MAC – предлагается он, а не привязка
     assert got[(4, "mac")]["value"] == "D8:CB:8A:00:0B:14" and got[(4, "mac")]["source"]["title"] == "Сеть"
     assert got[(6, "ip")]["value"] == "10.0.5.16" and got[(6, "ip")]["unsure"]
     assert got[(8, "mac")]["value"] == "D8:CB:8A:00:0A:18" and not got[(8, "mac")]["unsure"]
@@ -493,7 +493,7 @@ def test_host_rows_bindings_are_weakest():
 
 
 def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
-    """MAC из сети дописывается к записанным; имя машины — только сообщается."""
+    """MAC из сети дописывается к записанным; имя машины – только сообщается."""
     setup_dhcp(admin, ssh_port)
     loc = room["room"]
     second = add_pc(editor, loc, "pc-7", ip="10.0.5.200", mac="D8:CB:8A:00:00:07")
@@ -501,11 +501,11 @@ def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
     Ssh.files = {scan_dhcp.DEFAULT_PATH: LEASES + "\n" + lease("10.0.5.60", "d8:cb:8a:00:00:60", "DESKTOP-60")}
     assert collect(admin, "dhcp")["status"] == "ok"
 
-    # Привязка адреса ПК к другому MAC в настройках (host printer-1) — не повод менять MAC
+    # Привязка адреса ПК к другому MAC в настройках (host printer-1) – не повод менять MAC
     _, diffs = diffs_of(editor)
     assert (second, "mac") not in diffs
 
-    # host в файле настроек называется как ПК — MAC привязки предлагается дописать
+    # host в файле настроек называется как ПК – MAC привязки предлагается дописать
     conf = "/etc/dhcp/hosts.conf"
     Ssh.files[conf] = "host pc-7 { hardware ethernet 00:1b:a9:00:00:77; fixed-address 10.0.5.200; }"
     saved = ok(admin.patch("/api/scan/sources/dhcp", json={"configs": [conf, " "]}))
@@ -522,20 +522,20 @@ def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
     name = diffs[(named, "hostname")]
     assert name["proposed"] == "DESKTOP-60" and name["can_take"] is False
 
-    # Источник выключен — предложений нет
+    # Источник выключен – предложений нет
     ok(admin.patch("/api/scan/sources/dhcp", json={"enabled": False}))
     data, diffs = diffs_of(editor)
     assert not diffs and "dhcp" not in data["sources"]
 
 
 def test_dhcp_config_files(admin, ssh_port):
-    """Файлы настроек — отдельным списком; ключ на сервере с прежним набором файлов — предупреждение."""
+    """Файлы настроек – отдельным списком; ключ на сервере с прежним набором файлов – предупреждение."""
     setup_dhcp(admin, ssh_port)
     assert source(admin, "dhcp")["configs"] == []
     assert admin.patch("/api/scan/sources/dhcp", json={"configs": ["etc/a.conf"]}).status_code == 400
     assert admin.patch("/api/scan/sources/dhcp", json={"configs": ["/etc/a b.conf; rm"]}).status_code == 400
 
-    # Прежняя запись «Файл: аренды и настройки через пробел» — первый путь аренды, остальные — настройки
+    # Прежняя запись «Файл: аренды и настройки через пробел» – первый путь аренды, остальные – настройки
     saved = ok(admin.patch("/api/scan/sources/dhcp", json={"path": scan_dhcp.DEFAULT_PATH + " /etc/dhcp/dhcpd.conf"}))
     assert saved["path"] == scan_dhcp.DEFAULT_PATH and saved["configs"] == ["/etc/dhcp/dhcpd.conf"]
     saved = ok(admin.patch("/api/scan/sources/dhcp", json={"configs": []}))
@@ -552,20 +552,20 @@ def test_dhcp_config_files(admin, ssh_port):
     run = collect(admin, "dhcp")
     assert run["status"] == "ok" and "поставь ключ заново" in run["message"] and run["stats"]["fixed"] == 3
 
-    # Ключ поставлен заново — читаются все файлы; файл без привязок — предупреждение
+    # Ключ поставлен заново – читаются все файлы; файл без привязок – предупреждение
     assert ok(admin.post("/api/scan/sources/dhcp/key/install", json={"password": "pw"}))["ok"]
     assert all(f"cat -- {path}" in Ssh.authorized[0] for path in (scan_dhcp.DEFAULT_PATH, one, two))
     run = collect(admin, "dhcp")
     assert run["status"] == "ok" and run["stats"]["fixed"] == 4, run
-    assert run["message"] == f"{two} — привязок MAC — IP нет."
+    assert run["message"] == f"{two} – привязок MAC – IP нет."
     result = ok(admin.post("/api/scan/sources/dhcp/check"))
     assert result["ok"] and "привязок 4" in result["message"]
 
-    # Файла настроек на сервере нет — аренды всё равно собраны
+    # Файла настроек на сервере нет – аренды всё равно собраны
     del Ssh.files[two]
     assert ok(admin.post("/api/scan/sources/dhcp/key/install", json={"password": "pw"}))["ok"]
     run = collect(admin, "dhcp")
-    assert run["status"] == "ok" and f"{two} — не прочитан." in run["message"] and "No such file" in run["message"]
+    assert run["status"] == "ok" and f"{two} – не прочитан." in run["message"] and "No such file" in run["message"]
 
 
 # ---------- Сеть: проход подсетей ----------
@@ -634,8 +634,8 @@ def test_net_collect(admin, editor, room, monkeypatch):
     assert diffs[(first, "mac")]["kind"] == "fill" and diffs[(first, "mac")]["sources"][0]["title"] == "Сеть"
     assert diffs[(second, "mac")]["kind"] == "unsure"
 
-    # Адрес замолчал — наблюдение остаётся и когда устареет (этап 31: ПК может быть
-    # выключен месяцами): в «Сети» — пометка stale, предложений по нему нет
+    # Адрес замолчал – наблюдение остаётся и когда устареет (этап 31: ПК может быть
+    # выключен месяцами): в «Сети» – пометка stale, предложений по нему нет
     del alive["10.0.7.1"]
     session = SessionLocal()
     session.query(ScanHost).filter(ScanHost.ip == "10.0.7.2").update({"seen_at": NOW - timedelta(days=30)})
@@ -666,12 +666,12 @@ def conf(**fields):
 
 def test_next_run():
     every = conf(mode="every", minutes=30, time_from="08:00", time_to="18:00", days="work")
-    # 2026-10-02 — пятница
+    # 2026-10-02 – пятница
     assert scan_schedule.next_run(conf(), None, at("2026-10-02T10:00")) is None
     assert scan_schedule.next_run(every, None, at("2026-10-02T10:00")) == at("2026-10-02T10:00")
     assert scan_schedule.next_run(every, at("2026-10-02T09:50"), at("2026-10-02T10:00")) == at("2026-10-02T10:20")
     assert scan_schedule.next_run(every, at("2026-10-02T09:00"), at("2026-10-02T10:00")) == at("2026-10-02T09:30")
-    # После рабочих часов в пятницу — в понедельник с утра
+    # После рабочих часов в пятницу – в понедельник с утра
     assert scan_schedule.next_run(every, at("2026-10-02T17:50"), at("2026-10-02T18:30")) == at("2026-10-05T08:00")
     assert scan_schedule.next_run(every, at("2026-10-02T17:50"), at("2026-10-05T09:00")) == at("2026-10-05T08:00")
     round_clock = conf(mode="every", minutes=60, time_from="00:00", time_to="00:00")
@@ -707,7 +707,7 @@ def test_schedule_api(admin, editor, ssh_port):
 def test_schedule_tick(admin, ssh_port, monkeypatch):
     setup_dhcp(admin, ssh_port)
     ok(admin.patch("/api/scan/schedule/dhcp", json={"mode": "every", "minutes": 15, "time_from": "00:00", "time_to": "00:00"}))
-    ok(admin.patch("/api/scan/schedule/glpi", json={"mode": "daily"}))   # источник не настроен — пропуск
+    ok(admin.patch("/api/scan/schedule/glpi", json={"mode": "daily"}))   # источник не настроен – пропуск
     started = []
     real = scan_collect.start
 
@@ -723,7 +723,7 @@ def test_schedule_tick(admin, ssh_port, monkeypatch):
     try:
         assert scan_schedule.tick(session) == ["dhcp"]
         assert started == [("dhcp", "расписание")]
-        # Только что собирали — следующий раз через 15 минут
+        # Только что собирали – следующий раз через 15 минут
         assert scan_schedule.tick(session) == []
         assert scan_schedule.tick(session, datetime.now().astimezone() + timedelta(minutes=16)) == ["dhcp"]
     finally:

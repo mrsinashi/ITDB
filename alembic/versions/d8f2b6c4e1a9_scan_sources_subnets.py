@@ -1,4 +1,4 @@
-"""scan_sources, scan_subnets — подключения к источникам и подсети (этап 24)
+"""scan_sources, scan_subnets – подключения к источникам и подсети (этап 24)
 
 Revision ID: d8f2b6c4e1a9
 Revises: c3e8f1a7d2b5

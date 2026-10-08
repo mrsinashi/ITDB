@@ -5,7 +5,7 @@ import { apiFetch, shortName } from "../util.js";
 
 export default {
     computed: {
-        // reader — только просмотр; правка у admin и editor
+        // reader – только просмотр; правка у admin и editor
         canEdit() {
             return !!this.user && (this.user.role === "admin" || this.user.role === "editor");
         },
@@ -18,7 +18,7 @@ export default {
             return this.user && this.user.login ? this.user.login.charAt(0).toUpperCase() : "?";
         },
 
-        // На панели — «Фамилия И.О.» (без ФИО — логин), в подсказке — полностью
+        // На панели – «Фамилия И.О.» (без ФИО – логин), в подсказке – полностью
         navUserName() {
             return this.user ? shortName(this.user.full_name, this.user.login) : "";
         },
@@ -52,10 +52,10 @@ export default {
             try {
                 const response = await apiFetch("/api/auth/me");
                 this.user = await response.json();
-                // Схема — личная: у пользователя без настройки — красная,
+                // Схема – личная: у пользователя без настройки – красная,
                 // даже если в этом браузере до него работал другой
                 const prefs = (this.user && this.user.prefs) || {};
-                // Пометка копии (DEV) — и во вкладке браузера
+                // Пометка копии (DEV) – и во вкладке браузера
                 if (this.user && this.user.label) {
                     document.title = "ITDB · " + this.user.label;
                 }
@@ -69,7 +69,7 @@ export default {
             }
         },
 
-        // Ширина кнопки пользователя — целое число пикселей экрана.
+        // Ширина кнопки пользователя – целое число пикселей экрана.
         // Иначе при масштабе Windows 125–150% край шестерёнки и её меню
         // сглаживаются по-разному и меню кажется на 1px уже кнопки.
         snapNavUser() {
@@ -166,7 +166,7 @@ export default {
                     this.loadScanSources();     // «обновить» запускает сбор из Jabber
                 }
             } else if (view === "scan") {
-                // «Сканер» всегда открывается на первой вкладке слева — «Проверке» (этап 28);
+                // «Сканер» всегда открывается на первой вкладке слева – «Проверке» (этап 28);
                 // редактору доступна только она
                 this.scanMatchQuery = "";
                 if (this.isAdmin) {

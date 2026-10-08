@@ -12,7 +12,7 @@ export default {
             }
             const code = this.card.room_code;
             const name = this.card.room_name;
-            // Номер и название в одной строке — номер в скобках: «[214] Процедурная»
+            // Номер и название в одной строке – номер в скобках: «[214] Процедурная»
             return code && name ? "[" + code + "] " + name : (code || name || "");
         },
 
@@ -22,7 +22,7 @@ export default {
             if (!c) {
                 return [];
             }
-            // field — столбец таблицы, чьё оформление из Справочников показывать
+            // field – столбец таблицы, чьё оформление из Справочников показывать
             function F(key, label, value, copy, field) {
                 return { key: key, label: label, value: value, copy: !!copy, field: field === undefined ? key : field };
             }
@@ -32,7 +32,7 @@ export default {
                 return F("x-" + fd.key, fd.label, c[fd.key], false, fd.key);
             });
             const cardRoom = this.cardRoom;
-            // Группы и порядок строк — из описания столбцов (сервер, CARD_GROUPS)
+            // Группы и порядок строк – из описания столбцов (сервер, CARD_GROUPS)
             const groupRows = this.cardGroups.map(function (g) {
                 const rows = [];
                 g.fields.forEach(function (field) {
@@ -40,7 +40,7 @@ export default {
                     if (field === "user_fields") {
                         rows.push.apply(rows, custom);
                     } else if (field === "room_code") {
-                        // Номер и название кабинета — одной строкой
+                        // Номер и название кабинета – одной строкой
                         const room = F("room", "Кабинет", cardRoom, col && col.cardCopy, null);
                         room.always = !!(col && col.cardAlways);
                         rows.push(room);
@@ -52,16 +52,16 @@ export default {
                     }
                 });
                 if (!c.location_id && g.fields.indexOf("building") !== -1) {
-                    // Без расположения — строка есть, чтобы его можно было задать
+                    // Без расположения – строка есть, чтобы его можно было задать
                     rows.unshift(F("location", "Расположение", "не указано", false, null));
                 }
                 return [g.title, rows];
             });
 
-            // Пустые поля — только основные (always) или если развёрнуто
-            // кнопкой в шапке карточки; пустое показывается серым «—»
+            // Пустые поля – только основные (always) или если развёрнуто
+            // кнопкой в шапке карточки; пустое показывается серым «–»
             const showEmpty = this.cardShowEmpty;
-            // Сканер предлагает значение для пустого поля — строку показать (этап 26б)
+            // Сканер предлагает значение для пустого поля – строку показать (этап 26б)
             const scanFields = this.diffIndex.get(c.id) || {};
             const shownKinds = this.scanShownKinds;
             function filled(list) {
@@ -113,7 +113,7 @@ export default {
         },
 
         onCardRowDblclick(event, r) {
-            // Двойной клик по самому значению — это два копирования, не правка
+            // Двойной клик по самому значению – это два копирования, не правка
             if (event.target.closest(".copy-val")) {
                 return;
             }
@@ -156,8 +156,8 @@ export default {
             if (!td) {
                 return;
             }
-            // Ширина — ровно по ячейке: clientWidth округляется вверх, и на
-            // дробном масштабе (125%) редактор вылезал на 1px — снизу
+            // Ширина – ровно по ячейке: clientWidth округляется вверх, и на
+            // дробном масштабе (125%) редактор вылезал на 1px – снизу
             // появлялась полоса прокрутки
             el.style.width = "100%";
             el.style.height = td.clientHeight + "px";

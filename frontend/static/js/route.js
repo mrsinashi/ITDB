@@ -1,8 +1,8 @@
-// Адреса страниц (этап 28б): у каждой страницы и вкладки — свой адрес после «#»,
+// Адреса страниц (этап 28б): у каждой страницы и вкладки – свой адрес после «#»,
 // чтобы ссылку можно было открыть в новой вкладке (средняя кнопка мыши, Ctrl + клик):
 //   #table, #tree, #vacuum, #choices, #history, #users, #scan/check, #scan/net…
-//   #table?pc=12   — Таблица с открытой карточкой ПК
-//   #table?loc=7   — Таблица с фильтром по узлу дерева
+//   #table?pc=12   – Таблица с открытой карточкой ПК
+//   #table?loc=7   – Таблица с фильтром по узлу дерева
 
 export const VIEWS = ["table", "tree", "vacuum", "scan", "choices", "history", "users"];
 
@@ -16,7 +16,7 @@ export function pageLink(page, params) {
     return "#" + page + (query ? "?" + query : "");
 }
 
-// "#scan/net?x=1" → { view: "scan", tab: "net", params: { x: "1" } }; не адрес страницы — null
+// "#scan/net?x=1" → { view: "scan", tab: "net", params: { x: "1" } }; не адрес страницы – null
 export function parseHash(hash) {
     const text = String(hash || "").replace(/^#\/?/, "");
     if (!text) {
@@ -35,7 +35,7 @@ export function parseHash(hash) {
                 try {
                     params[pair.slice(0, eq)] = decodeURIComponent(pair.slice(eq + 1));
                 } catch (e) {
-                    // испорченное значение — пропустить
+                    // испорченное значение – пропустить
                 }
             }
         });

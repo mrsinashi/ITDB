@@ -1,33 +1,33 @@
-"""Сопоставление записей GLPI / GSIT с ПК ITDB (этап 25) — так, чтобы данные
+"""Сопоставление записей GLPI / GSIT с ПК ITDB (этап 25) – так, чтобы данные
 одного ПК не достались другому.
 
 Порядок:
 1. Признаки, общие для многих записей источника (серийный платы на 17 ПК,
-   одинаковый MAC виртуального адаптера), — не признаки: убираются.
-2. Дубли: записи источника с общим признаком — одно железо (агент поставили
-   заново). Остаётся самая свежая, остальные — «дубль».
-3. Каждая запись и ПК ITDB (не из архива): признаки — GLPI ID (только для
+   одинаковый MAC виртуального адаптера), – не признаки: убираются.
+2. Дубли: записи источника с общим признаком – одно железо (агент поставили
+   заново). Остаётся самая свежая, остальные – «дубль».
+3. Каждая запись и ПК ITDB (не из архива): признаки – GLPI ID (только для
    GLPI: столбец «GLPI» в ITDB), физический MAC, настоящий серийный.
-   - решение администратора «это этот ПК» — главнее всего (link);
-   - признаки указывают на один ПК и ничто не противоречит — сопоставлена (key);
-   - признаки указывают на разные ПК, или у ПК другой MAC / серийный — конфликт:
+   - решение администратора «это этот ПК» – главнее всего (link);
+   - признаки указывают на один ПК и ничто не противоречит – сопоставлена (key);
+   - признаки указывают на разные ПК, или у ПК другой MAC / серийный – конфликт:
      значения не предлагаются, решает администратор;
-   - совпал только GLPI ID при разных именах — «привязать?» (name): номер мог
+   - совпал только GLPI ID при разных именах – «привязать?» (name): номер мог
      остаться от другой системы;
-   - признаков нет, совпало только имя — «привязать?» (name);
-   - два сопоставления на один ПК — оба конфликт;
-   - ничего — нет в ITDB (none).
+   - признаков нет, совпало только имя – «привязать?» (name);
+   - два сопоставления на один ПК – оба конфликт;
+   - ничего – нет в ITDB (none).
 UUID в ITDB не хранится: он только склеивает дубли внутри источника.
 """
 from collections import defaultdict
 
 from scan_normalize import clean_serial, norm_mac
 
-# Признак на стольких записях и больше — общий, не признак
+# Признак на стольких записях и больше – общий, не признак
 SHARED_LIMIT = 3
 
 KEY_LABELS = {"id": "ID", "mac": "MAC", "serial": "серийному"}
-# Номер записи источника в таблице: GLPI — столбец GLPI, GSIT — столбец GSIT (этап 26ж)
+# Номер записи источника в таблице: GLPI – столбец GLPI, GSIT – столбец GSIT (этап 26ж)
 ID_FIELDS = {"glpi": "glpi_id", "gsit": "gsit_id"}
 ID_TITLES = {"glpi": "GLPI ID", "gsit": "GSIT ID"}
 
@@ -51,7 +51,7 @@ def key_values(keys):
 
 def drop_shared_keys(records):
     """Убрать признаки, которые есть у SHARED_LIMIT записей и больше.
-    records — [{"source_id", "keys"}]; keys меняются на месте. Ответ — сколько
+    records – [{"source_id", "keys"}]; keys меняются на месте. Ответ – сколько
     значений убрано."""
     counts = defaultdict(set)
 
@@ -75,8 +75,8 @@ def drop_shared_keys(records):
 
 
 def find_duplicates(records):
-    """Записи с общим признаком — одно железо. {source_id дубля: source_id
-    оставленной}; оставляется самая свежая (при равенстве — с большим id)."""
+    """Записи с общим признаком – одно железо. {source_id дубля: source_id
+    оставленной}; оставляется самая свежая (при равенстве – с большим id)."""
     parent = {record["source_id"]: record["source_id"] for record in records}
 
     def root(x):
@@ -119,7 +119,7 @@ def short_host(name):
 
 
 class Index:
-    """ПК ITDB по признакам. computers — [{"id", "hostname", "mac", "serial",
+    """ПК ITDB по признакам. computers – [{"id", "hostname", "mac", "serial",
     "glpi_id", "gsit_id", "archived"}]."""
 
     def __init__(self, computers):
@@ -130,7 +130,7 @@ class Index:
         self.by_name = defaultdict(set)
         self.macs = {}
         self.serials = {}
-        self.record_ids = set()     # номера записей источника (строками) — задаёт match_all
+        self.record_ids = set()     # номера записей источника (строками) – задаёт match_all
 
         for c in computers:
             macs = {norm_mac(line) for line in (c.get("mac") or "").splitlines()}
@@ -157,7 +157,7 @@ class Index:
             if short_host(c.get("hostname")):
                 self.by_name[short_host(c.get("hostname"))].add(c["id"])
 
-        # Архив — только для пояснения «есть в архиве»
+        # Архив – только для пояснения «есть в архиве»
         self.archived_by_key = defaultdict(set)
 
         for c in computers:
@@ -198,7 +198,7 @@ def contradictions(index, computer_id, record, kind, hits):
     number = str(index.computers[computer_id].get(ID_FIELDS.get(kind, "")) or "").strip()
 
     # Номер в таблице указывает на другую запись источника. Если такой записи уже нет
-    # (агент поставили заново — у ПК новая запись), это не противоречие: номер устарел,
+    # (агент поставили заново – у ПК новая запись), это не противоречие: номер устарел,
     # сканер предложит новый
     if number and number != str(record["source_id"]) and "id" not in hits and number in index.record_ids:
         result.append(ID_TITLES[kind])
@@ -300,8 +300,8 @@ def match_one(index, record, kind, links):
 
 
 def match_all(records, computers, links, kind):
-    """{source_id: итог}. records — [{"source_id", "name", "keys", "dup_of"}]
-    (уже без общих признаков), links — [{"source_id", "computer_id", "action"}]."""
+    """{source_id: итог}. records – [{"source_id", "name", "keys", "dup_of"}]
+    (уже без общих признаков), links – [{"source_id", "computer_id", "action"}]."""
     index = Index(computers)
     index.record_ids = {str(record["source_id"]) for record in records if not record.get("dup_of")}
     links_by = defaultdict(list)
@@ -321,8 +321,8 @@ def match_all(records, computers, links, kind):
 
         result[record["source_id"]] = match_one(index, record, kind, links_by[record["source_id"]])
 
-    # Один ПК — у нескольких записей. По признаку или вручную — главнее, чем по
-    # имени; два сопоставления по признаку (не вручную) — оба в конфликт
+    # Один ПК – у нескольких записей. По признаку или вручную – главнее, чем по
+    # имени; два сопоставления по признаку (не вручную) – оба в конфликт
     taken = defaultdict(list)
 
     for source_id, item in result.items():

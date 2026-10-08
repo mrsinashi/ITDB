@@ -1,19 +1,19 @@
-"""DHCP (isc-dhcpd) — этап 28: кому какой адрес выдан. Файл аренд
+"""DHCP (isc-dhcpd) – этап 28: кому какой адрес выдан. Файл аренд
 (/var/lib/dhcpd/dhcpd.leases) читается по SSH (scan_ssh.py).
 
 Из файла берётся:
 - аренды: «lease IP { starts …; ends …; binding state …; hardware ethernet MAC;
-  client-hostname "ИМЯ"; }» — у адреса действует последняя запись в файле;
-  время — UTC (или «epoch N» при db-time-format local);
-- привязки (резервы): «host ИМЯ { hardware ethernet MAC; fixed-address IP; }» — из
-  файлов настроек (dhcpd.conf и его части, поля «Конфиг N» подключения). Привязка —
+  client-hostname "ИМЯ"; }» – у адреса действует последняя запись в файле;
+  время – UTC (или «epoch N» при db-time-format local);
+- привязки (резервы): «host ИМЯ { hardware ethernet MAC; fixed-address IP; }» – из
+  файлов настроек (dhcpd.conf и его части, поля «Конфиг N» подключения). Привязка –
   это настройка, а не наблюдение: адрес на машине могли поменять вручную. Поэтому
   она хранится отдельно от аренд (scan_hosts.source = dhcp_conf) и уступает всему,
   что видно в сети на самом деле (scan_hostmatch.py).
 
 Актуальны аренды, которые действуют сейчас или кончились не раньше N дней назад
 (настройка подключения): адрес давно ушедшего устройства ни о чём не говорит.
-В таблицу ничего не пишется — только наблюдения (scan_hosts).
+В таблицу ничего не пишется – только наблюдения (scan_hosts).
 """
 import ipaddress
 import re
@@ -24,7 +24,7 @@ from scan_http import SourceError
 from scan_normalize import norm_mac
 
 DEFAULT_PATH = "/var/lib/dhcpd/dhcpd.leases"
-# Привязки MAC — IP из файлов настроек: отдельный вид строк scan_hosts
+# Привязки MAC – IP из файлов настроек: отдельный вид строк scan_hosts
 CONF_SOURCE = "dhcp_conf"
 
 LEASE_START = re.compile(r"^\s*lease\s+(\d+\.\d+\.\d+\.\d+)\s*\{")
@@ -88,7 +88,7 @@ def parse(text):
 
         if line.strip() == "}":
             if current["ip"]:
-                leases[current["ip"]] = current   # позже в файле — новее
+                leases[current["ip"]] = current   # позже в файле – новее
 
             current = None
             continue
@@ -142,8 +142,8 @@ def parse_files(files):
 
 
 def build(files, fresh_days, now=None):
-    """Наблюдения для scan_hosts и счётчики. files — текст файла или [(путь, текст)].
-    У привязок из настроек — "source": CONF_SOURCE."""
+    """Наблюдения для scan_hosts и счётчики. files – текст файла или [(путь, текст)].
+    У привязок из настроек – "source": CONF_SOURCE."""
     if isinstance(files, str):
         files = [(None, files)]
 
@@ -165,9 +165,9 @@ def build(files, fresh_days, now=None):
             active += 1
         elif last is None:
             stale += 1
-            continue   # ни начала, ни конца — когда адрес был занят, неизвестно
+            continue   # ни начала, ни конца – когда адрес был занят, неизвестно
         elif last < since:
-            stale += 1   # давняя аренда сохраняется: в «Сети» — серым, в предложения не идёт
+            stale += 1   # давняя аренда сохраняется: в «Сети» – серым, в предложения не идёт
 
         items[lease["ip"]] = {
             "ip": lease["ip"], "mac": lease["mac"], "name": lease["name"], "seen_at": last,
@@ -181,7 +181,7 @@ def build(files, fresh_days, now=None):
     fixed = {}
 
     for host in hosts:
-        # Адрес привязан дважды — действует последняя запись
+        # Адрес привязан дважды – действует последняя запись
         data = {"fixed": True, "host": host["name"]}
 
         if host.get("file"):
@@ -214,7 +214,7 @@ def file_warnings(files, params, info):
     # Со входом по ключу сервер выполняет команду, записанную вместе с ключом: меток
     # нет (ключ ставила прежняя версия) или в ней нет этих файлов
     if by_key and (None in read or any(path not in read for path in configs)):
-        return ["Ключ на сервере читает прежний набор файлов — поставь ключ заново."]
+        return ["Ключ на сервере читает прежний набор файлов – поставь ключ заново."]
 
     if None in read:
         return warnings
@@ -223,9 +223,9 @@ def file_warnings(files, params, info):
         text = read.get(path)
 
         if text is None or not text.strip():
-            warnings.append(f"{path} — не прочитан.")
+            warnings.append(f"{path} – не прочитан.")
         elif not parse(text)[1]:
-            warnings.append(f"{path} — привязок MAC — IP нет.")
+            warnings.append(f"{path} – привязок MAC – IP нет.")
 
     if info.get("read_error") and any("не прочитан" in line for line in warnings):
         warnings.append(info["read_error"])
@@ -263,7 +263,7 @@ def collect(params, fresh_days=None, progress=None):
         raise SourceError("Файл прочитан, но аренд в нём нет: это точно dhcpd.leases?")
 
     if info.get("auth") == "password":
-        warnings.append("Вход по паролю: поставь ключ — тогда пароль можно не хранить.")
+        warnings.append("Вход по паролю: поставь ключ – тогда пароль можно не хранить.")
 
     if progress:
         progress(len(items), len(items))

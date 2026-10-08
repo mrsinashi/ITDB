@@ -1,5 +1,5 @@
 """Этап 26з: логин с латинскими буквами заменяется, а не дописывается; драйверы
-удалённого доступа — не видеокарты; личные настройки «без закруглений» и
+удалённого доступа – не видеокарты; личные настройки «без закруглений» и
 «счётчики на кнопках»; столбец «Антивирус» по центру."""
 import scan_normalize as sn
 from conftest import ok
@@ -12,7 +12,7 @@ from test_scan_jabber import collect as jabber_collect
 def test_lookalike_login_is_replaced(admin, editor, room, jabber_url):
     loc = room["room"]
     first = add_pc(editor, loc, "pc-1", ip="10.0.2.11")
-    # «c» — латинская: такого логина в Jabber нет, а с адреса ПК пришла «сумкина_и.а.»
+    # «c» – латинская: такого логина в Jabber нет, а с адреса ПК пришла «сумкина_и.а.»
     set_vacuum(editor, first, "cумкина_и.а.\nivanov")
     second = add_pc(editor, loc, "pc-2", ip="10.0.2.12")
     set_vacuum(editor, second, "typo")

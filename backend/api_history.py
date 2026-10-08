@@ -47,13 +47,13 @@ def history(
     session=Depends(get_db),
 ):
     """Записи истории, новые сверху, порциями: limit (до 5000) начиная с offset.
-    total — сколько записей всего, days — сколько записей в каждый день
-    (день — по часовому поясу tz браузера): счётчики точные, даже если
+    total – сколько записей всего, days – сколько записей в каждый день
+    (день – по часовому поясу tz браузера): счётчики точные, даже если
     загружена только часть записей.
-    Фильтры: user — кто менял, entity (+ entity_id / entity_key) — что менялось.
+    Фильтры: user – кто менял, entity (+ entity_id / entity_key) – что менялось.
     Записи о пользователях системы видит только администратор.
-    Отменённые целиком записи — только с cancelled=true (и в счётчиках тоже).
-    users — все, кто что-либо менял (для фильтра)."""
+    Отменённые целиком записи – только с cancelled=true (и в счётчиках тоже).
+    users – все, кто что-либо менял (для фильтра)."""
     limit = min(max(limit, 1), HISTORY_PAGE_MAX)
     offset = max(offset, 0)
 
@@ -139,8 +139,8 @@ def history(
         for location in locations:
             location_name_by_id[location.id] = location.name
 
-    # Справочники, поля, оформление, пользователи — название сейчас, а если
-    # объекта уже нет (удалённое значение) — каким оно было при записи
+    # Справочники, поля, оформление, пользователи – название сейчас, а если
+    # объекта уже нет (удалённое значение) – каким оно было при записи
     simple_titles = {}
 
     for item in items:
@@ -196,7 +196,7 @@ def history_of_value(
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    """Все изменения одного поля объекта (и отменённые) — окно «История значения»."""
+    """Все изменения одного поля объекта (и отменённые) – окно «История значения»."""
     if entity in ADMIN_ENTITIES and me["role"] != "admin":
         raise HTTPException(status_code=403, detail="Это доступно только администратору.")
 
@@ -205,12 +205,12 @@ def history_of_value(
 
 class CancelItem(BaseModel):
     id: int
-    field: Optional[str] = None     # без поля — все поля записи
+    field: Optional[str] = None     # без поля – все поля записи
 
 
 class CancelRequest(BaseModel):
     items: list[CancelItem]
-    cancel: bool = True             # False — восстановить отменённые
+    cancel: bool = True             # False – восстановить отменённые
 
 
 @router.post("/history/cancel")
@@ -255,9 +255,9 @@ UNDO_WINDOW = timedelta(hours=12)
 
 @router.post("/history/undo-last")
 def undo_last(user=Depends(require_editor), session=Depends(get_db)):
-    """Отменить своё последнее действие (Ctrl+Z): все его записи истории — одной
-    отменой, как «Отменить изменения» в Истории. Действие — записи одного
-    сохранения (у них одно время). items — что отменено (для возврата Ctrl+Y)."""
+    """Отменить своё последнее действие (Ctrl+Z): все его записи истории – одной
+    отменой, как «Отменить изменения» в Истории. Действие – записи одного
+    сохранения (у них одно время). items – что отменено (для возврата Ctrl+Y)."""
     allowed = [
         entity for entity in ENTITIES
         if user["role"] == "admin" or not SIMPLE.get(entity, {}).get("admin")
@@ -275,12 +275,12 @@ def undo_last(user=Depends(require_editor), session=Depends(get_db)):
     records = session.query(History).filter(*mine, History.at == last.at).order_by(History.id).with_for_update().all()
 
     # Последним могло быть то, что не отменяется: настройка (вид выделений, сканер),
-    # создание, удаление, смена пароля — тогда не отменяется ничего (а не то, что было раньше)
+    # создание, удаление, смена пароля – тогда не отменяется ничего (а не то, что было раньше)
     if any(record.entity not in allowed for record in records):
-        raise HTTPException(status_code=400, detail="Последнее действие — настройка: она не отменяется.")
+        raise HTTPException(status_code=400, detail="Последнее действие – настройка: она не отменяется.")
 
     if any(field_kind(record.entity, field) == "fixed" for record in records for field in record.changes or {}):
-        raise HTTPException(status_code=400, detail="Последнее действие — создание или удаление: оно не отменяется.")
+        raise HTTPException(status_code=400, detail="Последнее действие – создание или удаление: оно не отменяется.")
 
     pairs = [
         (record, field)
@@ -289,7 +289,7 @@ def undo_last(user=Depends(require_editor), session=Depends(get_db)):
         if not change.get("cancelled")
     ]
 
-    # Что отменяется — словами, пока значения ещё прежние
+    # Что отменяется – словами, пока значения ещё прежние
     objects = {ref_of(record) for record, _ in pairs}
 
     if len(objects) == 1:
@@ -304,7 +304,7 @@ def undo_last(user=Depends(require_editor), session=Depends(get_db)):
             if label not in labels:
                 labels.append(label)
 
-        text = f"{title} — {', '.join(labels)}" if title else ", ".join(labels)
+        text = f"{title} – {', '.join(labels)}" if title else ", ".join(labels)
     else:
         text = f"изменений: {len(pairs)}, объектов: {len(objects)}"
 
@@ -323,12 +323,12 @@ def undo_last(user=Depends(require_editor), session=Depends(get_db)):
 class RevertRequest(BaseModel):
     id: int                         # запись истории
     field: str
-    initial: bool = False           # True — исходное значение («было» первого изменения)
+    initial: bool = False           # True – исходное значение («было» первого изменения)
 
 
 @router.post("/history/revert")
 def revert_history(payload: RevertRequest, user=Depends(require_editor), session=Depends(get_db)):
-    """Вернуть полю значение из истории; в Историю — запись «возврат значения»."""
+    """Вернуть полю значение из истории; в Историю – запись «возврат значения»."""
     record = session.get(History, payload.id)
 
     if not record or payload.field not in (record.changes or {}):

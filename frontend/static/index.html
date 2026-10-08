@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>ITDB</title>
     <link rel="stylesheet" href="/app.css">
-    <!-- Цветовая схема из прошлого входа — до отрисовки, чтобы не мигало -->
+    <!-- Цветовая схема из прошлого входа – до отрисовки, чтобы не мигало -->
     <script>try { document.documentElement.dataset.theme = localStorage.getItem("itdb.theme") || "red"; document.documentElement.classList.toggle("no-radius", localStorage.getItem("itdb.noRadius") === "1"); } catch (e) {}</script>
 </head>
 <body>
@@ -38,7 +38,7 @@
                             <svg v-if="theme === t.key" class="theme-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>
                         </button>
                         <div class="nc-sep"></div>
-                        <label class="nc-check" title="Рамки блоков — цветом схемы">
+                        <label class="nc-check" title="Рамки блоков – цветом схемы">
                             <input type="checkbox" :checked="accentBorders" @change="toggleAccentBorders"> Акцентные границы блоков
                         </label>
                         <label class="nc-check">
@@ -61,7 +61,7 @@
                                 <span class="uc-role">{{ roleLabel }}</span>
                             </span>
                         </div>
-                        <!-- Смена своего пароля — прямо в меню, без отдельного окна -->
+                        <!-- Смена своего пароля – прямо в меню, без отдельного окна -->
                         <div v-if="ownPassword" class="uc-form" @keydown.enter.prevent="submitOwnPassword">
                             <input ref="op-current" class="input" type="password" v-model="ownPassword.current" placeholder="Текущий пароль" autocomplete="current-password">
                             <input class="input" type="password" v-model="ownPassword.next" placeholder="Новый пароль, от 6 знаков" autocomplete="new-password">
@@ -72,7 +72,7 @@
                                 <button class="btn btn-primary" :disabled="ownPassword.saving" @click="submitOwnPassword">Сохранить</button>
                             </div>
                         </div>
-                        <!-- Свои логин, ФИО, должность — тоже прямо в меню -->
+                        <!-- Свои логин, ФИО, должность – тоже прямо в меню -->
                         <div v-else-if="ownProfile" class="uc-form" @keydown.enter.prevent="submitOwnProfile">
                             <label class="uc-label">Логин</label>
                             <input ref="pf-login" class="input" v-model="ownProfile.login" spellcheck="false" autocomplete="off"
@@ -124,10 +124,10 @@
             <div class="toolbar">
                 <div class="tb-left">
                     <span class="tb-count">{{ countText }}</span>
-                    <!-- Фильтры: по дереву и по столбцам. Не помещаются — сжимаются, полный текст в подсказке -->
+                    <!-- Фильтры: по дереву и по столбцам. Не помещаются – сжимаются, полный текст в подсказке -->
                     <span v-if="locationFilter || activeColFilters.length" class="tb-chips">
                         <button v-if="locationFilter" class="chip" @click="clearLocationFilter"
-                            :title="locationFilter.path + ' — снять фильтр'">
+                            :title="locationFilter.path + ' – снять фильтр'">
                             <span class="chip-text">{{ locationFilter.path }}</span><span class="chip-x">✕</span>
                         </button>
                         <template v-if="activeColFilters.length < 3">
@@ -136,7 +136,7 @@
                             </button>
                         </template>
                     </span>
-                    <!-- Три фильтра и больше — одной кнопкой со списком -->
+                    <!-- Три фильтра и больше – одной кнопкой со списком -->
                     <span v-if="activeColFilters.length >= 3" class="dropdown-wrap" ref="colFilterListWrap">
                         <button class="chip" :class="{ 'menu-open': openMenu === 'colFilterList' }" @click="toggleMenu('colFilterList')" title="Фильтры по столбцам">
                             <span class="chip-text">Фильтры: {{ activeColFilters.length }}</span>
@@ -187,7 +187,7 @@
                     <button class="btn icon-only tb-fit" :class="{ active: tableFit }" @click="toggleTableFit" :title="tableFit ? 'Обычный масштаб' : 'По ширине окна'">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 8-4 4 4 4"/></svg>
                     </button>
-                    <!-- Печать таблицы: выбранные строки, без выделения — все показанные -->
+                    <!-- Печать таблицы: выбранные строки, без выделения – все показанные -->
                     <button class="btn icon-only tb-print" @click="openPrint" :title="selectedRows.length ? 'Печать: выбранные (' + selectedRows.length + ')' : 'Печать'">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                     </button>
@@ -209,7 +209,7 @@
                                 </label>
                             </div>
                             <div class="dd-sep"></div>
-                            <label title="Иначе — только в видимых">
+                            <label title="Иначе – только в видимых">
                                 <input type="checkbox" v-model="searchHidden">
                                 Искать и в скрытых столбцах
                             </label>
@@ -219,7 +219,7 @@
                     </span>
                     <span class="tb-divider"></span>
                     <!-- Значения сканера (этапы 26б, 26в): кнопка дописывает в ячейки блочки с тем,
-                         что предлагают GLPI / GSIT; у включённой при наведении — что значат цвета -->
+                         что предлагают GLPI / GSIT; у включённой при наведении – что значат цвета -->
                     <span class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
                     <button class="btn icon-only" :class="{ active: scanOverlay, 'has-badge': diffs.count > 0 }" @click="toggleScanOverlay"
                         :title="scanOverlay ? null : scanButtonTitle">
@@ -234,21 +234,21 @@
                     </span>
                     <!-- Только строки с предложениями: значок без кнопки, есть только при включённой кнопке -->
                     <span v-if="scanOverlay" class="scan-only" :class="{ on: scanOnlyRows }" :title="scanOnlyRows ? 'Показать все строки' : 'Только строки с предложениями'" @click="scanOnlyRows = !scanOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
-                    <!-- Имена по правилам (этапы 35, 36): слева от HOSTNAME — столбец «По правилу» с именем у ПК, названных иначе -->
+                    <!-- Имена по правилам (этапы 35, 36): слева от HOSTNAME – столбец «По правилу» с именем у ПК, названных иначе -->
                     <button class="btn icon-only" :class="{ active: nameCheck, 'has-badge': nameCheck && nameBadCount > 0 }" @click="toggleNameCheck"
                         :title="nameCheck ? 'Не по правилу: ' + nameBadCount : 'Имена по правилам'">
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg><span v-if="nameCheck && nameBadCount > 0 && buttonCounts" class="btn-badge">{{ nameBadBadge }}</span>
                     </button>
                     <span v-if="nameCheck" class="scan-only" :class="{ on: nameOnlyRows }" :title="nameOnlyRows ? 'Показать все строки' : 'Только не по правилу'" @click="nameOnlyRows = !nameOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
-                    <!-- Архив: без выбранных строк — показать архив / вернуться к таблице,
-                         с выбранными — убрать их в архив (в архиве — вернуть) -->
+                    <!-- Архив: без выбранных строк – показать архив / вернуться к таблице,
+                         с выбранными – убрать их в архив (в архиве – вернуть) -->
                     <button class="btn icon-only" :class="{ active: showArchive }" :disabled="archiveSaving" @click="onArchiveButton" :title="archiveButtonTitle">
                         <svg v-if="archiveAction === 'restore'" class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/></svg>
                         <svg v-else class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
                     </button>
-                    <!-- Добавление и выгрузка — у каждого своя кнопка с меню:
+                    <!-- Добавление и выгрузка – у каждого своя кнопка с меню:
                          потом добавлять можно будет не только компьютер,
-                         выгружать — не только в Excel -->
+                         выгружать – не только в Excel -->
                     <span v-if="canEdit" class="dropdown-wrap" ref="addWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'add', active: newComputer }" @click="toggleMenu('add')" title="Добавить">
                             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
@@ -264,28 +264,28 @@
                         </button>
                         <div v-if="openMenu === 'export'" class="dropdown right attached">
                             <button @click="closeMenus(); downloadExport(false)" title="Рабочие ПК, без архива"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel</button>
-                            <button @click="closeMenus(); downloadExport(true)" title="Архив — на отдельном листе"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel (С архивом)</button>
+                            <button @click="closeMenus(); downloadExport(true)" title="Архив – на отдельном листе"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>Excel (С архивом)</button>
                         </div>
                     </span>
                 </div>
             </div>
 
-            <!-- Новый компьютер: строка под панелью. Остальные поля — потом в таблице или карточке -->
+            <!-- Новый компьютер: строка под панелью. Остальные поля – потом в таблице или карточке -->
             <div v-if="newComputer" class="add-bar">
                 <span class="ab-title">Новый компьютер:</span>
                 <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions" can-add-room
                     placeholder="Расположение: начни вводить адрес, отделение или кабинет" @pick="onNewComputerLocation" @add-room="openNewRoom"></location-picker>
-                <input ref="nc-seat" class="input ab-seat" v-model="newComputer.seat_no" placeholder="№ места" title="№ Места — только число" @keydown.enter="submitNewComputer">
+                <input ref="nc-seat" class="input ab-seat" v-model="newComputer.seat_no" placeholder="№ места" title="№ Места – только число" @keydown.enter="submitNewComputer">
                 <input ref="nc-hostname" class="input ab-host" v-model="newComputer.hostname" placeholder="HOSTNAME" spellcheck="false" @keydown.enter="submitNewComputer"
                     :title="newComputer.hostname && newComputer.hostname === newComputer.autoName ? 'Имя по правилу' : null">
-                <input ref="nc-ip" class="input ab-ip" v-model="newComputer.ip" placeholder="IP" spellcheck="false" @keydown.enter="submitNewComputer" @input="onIpInput($event, newComputer, 'ip')">
+                <input ref="nc-ip" class="input ab-ip" v-model="newComputer.ip" placeholder="IP" spellcheck="false" autocomplete="off" @keydown="onNewIpKeydown" @input="onNewIpInput" @blur="closeIpSuggest">
                 <button class="btn btn-primary icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewComputer" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newComputerError" class="ab-error">{{ newComputerError }}</span>
             </div>
             <!-- Новый кабинет (этап 36): «＋ кабинет» в списке расположений нового ПК -->
             <div v-if="newComputer && newRoom" class="add-bar room-bar">
-                <span class="ab-title">Новый кабинет в:</span>
+                <span class="ab-title" :title="newRoomAfterText()">Новый кабинет в:</span>
                 <location-picker ref="nr-parent" class="ab-loc ab-loc-short" input-class="input" :value="newRoom.parent_id" :options="roomParentOptions"
                     placeholder="Отделение или этаж" @pick="onNewRoomParent"></location-picker>
                 <input ref="nr-code" class="input ab-seat" v-model="newRoom.code" placeholder="№ каб." title="Номер кабинета" spellcheck="false" @keydown.enter="submitNewRoom">
@@ -302,19 +302,19 @@
                     <location-picker ref="ab-location" class="ab-loc" input-class="input" :value="actionBar.location_id" :options="locationOptions"
                         placeholder="Куда: начни вводить адрес, отделение или кабинет" @pick="onActionLocation"></location-picker>
                     <input ref="ab-seat" class="input ab-seat" v-model="actionBar.seat_no" placeholder="№ места"
-                        :title="actionBar.ids.length > 1 ? 'С какого № места. Пусто — в конец узла' : '№ места. Пусто — в конец узла'">
-                    <label class="ab-check" title="Выключено — пользователь и VACUUM снимаются"><input type="checkbox" v-model="actionBar.with_people">с пользователями и VACUUM</label>
+                        :title="actionBar.ids.length > 1 ? 'С какого № места. Пусто – в конец узла' : '№ места. Пусто – в конец узла'">
+                    <label class="ab-check" title="Выключено – пользователь и VACUUM снимаются"><input type="checkbox" v-model="actionBar.with_people">с пользователями и VACUUM</label>
                 </template>
                 <template v-else-if="actionBar.kind === 'replace'">
                     <location-picker ref="ab-new" class="ab-loc ab-pc" input-class="input" :value="actionBar.new_id" :options="computerOptions" empty-text="Нет других ПК"
                         placeholder="Новый ПК: имя, ИНВ или расположение" @pick="onReplaceNew"></location-picker>
-                    <span class="ab-title">старый — в:</span>
+                    <span class="ab-title">старый – в:</span>
                     <location-picker ref="ab-location" class="ab-loc ab-loc-short" input-class="input" :value="actionBar.location_id" :options="locationOptions"
                         placeholder="Куда убрать старый (например, склад)" @pick="onActionLocation"></location-picker>
-                    <label class="ab-check" title="Новый — «установлен», старый — «склад»"><input type="checkbox" v-model="actionBar.with_people">пользователи и VACUUM — новому</label>
+                    <label class="ab-check" title="Новый – «установлен», старый – «склад»"><input type="checkbox" v-model="actionBar.with_people">пользователи и VACUUM – новому</label>
                 </template>
                 <template v-else-if="actionBar.kind === 'scan'">
-                    <!-- Списки со счётчиками: число — справа, как в фильтре столбца -->
+                    <!-- Списки со счётчиками: число – справа, как в фильтре столбца -->
                     <count-select class="ab-scan" v-model="actionBar.scanKind" :options="scanBarKindOptions" title="Тип"></count-select>
                     <count-select class="ab-scan" v-model="actionBar.field" :options="scanBarFieldOptions" title="Столбец"></count-select>
                     <span class="ab-title">значений: {{ scanBarDiffs.length }}</span>
@@ -323,7 +323,7 @@
                     <select class="input ab-field" v-model="actionBar.field" @change="closeSuggest()">
                         <option v-for="col in bulkColumns" :key="col.field" :value="col.field">{{ colTitle(col) }}</option>
                     </select>
-                    <input ref="ab-value" class="input ab-value" v-model="actionBar.value" placeholder="Новое значение (пусто — очистить)" spellcheck="false"
+                    <input ref="ab-value" class="input ab-value" v-model="actionBar.value" placeholder="Новое значение (пусто – очистить)" spellcheck="false"
                         @focus="openBulkSuggest($event.target)" @click="!suggest && openBulkSuggest($event.target)" @input="onBulkSuggestInput($event.target)"
                         @keydown="suggestKeydown($event)" @blur="closeSuggest()">
                 </template>
@@ -332,8 +332,8 @@
                 <span v-if="actionBar.error" class="ab-error">{{ actionBar.error }}</span>
             </div>
 
-            <!-- Таблица уже окна — по центру (отступ слева — целым числом пикселей, иначе линии мылятся) -->
-            <div class="table-wrap" :class="{ fit: tableFit }" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
+            <!-- Таблица уже окна – по центру (отступ слева – целым числом пикселей, иначе линии мылятся) -->
+            <div class="table-wrap" :class="{ fit: tableFit, 'fit-scroll': tableFit && tableFitScroll }" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
                 <!-- Полоска у последней нажатой строки (этапы 31, 36): у левого края видимой части -->
                 <div ref="rowMark" class="row-mark"></div>
                 <table class="data-table" :class="{ 'sticky-stuck': !!stuckEdge, 'alt-copy': altDown }" ref="table" :style="tableStyle">
@@ -346,7 +346,7 @@
                                 :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field, 'th-virtual': col.virtual }"
                                 :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
                                 @mousedown="onHeadMouseDown($event, col)" @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
-                                <!-- Подпись по центру; справа всегда место под воронку: не хватает — подпись левее -->
+                                <!-- Подпись по центру; справа всегда место под воронку: не хватает – подпись левее -->
                                 <span class="th-in"><span class="th-pad"></span><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
                                 <template v-if="!col.virtual">
                                 <span class="th-filter" :class="{ on: isColFiltered(col.field) }" :title="isColFiltered(col.field) ? 'Изменить фильтр' : 'Фильтр'" @click.stop="openColFilter(col, $event)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
@@ -371,9 +371,9 @@
                                         :title="nameChipTitle(row)" @mousedown.stop @dblclick.stop @click.stop="openNamePop(row, $event)">{{ nameChip(row) }}</button>
                                     <span v-else-if="nameKept(row)" class="name-kept" :title="'Своё имя · правило ' + nameChipTitle(row)">своё</span>
                                 </template>
-                                <!-- Антивирусы (этап 26д): строкой каждый, цвет — по состоянию (Справочники) -->
+                                <!-- Антивирусы (этап 26д): строкой каждый, цвет – по состоянию (Справочники) -->
                                 <span v-else-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avCellStyle(a) || {}).backgroundColor }" :style="avCellStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
-                                <!-- Значения по строкам: повтор — блочком, логина нет в Jabber — красным, номер GLPI / GSIT — ссылкой -->
+                                <!-- Значения по строкам: повтор – блочком, логина нет в Jabber – красным, номер GLPI / GSIT – ссылкой -->
                                 <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><a v-else-if="p.card" class="cell-line host-link" :class="p.cls" :style="p.style" :href="p.card" draggable="false" :title="p.title" @click.prevent>{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :style="p.style" :title="p.title" @dblclick="onCellValueDblclick($event, row, col)">{{ p.text }}</span></template></span>
                                 <span v-else :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)" @dblclick="onCellValueDblclick($event, row, col)">{{ cellText(row, col) }}</span>
                                 <button v-if="scanCellMark(row, col) && !isEditing(row, col)" type="button" class="scan-chip"
@@ -439,8 +439,8 @@
                 </div>
             </div>
             <div class="tree">
-                <!-- Дерево — таблица «Расположение | ПК» в манере главной таблицы.
-                     Ширина — по самому широкому узлу с учётом сдвига, даже свёрнутому. -->
+                <!-- Дерево – таблица «Расположение | ПК» в манере главной таблицы.
+                     Ширина – по самому широкому узлу с учётом сдвига, даже свёрнутому. -->
                 <div class="tree-wrap" :style="{ width: (treeWidth + treeScrollbar) + 'px' }" @mouseleave="treeHover = null">
                     <div class="tree-grid" :class="{ 'accent-head': accentHeaders.tree }">
                         <!-- Прокрутка внутри рамки: шапка и текущий адрес закрепляются сверху -->
@@ -461,7 +461,7 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Действия со строкой — плашка справа от таблицы -->
+                    <!-- Действия со строкой – плашка справа от таблицы -->
                     <div v-if="treeHover" class="tree-actions" :style="{ top: treeHover.top + 'px', height: treeHover.height + 'px' }">
                         <span class="na-box">
                             <a class="icon-btn" :href="pageHref('table', { loc: treeHover.node.id })" title="Показать эти ПК в таблице" @click="navClick($event, () => treeAction('showLocationInTable'))">
@@ -477,7 +477,7 @@
                             </template>
                         </span>
                     </div>
-                    <!-- «Добавить» — и справа от шапки таблицы (то же, что на панели) -->
+                    <!-- «Добавить» – и справа от шапки таблицы (то же, что на панели) -->
                     <div v-if="canEdit" class="side-add">
                         <span class="dropdown-wrap" ref="treeAddSideWrap">
                             <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'treeAddSide', active: treeForm && treeForm.top }" @click="toggleMenu('treeAddSide')" title="Добавить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button>
@@ -492,7 +492,7 @@
 
         <!-- ================= Справочники ================= -->
         <!-- Строка на каждый столбец таблицы, в том же порядке: оформление
-             столбца целиком и значения (клик по значению — его оформление). -->
+             столбца целиком и значения (клик по значению – его оформление). -->
         <section v-if="user && view === 'choices'" class="view">
             <div class="toolbar">
                 <div class="tb-left">
@@ -502,7 +502,7 @@
                         <a href="#choices/names" :class="{ active: choicesTab === 'names' }" @click="navClick($event, () => setChoicesTab('names'))" title="Правила имён компьютеров">Имена ПК</a>
                     </nav>
                     <template v-if="choicesTab === 'styles'">
-                        <span v-if="choicesQuery.trim()" class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter — следующий)</template></span>
+                        <span v-if="choicesQuery.trim()" class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter – следующий)</template></span>
                     </template>
                     <span v-else class="tb-count">{{ namesCountText }}</span>
                 </div>
@@ -524,11 +524,11 @@
                         <span class="dropdown-wrap" ref="namingHelpWrap">
                             <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namingHelp' }" @click="toggleMenu('namingHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
                             <div v-if="openMenu === 'namingHelp'" class="dropdown right attached names-help">
-                                <p>Имя ПК — начало от узлов выше, своя часть и номер: <b>ter-proc-1</b>.</p>
-                                <p>Номер — по порядку № места сверху вниз.</p>
-                                <p>Серое в имени — клик: убрать или вернуть.</p>
-                                <p>Клик по строке — её ПК справа.</p>
-                                <p>«В таблице» — как названы ПК сейчас; клик — взять.</p>
+                                <p>Имя ПК – начало от узлов выше, своя часть и номер: <b>ter-proc-1</b>.</p>
+                                <p>Номер – по порядку № места сверху вниз.</p>
+                                <p>Серое в имени – клик: убрать или вернуть.</p>
+                                <p>Клик по строке – её ПК справа.</p>
+                                <p>«В таблице» – как названы ПК сейчас; клик – взять.</p>
                             </div>
                         </span>
                         <span class="tb-divider"></span>
@@ -542,8 +542,8 @@
                 </div>
             </div>
             <div v-if="choicesTab === 'styles'" class="page choices-page" :class="{ 'accent-head': accentHeaders.choices }">
-                <!-- Блок на каждый столбец таблицы, в том же порядке: первая строка —
-                     оформление столбца целиком, ниже — значения (из справочника и из данных). -->
+                <!-- Блок на каждый столбец таблицы, в том же порядке: первая строка –
+                     оформление столбца целиком, ниже – значения (из справочника и из данных). -->
                 <div class="st-grid">
                     <div v-for="b in styleBlocks" :key="b.field" class="st-block" :data-field="b.field"
                         :class="{ 'search-hit': choicesMatch.blockSet.has(b.field), 'search-current': choicesMatch.current === b.field }">
@@ -554,7 +554,7 @@
                             <span v-if="b.av" class="st-tag">из сканера</span>
                             <span v-if="b.valuesOn" class="st-head-n" title="Значений">{{ b.values.length }}</span>
                         </div>
-                        <!-- Антивирусы (этап 26д): цвет по состоянию, что показывать; названия — скрыть ненужные -->
+                        <!-- Антивирусы (этап 26д): цвет по состоянию, что показывать; названия – скрыть ненужные -->
                         <template v-if="b.av">
                             <template v-if="avSettings">
                                 <div class="st-row st-sub">Состояние</div>
@@ -574,7 +574,7 @@
                                         <span v-if="avRename && avRename.key === v.key" class="st-val"><input class="input av-rename" v-model="avRename.value" maxlength="60" spellcheck="false" autocomplete="off"
                                             :placeholder="v.name" @keydown="onAvRenameKeydown" @blur="finishAvRename(true)"></span>
                                         <span v-else class="st-val" :class="{ 'av-can-rename': canEdit }" @dblclick="startAvRename(v)"
-                                            :title="(v.title ? v.title + '\nВ источнике: ' + v.name : v.name) + (canEdit ? '\nДвойной клик — своё название' : '')"><span v-if="v.title" class="av-own">{{ v.title }}</span><template v-else>{{ v.name }}</template></span>
+                                            :title="(v.title ? v.title + '\nВ источнике: ' + v.name : v.name) + (canEdit ? '\nДвойной клик – своё название' : '')"><span v-if="v.title" class="av-own">{{ v.title }}</span><template v-else>{{ v.name }}</template></span>
                                         <span class="st-n" :title="'ПК с этим антивирусом: ' + v.count">{{ v.count }}</span>
                                         <span class="st-act av-act av-name-act">
                                             <span v-if="canEdit" class="st-ren" title="Своё название" @click="startAvRename(v)">✎</span>
@@ -637,7 +637,7 @@
                                     <input v-if="fieldDefEdit && fieldDefEdit.id === fd.id" class="input fd-rename" v-model="fieldDefEdit.label"
                                         @keydown.enter="saveRenameFieldDef(fd)" @keydown.esc="fieldDefEdit = null" @blur="saveRenameFieldDef(fd)">
                                     <template v-else>{{ fd.label }}</template>
-                                    <span v-if="fd.reserved" class="field-def-warn" title="Создай поле с другим ключом">ключ занят встроенным полем — не показывается</span>
+                                    <span v-if="fd.reserved" class="field-def-warn" title="Создай поле с другим ключом">ключ занят встроенным полем – не показывается</span>
                                 </td>
                                 <td><code class="fd-key">{{ fd.key }}</code></td>
                                 <td v-if="canEdit" class="fd-actions">
@@ -690,7 +690,7 @@
                                 <td>
                                     <style-controls :value="m" :disabled="!canEdit" @change="updateScanMark(m.kind, $event)"></style-controls>
                                     <span class="sc" :class="{ disabled: !canEdit }">
-                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка блочка ' + m.frame + '\nCtrl + клик — убрать' : 'Рамка блочка — в тон фона'"
+                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка блочка ' + m.frame + '\nCtrl + клик – убрать' : 'Рамка блочка – в тон фона'"
                                             @click.capture="($event.ctrlKey || $event.metaKey) && ($event.preventDefault(), canEdit && m.frame && updateScanMark(m.kind, { frame: '' }))">
                                             <span class="sc-swatch sc-frame" :style="{ borderColor: m.frame || null }"></span>
                                             <input type="color" :value="m.frame || '#9db4cc'" :disabled="!canEdit" @change="updateScanMark(m.kind, { frame: $event.target.value })">
@@ -707,9 +707,9 @@
                 </div>
             </div>
 
-            <!-- Имена ПК (этапы 35, 36): правило — у узлов дерева. Имя ПК собрано из частей:
+            <!-- Имена ПК (этапы 35, 36): правило – у узлов дерева. Имя ПК собрано из частей:
                  серое начало от узлов выше, своя часть (ввод прямо в имени), серый номер;
-                 клик по серому — убрать / вернуть. Клик по строке — справа ПК узла -->
+                 клик по серому – убрать / вернуть. Клик по строке – справа ПК узла -->
             <div v-else class="history-page nr-page">
                 <div class="nr-layout">
                     <div class="users-wrap nr-wrap" @mouseleave="namesHover = null">
@@ -731,10 +731,10 @@
                                                 @focus="canEdit && onNamePartFocus(r.node)" @input="onNamePartInput(r.node, $event.target.value)" @keydown="onNamePartKeydown" @blur="finishNamePart(r.node, $event)"><span v-if="r.entry.start || r.entry.single" class="nr-suf"
                                                 :class="{ off: r.entry.single, edit: canEdit && (r.entry.leaf || r.entry.single) }" :title="nameSuffixTitle(r)"
                                                 @click="(r.entry.leaf || r.entry.single) && toggleNameFlag(r.node, 'single')">{{ nameSuffixText(r) }}</span></td>
-                                            <td class="nr-c nr-pcs"><template v-if="nameNodeStats.get(r.node.id).total">{{ nameNodeStats.get(r.node.id).total }}</template><a v-if="nameNodeStats.get(r.node.id).bad" class="nr-bad" :href="pageHref('table', { loc: r.node.id })" title="Не по правилу — показать в таблице"
+                                            <td class="nr-c nr-pcs"><template v-if="nameNodeStats.get(r.node.id).total">{{ nameNodeStats.get(r.node.id).total }}</template><a v-if="nameNodeStats.get(r.node.id).bad" class="nr-bad" :href="pageHref('table', { loc: r.node.id })" title="Не по правилу – показать в таблице"
                                                 @click="navClick($event, () => showNamesInTable(r.node, true))">{{ nameNodeStats.get(r.node.id).bad }}</a></td>
                                             <td v-if="canEdit" class="nr-sug"><button v-if="nameSuggestions.get(r.node.id)" type="button" class="scan-chip nr-chip" :disabled="nameSaving"
-                                                :title="nameSuggestions.get(r.node.id).title + ' — взять'" @click="applyNameSuggestion(r.node)">{{ nameSuggestions.get(r.node.id).text }}</button></td>
+                                                :title="nameSuggestions.get(r.node.id).title + ' – взять'" @click="applyNameSuggestion(r.node)">{{ nameSuggestions.get(r.node.id).text }}</button></td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -759,7 +759,7 @@
                                     <tbody>
                                         <tr class="nr-sel-head">
                                             <td colspan="3"><span class="nr-sel-in"><span class="nr-sel-title" :title="(treeIndex[nameSelId] || {}).path">{{ nameSelTitle }}</span>
-                                                <button v-if="canEdit && nameSelFixes.length" class="btn nr-rename-all" @click="renameNodeByRule" title="Все ПК узла — по правилу">Переименовать: {{ nameSelFixes.length }}</button>
+                                                <button v-if="canEdit && nameSelFixes.length" class="btn nr-rename-all" @click="renameNodeByRule" title="Все ПК узла – по правилу">Переименовать: {{ nameSelFixes.length }}</button>
                                                 <span class="icon-btn nr-sel-close" title="Закрыть (Esc)" @click="nameSelId = null">✕</span></span></td>
                                         </tr>
                                         <tr v-if="!nameSelRows.length" class="h-empty"><td colspan="3">ПК нет.</td></tr>
@@ -767,7 +767,7 @@
                                             <tr v-if="item.group" class="nr-sub"><td colspan="3" :title="item.path">{{ item.title }}</td></tr>
                                             <tr v-else>
                                                 <td class="nr-c nr-seat">{{ item.row.seat_no }}</td>
-                                                <td class="nr-host"><a :href="pageHref('table', { pc: item.row.id })" @click="navClick($event, () => openNameKeepPc(item.row))">{{ item.row.hostname || "—" }}</a></td>
+                                                <td class="nr-host"><a :href="pageHref('table', { pc: item.row.id })" @click="navClick($event, () => openNameKeepPc(item.row))">{{ item.row.hostname || "–" }}</a></td>
                                                 <td class="nr-want">
                                                     <template v-if="item.check">
                                                         <span v-if="item.check.kept" class="name-kept" :title="'Своё имя · правило ' + nameRuleText(item.check.entry)">своё<span v-if="canEdit" class="icon-btn danger nr-unkeep" title="Снова по правилу" @click="setNameKeepFor([item.row.id], false)">✕</span></span>
@@ -775,7 +775,7 @@
                                                             :title="'Правило: ' + nameRuleText(item.check.entry)" @click="openNamePop(item.row, $event)">{{ item.check.expected }}</button>
                                                         <span v-else class="nr-ok" title="По правилу">✓</span>
                                                     </template>
-                                                    <span v-else class="nr-none" title="Правила нет">—</span>
+                                                    <span v-else class="nr-none" title="Правила нет">–</span>
                                                 </td>
                                             </tr>
                                         </template>
@@ -784,7 +784,7 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Ничего не выбрано — ПК со своим именем: не по правилу, и так и надо -->
+                    <!-- Ничего не выбрано – ПК со своим именем: не по правилу, и так и надо -->
                     <div v-else-if="nameKeepRows.length" class="users-wrap nr-side-wrap nr-keep-wrap">
                         <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
                             <div class="history-scroll">
@@ -864,13 +864,13 @@
                     </span>
                 </div>
             </div>
-            <!-- Отступ сверху — вне прокрутки: над шапкой ничего не проезжает -->
+            <!-- Отступ сверху – вне прокрутки: над шапкой ничего не проезжает -->
             <div class="history-page">
                 <div class="history-frame" :class="{ empty: !!historyError, 'accent-head': accentHeaders.history }">
                 <div class="history-scroll" ref="historyScroll" @scroll="onHistoryScroll">
-                <!-- Записи по дням: дата — строкой-разделителем (прилипает под шапкой),
+                <!-- Записи по дням: дата – строкой-разделителем (прилипает под шапкой),
                      в строке только время. Все цифры те же: дд.мм.гггг и чч:мм:сс.
-                     Таблица с шапкой видна и без записей: в шапке — глаз «отменённые». -->
+                     Таблица с шапкой видна и без записей: в шапке – глаз «отменённые». -->
                 <table v-if="!historyError" class="history-table" :class="{ 'accent-head': accentHeaders.history }">
                     <thead>
                         <tr><th class="h-time">Время</th><th class="h-obj">Объект</th><th class="h-user">Пользователь</th><th class="h-changes-th"><span class="h-th">Изменения
@@ -893,12 +893,12 @@
                                 <span v-else class="h-other" :title="entityLabel(item.entity) + ' ' + (item.title || ('#' + item.entity_id))"><span class="h-obj-kind">{{ entityLabel(item.entity) }}</span>{{ item.title || ('#' + item.entity_id) }}</span>
                                 <span v-if="historyFilter.entityId === null" class="h-only" title="Показать изменения только этого объекта" @click="filterHistoryObject(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                             </td>
-                            <td class="h-user"><span v-if="item.user_name" class="h-user-link" title="Показать изменения только этого пользователя" @click="setHistoryUser(item.user_name)">{{ item.user_name }}</span><template v-else>—</template></td>
+                            <td class="h-user"><span v-if="item.user_name" class="h-user-link" title="Показать изменения только этого пользователя" @click="setHistoryUser(item.user_name)">{{ item.user_name }}</span><template v-else>–</template></td>
                             <td class="h-changes">
                                 <div class="changes">
                                     <template v-for="(change, field) in shownChanges(item.changes)" :key="field">
                                         <span class="field" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue(item.entity, field) }"
-                                            :title="canOpenValue(item.entity, field) ? 'Двойной клик — история значения' : null"
+                                            :title="canOpenValue(item.entity, field) ? 'Двойной клик – история значения' : null"
                                             @dblclick="openValueHistory(item.entity, item.entity_id, field, item.entity_key)">{{ fieldLabel(item.entity, field) }}</span>
                                         <span class="ch-val" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue(item.entity, field) }"
                                             @dblclick="openValueHistory(item.entity, item.entity_id, field, item.entity_key)"><template v-if="field !== 'created'"><span class="old"><span v-if="isColorChange(item.entity, field) && change.old" class="h-swatch" :style="{ background: change.old }"></span>{{ historyValue(item.entity, field, change.old) }}</span><span class="arrow">→</span></template><span class="new"><span v-if="isColorChange(item.entity, field) && change.new" class="h-swatch" :style="{ background: change.new }"></span>{{ historyValue(item.entity, field, change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.scan" class="h-mark" :title="'Значение принято из сканера: ' + change.scan">из {{ change.scan }}</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
@@ -908,7 +908,7 @@
                         </tr>
                     </tbody>
                 </table>
-                <!-- Сначала загружены последние 200 записей; остальное — по кнопке -->
+                <!-- Сначала загружены последние 200 записей; остальное – по кнопке -->
                 <div v-if="historyRest > 0 && !historyQuery.trim() && historyItems.length" class="history-more">
                     <span>Показаны последние {{ historyItems.length }} из {{ historyTotal }}</span>
                     <button class="btn" :disabled="historyLoadingMore" @click="loadMoreHistory(false)">Показать ещё {{ Math.min(200, historyRest) }}</button>
@@ -938,9 +938,9 @@
                 </div>
             </div>
 
-            <!-- Таблица в манере Истории (та же рамка и шапка); ширина столбцов постоянная —
-                 строка добавления и «Изменить» — прямо в таблице (поля по столбцам, пароли —
-                 ниже под «Логином»), справа снаружи рамки — плашка действий, как в Дереве -->
+            <!-- Таблица в манере Истории (та же рамка и шапка); ширина столбцов постоянная –
+                 строка добавления и «Изменить» – прямо в таблице (поля по столбцам, пароли –
+                 ниже под «Логином»), справа снаружи рамки – плашка действий, как в Дереве -->
             <div class="history-page">
                 <div class="users-wrap" @mouseleave="usersHover = null">
                     <div class="history-frame" :class="{ empty: !users.length && !userBar, 'accent-head': accentHeaders.users }">
@@ -966,11 +966,11 @@
                                                 </select></td>
                                                 <td class="u-created">{{ item.user ? formatDate(item.user.created_at) : "" }}</td>
                                             </tr>
-                                            <!-- Пароль скрыт (этап 22), повтор обязателен; глаз — показать оба поля -->
+                                            <!-- Пароль скрыт (этап 22), повтор обязателен; глаз – показать оба поля -->
                                             <tr class="er-row er-extra" @mouseenter="usersHover = null" @keydown.enter="submitUserBar">
                                                 <td><input ref="ub-password" class="input er-input" :type="userBar.show ? 'text' : 'password'" v-model="userBar.password" spellcheck="false" autocomplete="new-password"
                                                     :placeholder="userBar.kind === 'new' ? 'Пароль' : 'Новый пароль'"
-                                                    :title="userBar.kind === 'new' ? 'Пароль, от 6 знаков' : 'Новый пароль. Пусто — пароль не меняется'"></td>
+                                                    :title="userBar.kind === 'new' ? 'Пароль, от 6 знаков' : 'Новый пароль. Пусто – пароль не меняется'"></td>
                                                 <td colspan="4" class="er-rest">
                                                     <span class="er-tools">
                                                         <span class="icon-btn" :class="{ on: userBar.show }" @click="userBar.show = !userBar.show" :title="userBar.show ? 'Скрыть пароль' : 'Показать пароль'">
@@ -1010,7 +1010,7 @@
                             </template>
                         </span>
                     </div>
-                    <!-- Строка добавления / правки: ✓ ✕ — плашкой у строки -->
+                    <!-- Строка добавления / правки: ✓ ✕ – плашкой у строки -->
                     <div v-if="userBar && userBar.plate" class="tree-actions er-plate" :style="{ top: userBar.plate.top + 'px', height: userBar.plate.height + 'px' }">
                         <span class="na-box">
                             <span class="icon-btn er-ok" :class="{ off: userBar.saving }" :title="userBar.kind === 'new' ? 'Добавить (Enter)' : 'Сохранить (Enter)'" @click="submitUserBar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
@@ -1025,7 +1025,7 @@
             </div>
         </section>
 
-        <!-- ================= Сканер (этап 24; редактору — только «Проверка», этап 26г) ================= -->
+        <!-- ================= Сканер (этап 24; редактору – только «Проверка», этап 26г) ================= -->
         <section v-if="user && canEdit && view === 'scan'" class="view">
             <div class="toolbar">
                 <div class="tb-left">
@@ -1035,12 +1035,12 @@
                         <a href="#scan/net" :class="{ active: scanTab === 'net' }" @click="navClick($event, () => setScanTab('net'))" title="DHCP и проход подсетей">Сеть</a>
                         <a v-if="isAdmin" href="#scan/names" :class="{ active: scanTab === 'names' }" @click="navClick($event, () => setScanTab('names'))" title="Как значения источников называются в таблице">Названия</a>
                         <a v-if="isAdmin" href="#scan/schedule" :class="{ active: scanTab === 'schedule' }" @click="navClick($event, () => setScanTab('schedule'))" title="Когда собирать">Расписание</a>
-                        <!-- «Подключения» — последней, значком-шестерёнкой -->
+                        <!-- «Подключения» – последней, значком-шестерёнкой -->
                         <a v-if="isAdmin" href="#scan/settings" class="tb-tab-ico" :class="{ active: scanTab === 'settings' }" @click="navClick($event, () => setScanTab('settings'))" title="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
                     </nav>
-                    <!-- С выделением на «Проверке» вместо счётчика — «Выбрано: N ▾» (места на панели мало) -->
+                    <!-- С выделением на «Проверке» вместо счётчика – «Выбрано: N ▾» (места на панели мало) -->
                     <span v-if="!(scanTab === 'check' && check.selected.length)" class="tb-count">{{ scanTopCountText() }}</span>
-                    <!-- Выделенные строки «Проверки» — действия над ними, как в Таблице -->
+                    <!-- Выделенные строки «Проверки» – действия над ними, как в Таблице -->
                     <span v-if="scanTab === 'check' && check.selected.length" class="dropdown-wrap" ref="checkSelWrap">
                         <button class="btn" :class="{ 'menu-open': openMenu === 'checkSel' }" @click="toggleMenu('checkSel')" title="Действия с выбранными">
                             Выбрано: {{ check.selected.length }}
@@ -1064,12 +1064,12 @@
                 </span>
                 <div class="tb-right">
                     <button v-if="scanTab === 'settings'" class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
-                    <!-- «Названия»: пояснение — по кнопке «?», а не текстом над таблицей (этап 26д) -->
+                    <!-- «Названия»: пояснение – по кнопке «?», а не текстом над таблицей (этап 26д) -->
                     <span v-if="scanTab === 'names'" class="dropdown-wrap" ref="namesHelpWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namesHelp' }" @click="toggleMenu('namesHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
                         <div v-if="openMenu === 'namesHelp'" class="dropdown right attached names-help">
                             <p>Значения источников сравниваются с таблицей по смыслу и показываются так, как названы в таблице.</p>
-                            <p>Изменить — двойной клик по отметке в подробностях на «Проверке»:</p>
+                            <p>Изменить – двойной клик по отметке в подробностях на «Проверке»:</p>
                             <p class="nh-marks"><b>=</b> одно и то же<br><b>≠</b> разное<br><b>⇐</b> в таблице своё<br><b>→</b> это материнская плата</p>
                         </div>
                     </span>
@@ -1084,7 +1084,7 @@
                 </div>
             </div>
 
-            <!-- Привязать запись источника к ПК — строкой под панелью -->
+            <!-- Привязать запись источника к ПК – строкой под панелью -->
             <div v-if="scanLinkBar && scanTab === 'check'" class="add-bar scan-link-bar">
                 <span class="ab-title">Привязать {{ scanLinkBar.record.title }} №{{ scanLinkBar.source_id }}<template v-if="scanLinkBar.record.name"> «{{ scanLinkBar.record.name }}»</template> к:</span>
                 <location-picker ref="sl-picker" class="ab-loc ab-pc" input-class="input" :value="null" :options="scanComputerOptions" empty-text="Нет ПК"
@@ -1095,7 +1095,7 @@
 
             <div v-if="scanTab === 'settings'" class="page scan-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <div v-if="!scanKeyReady" class="scan-warn">
-                    В <b>.env</b> нет ключа <b>ITDB_SECRET_KEY</b> — пароли не сохранить. Выполни из корня проекта и перезапусти:
+                    В <b>.env</b> нет ключа <b>ITDB_SECRET_KEY</b> – пароли не сохранить. Выполни из корня проекта и перезапусти:
                     <code>echo "ITDB_SECRET_KEY=$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" &gt;&gt; .env</code>
                 </div>
 
@@ -1111,7 +1111,7 @@
                                 </label>
                             </div>
                             <table class="scan-form">
-                                <!-- «Сеть»: адреса нет — подсети из списка ниже и что проверять (этап 28) -->
+                                <!-- «Сеть»: адреса нет – подсети из списка ниже и что проверять (этап 28) -->
                                 <template v-if="s.form === 'net'">
                                     <tr>
                                         <td class="sf-label">Подсети</td>
@@ -1137,12 +1137,12 @@
                                     <td><input class="input" v-model="scanForms[s.kind].path" spellcheck="false" autocomplete="off" placeholder="/var/lib/dhcpd/dhcpd.leases"
                                         title="Файл аренд"></td>
                                 </tr>
-                                <!-- DHCP: файлы настроек с привязками MAC — IP; «+» — только в последней строке (28в) -->
+                                <!-- DHCP: файлы настроек с привязками MAC – IP; «+» – только в последней строке (28в) -->
                                 <tr v-for="(c, ci) in (s.form === 'ssh' ? scanForms[s.kind].configs : [])" :key="'cfg' + ci">
                                     <td class="sf-label">Конфиг {{ ci + 1 }}</td>
                                     <td><div class="sf-secret sf-config">
                                         <input class="input" v-model="scanForms[s.kind].configs[ci]" spellcheck="false" autocomplete="off" placeholder="/etc/dhcp/dhcpd.conf"
-                                            title="Файл настроек с привязками MAC — IP">
+                                            title="Файл настроек с привязками MAC – IP">
                                         <span v-if="ci === scanForms[s.kind].configs.length - 1 && c.trim()" class="sf-eye sf-add" title="Ещё файл" @click="addScanConfig(s.kind, $event)">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                                         </span>
@@ -1151,7 +1151,7 @@
                                 <tr v-if="s.form === 'jabber'">
                                     <td class="sf-label">Домен XMPP</td>
                                     <td><input class="input" v-model="scanForms[s.kind].domain" spellcheck="false" autocomplete="off" placeholder="jabber.lan"
-                                        title="Часть логина после @. Пусто — из адреса"></td>
+                                        title="Часть логина после @. Пусто – из адреса"></td>
                                 </tr>
                                 <tr>
                                     <td class="sf-label">Логин</td>
@@ -1200,8 +1200,8 @@
                                     <td><label class="sf-check" :title="scanFreshTitle(s)">не старше <input class="input sf-days" type="number" min="1" :max="s.form === 'glpi' ? 60 : 365" v-model.number="scanForms[s.kind].fresh_days"> дн.</label></td>
                                 </tr>
                             </table>
-                            <!-- Под формой — только ошибки; итог проверки — в подсказке у блочка в шапке,
-                                 последний сбор — в подсказке у «Собрать» (просьба пользователя 01.10) -->
+                            <!-- Под формой – только ошибки; итог проверки – в подсказке у блочка в шапке,
+                                 последний сбор – в подсказке у «Собрать» (просьба пользователя 01.10) -->
                             <div v-if="scanStatus(s.kind) && !scanStatus(s.kind).ok" class="scan-status bad"><span class="ss-text">{{ scanStatus(s.kind).text }}</span></div>
                             <div v-if="scanForms[s.kind].error" class="scan-status bad"><span class="ss-text">{{ scanForms[s.kind].error }}</span></div>
                             <div v-if="scanRunInfo(s.kind) && scanRunInfo(s.kind).bad" class="scan-status bad"><span class="ss-text">Сбор: {{ scanRunInfo(s.kind).text }}</span></div>
@@ -1209,7 +1209,7 @@
                                 <button class="btn icon-only" :disabled="scanForms[s.kind].checking" @click="checkScanSource(s.kind)"
                                     :title="scanForms[s.kind].checking ? 'Проверяю…' : 'Проверить подключение'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></svg></button>
                                 <button class="btn" :disabled="!!scanCollectBlock(s.kind)" @click="collectScan(s.kind)" :title="scanCollectTitle(s.kind)">{{ scanCollecting(s.kind) ? "Собираю…" : "Собрать" }}</button>
-                                <!-- Идёт сбор — полоса «сделано из» (этап 28) -->
+                                <!-- Идёт сбор – полоса «сделано из» (этап 28) -->
                                 <span v-if="scanProgress(s.kind)" class="scan-progress sp-fit"><span class="sp-bar"><span class="sp-fill" :style="{ width: scanProgress(s.kind).percent + '%' }"></span></span><span class="sp-text">{{ scanProgress(s.kind).text }}</span></span>
                                 <span v-else class="sb-gap"></span>
                                 <button v-if="scanDirty(s.kind)" class="btn" @click="resetScanForm(s.kind)" title="Вернуть сохранённые значения">Отменить</button>
@@ -1229,13 +1229,13 @@
                                     <tr><th>Подсеть</th><th>Назначение</th><th>Адрес</th><th class="sn-c">Сканировать</th><th class="sn-c" title="ПК с IP из этой подсети">ПК</th><th>Примечание</th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-if="!scanSubnets.length && !subnetBar" class="h-empty"><td colspan="6">Подсетей пока нет — добавь кнопкой «+» справа от таблицы.</td></tr>
+                                    <tr v-if="!scanSubnets.length && !subnetBar" class="h-empty"><td colspan="6">Подсетей пока нет – добавь кнопкой «+» справа от таблицы.</td></tr>
                                     <template v-for="item in subnetsView" :key="item.key">
                                         <template v-if="item.edit">
                                             <tr class="er-row" @mouseenter="subnetHover = null" @keydown.enter="submitSubnetBar">
                                                 <td><input ref="sb-cidr" class="input er-input" v-model="subnetBar.cidr" placeholder="192.168.89.0/24" spellcheck="false" autocomplete="off"
-                                                    title="Например 192.168.89.0/24. Без маски — /24"
-                                                    @focus="openCidrSuggest($event.target)" @click="!suggest && openCidrSuggest($event.target)" @input="onSuggestInput($event.target.value)"
+                                                    title="Например 192.168.89.0/24. Без маски – /24"
+                                                    @focus="openCidrSuggest($event.target)" @click="!suggest && openCidrSuggest($event.target)" @input="onCidrInput($event)"
                                                     @keydown="onCidrKeydown($event)" @blur="closeSuggest()"></td>
                                                 <td><select class="input er-input" v-model="subnetBar.purpose" title="Назначение">
                                                     <option v-for="p in scanPurposeOptions" :key="p.key" :value="p.key">{{ p.label }}</option>
@@ -1274,7 +1274,7 @@
                             <span class="icon-btn danger" title="Удалить подсеть" @click="deleteSubnet(subnetHover.subnet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                         </span>
                     </div>
-                    <!-- Строка добавления / правки: ✓ ✕ — плашкой у строки -->
+                    <!-- Строка добавления / правки: ✓ ✕ – плашкой у строки -->
                     <div v-if="subnetBar && subnetBar.plate" class="tree-actions er-plate" :style="{ top: subnetBar.plate.top + 'px', height: subnetBar.plate.height + 'px' }">
                         <span class="na-box">
                             <span class="icon-btn er-ok" :class="{ off: subnetBar.saving }" :title="subnetBar.kind === 'new' ? 'Добавить (Enter)' : 'Сохранить (Enter)'" @click="submitSubnetBar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
@@ -1291,7 +1291,7 @@
             <!-- Проверка (этап 26г): записи GLPI и GSIT по ПК и что сканер предлагает изменить -->
             <div v-else-if="scanTab === 'check'" class="page scan-match-page check-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <div class="sm-filters">
-                    <!-- Один «Собрать» — из всех включённых источников; когда собирали — в подсказке -->
+                    <!-- Один «Собрать» – из всех включённых источников; когда собирали – в подсказке -->
                     <button v-if="isAdmin" class="btn ck-collect" :disabled="!!checkCollectBlock" @click="collectAllScan" :title="checkCollectTitle">{{ checkCollecting ? "Собираю…" : "Собрать" }}</button>
                     <template v-if="!check.pair">
                         <template v-for="f in checkFilters" :key="f.key">
@@ -1339,7 +1339,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-if="!checkShown.length" class="h-empty"><td :colspan="2 + checkSourceKinds.length">{{ check.loading ? "Загрузка…" : (checkRows.length ? "Здесь всё решено." : "Записей нет — нажми «Собрать».") }}</td></tr>
+                                    <tr v-if="!checkShown.length" class="h-empty"><td :colspan="2 + checkSourceKinds.length">{{ check.loading ? "Загрузка…" : (checkRows.length ? "Здесь всё решено." : "Записей нет – нажми «Собрать».") }}</td></tr>
                                     <template v-for="row in checkShown" :key="row.key">
                                         <tr class="ck-row" :data-key="row.key"
                                             :class="{ 'is-hover': check.hover && check.hover.key === row.key, 'sm-open': check.open === row.key, 'row-selected': isCheckSelected(row) }"
@@ -1361,7 +1361,7 @@
                                                         <table class="sm-compare ck-compare">
                                                             <tr>
                                                                 <th></th>
-                                                                <th :title="row.pc ? (row.pc.hostname || '') + ' — ' + (row.pc.place || '') : 'ПК в таблице нет'">В таблице</th>
+                                                                <th :title="row.pc ? (row.pc.hostname || '') + ' – ' + (row.pc.place || '') : 'ПК в таблице нет'">В таблице</th>
                                                                 <th v-for="k in checkSourceKinds.filter(x => row.recs[x])" :key="'ch-' + k" colspan="2" class="ck-src-head" :title="checkSourceHeadTitle(row, k)">{{ checkSourceHead(row, k) }}</th>
                                                                 <th v-if="checkJabberOn && !row.record" colspan="2" class="ck-src-head" title="Кто в Jabber с адреса этого ПК">Vacuum</th>
                                                                 <th v-if="checkNetOn && !row.record" colspan="2" class="ck-src-head" title="DHCP и проход подсетей">Сеть</th>
@@ -1370,9 +1370,9 @@
                                                             <tr v-for="f in checkDetailFields(row)" :key="f.field">
                                                                 <td class="smc-label">{{ f.label }}</td>
                                                                 <td class="smc-v smc-itdb" :class="{ 'smc-can-edit': checkCanEditValue(row, f), 'smc-editing': valueEdit && valueEdit.key === 'c:' + row.key + ':' + f.field }"
-                                                                    :title="checkCanEditValue(row, f) ? 'Двойной клик — изменить' : null" @dblclick.stop="startCheckEdit(row, f)"><template v-if="valueEdit && valueEdit.key === 'c:' + row.key + ':' + f.field"><textarea v-if="valueEdit.multiline" v-model="valueEdit.value" class="value-edit" rows="2" @keydown="onValueEditKeydown" @blur="finishValueEdit" @click.stop></textarea><input v-else v-model="valueEdit.value" class="value-edit" @keydown="onValueEditKeydown" @blur="finishValueEdit" @click.stop></template><template v-else>{{ f.itdb }}</template></td>
+                                                                    :title="checkCanEditValue(row, f) ? 'Двойной клик – изменить' : null" @dblclick.stop="startCheckEdit(row, f)"><template v-if="valueEdit && valueEdit.key === 'c:' + row.key + ':' + f.field"><textarea v-if="valueEdit.multiline" v-model="valueEdit.value" class="value-edit" rows="2" @keydown="onValueEditKeydown" @blur="finishValueEdit" @click.stop></textarea><input v-else v-model="valueEdit.value" class="value-edit" @keydown="onValueEditKeydown" @blur="finishValueEdit" @click.stop></template><template v-else>{{ f.itdb }}</template></td>
                                                                 <template v-for="cell in f.cells" :key="cell.kind">
-                                                                    <!-- Отметка = ≈ ≠ ⇐ — между значением таблицы и источника, по центру -->
+                                                                    <!-- Отметка = ≈ ≠ ⇐ – между значением таблицы и источника, по центру -->
                                                                     <td class="smc-v ck-mark-td" :class="{ cycle: cell.c && cell.c.cycle }" :title="cell.c && cell.c.symbol ? cell.c.markTitle : null"
                                                                         @dblclick.stop="cell.c && cell.c.cycle && scanCycleMark(cell.c)" @mousedown="cell.c && cell.c.cycle && $event.detail > 1 && $event.preventDefault()" @click.stop>
                                                                         <span v-if="cell.c && cell.c.symbol" class="ck-mark" :class="{ manual: cell.c.manual, ne: cell.c.symbol === '≠' }">{{ cell.c.symbol }}</span>
@@ -1413,7 +1413,7 @@
                             </table>
                         </div>
                     </div>
-                    <!-- Плашки действий: у открытой строки (идёт за ней при прокрутке, место — placeCheckPlate) и у строки под курсором -->
+                    <!-- Плашки действий: у открытой строки (идёт за ней при прокрутке, место – placeCheckPlate) и у строки под курсором -->
                     <div v-if="checkOpenRow && checkRowHasActions(checkOpenRow) && !valueEdit" ref="checkOpenPlate" class="tree-actions ck-plate-open">
                         <span class="na-box">
                             <template v-for="(a, ai) in checkActions(checkOpenRow)" :key="a.key">
@@ -1438,7 +1438,7 @@
                     <button v-for="f in netFiltersShown" :key="f.key" class="sm-chip" :class="{ on: net.filter === f.key }" :title="f.title" @click="net.filter = f.key">
                         {{ f.label }}<span class="su-n">{{ netCounts[f.key] }}</span>
                     </button>
-                    <!-- По источникам (этап 31): нажатие на включённый — снять -->
+                    <!-- По источникам (этап 31): нажатие на включённый – снять -->
                     <span class="sm-sep"></span>
                     <button v-for="s in netSources" :key="s.key" class="sm-chip" :class="{ on: net.source === s.key }" :title="s.title" @click="setNetSource(s.key)">
                         {{ s.label }}<span class="su-n">{{ netCounts[s.key] }}</span>
@@ -1454,15 +1454,15 @@
                                 </thead>
                                 <tbody>
                                     <tr v-if="!netShown.length" class="h-empty"><td colspan="8">{{ netEmptyText() }}</td></tr>
-                                    <!-- Давно не видели (старше срока «Актуальны») — не удаляется, а серым (этап 31) -->
+                                    <!-- Давно не видели (старше срока «Актуальны») – не удаляется, а серым (этап 31) -->
                                     <tr v-for="h in netShown" :key="h.ip" :class="{ 'nt-stale': h.stale }">
                                         <td class="nt-ip" :title="netIpTitle(h)">{{ h.ip }}</td>
-                                        <!-- Источники говорят разное — значения строками; откуда каждое — в подсказке -->
+                                        <!-- Источники говорят разное – значения строками; откуда каждое – в подсказке -->
                                         <td class="nt-mac"><div v-for="m in h.mac" :key="m.value" class="vc-line" :class="{ 'nt-old': m.stale }" :title="netValueTitle(m)">{{ m.value }}</div></td>
                                         <td class="nt-name"><div v-for="n in h.name" :key="n.value" class="vc-line" :class="{ 'nt-old': n.stale }" :title="netValueTitle(n)">{{ n.value }}</div></td>
                                         <td class="nt-src" :class="{ 'nt-old': h.dhcp && h.dhcp.stale && !h.conf }" :title="netDhcpTitle(h)">{{ netDhcpText(h) }}</td>
                                         <td class="nt-src" :class="{ 'nt-old': h.net && h.net.stale }" :title="netSeenTitle(h.net, 'Сканер')">{{ h.net ? h.net.text : "" }}</td>
-                                        <td class="nt-ports" :class="{ 'nt-none': h.ports && !h.ports.length, 'nt-old': h.net && h.net.stale }" :title="netPortsTitle(h)">{{ h.ports ? (h.ports.join(", ") || "—") : "" }}</td>
+                                        <td class="nt-ports" :class="{ 'nt-none': h.ports && !h.ports.length, 'nt-old': h.net && h.net.stale }" :title="netPortsTitle(h)">{{ h.ports ? (h.ports.join(", ") || "–") : "" }}</td>
                                         <td class="nt-when" :title="netWhenTitle(h)">{{ h.seen_at ? formatTime(h.seen_at) : "" }}</td>
                                         <td class="nt-pc">
                                             <div v-for="c in h.computers" :key="c.computer_id" class="vc-line">
@@ -1476,7 +1476,7 @@
                     </div>
                 </div>
             </div>
-            <!-- Расписание (этап 28): когда собирать из каждого источника; ниже — журнал запусков -->
+            <!-- Расписание (этап 28): когда собирать из каждого источника; ниже – журнал запусков -->
             <div v-else-if="scanTab === 'schedule'" class="page scan-page sched-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <div v-if="schedule.error" class="sm-error">{{ schedule.error }}</div>
                 <div class="scan-caption">Расписание</div>
@@ -1498,8 +1498,8 @@
                                         </select></td>
                                         <td class="sd-cell sd-times">
                                             <template v-if="it.mode === 'every'">
-                                                <span class="sd-word">с</span><input class="input er-input sd-t" :value="it.time_from" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Начало; одинаковое с концом — круглые сутки" @change="setScheduleTime(it, 'time_from', $event.target)" @keydown.enter="$event.target.blur()">
-                                                <span class="sd-word">до</span><input class="input er-input sd-t" :value="it.time_to" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Конец; одинаковое с началом — круглые сутки" @change="setScheduleTime(it, 'time_to', $event.target)" @keydown.enter="$event.target.blur()">
+                                                <span class="sd-word">с</span><input class="input er-input sd-t" :value="it.time_from" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Начало; одинаковое с концом – круглые сутки" @change="setScheduleTime(it, 'time_from', $event.target)" @keydown.enter="$event.target.blur()">
+                                                <span class="sd-word">до</span><input class="input er-input sd-t" :value="it.time_to" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Конец; одинаковое с началом – круглые сутки" @change="setScheduleTime(it, 'time_to', $event.target)" @keydown.enter="$event.target.blur()">
                                             </template>
                                             <template v-else-if="it.mode === 'daily'">
                                                 <span class="sd-word">в</span><input class="input er-input sd-t" :value="it.time_at" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Время запуска" @change="setScheduleTime(it, 'time_at', $event.target)" @keydown.enter="$event.target.blur()">
@@ -1583,7 +1583,7 @@
             </div>
         </section>
 
-        <!-- ================= Vacuum (этап 26д; с 26ж — вкладка меню): пользователи Jabber ================= -->
+        <!-- ================= Vacuum (этап 26д; с 26ж – вкладка меню): пользователи Jabber ================= -->
         <section v-if="user && canEdit && view === 'vacuum'" class="view">
             <div class="toolbar">
                 <div class="tb-left">
@@ -1630,9 +1630,9 @@
                                 </thead>
                                 <tbody>
                                     <tr v-if="!vacuumShown.length" class="h-empty"><td colspan="5">{{ vacuumEmptyText() }}</td></tr>
-                                    <!-- Давно не подключался — серым; последний IP видели давно — серые IP и ПК (этап 31) -->
+                                    <!-- Давно не подключался – серым; последний IP видели давно – серые IP и ПК (этап 31) -->
                                     <tr v-for="u in vacuumShown" :key="u.login" :class="{ 'vc-gone': u.gone, 'vc-nogroup': u.no_group, 'vc-stale': u.stale, 'vc-ip-stale': u.ip_stale }">
-                                        <td class="vc-login" :title="u.gone ? 'Пользователя нет — убрать из групп' : (u.no_group ? 'Нет ни в одной группе' : (u.stale ? 'Давно не подключался' : null))">{{ u.login }}</td>
+                                        <td class="vc-login" :title="u.gone ? 'Пользователя нет – убрать из групп' : (u.no_group ? 'Нет ни в одной группе' : (u.stale ? 'Давно не подключался' : null))">{{ u.login }}</td>
                                         <td class="vc-groups">{{ u.groups.join(", ") }}<span v-if="u.no_group" class="vc-flag">нет групп</span></td>
                                         <td class="vc-hosts">
                                             <template v-for="(a, ai) in u.addresses" :key="'h' + ai">
@@ -1640,11 +1640,11 @@
                                                     <a v-if="h.computer_id" :href="pageHref('table', { pc: h.computer_id })" class="vc-host" :title="h.place || null" @click="navClick($event, () => openCardById(h.computer_id))">{{ h.hostname || "без имени" }}</a>
                                                     <span v-else class="vc-host vc-src" :title="'В таблице нет; имя из ' + h.source">{{ h.hostname || "без имени" }}</span>
                                                 </div>
-                                                <div v-if="!a.hosts.length" class="vc-line vc-none">—</div>
+                                                <div v-if="!a.hosts.length" class="vc-line vc-none">–</div>
                                             </template>
                                         </td>
                                         <td class="vc-ip">
-                                            <div v-for="(a, ai) in u.addresses" :key="'ip' + ai" class="vc-line" :title="vacuumIpTitle(u, a)">{{ a.ip || "—" }}</div>
+                                            <div v-for="(a, ai) in u.addresses" :key="'ip' + ai" class="vc-line" :title="vacuumIpTitle(u, a)">{{ a.ip || "–" }}</div>
                                         </td>
                                         <td class="vc-status" :class="{ on: u.online }"><span class="vc-dot"></span>{{ vacuumStatusText(u) }}</td>
                                     </tr>
@@ -1660,8 +1660,8 @@
         <teleport to="body">
             <div v-if="openMenu === 'colFilter' && colFilterMenu" ref="colFilterPanel" class="cf-menu" :style="colFilterMenuStyle">
                 <input ref="colFilterInput" class="cf-search" v-model="colFilterMenu.query" placeholder="Найти значение" spellcheck="false" autocomplete="off"
-                    :title="colFilterMenuTitle + '. Enter — показать только найденные'" @keydown.enter.prevent="onColFilterEnter">
-                <!-- «Антивирусы»: сверху — состояния -->
+                    :title="colFilterMenuTitle + '. Enter – показать только найденные'" @keydown.enter.prevent="onColFilterEnter">
+                <!-- «Антивирусы»: сверху – состояния -->
                 <div v-if="colFilterStates.length" class="cf-states">
                     <label v-for="st in colFilterStates" :key="'cfs-' + st.kind" class="cf-item">
                         <input type="checkbox" :checked="st.checked" @change="toggleAvState(st.kind)">
@@ -1699,7 +1699,7 @@
                     @mousemove="suggest.active = i" @click="pickSuggest(o)">
                     <span class="sug-value" :class="{ 'val-chip': !!(suggestItemStyle(o) || {}).backgroundColor }" :style="suggestItemStyle(o)">{{ o.value }}</span>
                     <span v-if="o.scan" class="sug-count sug-scan" title="Предлагает сканер">{{ o.count }}</span>
-                    <span v-else class="sug-count" :title="o.count ? 'ПК с этим значением' : 'Есть в справочнике, у ПК пока нет'">{{ o.count }}</span>
+                    <span v-else class="sug-count" :title="o.countTitle !== undefined ? o.countTitle || null : (o.count ? 'ПК с этим значением' : 'Есть в справочнике, у ПК пока нет')">{{ o.count }}</span>
                 </div>
             </div>
         </teleport>
@@ -1727,7 +1727,7 @@
                         </template>
                         <button v-else-if="scanPop.d.can_take" class="btn btn-primary" @click="scanPopTake(false)">Взять из сканера</button>
                         <button class="btn" :class="{ 'sp-wide': scanPop.d.can_take && scanPop.d.replace }" @click="scanPopLeave">{{ !scanPop.d.can_take ? "Не показывать" : scanPop.d.table ? "Оставить как есть" : "Не заполнять" }}</button>
-                        <button v-if="scanPop.d.field === 'model' && scanPop.d.proposed" class="btn sp-wide" @click="scanPopBoard" title="Записать в «Мат. плату»; так же — у всех ПК с этим названием">Это материнская плата</button>
+                        <button v-if="scanPop.d.field === 'model' && scanPop.d.proposed" class="btn sp-wide" @click="scanPopBoard" title="Записать в «Мат. плату»; так же – у всех ПК с этим названием">Это материнская плата</button>
                     </div>
                     <label v-if="scanPopCanAll(scanPop)" class="sp-all">
                         <input type="checkbox" v-model="scanPop.forAll"> и у всех ПК с такой парой<template v-if="scanPop.d.same_pair"> (ещё {{ scanPop.d.same_pair }})</template>
@@ -1756,7 +1756,7 @@
                 <div class="sp-why">Правило: <a href="#choices/names" class="np-rule" title="Изменить правило" @click.prevent="namePopRule">{{ nameRuleText(namePop.check.entry) }}</a></div>
                 <div v-if="canEdit" class="sp-actions">
                     <button class="btn btn-primary" :disabled="namePop.busy" @click="namePopRename">Переименовать</button>
-                    <button class="btn" :disabled="namePop.busy || !namePop.row.hostname" :title="namePop.row.hostname ? 'Это имя не по правилу — так и надо' : 'Имени нет'" @click="namePopKeep">Оставить своё</button>
+                    <button class="btn" :disabled="namePop.busy || !namePop.row.hostname" :title="namePop.row.hostname ? 'Это имя не по правилу – так и надо' : 'Имени нет'" @click="namePopKeep">Оставить своё</button>
                 </div>
             </div>
         </teleport>
@@ -1782,13 +1782,13 @@
                             <tr v-if="r.group" class="ct-group"><td colspan="2">{{ r.group }}</td></tr>
                             <tr v-else :class="{ 'ct-editable': isCardEditable(r), 'ct-saved': isCardFlash(r) }"
                                 @dblclick="onCardRowDblclick($event, r)"
-                                :title="isCardEditable(r) && cardEditKey !== r.key ? 'Двойной клик — изменить' : null">
+                                :title="isCardEditable(r) && cardEditKey !== r.key ? 'Двойной клик – изменить' : null">
                                 <td class="ct-label">{{ r.label }}</td>
                                 <td class="ct-value" :class="{ editing: cardEditKey === r.key }">
                                     <template v-if="r.copy">
                                         <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)"><span :class="{ 'val-chip': !!(cardValueStyle(r, line) || {}).backgroundColor }" :style="cardValueStyle(r, line)">{{ line }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><a v-if="idLink(r.field, line)" class="id-open" :href="idLink(r.field, line)" target="_blank" rel="noopener" :title="idLinkTitle(r.field)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></span>
                                     </template>
-                                    <span v-else-if="r.empty" class="ct-empty">—</span>
+                                    <span v-else-if="r.empty" class="ct-empty">–</span>
                                     <span v-else-if="r.key === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(card)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avStyle(a) || {}).backgroundColor }" :style="avStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
                                     <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)" @dblclick="onCardValueDblclick($event, r, r.value)">{{ r.value }}</span>
                                     <template v-if="cardEditKey === r.key">
@@ -1815,16 +1815,16 @@
                     </table>
                     <div class="card-section">Пользователи</div>
                     <div class="card-sec-body">
-                        <div v-if="!cardLoading && cardPeople.length === 0" class="muted">—</div>
+                        <div v-if="!cardLoading && cardPeople.length === 0" class="muted">–</div>
                         <div v-for="person in cardPeople" :key="person.person_id">
                             <b v-if="person.is_main">{{ person.full_name }}</b>
                             <template v-else>{{ person.full_name }}</template>
-                            <span v-if="person.position" class="muted"> — {{ person.position }}</span>
+                            <span v-if="person.position" class="muted"> – {{ person.position }}</span>
                         </div>
                     </div>
                     <div class="card-section">VACUUM</div>
                     <div class="card-sec-body">
-                        <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">—</div>
+                        <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">–</div>
                         <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" :style="vacuumLoginMark(login).style" :title="vacuumLoginMark(login).title" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                     </div>
                     <div class="card-section toggle-sec" :class="{ open: cardHistoryOpen }" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
@@ -1841,7 +1841,7 @@
                             <div class="changes">
                                 <template v-for="(change, field) in shownChanges(item.changes)" :key="field">
                                     <span class="field" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue('computers', field) }"
-                                        :title="canOpenValue('computers', field) ? 'Двойной клик — история значения' : null"
+                                        :title="canOpenValue('computers', field) ? 'Двойной клик – история значения' : null"
                                         @dblclick="openValueHistory('computers', card.id, field)">{{ fieldLabel('computers', field) }}</span>
                                     <span class="ch-val" :class="{ 'ch-cancelled': change.cancelled, 'ch-open': canOpenValue('computers', field) }"
                                         @dblclick="openValueHistory('computers', card.id, field)"><template v-if="field !== 'created'"><span class="old">{{ displayValue(change.old) }}</span><span class="arrow">→</span></template><span class="new">{{ displayValue(change.new) }}</span><span v-if="change.revert" class="h-mark" title="Значение возвращено из истории">возврат значения</span><span v-if="change.scan" class="h-mark" :title="'Значение принято из сканера: ' + change.scan">из {{ change.scan }}</span><span v-if="change.cancelled" class="h-mark" :title="cancelTitle(change)">отменено</span></span>
@@ -1858,8 +1858,8 @@
             <div class="dialog vh-dialog" role="dialog">
                 <div class="vh-head">
                     <span class="vh-title"><b>{{ valueDialog.data ? valueDialog.data.title : "…" }}</b><template v-if="valueDialog.data"> · {{ valueDialog.data.label }}</template></span>
-                    <span v-if="valueDialog.data && valueDialog.data.kind === 'value'" class="vh-now">сейчас: <b>{{ historyValue(valueDialog.entity, valueDialog.field, valueDialog.data.current) }}</b></span>
-                    <span v-else-if="valueDialog.data && valueDialog.data.kind === 'gone'" class="vh-now">объекта уже нет — только просмотр</span>
+                    <span v-if="valueDialog.data && valueDialog.data.kind === 'value'" class="vh-now">сейчас: <b>{{ historyValueText(valueDialog.entity, valueDialog.field, valueDialog.data.current) }}</b></span>
+                    <span v-else-if="valueDialog.data && valueDialog.data.kind === 'gone'" class="vh-now">объекта уже нет – только просмотр</span>
                     <span class="vh-close" title="Закрыть (Esc)" @click="closeValueDialog">×</span>
                 </div>
                 <div class="vh-body">
@@ -1872,20 +1872,20 @@
                                 @mousedown="vhRowMouseDown($event)" @click="vhRowClick($event, r)" @dblclick="vhCanRevert && canEdit && vhRevert()">
                                 <template v-if="r.item">
                                     <td class="h-time">{{ formatTime(r.item.at) }}</td>
-                                    <td class="h-user">{{ r.item.user_name || "—" }}</td>
+                                    <td class="h-user">{{ r.item.user_name }}</td>
                                     <td class="ch-val" :class="{ 'ch-cancelled': r.item.cancelled }"><span class="old"><span v-if="isColorChange(valueDialog.entity, field) && r.item.old" class="h-swatch" :style="{ background: r.item.old }"></span>{{ historyValue(valueDialog.entity, valueDialog.field, r.item.old) }}</span><span class="arrow">→</span><span class="new"><span v-if="isColorChange(valueDialog.entity, field) && r.item.new" class="h-swatch" :style="{ background: r.item.new }"></span>{{ historyValue(valueDialog.entity, valueDialog.field, r.item.new) }}</span><span v-if="r.item.revert" class="h-mark">возврат значения</span><span v-if="r.item.scan" class="h-mark" :title="'Значение принято из сканера: ' + r.item.scan">из {{ r.item.scan }}</span><span v-if="r.item.cancelled" class="h-mark" :title="cancelTitle(r.item)">отменено</span></td>
                                 </template>
                                 <template v-else>
-                                    <td class="h-time">—</td>
+                                    <td class="h-time"></td>
                                     <td class="h-user"></td>
-                                    <td class="ch-val">Исходное значение: <span class="new">{{ historyValue(valueDialog.entity, valueDialog.field, r.value) }}</span></td>
+                                    <td class="ch-val">Исходное значение: <span class="new">{{ historyValueText(valueDialog.entity, valueDialog.field, r.value) }}</span></td>
                                 </template>
                             </tr>
                         </tbody>
                     </table>
                 </div>
                 <div v-if="vhCanAct && valueDialog.data.kind !== 'gone'" class="vh-hint">
-                    Несколько строк — Ctrl / Shift.
+                    Несколько строк – Ctrl / Shift.
                 </div>
                 <div class="dialog-buttons">
                     <span v-if="valueDialog.error" class="vh-error">{{ valueDialog.error }}</span>
@@ -1904,7 +1904,7 @@
             <div class="dialog pr-dialog" role="dialog" @click="onPrintDialogClick">
                 <div class="vh-head">
                     <span class="vh-title"><b>Печать</b> · {{ printDlg.selected ? "выбрано строк" : "строк" }}: {{ printDlg.rows.length }}</span>
-                    <span class="vh-now" title="Таблица — по ширине листа">масштаб: <b>{{ Math.round(printDlg.scale * 100) }}%</b></span>
+                    <span class="vh-now" title="Таблица – по ширине листа">масштаб: <b>{{ Math.round(printDlg.scale * 100) }}%</b></span>
                     <span class="vh-close" title="Закрыть (Esc)" @click="closePrint">×</span>
                 </div>
                 <div class="pr-opts">
@@ -1939,6 +1939,7 @@
                     <span class="pr-sep"></span>
                     <label class="pr-check" title="Шапка на каждой странице"><input type="checkbox" v-model="printDlg.headers" @change="printChanged()">Сквозные заголовки</label>
                     <label class="pr-check"><input type="checkbox" v-model="printDlg.strike" @change="printChanged()">Зачёркивание</label>
+                    <label class="pr-check" title="Столбец # слева: строки по порядку с 1"><input type="checkbox" v-model="printDlg.numbers" @change="printChanged()">Номера строк</label>
                 </div>
                 <iframe ref="printFrame" class="pr-frame" title="Лист"></iframe>
                 <div class="dialog-buttons">
@@ -1969,7 +1970,7 @@
     </div>
 
     <script src="/vendor/vue.global.prod.js"></script>
-    <!-- Код интерфейса — модули в js/ (без сборки), вход — js/main.js -->
+    <!-- Код интерфейса – модули в js/ (без сборки), вход – js/main.js -->
     <script type="module" src="/js/main.js"></script>
 </body>
 </html>

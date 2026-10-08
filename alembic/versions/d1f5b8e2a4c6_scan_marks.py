@@ -1,4 +1,4 @@
-"""scan_marks — как помечать в Таблице ячейки с другим значением у сканера (этап 26б)
+"""scan_marks – как помечать в Таблице ячейки с другим значением у сканера (этап 26б)
 
 Revision ID: d1f5b8e2a4c6
 Revises: c8e4a1d6f2b7
@@ -12,7 +12,7 @@ down_revision = "c8e4a1d6f2b7"
 branch_labels = None
 depends_on = None
 
-# Начальный вид: мягкие фоны, «неточно» — курсивом; «в таблице часть» выключено
+# Начальный вид: мягкие фоны, «неточно» – курсивом; «в таблице часть» выключено
 DEFAULTS = [
     # kind, sort, color, bg_color, bold, italic, strike, frame, enabled, always
     ("diff", 1, None, "#fde7a8", False, False, False, None, True, False),

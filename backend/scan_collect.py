@@ -1,18 +1,18 @@
 """Сбор из GLPI / GSIT (этап 25) и Jabber (этап 26д): запуск в фоне, запись
 результата, отчёт.
 
-Сбор идёт в отдельном потоке программы (служба — один процесс uvicorn),
+Сбор идёт в отдельном потоке программы (служба – один процесс uvicorn),
 со своей сессией базы. Пока идёт, в запуске (scan_runs.stats.progress)
 обновляется «сделано из», страница спрашивает его раз в пару секунд.
 Результат записывается целиком в конце: записи источника заменяются новыми
-одной транзакцией. Сбой на середине ничего не портит — остаются прежние.
+одной транзакцией. Сбой на середине ничего не портит – остаются прежние.
 
 В таблицу ПК сбор ничего не пишет (правило 1): только scan_records (GLPI, GSIT),
-scan_jabber_users (Jabber — пользователи не заменяются, а обновляются: у
-ушедших из сети остаются последний IP и время) и scan_hosts (этап 28: DHCP —
-аренды обновляются, привязки из настроек заменяются целиком; Сеть — ответившие
+scan_jabber_users (Jabber – пользователи не заменяются, а обновляются: у
+ушедших из сети остаются последний IP и время) и scan_hosts (этап 28: DHCP –
+аренды обновляются, привязки из настроек заменяются целиком; Сеть – ответившие
 адреса обновляются). Наблюдения по сроку не удаляются (этап 31): то, что старше
-срока «Актуальны», остаётся последним известным — в «Сети» серым, в предложения
+срока «Актуальны», остаётся последним известным – в «Сети» серым, в предложения
 не идёт.
 """
 import logging
@@ -43,17 +43,17 @@ COLLECTORS = {
 }
 # Источники записей о ПК (scan_records): сопоставление, названия, расхождения
 RECORD_KINDS = ("glpi", "gsit")
-# Источники наблюдений сети (scan_hosts): адрес — MAC — имя
+# Источники наблюдений сети (scan_hosts): адрес – MAC – имя
 HOST_KINDS = ("dhcp", "net")
-# Какие строки scan_hosts пишет источник: DHCP — аренды и привязки из настроек
+# Какие строки scan_hosts пишет источник: DHCP – аренды и привязки из настроек
 HOST_SOURCES = {"dhcp": ("dhcp", CONF_SOURCE), "net": ("net",)}
-# Запуск, который «идёт» дольше, — оборвался (программу перезапускали)
+# Запуск, который «идёт» дольше, – оборвался (программу перезапускали)
 RUN_TIMEOUT = timedelta(hours=2)
 STATES = ("key", "link", "name", "conflict", "none", "dup")
 
 
 class CollectRefused(Exception):
-    """Сбор не начат: текст — для пользователя; code — HTTP-код."""
+    """Сбор не начат: текст – для пользователя; code – HTTP-код."""
 
     def __init__(self, message, code=400):
         super().__init__(message)
@@ -85,7 +85,7 @@ def running_run(session, kind):
 
 
 def start(session, kind, user_name, background=True):
-    """Начать сбор. Ответ — ScanRun; отказ — CollectRefused."""
+    """Начать сбор. Ответ – ScanRun; отказ – CollectRefused."""
     if kind not in COLLECTORS:
         raise CollectRefused("Из этого источника сбор пока не делается.", 404)
 
@@ -131,7 +131,7 @@ def execute(run_id):
         except SourceError as err:
             session.rollback()
             finish(session, run, "error", str(err))
-        except Exception as err:  # noqa: BLE001 — сбой не должен оставить запуск «идущим»
+        except Exception as err:  # noqa: BLE001 – сбой не должен оставить запуск «идущим»
             logger.exception("Сбор из %s: ошибка", run.source)
             session.rollback()
             finish(session, run, "error", f"Ошибка на сервере: {err}")
@@ -181,7 +181,7 @@ def collect_into(session, run):
 
 
 def save_records(session, kind, run, items, stats):
-    """Записи источника заменяются новыми; в stats — итог сопоставления."""
+    """Записи источника заменяются новыми; в stats – итог сопоставления."""
     built = []
 
     for item in items:
@@ -190,7 +190,7 @@ def save_records(session, kind, run, items, stats):
         built.append({
             "source_id": item["id"],
             "name": values["hostname"],
-            # Дата GLPI — время его сервера; считаем, что пояс тот же, что у ITDB
+            # Дата GLPI – время его сервера; считаем, что пояс тот же, что у ITDB
             "checked_at": checked.astimezone() if checked else None,
             "keys": keys,
             "data": data,
@@ -221,11 +221,11 @@ def save_records(session, kind, run, items, stats):
 
 def save_hosts(session, kind, run, items, fresh_days):
     """Наблюдения сети. По сроку ничего не удаляется (этап 31): ПК может быть
-    выключен месяцами и стоять на месте — последнее известное об адресе остаётся
-    (что старше срока «Актуальны» — в «Сети» серым и в предложения не идёт).
-    DHCP — аренды обновляются по адресу (аренда, которой в файле уже нет, остаётся
-    как была), привязки из настроек — это настройка, а не наблюдение: заменяются
-    целиком. Сеть — ответившие адреса обновляются, молчащие остаются."""
+    выключен месяцами и стоять на месте – последнее известное об адресе остаётся
+    (что старше срока «Актуальны» – в «Сети» серым и в предложения не идёт).
+    DHCP – аренды обновляются по адресу (аренда, которой в файле уже нет, остаётся
+    как была), привязки из настроек – это настройка, а не наблюдение: заменяются
+    целиком. Сеть – ответившие адреса обновляются, молчащие остаются."""
     if kind == "dhcp":
         session.query(ScanHost).filter(ScanHost.source == CONF_SOURCE).delete(synchronize_session=False)
         existing = {}
@@ -248,10 +248,10 @@ def save_hosts(session, kind, run, items, fresh_days):
             row = ScanHost(source=item.get("source") or kind, ip=item["ip"])
             session.add(row)
 
-        # Адрес ответил, но MAC или имя в этот раз не узнали (ПК тот же) — прежние остаются
+        # Адрес ответил, но MAC или имя в этот раз не узнали (ПК тот же) – прежние остаются
         if item.get("mac") or row.mac is None or kind == "dhcp":
             if row.mac and item.get("mac") and row.mac != item["mac"]:
-                row.name = None   # на адресе другая машина — прежнее имя не её
+                row.name = None   # на адресе другая машина – прежнее имя не её
 
             row.mac = item.get("mac")
 
@@ -263,7 +263,7 @@ def save_hosts(session, kind, run, items, fresh_days):
         row.run_id = run.id
 
     if kind == "dhcp":
-        # Аренды в файле больше нет — она не действует; когда адрес был занят, остаётся
+        # Аренды в файле больше нет – она не действует; когда адрес был занят, остаётся
         found = {item["ip"] for item in items if (item.get("source") or kind) == kind}
 
         for ip, row in existing.items():
@@ -273,9 +273,9 @@ def save_hosts(session, kind, run, items, fresh_days):
 
 def save_jabber(session, run, items, keep_groups=False, users_ok=False):
     """Пользователи Jabber: обновить, кто в сети и откуда; последний IP и время
-    в сети остаются у тех, кто сейчас не в сети. keep_groups — группы получить
-    не удалось: прежние группы не трогать. users_ok — получен список всех
-    пользователей: кого в нём нет — удалён (registered = False)."""
+    в сети остаются у тех, кто сейчас не в сети. keep_groups – группы получить
+    не удалось: прежние группы не трогать. users_ok – получен список всех
+    пользователей: кого в нём нет – удалён (registered = False)."""
     seen_at = now()
     existing = {row.login.lower(): row for row in session.query(ScanJabberUser)}
     found = set()
@@ -354,7 +354,7 @@ def links_of(session, kind):
 
 
 def match(session, kind, records=None):
-    """Итог сопоставления записей источника с ПК ITDB — сейчас, по текущим
+    """Итог сопоставления записей источника с ПК ITDB – сейчас, по текущим
     данным таблицы и решениям администратора. ({source_id: итог}, Index)."""
     if records is None:
         records = [
@@ -373,7 +373,7 @@ def match(session, kind, records=None):
 
 
 def active_values(session):
-    """{id ПК: {поле: значение}} рабочих ПК — для сравнения с записями."""
+    """{id ПК: {поле: значение}} рабочих ПК – для сравнения с записями."""
     columns = [getattr(Computer, field) for field in COMPARE_FIELDS]
     rows = session.query(Computer.id, *columns).filter(Computer.archived == False)  # noqa: E712
     return {row[0]: dict(zip(COMPARE_FIELDS, row[1:])) for row in rows}
@@ -381,7 +381,7 @@ def active_values(session):
 
 def load_names(session, computers=None):
     """Словарь названий: ручные соответствия, значения столбцов и Справочников,
-    пары «источник — таблица» у сопоставленных ПК обоих источников."""
+    пары «источник – таблица» у сопоставленных ПК обоих источников."""
     computers = computers if computers is not None else active_values(session)
     aliases = [
         {"field": a.field, "source": a.source, "table": a.table_value, "kind": a.kind}
@@ -423,7 +423,7 @@ def load_names(session, computers=None):
 
 
 def compare_record(names, values, computer):
-    """Строки сравнения записи с ПК (или без ПК — как было бы названо)."""
+    """Строки сравнения записи с ПК (или без ПК – как было бы названо)."""
     result = []
     values = route_values(values, names.boards)
 

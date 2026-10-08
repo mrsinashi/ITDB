@@ -9,11 +9,11 @@ const STYLE_RESET = { color: "", bg_color: "", bold: false, italic: false, under
 
 export default {
     computed: {
-        // Поиск в Справочниках: «ЦП 101» — раздел по словам в названии,
-        // значения — по остальным. Ничего не скрывается: совпавшие значения
-        // подсвечены, страница переходит к разделу (Enter — к следующему).
+        // Поиск в Справочниках: «ЦП 101» – раздел по словам в названии,
+        // значения – по остальным. Ничего не скрывается: совпавшие значения
+        // подсвечены, страница переходит к разделу (Enter – к следующему).
         // Значение найдено, если все слова есть в «название раздела + значение»
-        // и хотя бы одно — в самом значении.
+        // и хотя бы одно – в самом значении.
         choicesMatch() {
             const texts = [];
             if (searchWords(this.choicesQuery).length) {
@@ -100,8 +100,8 @@ export default {
             return map;
         },
 
-        // Оформление столбцов для Таблицы: у общего «Кабинета» — как у названия
-        // кабинета (нет — как у номера)
+        // Оформление столбцов для Таблицы: у общего «Кабинета» – как у названия
+        // кабинета (нет – как у номера)
         tableColumnStyles() {
             const field = ROOM_STYLE_FIELDS.find((f) => this.columnStyles[f]);
             if (!field) {
@@ -132,7 +132,7 @@ export default {
         },
 
         // «Справочники»: блок на каждый столбец таблицы, в том же порядке.
-        // Значения — из справочника и из самих данных, с числом ПК.
+        // Значения – из справочника и из самих данных, с числом ПК.
         styleBlocks() {
             const collect = (field, multiline, subnet) => this.collectValues(field, multiline, subnet);
             const byField = this.choicesByField;
@@ -309,7 +309,7 @@ export default {
             return !!(st && (st.color || st.bg_color || st.bold || st.italic || st.underline || st.strike));
         },
 
-        // Оформление строки значения как есть: значение поверх столбца. chip — фон
+        // Оформление строки значения как есть: значение поверх столбца. chip – фон
         // блочком у текста (решает тот, чей фон: значение или столбец)
         lineLook(field, line) {
             const col = this.tableColumnStyles[field] || NO_STYLE;
@@ -326,7 +326,7 @@ export default {
             };
         },
 
-        // Образец в Справочниках: фон блочком — по ширине текста, заливкой — во всю строку
+        // Образец в Справочниках: фон блочком – по ширине текста, заливкой – во всю строку
         sampleClass(field, choice) {
             const col = this.columnStyles[field] || NO_STYLE;
             const val = choice || NO_STYLE;
@@ -547,7 +547,7 @@ export default {
             }
             list[index] = target;
             list[index + dir] = fd;
-            // Перенумеровать подряд — у старых полей sort мог совпадать
+            // Перенумеровать подряд – у старых полей sort мог совпадать
             const changed = [];
             list.forEach(function (f, i) {
                 if (f.sort !== i + 1) {

@@ -1,11 +1,11 @@
 // История: отмена изменений, возврат значения, фильтры, выделение строк (этап 19).
 //
-// Отменить — у изменения пометка «отменено», новой записи нет, значение поля
+// Отменить – у изменения пометка «отменено», новой записи нет, значение поля
 // пересчитывается по оставшимся изменениям (сервер: backend/history_undo.py).
-// Вернуть значение — поле получает значение из истории, в Истории новая запись
+// Вернуть значение – поле получает значение из истории, в Истории новая запись
 // с пометкой «возврат значения».
-// Отменённые по умолчанию скрыты и не считаются — глаз в шапке таблицы Истории.
-// Окно «История значения» — двойной клик по полю в записи (Истории и карточки).
+// Отменённые по умолчанию скрыты и не считаются – глаз в шапке таблицы Истории.
+// Окно «История значения» – двойной клик по полю в записи (Истории и карточки).
 
 import { apiFetch, clickSelect } from "../util.js";
 import { FIXED_HISTORY_FIELDS } from "../columns.js";
@@ -62,7 +62,7 @@ export default {
             return !!(f.user || f.entity);
         },
 
-        // История карточки: отменённые целиком записи — только с глазом
+        // История карточки: отменённые целиком записи – только с глазом
         cardHistoryShown() {
             if (this.historyShowCancelled) {
                 return this.cardHistory;
@@ -78,7 +78,7 @@ export default {
                 return [];
             }
             const rows = d.items.map(function (it) { return { key: "h" + it.id, item: it }; });
-            // Исходное значение — «было» самого первого изменения: к нему тоже можно вернуться
+            // Исходное значение – «было» самого первого изменения: к нему тоже можно вернуться
             if (d.kind === "value" && d.items.length) {
                 rows.push({ key: "initial", initial: true, value: d.initial });
             }
@@ -126,7 +126,7 @@ export default {
     },
 
     watch: {
-        // Другой набор записей — выделение снимается
+        // Другой набор записей – выделение снимается
         historyItems() {
             const ids = new Set(this.historyItems.map(function (item) { return item.id; }));
             this.historySelected = this.historySelected.filter(function (id) { return ids.has(id); });
@@ -134,7 +134,7 @@ export default {
     },
 
     methods: {
-        // Поля записи для показа: «Создан» первым; отменённые — только с глазом
+        // Поля записи для показа: «Создан» первым; отменённые – только с глазом
         shownChanges(changes) {
             const ordered = this.orderedChanges(changes) || {};
             if (this.historyShowCancelled) {
@@ -161,10 +161,10 @@ export default {
             if (!c) {
                 return "";
             }
-            return "Отменил " + (c.by || "—") + " " + this.formatTime(c.at);
+            return ["Отменил", c.by, this.formatTime(c.at)].filter(Boolean).join(" ");
         },
 
-        // Двойной клик открывает «Историю значения» (у создания, удаления и пароля — нет)
+        // Двойной клик открывает «Историю значения» (у создания, удаления и пароля – нет)
         canOpenValue(entity, field) {
             return !!ENTITY_FILTERS[entity] && NO_UNDO_ENTITIES.indexOf(entity) === -1 && FIXED_HISTORY_FIELDS.indexOf(field) === -1;
         },
@@ -296,7 +296,7 @@ export default {
         },
 
         // После отмены и возврата: значения ПК, узлов, справочников и т. п.
-        // изменились — перечитать Историю, таблицу, открытую карточку, дерево,
+        // изменились – перечитать Историю, таблицу, открытую карточку, дерево,
         // Справочники (оформление таблицы) и пользователей
         async afterHistoryAction() {
             const cardId = this.card ? this.card.id : null;
@@ -308,7 +308,7 @@ export default {
             if (this.view === "history") {
                 tasks.push(this.loadHistory());
             }
-            // Дерево нужно и правилам имён ПК (этап 35) — если загружено, перечитать
+            // Дерево нужно и правилам имён ПК (этап 35) – если загружено, перечитать
             if (this.view === "tree" || this.treeRoots.length) {
                 tasks.push(this.loadTree());
             }
@@ -409,7 +409,7 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.toast(vd.data.label + ": возвращено «" + this.historyValue(vd.entity, vd.field, r.initial ? r.value : r.item.new) + "»", "success");
+                this.toast(vd.data.label + ": возвращено «" + this.historyValueText(vd.entity, vd.field, r.initial ? r.value : r.item.new) + "»", "success");
                 await this.afterHistoryAction();
                 await this.loadValueHistory();
             } catch (e) {

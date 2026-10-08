@@ -1,16 +1,16 @@
 """Имена ПК по правилам (этап 35): части имени у узлов дерева, «своё имя» у ПК.
 
-Имя ПК по правилу — части имени узлов по пути через «-» и номер: отделение ter,
+Имя ПК по правилу – части имени узлов по пути через «-» и номер: отделение ter,
 кабинет proc → ter-proc-1. Узел с «только своей» частью не берёт части узлов
-выше, с одним местом — имя без номера. Какое имя должно быть у ПК, считает фронт
-(js/naming.js) по дереву и строкам таблицы; здесь — хранение с проверками:
+выше, с одним местом – имя без номера. Какое имя должно быть у ПК, считает фронт
+(js/naming.js) по дереву и строкам таблицы; здесь – хранение с проверками:
 
-- часть имени и галочки — поля узла (name_part, name_own, name_single), правка
+- часть имени и галочки – поля узла (name_part, name_own, name_single), правка
   пишется в Историю узла и отменяется, как его название;
-- «своё имя» у ПК (имя не по правилу и так и надо) — app_settings «name_keep»:
+- «своё имя» у ПК (имя не по правилу и так и надо) – app_settings «name_keep»:
   {id ПК: {name, location_id, by, at}}; действует, пока у ПК то же имя и то же
-  расположение (переехал или переименован — проверяется снова);
-- переименовать по правилу несколько ПК — обычная правка HOSTNAME одним
+  расположение (переехал или переименован – проверяется снова);
+- переименовать по правилу несколько ПК – обычная правка HOSTNAME одним
   действием (одна отмена Ctrl+Z).
 """
 import re
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/naming", tags=["naming"])
 
 KEEP_KEY = "name_keep"
 
-# Имя компьютера в Windows (NetBIOS) — не длиннее 15 знаков
+# Имя компьютера в Windows (NetBIOS) – не длиннее 15 знаков
 NAME_MAX = 15
 PART_RE = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 
@@ -40,14 +40,14 @@ RULE_FIELDS = {"part": "name_part", "own": "name_own", "single": "name_single"}
 
 
 def clean_part(value):
-    """Часть имени: строчными, латиница, цифры и «-» между ними; пусто — None."""
+    """Часть имени: строчными, латиница, цифры и «-» между ними; пусто – None."""
     text = str(value or "").strip().lower().strip("-")
 
     if not text:
         return None
 
     if not PART_RE.fullmatch(text):
-        raise HTTPException(status_code=400, detail="Часть имени — латиница, цифры и «-».")
+        raise HTTPException(status_code=400, detail="Часть имени – латиница, цифры и «-».")
 
     if len(text) > NAME_MAX:
         raise HTTPException(status_code=400, detail=f"Часть имени длиннее {NAME_MAX} знаков.")
@@ -56,7 +56,7 @@ def clean_part(value):
 
 
 def set_rule(location, field, value):
-    """Поле правила узла; изменения — для Истории ({поле: {"old", "new"}})."""
+    """Поле правила узла; изменения – для Истории ({поле: {"old", "new"}})."""
     old = getattr(location, field)
     new = clean_part(value) if field == "name_part" else bool(value)
 
@@ -80,9 +80,9 @@ class NodesUpdate(BaseModel):
 
 @router.patch("/nodes")
 def update_nodes(payload: NodesUpdate, me=Depends(require_editor), session=Depends(get_db)):
-    """Правила узлов: у каждого — только переданные поля. Одно действие — все
+    """Правила узлов: у каждого – только переданные поля. Одно действие – все
     узлы сразу («Взять из таблицы»), запись Истории у каждого изменённого.
-    nodes — правила этих узлов после правки."""
+    nodes – правила этих узлов после правки."""
     ids = [item.id for item in payload.items]
 
     if not ids:
@@ -145,7 +145,7 @@ class KeepUpdate(BaseModel):
 
 @router.post("/keep")
 def update_keep(payload: KeepUpdate, me=Depends(require_editor), session=Depends(get_db)):
-    """keep — оставить ПК их нынешние имена (на их нынешнем месте); иначе — снова по правилу."""
+    """keep – оставить ПК их нынешние имена (на их нынешнем месте); иначе – снова по правилу."""
     ids = parse_ids(payload.ids)
     computers = session.query(Computer).filter(Computer.id.in_(ids)).all()
 
@@ -156,7 +156,7 @@ def update_keep(payload: KeepUpdate, me=Depends(require_editor), session=Depends
     row = session.query(AppSetting).filter(AppSetting.key == KEEP_KEY).with_for_update().one()
     items = dict(row.value or {})
 
-    # Устаревшие записи — без следа: они и так уже не действуют
+    # Устаревшие записи – без следа: они и так уже не действуют
     current = {
         computer.id: computer
         for computer in session.query(Computer).filter(Computer.id.in_([int(key) for key in items])).all()
@@ -213,7 +213,7 @@ class RenameRequest(BaseModel):
 
 @router.post("/rename")
 def rename(payload: RenameRequest, me=Depends(require_editor), session=Depends(get_db)):
-    """Новые имена нескольким ПК одним действием — как правка HOSTNAME в таблице."""
+    """Новые имена нескольким ПК одним действием – как правка HOSTNAME в таблице."""
     ids = parse_ids([item.id for item in payload.items])
     computers = lock_computers(session, ids)
     user_field_keys = user_field_keys_of(session)

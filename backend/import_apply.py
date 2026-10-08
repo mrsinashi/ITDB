@@ -232,7 +232,7 @@ async def apply_import(
     if not name.endswith((".xlsx", ".xlsm")):
         raise HTTPException(
             status_code=400,
-            detail="Нужен файл .xlsx или .xlsm. Если файл .xls — пересохрани его в .xlsx через Excel.",
+            detail="Нужен файл .xlsx или .xlsm. Если файл .xls – пересохрани его в .xlsx через Excel.",
         )
 
     data = await file.read()

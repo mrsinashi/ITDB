@@ -1,15 +1,17 @@
 // Таблица: новый компьютер и смена расположения, архив, действия с выбранными строками.
 
-import { apiFetch, fixIpTyping, searchNorm } from "../util.js";
+import { apiFetch, fixIpTyping, searchNorm, splitMulti } from "../util.js";
 import { LOCATION_FIELDS } from "../columns.js";
 
 // Куда можно добавить кабинет
 const ROOM_PARENTS = ["department", "floor"];
+// Подсказка полного IP: сколько вариантов
+const IP_FULL_MAX = 8;
 
 export default {
     computed: {
-        // Кнопка «Архив»: с выбранными строками — убрать в архив / вернуть,
-        // без выбора — показать архив / вернуться к таблице
+        // Кнопка «Архив»: с выбранными строками – убрать в архив / вернуть,
+        // без выбора – показать архив / вернуться к таблице
         archiveAction() {
             if (this.canEdit && this.selectedRows.length) {
                 return this.showArchive ? "restore" : "archive";
@@ -37,7 +39,7 @@ export default {
             return this.activeRows.filter(function (row) { return !skip.has(row.id); }).map((row) => {
                 const entry = this.treeIndex[row.location_id];
                 const place = [entry ? entry.path : "", row.seat_no ? "№ " + row.seat_no : ""].filter(Boolean).join(", ");
-                const path = (row.hostname || "без имени") + (place ? " — " + place : "");
+                const path = (row.hostname || "без имени") + (place ? " – " + place : "");
                 return {
                     id: row.id,
                     kind: "pc",
@@ -55,18 +57,18 @@ export default {
             });
         },
 
-        // Все узлы дерева в его порядке — для выбора расположения ПК
+        // Все узлы дерева в его порядке – для выбора расположения ПК
         locationOptions() {
             const list = [];
-            const walk = (nodes) => {
+            const walk = (nodes, parentId) => {
                 nodes.forEach((node) => {
                     const entry = this.treeIndex[node.id];
                     const path = entry ? entry.path : (node.name || node.code || "");
-                    list.push({ id: node.id, kind: node.kind, path: path, search: searchNorm(path) });
-                    walk(node.children || []);
+                    list.push({ id: node.id, kind: node.kind, parentId: parentId, path: path, search: searchNorm(path) });
+                    walk(node.children || [], node.id);
                 });
             };
-            walk(this.treeRoots);
+            walk(this.treeRoots, null);
             return list;
         },
 
@@ -132,7 +134,7 @@ export default {
             }
         },
 
-        // Открыта карточка этого ПК — перечитать её историю после правки
+        // Открыта карточка этого ПК – перечитать её историю после правки
         async reloadCardHistory(id) {
             if (!this.card || this.card.id !== id) {
                 return;
@@ -181,13 +183,13 @@ export default {
                 this.closeNewComputer();
                 return;
             }
-            // Новый ПК появится среди рабочих — из архива уходим
+            // Новый ПК появится среди рабочих – из архива уходим
             this.setArchiveView(false);
             this.actionBar = null;
             this.ensureTree();
-            // По умолчанию — узел, выбранный фильтром из дерева
+            // По умолчанию – узел, выбранный фильтром из дерева
             const locationId = this.locationFilter ? this.locationFilter.id : null;
-            // autoName — имя по правилу в поле HOSTNAME (пока его не поменяли руками, этап 35)
+            // autoName – имя по правилу в поле HOSTNAME (пока его не поменяли руками, этап 35)
             this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "", autoName: "" };
             this.newComputerError = "";
             this.newRoom = null;
@@ -198,6 +200,7 @@ export default {
         },
 
         closeNewComputer() {
+            this.closeIpSuggest();
             this.newComputer = null;
             this.newComputerError = "";
             this.newRoom = null;
@@ -236,8 +239,8 @@ export default {
             this.$nextTick(() => this.focusNewComputer("hostname"));
         },
 
-        // IP при вводе (новый ПК, ячейка, карточка): «ю», «/», набранные «,» и «б» —
-        // точка (этап 36). target[key] — значение поля (null — this)
+        // IP при вводе (новый ПК, ячейка, карточка): «ю», «/», набранные «,» и «б» –
+        // точка (этап 36). target[key] – значение поля (null – this)
         onIpInput(event, target, key) {
             const fixed = fixIpTyping(event.target, event);
             if (fixed !== null) {
@@ -245,18 +248,121 @@ export default {
             }
         },
 
+        // ---------- Полный IP по его концу (этап 37) ----------
+        // Набрано «15.12» (два-три числа, раскладка – как в поиске), и это не начало
+        // адреса из таблицы, – в списке под полем адреса с началом подсетей таблицы:
+        // «192.168.15.12». Сначала – где подсеть /24 уже есть (число ПК в ней)
+
+        ipFullOptions(text) {
+            const raw = String(text || "").trim().toLowerCase();
+            if (!/^\d{1,3}([.,/юб]\d{1,3}){1,2}$/.test(raw)) {
+                return [];
+            }
+            const typed = raw.split(/[.,/юб]/).map(Number);
+            if (typed.some(function (n) { return n > 255; })) {
+                return [];
+            }
+            const last = String(typed[typed.length - 1]);
+            const subnets = new Map();   // «192.168.15» → число ПК
+            let isStart = false;
+            this.rows.forEach(function (row) {
+                const seen = new Set();
+                splitMulti(row.ip).forEach(function (ip) {
+                    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+                    if (!m) {
+                        return;
+                    }
+                    const oct = m.slice(1, 5).map(Number);
+                    // Начало адреса из таблицы – подсказка не нужна
+                    if (typed.slice(0, -1).every(function (n, i) { return oct[i] === n; }) && String(oct[typed.length - 1]).indexOf(last) === 0) {
+                        isStart = true;
+                    }
+                    seen.add(oct.slice(0, 3).join("."));
+                });
+                seen.forEach(function (key) { subnets.set(key, (subnets.get(key) || 0) + 1); });
+            });
+            if (isStart) {
+                return [];
+            }
+            const keep = 4 - typed.length;   // сколько чисел взять из начала подсети
+            const found = new Map();
+            subnets.forEach(function (count, key) {
+                const head = key.split(".").slice(0, keep);
+                const value = head.concat(typed).join(".");
+                const net = value.split(".").slice(0, 3).join(".");
+                const was = found.get(value) || { value: value, net: net, pcs: subnets.get(net) || 0, weight: 0 };
+                was.weight += count;
+                found.set(value, was);
+            });
+            let list = Array.from(found.values());
+            if (list.some(function (o) { return o.pcs; })) {
+                list = list.filter(function (o) { return o.pcs; });
+            }
+            list.sort(function (a, b) { return b.pcs - a.pcs || b.weight - a.weight; });
+            return list.slice(0, IP_FULL_MAX).map(function (o) {
+                return { key: o.value, value: o.value, count: o.pcs || "", countTitle: o.pcs ? "ПК в подсети " + o.net + ".0/24" : "" };
+            });
+        },
+
+        onNewIpInput(event) {
+            this.onIpInput(event, this.newComputer, "ip");
+            const el = event.target;
+            const options = this.ipFullOptions(el.value);
+            if (!options.length) {
+                this.closeIpSuggest();
+                return;
+            }
+            this.openSuggestList(el, "ip-full", options, (value) => {
+                if (this.newComputer) {
+                    this.newComputer.ip = value;
+                    this.$nextTick(() => this.focusNewComputer("ip"));
+                }
+            });
+        },
+
+        // Список открыт: ↑↓ Enter – в нём, Esc закрывает только его; иначе Enter – добавить ПК
+        onNewIpKeydown(event) {
+            if (this.suggest && this.suggest.field === "ip-full") {
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    this.closeIpSuggest();
+                    return;
+                }
+                if (this.suggestKeydown(event)) {
+                    return;
+                }
+            }
+            if (event.key === "Enter") {
+                this.closeIpSuggest();
+                this.submitNewComputer();
+            }
+        },
+
+        closeIpSuggest() {
+            if (this.suggest && this.suggest.field === "ip-full") {
+                this.closeSuggest();
+            }
+        },
+
         // ---------- Новый кабинет из строки «Новый компьютер» (этап 36) ----------
-        // В списке расположений — «＋ кабинет»: строка под строкой нового ПК. Место —
+        // В списке расположений – «＋ кабинет»: строка под строкой нового ПК. Место –
         // найденное в списке, иначе отделение или этаж выбранного расположения
 
+        // data.afterId – «＋ кабинет» у кабинета: новый встаёт сразу после него (этап 37)
         openNewRoom(data) {
             let parentId = data.parentId;
             const entry = !parentId && this.newComputer ? this.treeIndex[this.newComputer.location_id] : null;
             if (entry) {
                 parentId = entry.node.kind === "room" ? entry.node.parent_id : (ROOM_PARENTS.indexOf(entry.node.kind) !== -1 ? entry.node.id : null);
             }
-            this.newRoom = { parent_id: parentId || null, code: data.code || "", name: data.name || "", error: "", saving: false };
+            this.newRoom = { parent_id: parentId || null, after_id: parentId && data.afterId || null, code: data.code || "", name: data.name || "", error: "", saving: false };
             this.$nextTick(() => this.focusNewRoom(!parentId ? "parent" : (data.code || data.name ? "name" : "code")));
+        },
+
+        // Подсказка у строки «Новый кабинет»: после какого кабинета он встанет
+        newRoomAfterText() {
+            const entry = this.newRoom && this.newRoom.after_id ? this.treeIndex[this.newRoom.after_id] : null;
+            return entry ? "Встанет после: " + [entry.node.code, entry.node.name].filter(Boolean).join(" ") : null;
         },
 
         closeNewRoom() {
@@ -274,6 +380,9 @@ export default {
 
         onNewRoomParent(parentId) {
             if (this.newRoom) {
+                if (this.newRoom.parent_id !== parentId) {
+                    this.newRoom.after_id = null;
+                }
                 this.newRoom.parent_id = parentId;
                 this.newRoom.error = "";
                 this.$nextTick(() => this.focusNewRoom("code"));
@@ -297,11 +406,14 @@ export default {
                 this.focusNewRoom("code");
                 return;
             }
-            // Среди соседей — по номеру: перед первым кабинетом с большим номером
+            // Среди соседей – сразу после кабинета, у которого нажали «＋ кабинет», иначе
+            // по номеру: перед первым кабинетом с большим номером
             const parent = this.treeIndex[form.parent_id];
-            const next = code && parent ? (parent.node.children || []).find(function (child) {
+            const children = parent ? parent.node.children || [] : [];
+            const after = form.after_id ? children.findIndex(function (child) { return child.id === form.after_id; }) : -1;
+            const next = after !== -1 ? children[after + 1] : (code ? children.find(function (child) {
                 return child.kind === "room" && child.code && child.code.localeCompare(code, "ru", { numeric: true, sensitivity: "base" }) > 0;
-            }) : null;
+            }) : null);
             form.saving = true;
             form.error = "";
             try {
@@ -360,7 +472,7 @@ export default {
                 });
                 (data.shifted || []).forEach((id) => this.flashCell(id, "seat_no"));
                 this.toast("Добавлен: " + (form.hostname.trim() || "компьютер без имени") +
-                    (data.shifted && data.shifted.length ? ". № места был занят — следующие сдвинуты: " + data.shifted.length : ""), "success");
+                    (data.shifted && data.shifted.length ? ". № места был занят – следующие сдвинуты: " + data.shifted.length : ""), "success");
                 // Форма остаётся открытой: можно сразу добавить следующий в тот же узел
                 form.hostname = "";
                 form.ip = "";
@@ -377,7 +489,7 @@ export default {
             this.allColumns.forEach((col) => this.flashCell(id, col.field));
         },
 
-        // «Создан» — первым: в базе ключи изменений хранятся в другом порядке
+        // «Создан» – первым: в базе ключи изменений хранятся в другом порядке
         orderedChanges(changes) {
             if (!changes || !changes.created) {
                 return changes;
@@ -400,7 +512,7 @@ export default {
                 return;
             }
             this.showArchive = on;
-            // Выбранные строки другого режима не видны — снимаем
+            // Выбранные строки другого режима не видны – снимаем
             this.selectedRows = [];
             this.selectAnchorId = null;
             if (on) {
@@ -482,7 +594,7 @@ export default {
                 bar.field = (this.bulkColumns[0] || {}).field || "";
                 bar.value = "";
             } else if (kind === "scan") {
-                // «Принять изменения…»: тип и столбец; пусто — все
+                // «Принять изменения…»: тип и столбец; пусто – все
                 bar.scanKind = "";
                 bar.field = "";
             }
@@ -608,10 +720,10 @@ export default {
             }
         },
 
-        // Enter в строке действия — выполнить (открытый список выбора
+        // Enter в строке действия – выполнить (открытый список выбора
         // расположения забирает Enter себе и дальше его не пускает)
         // «Изменить поле…»: подсказки значений выбранного столбца. Выбор
-        // из списка только вписывает значение — выполнить Enter / ✓
+        // из списка только вписывает значение – выполнить Enter / ✓
         openBulkSuggest(el) {
             const bar = this.actionBar;
             if (!bar || bar.kind !== "bulk") {
@@ -652,7 +764,7 @@ export default {
             await this.runAction("/api/computers/swap", { ids: ids }, () => "Поменяны местами: " + this.rowName(ids[0]) + " и " + this.rowName(ids[1]), (message) => this.toastError(message));
         },
 
-        // Запрос действия; после успеха — таблица перечитывается, затронутые
+        // Запрос действия; после успеха – таблица перечитывается, затронутые
         // строки вспыхивают, выделение снимается
         async runAction(url, body, doneText, onError) {
             try {

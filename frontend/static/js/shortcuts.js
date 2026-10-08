@@ -18,7 +18,7 @@ window.addEventListener("blur", function () {
     setCtrlDown(false);
 });
 
-// Ctrl+F и Alt+F — в поиск текущего раздела
+// Ctrl+F и Alt+F – в поиск текущего раздела
 window.addEventListener("keydown", function (event) {
     const ctrl = event.ctrlKey || event.metaKey;
     if (event.code === "KeyF" && !event.shiftKey && (ctrl !== event.altKey)) {
@@ -39,7 +39,7 @@ window.addEventListener("keydown", function (event) {
     if (!vm) {
         return;
     }
-    // Окно печати: Esc — закрыть (сначала список столбцов), Ctrl+P — печать листа
+    // Окно печати: Esc – закрыть (сначала список столбцов), Ctrl+P – печать листа
     if (vm.printDlg && !vm.dialog) {
         if (event.key === "Escape") {
             event.preventDefault();
@@ -50,7 +50,7 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
-    // Окно «История значения»: Esc — закрыть
+    // Окно «История значения»: Esc – закрыть
     if (vm.valueDialog && !vm.dialog) {
         if (event.key === "Escape") {
             event.preventDefault();
@@ -58,7 +58,7 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
-    // Открыт диалог подтверждения: Esc — отмена, Enter — OK
+    // Открыт диалог подтверждения: Esc – отмена, Enter – OK
     if (vm.dialog) {
         if (event.key === "Escape") {
             event.preventDefault();
@@ -69,8 +69,8 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
-    // Ctrl+Z — отменить своё последнее изменение, Ctrl+Y / Ctrl+Shift+Z — вернуть
-    // (в поле ввода — обычная отмена набранного)
+    // Ctrl+Z – отменить своё последнее изменение, Ctrl+Y / Ctrl+Shift+Z – вернуть
+    // (в поле ввода – обычная отмена набранного)
     if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.code === "KeyZ" || event.code === "KeyY") &&
         !event.defaultPrevented && !isTypingTarget(document.activeElement) && !vm.editingRowId) {
         event.preventDefault();
@@ -125,13 +125,13 @@ window.addEventListener("keydown", function (event) {
             return;
         }
     }
-    // «Имена ПК»: Esc — снять выбор узла (справа — снова «Своё имя»)
+    // «Имена ПК»: Esc – снять выбор узла (справа – снова «Своё имя»)
     if (vm.view === "choices" && vm.choicesTab === "names" && vm.nameSelId !== null && event.key === "Escape" &&
         !event.defaultPrevented && !vm.openMenu && !isTypingTarget(document.activeElement)) {
         vm.nameSelId = null;
         return;
     }
-    // История: Ctrl+A — выделить все видимые записи, Esc — снять выделение
+    // История: Ctrl+A – выделить все видимые записи, Esc – снять выделение
     if (vm.view === "history" && !vm.card && !event.defaultPrevented && !isTypingTarget(document.activeElement)) {
         if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyA") {
             event.preventDefault();
@@ -141,7 +141,7 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
-    // «Проверка» (Сканирование): Ctrl+A — выделить все показанные строки, Esc — снять
+    // «Проверка» (Сканирование): Ctrl+A – выделить все показанные строки, Esc – снять
     if (vm.view === "scan" && vm.scanTab === "check" && !vm.card && !event.defaultPrevented && !isTypingTarget(document.activeElement)) {
         if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyA") {
             event.preventDefault();
@@ -154,8 +154,8 @@ window.addEventListener("keydown", function (event) {
     if (vm.view !== "table" || event.defaultPrevented || isTypingTarget(document.activeElement)) {
         return;
     }
-    // Enter — VNC, Alt+P — ping, Alt+R — RDP: к ПК, по строке которого нажали последним
-    // (выделять не нужно); открыта карточка — к её ПК
+    // Enter – VNC, Alt+P – ping, Alt+R – RDP: к ПК, по строке которого нажали последним
+    // (выделять не нужно); открыта карточка – к её ПК
     const plainEnter = event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
     const altKey = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
     const what = plainEnter ? "vnc" : (altKey && event.code === "KeyP" ? "ping" : (altKey && event.code === "KeyR" ? "rdp" : null));
@@ -171,7 +171,7 @@ window.addEventListener("keydown", function (event) {
     if (vm.card) {
         return;
     }
-    // Ctrl+A — выделить все видимые строки таблицы
+    // Ctrl+A – выделить все видимые строки таблицы
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyA") {
         event.preventDefault();
         vm.selectAllVisible();
@@ -181,7 +181,7 @@ window.addEventListener("keydown", function (event) {
 });
 
 // Alt над таблицей: курсор «копировать», клик копирует значение.
-// Отпущенный Alt в Windows выделяет меню браузера — пока курсор над
+// Отпущенный Alt в Windows выделяет меню браузера – пока курсор над
 // таблицей, это гасится.
 window.addEventListener("keydown", function (event) {
     const vm = window.itdbTable;

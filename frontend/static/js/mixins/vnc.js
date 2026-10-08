@@ -1,14 +1,14 @@
 // Подключение к ПК по VNC через внешнее приложение (этап 28б): ссылки
-// itdb://vnc/tight/IP и itdb://vnc/ultra/IP. Обработчик протокола itdb:// — отдельное
+// itdb://vnc/tight/IP и itdb://vnc/ultra/IP. Обработчик протокола itdb:// – отдельное
 // приложение на компьютере пользователя. Двойной клик по значению TightVNC / UltraVNC
-// (Таблица, карточка ПК, подробности «Проверки») — подключение этим VNC; Enter —
-// тем, что записан у ПК, а если не записан — тем, что выбран по умолчанию в
+// (Таблица, карточка ПК, подробности «Проверки») – подключение этим VNC; Enter –
+// тем, что записан у ПК, а если не записан – тем, что выбран по умолчанию в
 // Справочниках (блок «Тип VNC»).
 // Enter, Alt+P (itdb://ping/IP) и Alt+R (itdb://rdp/IP) работают с последним ПК, по
-// строке которого нажали мышью (выделять строку не нужно); открыта карточка — с её ПК.
+// строке которого нажали мышью (выделять строку не нужно); открыта карточка – с её ПК.
 // Строка отмечена полоской слева (элемент .row-mark над таблицей ставится прямо в DOM:
-// данные Vue не меняются — таблица на каждый клик не перерисовывается). Полоска видна
-// и при прокрутке вправо; строку скрыли поиском или фильтром — она забыта (этап 36).
+// данные Vue не меняются – таблица на каждый клик не перерисовывается). Полоска видна
+// и при прокрутке вправо; строку скрыли поиском или фильтром – она забыта (этап 36).
 
 import { apiFetch } from "../util.js";
 
@@ -17,7 +17,7 @@ export const VNC_KINDS = [
     { key: "ultra", label: "UltraVNC" }
 ];
 
-// «TightVNC» → tight, «UltraVNC 1.4» → ultra; другое — null
+// «TightVNC» → tight, «UltraVNC 1.4» → ultra; другое – null
 export function vncKindOf(text) {
     const value = String(text || "").toLowerCase();
     if (value.indexOf("tight") !== -1) {
@@ -41,7 +41,7 @@ function firstIp(value) {
 }
 
 // Открыть ссылку внешнего приложения, не уходя со страницы. Firefox при незнакомом
-// протоколе показал бы вместо программы страницу ошибки — там ссылка открывается в
+// протоколе показал бы вместо программы страницу ошибки – там ссылка открывается в
 // скрытой рамке
 function launch(url) {
     if (/firefox/i.test(navigator.userAgent)) {
@@ -69,7 +69,7 @@ export default {
     },
 
     watch: {
-        // Строку скрыли поиском или фильтром — она больше не «последняя нажатая» (этап 36)
+        // Строку скрыли поиском или фильтром – она больше не «последняя нажатая» (этап 36)
         displayRows(rows) {
             const id = this.activeRowId;
             if (id !== null && id !== undefined && !rows.some(function (r) { return r.id === id; })) {
@@ -86,7 +86,7 @@ export default {
                     this.appSettings = await response.json();
                 }
             } catch (e) {
-                // без настроек — значения по умолчанию
+                // без настроек – значения по умолчанию
             }
         },
 
@@ -111,7 +111,7 @@ export default {
             return found ? found.label : kind;
         },
 
-        // Каким VNC подключаться к ПК: записанным в таблице, иначе — по умолчанию
+        // Каким VNC подключаться к ПК: записанным в таблице, иначе – по умолчанию
         vncKindOfRow(row) {
             const lines = String(row.vnc || "").split("\n");
             for (const line of lines) {
@@ -123,11 +123,11 @@ export default {
             return this.appSettings.vnc_default;
         },
 
-        // Подключиться к ПК: kind — tight / ultra (нет — как у ПК или по умолчанию)
+        // Подключиться к ПК: kind – tight / ultra (нет – как у ПК или по умолчанию)
         vncConnect(row, kind) {
             const ip = firstIp(row && row.ip);
             if (!ip) {
-                this.toastError("У ПК нет IP — подключиться некуда.");
+                this.toastError("У ПК нет IP – подключиться некуда.");
                 return;
             }
             const use = kind || this.vncKindOfRow(row);
@@ -135,8 +135,8 @@ export default {
             this.toast(this.vncLabel(use) + ": " + (row.hostname || ip) + " (" + ip + ")");
         },
 
-        // Двойной клик по значению в ячейке Таблицы: TightVNC / UltraVNC — подключение,
-        // остальное — как обычно (правка ячейки)
+        // Двойной клик по значению в ячейке Таблицы: TightVNC / UltraVNC – подключение,
+        // остальное – как обычно (правка ячейки)
         onCellValueDblclick(event, row, col) {
             if (col.field !== "vnc" || this.isEditing(row, col)) {
                 return;
@@ -149,7 +149,7 @@ export default {
             }
         },
 
-        // То же в карточке ПК (строка «Тип VNC»); line — строка значения
+        // То же в карточке ПК (строка «Тип VNC»); line – строка значения
         onCardValueDblclick(event, r, line) {
             if (r.field !== "vnc" || !this.card) {
                 return;
@@ -171,7 +171,7 @@ export default {
             }
         },
 
-        // Запомнить строку, по которой нажали (Enter, Alt+P, Alt+R — к этому ПК)
+        // Запомнить строку, по которой нажали (Enter, Alt+P, Alt+R – к этому ПК)
         setActiveRow(row) {
             this.activeRowId = row ? row.id : null;
             this.markActiveRow();
@@ -192,8 +192,8 @@ export default {
             this.placeRowMark();
         },
 
-        // Полоска — отдельный элемент над таблицей: у левого края видимой части, и при
-        // прокрутке вправо (этап 36). Меняется на каждую прокрутку — прямо в стиль
+        // Полоска – отдельный элемент над таблицей: у левого края видимой части, и при
+        // прокрутке вправо (этап 36). Меняется на каждую прокрутку – прямо в стиль
         placeRowMark() {
             const mark = this.$refs.rowMark;
             const wrap = this.$refs.tableWrap;
@@ -228,7 +228,7 @@ export default {
             return this.rows.find(function (r) { return r.id === id; }) || null;
         },
 
-        // what: vnc / ping / rdp. Ответ — нашёлся ли ПК
+        // what: vnc / ping / rdp. Ответ – нашёлся ли ПК
         connectActive(what) {
             const row = this.activePc();
             if (!row) {

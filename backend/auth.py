@@ -81,9 +81,9 @@ def get_current_user(request: Request, session=Depends(get_db)):
 
 
 # Роли:
-#   admin  — всё, включая импорт
-#   editor — правка данных (ПК, дерево, справочники, поля)
-#   reader — только просмотр
+#   admin  – всё, включая импорт
+#   editor – правка данных (ПК, дерево, справочники, поля)
+#   reader – только просмотр
 WRITE_ROLES = ("admin", "editor")
 
 

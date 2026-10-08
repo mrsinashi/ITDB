@@ -2,19 +2,19 @@
 
 Два действия над полем объекта (ПК или узла дерева):
 
-- **Отменить** изменения — у поля в записи истории ставится пометка
+- **Отменить** изменения – у поля в записи истории ставится пометка
   «cancelled» (кто и когда), новой записи нет. Значение поля пересчитывается
   по оставшимся изменениям: оно равно «стало» последнего неотменённого
-  изменения (или «было» самого первого, если отменены все). Отмена обратима —
+  изменения (или «было» самого первого, если отменены все). Отмена обратима –
   «Восстановить» снимает пометку и пересчитывает так же.
-- **Вернуть значение** — поле получает значение из выбранной строки истории
+- **Вернуть значение** – поле получает значение из выбранной строки истории
   (или исходное), в Историю пишется новая запись с пометкой «revert».
 
 Перед отменой значение сверяется с историей: если поле с тех пор менялось не
 через неё (например, узел переименовали, а в старой записи путь текстом),
-ничего не делается — ошибка с объяснением.
+ничего не делается – ошибка с объяснением.
 
-Создание ПК или узла не отменяется (удаления в системе нет — только архив).
+Создание ПК или узла не отменяется (удаления в системе нет – только архив).
 Служебные поля записей («Заменил», «Заменён на», старые поля) отменяются
 только пометкой: значения у них нет.
 """
@@ -42,10 +42,10 @@ from api_users import ROLES, check_login_free, clean_login, clean_text, end_sess
 from history_log import choice_title, column_label
 from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, User
 
-# Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ — столбец)
+# Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ – столбец)
 Ref = namedtuple("Ref", "entity entity_id entity_key")
 
-# Поля узла дерева, которые можно вернуть (с этапа 35 — и правило имён ПК)
+# Поля узла дерева, которые можно вернуть (с этапа 35 – и правило имён ПК)
 LOCATION_VALUE_FIELDS = {"name", "code", "archived", "name_part", "name_own", "name_single"}
 LOCATION_LABELS = {
     "name": "Название", "code": "Код", "archived": "Архив",
@@ -59,7 +59,7 @@ NAME_RULE_FIELDS = set(RULE_FIELDS.values())
 STYLE_FLAGS = {"bold", "italic", "underline", "strike", "chip"}
 
 # Этап 19б: справочники, польз. поля, оформление столбцов, пользователи системы.
-# fields — поля, которые можно отменить и вернуть; admin — только администратор.
+# fields – поля, которые можно отменить и вернуть; admin – только администратор.
 SIMPLE = {
     "choices": {"model": Choice, "fields": {"value", "color", "bg_color"} | STYLE_FLAGS},
     "field_defs": {"model": FieldDef, "fields": {"label", "archived"}},
@@ -96,8 +96,8 @@ def check_rights(entity, user):
 
 
 def field_kind(entity, field):
-    """value — у поля есть значение (можно отменить и вернуть);
-    info — служебная пометка (только отменить); fixed — создание, удаление,
+    """value – у поля есть значение (можно отменить и вернуть);
+    info – служебная пометка (только отменить); fixed – создание, удаление,
     смена пароля (нельзя)."""
     if field in FIXED_FIELDS:
         return "fixed"
@@ -146,7 +146,7 @@ def field_label(session, entity, field):
 
 def find_object(session, ref, lock=True):
     """Объект истории или None, если его уже нет (удалённое значение справочника).
-    Оформления столбца может не быть (пустое удаляется) — тогда пустое, не в базе."""
+    Оформления столбца может не быть (пустое удаляется) – тогда пустое, не в базе."""
     if ref.entity not in ENTITIES:
         raise HTTPException(status_code=400, detail="Для этого объекта отмены нет.")
 
@@ -196,7 +196,7 @@ def object_title(session, obj, ref):
 
 
 def field_chain(session, ref, field):
-    """Записи истории объекта, где менялось поле, — от старых к новым."""
+    """Записи истории объекта, где менялось поле, – от старых к новым."""
     query = session.query(History).filter(
         History.entity == ref.entity, History.entity_id == ref.entity_id
     )
@@ -222,8 +222,8 @@ def effective_point(chain, field):
 
 
 class Values:
-    """Значения полей в сравнимом виде; у расположения — id узла
-    (в старых записях без id — ищется по пути)."""
+    """Значения полей в сравнимом виде; у расположения – id узла
+    (в старых записях без id – ищется по пути)."""
 
     def __init__(self, session):
         self.session = session
@@ -283,7 +283,7 @@ class Values:
         return getattr(obj, field, None)
 
     def display(self, entity, field, value):
-        """Значение для показа (у расположения — путь)."""
+        """Значение для показа (у расположения – путь)."""
         if entity == "computers" and field == "location_id":
             if value is None or value == "?":
                 return None
@@ -314,7 +314,7 @@ def same(field, a, b):
 
 def set_value(session, entity, obj, field, value, batch, user):
     """Поставить полю значение из истории. Возвращает изменения для записи
-    истории ({поле: {"old", "new"}}); соседи со сдвинутым № места — в batch."""
+    истории ({поле: {"old", "new"}}); соседи со сдвинутым № места – в batch."""
     if entity == "locations":
         return set_location_value(session, obj, field, value)
 
@@ -348,7 +348,7 @@ def set_value(session, entity, obj, field, value, batch, user):
             path = location_path(value, load_locations(session)) if location else None
             raise HTTPException(
                 status_code=400,
-                detail=f"Узел «{path or value}» в архиве — сначала верни его из архива.",
+                detail=f"Узел «{path or value}» в архиве – сначала верни его из архива.",
             )
 
         payload = {"location_id": value}
@@ -407,7 +407,7 @@ def set_location_value(session, location, field, value):
 
 
 def set_simple_value(session, entity, obj, field, value, user):
-    """Справочник, польз. поле, оформление столбца, пользователь системы —
+    """Справочник, польз. поле, оформление столбца, пользователь системы –
     с теми же проверками, что и при обычной правке."""
     old = getattr(obj, field)
 
@@ -470,7 +470,7 @@ def set_simple_value(session, entity, obj, field, value, user):
 
 
 def touch(entity, obj):
-    """ПК изменился без новой записи истории — версия +1 (правка из таблицы
+    """ПК изменился без новой записи истории – версия +1 (правка из таблицы
     со старой версией получит «обнови таблицу»)."""
     if entity == "computers":
         obj.version = (obj.version or 1) + 1
@@ -487,12 +487,12 @@ def mark(record, field, cancelled_by):
         change.pop("cancelled", None)
 
     changes[field] = change
-    record.changes = changes  # новый dict — иначе JSONB не заметит изменения
+    record.changes = changes  # новый dict – иначе JSONB не заметит изменения
     record.cancelled = all(item.get("cancelled") for item in changes.values())
 
 
 def cancel_changes(session, items, cancel, user, batch):
-    """items — [(запись, поле)]. cancel=True — отменить, False — восстановить.
+    """items – [(запись, поле)]. cancel=True – отменить, False – восстановить.
     Возвращает, сколько изменений отмечено."""
     groups = {}
 
@@ -533,7 +533,7 @@ def cancel_changes(session, items, cancel, user, batch):
                 raise HTTPException(
                     status_code=409,
                     detail=f"«{label}» у «{object_title(session, obj, ref)}» менялось не через историю "
-                           f"(сейчас: {shown if shown not in (None, '') else '—'}). Отмена не выполнена.",
+                           f"(сейчас: {shown if shown not in (None, '') else '–'}). Отмена не выполнена.",
                 )
 
         for record in chain:
@@ -554,7 +554,7 @@ def cancel_changes(session, items, cancel, user, batch):
 
 def revert_value(session, record, field, initial, user, batch):
     """Поставить полю значение из записи истории («стало») или исходное
-    («было» самого первого изменения). Новая запись — с пометкой revert."""
+    («было» самого первого изменения). Новая запись – с пометкой revert."""
     entity = record.entity
     ref = ref_of(record)
     check_rights(entity, user)
@@ -601,7 +601,7 @@ def revert_value(session, record, field, initial, user, batch):
 
 def value_history(session, ref, field):
     """История одного поля объекта для окна «История значения».
-    Удалённого объекта (значение справочника) нет — история только для просмотра."""
+    Удалённого объекта (значение справочника) нет – история только для просмотра."""
     obj = find_object(session, ref, lock=False)
     query = session.query(History).filter(
         History.entity == ref.entity, History.entity_id == ref.entity_id

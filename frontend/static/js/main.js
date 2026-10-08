@@ -1,15 +1,15 @@
 // Интерфейс ITDB: Vue 3 без сборки, модули браузера (import/export).
 //
-//   main.js            — приложение: общее состояние (data), запуск, компоненты
-//   settings.js        — переключатели UI_OPTIONS, цветовые схемы, роли
-//   util.js            — запросы к API, localStorage, поиск по словам
-//   columns.js         — столбцы с сервера (GET /api/columns) в вид для таблицы, подписи полей, дубли
-//   widths.js          — автоширина столбцов
-//   tree-utils.js      — значки и ширина колонки дерева
-//   naming.js          — имена ПК по правилам узлов дерева: проверка, новое имя, «по таблице»
-//   shortcuts.js       — сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
-//   alt-copy.js        — Alt + клик: копирование значения во всех таблицах, кроме главной
-//   mixins/            — методы и вычисляемые значения по разделам:
+//   main.js            – приложение: общее состояние (data), запуск, компоненты
+//   settings.js        – переключатели UI_OPTIONS, цветовые схемы, роли
+//   util.js            – запросы к API, localStorage, поиск по словам
+//   columns.js         – столбцы с сервера (GET /api/columns) в вид для таблицы, подписи полей, дубли
+//   widths.js          – автоширина столбцов
+//   tree-utils.js      – значки и ширина колонки дерева
+//   naming.js          – имена ПК по правилам узлов дерева: проверка, новое имя, «по таблице»
+//   shortcuts.js       – сочетания клавиш (Ctrl+F, Ctrl+A, Esc, Alt)
+//   alt-copy.js        – Alt + клик: копирование значения во всех таблицах, кроме главной
+//   mixins/            – методы и вычисляемые значения по разделам:
 //                        auth, table, table-actions, card, tree, history, choices, common,
 //                        suggest (подсказки при вводе), users (пользователи системы),
 //                        history-undo (отмена и возврат из Истории, фильтры Истории),
@@ -27,10 +27,10 @@
 //                        print (печать Таблицы: окно с настройками и листом),
 //                        table-fit (масштаб по ширине окна), col-order (порядок столбцов перетаскиванием),
 //                        naming (имена ПК по правилам: вкладка Справочников, проверка в Таблице)
-//   route.js           — адреса страниц после «#» (ссылки открываются в новой вкладке)
-//   components/        — tree-node, tree-form, style-controls, location-picker, count-select
+//   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
+//   components/        – tree-node, tree-form, style-controls, location-picker, count-select
 //
-// Шаблоны разметки — в index.html.
+// Шаблоны разметки – в index.html.
 
 import "./settings.js";
 import { loadJson } from "./util.js";
@@ -87,7 +87,7 @@ const app = Vue.createApp({
             view: "table",
             theme: document.documentElement.dataset.theme || "red",
             // Акценты (личные настройки): границы блоков цветом схемы и
-            // цветная шапка таблиц — отдельно для каждой страницы
+            // цветная шапка таблиц – отдельно для каждой страницы
             accentBorders: false,
             noRadius: document.documentElement.classList.contains("no-radius"),   // без закруглений
             buttonCounts: true,   // счётчики на кнопках панели
@@ -110,8 +110,8 @@ const app = Vue.createApp({
             cardGroups: [],
             historyLabels: {},
             hiddenColumns: mergeRoomHidden(loadJson(HIDDEN_COLUMNS_KEY, [])),
-            // Второй вид таблицы (кнопка справа от поиска): 1 — основной, 2 — второй;
-            // его скрытые столбцы (null — ещё не меняли: столбцы по умолчанию)
+            // Второй вид таблицы (кнопка справа от поиска): 1 – основной, 2 – второй;
+            // его скрытые столбцы (null – ещё не меняли: столбцы по умолчанию)
             tableView: loadJson(TABLE_VIEW_KEY, 1) === 2 ? 2 : 1,
             hiddenColumns2: loadJson(HIDDEN_COLUMNS2_KEY, null),
             searchHidden: loadJson(SEARCH_HIDDEN_KEY, false),
@@ -126,15 +126,16 @@ const app = Vue.createApp({
             noteTooltip: { visible: false, text: "", top: 0, left: 0, width: 0 },
             // Закреплённый столбец, у правого края которого сейчас тень (под него уехали соседи)
             stuckEdge: null,
-            // Закреплённые столбцы: список полей; null — как в описании столбцов (HOSTNAME, IP)
+            // Закреплённые столбцы: список полей; null – как в описании столбцов (HOSTNAME, IP)
             pinnedColumns: loadJson(PINNED_COLUMNS_KEY, null),
-            // Порядок столбцов основного и второго вида: список полей; null — как с сервера
+            // Порядок столбцов основного и второго вида: список полей; null – как с сервера
             columnOrder: loadJson(COLUMN_ORDER_KEY, null),
             columnOrder2: loadJson(COLUMN_ORDER2_KEY, null),
             // Масштаб таблицы по ширине окна: включён ли, сам масштаб и отступ слева
             tableFit: loadJson(TABLE_FIT_KEY, false) === true,
             tableZoom: 1,
             tableFitMargin: 0,
+            tableFitScroll: false,
             editingRowId: null,
             editingField: null,
             editValue: "",
@@ -168,11 +169,11 @@ const app = Vue.createApp({
             // Справочники: вкладка «Оформление» (styles) или «Имена ПК» (names, этап 35)
             choicesTab: "styles",
             namesQuery: "",
-            namesHover: null,    // строка «Имён ПК» под курсором — плашка действий
+            namesHover: null,    // строка «Имён ПК» под курсором – плашка действий
             nameDraft: null,     // часть имени, которую сейчас вводят: { id узла, raw, part }
             nameSaving: false,
             nameKeep: {},        // «своё имя»: id ПК → { name, location_id, by, at }
-            nameSelId: null,     // узел, выбранный на вкладке «Имена ПК»: справа — его ПК (этап 36)
+            nameSelId: null,     // узел, выбранный на вкладке «Имена ПК»: справа – его ПК (этап 36)
             treeWidth: 480,
             treeHover: null,
             treeScrollbar: 0,
@@ -183,7 +184,7 @@ const app = Vue.createApp({
             historyItems: [],
             historyQuery: "",
             // Всего записей и записей по дням (с сервера, точные, даже если
-            // загружена только часть — сначала 200, остальное по кнопке)
+            // загружена только часть – сначала 200, остальное по кнопке)
             historyTotal: 0,
             historyDayCounts: {},
             historyLoadingMore: false,
@@ -202,7 +203,7 @@ const app = Vue.createApp({
             usersLoading: false,
             usersError: "",
             userBar: null,       // строка под панелью: новый / изменить
-            usersHover: null,    // строка под курсором — плашка действий
+            usersHover: null,    // строка под курсором – плашка действий
             ownPassword: null,   // форма смены своего пароля в меню пользователя
             ownProfile: null,    // форма «Редактировать» (логин, ФИО, должность) там же
             ownMenu: false,      // открыт список ✎ ▾ в меню пользователя
@@ -216,33 +217,33 @@ const app = Vue.createApp({
             scanBuildings: [],
             scanPurposes: {},
             subnetBar: null,     // строка под панелью: новая подсеть / изменить
-            subnetHover: null,   // подсеть под курсором — плашка действий
+            subnetHover: null,   // подсеть под курсором – плашка действий
             // Этап 25: вкладки страницы, сбор и сопоставление
-            // check — проверка, names — названия, schedule — расписание, settings — подключения и подсети
+            // check – проверка, names – названия, schedule – расписание, settings – подключения и подсети
             scanTab: "check",
             scanRuns: {},        // kind → запуск сбора, за которым следим
             scanPollTimer: null,
-            // Этап 26г: «Проверка» — записи GLPI и GSIT по ПК и предложения сканера
+            // Этап 26г: «Проверка» – записи GLPI и GSIT по ПК и предложения сканера
             check: {
-                data: null,      // { glpi, gsit } — ответы /api/scan/records
+                data: null,      // { glpi, gsit } – ответы /api/scan/records
                 loading: false,
                 error: "",
                 filter: "todo",  // todo / unknown / diff / ok / none / rejected / all
                 fields: [],      // «Фильтр»: только строки с предложениями по этим полям
                 pair: null,      // «ещё у N ПК»: { field, table, raw }
                 open: null,      // ключ раскрытой строки (одна)
-                hover: null,     // строка под курсором — плашка действий
+                hover: null,     // строка под курсором – плашка действий
                 selected: [],    // ключи выделенных строк
                 anchor: null     // строка, от которой идёт Shift+клик
             },
             scanMatchQuery: "",  // поиск на «Проверке» и «Названиях»
-            // Страница «Vacuum» — пользователи Jabber (/api/scan/jabber)
+            // Страница «Vacuum» – пользователи Jabber (/api/scan/jabber)
             vacuum: { data: null, loading: false, error: "", filter: "all" },
             // Вкладка «Сеть»: адреса из DHCP и прохода подсетей (/api/scan/hosts)
             net: { data: null, loading: false, error: "", filter: "all", source: null },
             // Общие настройки (/api/settings): VNC по умолчанию
             appSettings: { vnc_default: "tight" },
-            undone: [],          // что отменил Ctrl+Z — для возврата Ctrl+Y
+            undone: [],          // что отменил Ctrl+Z – для возврата Ctrl+Y
             undoBusy: false,
             vacuumQuery: "",
             scanNames: { items: [], loading: false, error: "", hover: null },
@@ -252,8 +253,8 @@ const app = Vue.createApp({
             scanOverlay: false,
             scanLegend: false,   // подсказка «что значат цвета» у включённой кнопки
             scanPop: null,       // карточка действий у блочка значения сканера
-            scanMarks: [],       // /api/scan/marks — вид пометок по ситуациям
-            tableMarks: [],      // /api/table-marks — вид выделений значений в Таблице (этап 26к)
+            scanMarks: [],       // /api/scan/marks – вид пометок по ситуациям
+            tableMarks: [],      // /api/table-marks – вид выделений значений в Таблице (этап 26к)
             scanOnlyRows: false, // воронка у кнопки «Значения сканера»: только строки с предложениями
             // Этап 35: имена по правилам в Таблице (кнопка на панели)
             nameCheck: false,
@@ -261,23 +262,23 @@ const app = Vue.createApp({
             namePop: null,       // карточка у блочка с именем по правилу
             valueEdit: null,     // правка значения ПК в подробностях «Проверки»
             diffs: {
-                items: [],          // /api/scan/diffs (и отклонённые — с rejected_by)
-                count: 0,           // расхождений без отклонённых — на кнопке
+                items: [],          // /api/scan/diffs (и отклонённые – с rejected_by)
+                count: 0,           // расхождений без отклонённых – на кнопке
                 rejected: 0,
                 sources: [],
                 antivirus: {},      // столбец «Антивирусы»: id ПК → [{ name, status, version, source }]
                 links: {},          // столбец с номером записи (glpi_id, gsit_id) → начало ссылки
                 vacuumMissing: [],  // логины VACUUM из таблицы, которых нет в Jabber
-                vacuumStale: {},    // давно не подключавшиеся: логин → сколько дней (null — никогда)
+                vacuumStale: {},    // давно не подключавшиеся: логин → сколько дней (null – никогда)
                 jabber: {},         // кого Jabber видит с адреса ПК: id ПК → логины
                 net: {},            // что о ПК видно в сети (DHCP, проход подсетей): id ПК → { ip, mac, hostname }
                 verified: {},       // ПК, проверенные и GLPI / GSIT, и сетью: id ПК → чем
                 loading: false,
                 error: "",
             },
-            avSettings: null,    // /api/scan/antivirus — вид и что показывать в столбце «Антивирусы»
+            avSettings: null,    // /api/scan/antivirus – вид и что показывать в столбце «Антивирусы»
             avRename: null,      // правка своего названия антивируса в Справочниках: { key, source, value }
-            scanLinkBar: null,   // «Привязать запись к ПК:» — строка под панелью
+            scanLinkBar: null,   // «Привязать запись к ПК:» – строка под панелью
 
             // Карточка
             card: null,
@@ -305,9 +306,9 @@ const app = Vue.createApp({
             fieldDefsLoading: false,
             selectedRows: [],
             selectAnchorId: null,   // строка, от которой идёт Shift+клик
-            activeRowId: null,      // последняя нажатая строка: Enter — VNC, Alt+P — ping, Alt+R — RDP
-            dupVersion: 0,          // пересчитаны дубли — пересчитать заливку ячеек
-            altDown: false,         // зажат Alt — клик копирует значение
+            activeRowId: null,      // последняя нажатая строка: Enter – VNC, Alt+P – ping, Alt+R – RDP
+            dupVersion: 0,          // пересчитаны дубли – пересчитать заливку ячеек
+            altDown: false,         // зажат Alt – клик копирует значение
             copyHint: null,         // подсветка значения под курсором при Alt
             newFieldDef: { key: "", label: "", field_type: "text" }
         };

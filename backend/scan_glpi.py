@@ -1,16 +1,16 @@
 """GLPI и GSIT через REST API GLPI (apirest.php): проверка подключения (этап 24)
 и сбор данных о ПК (этап 25).
 
-GSIT — тоже GLPI (старый, с FusionInventory), поэтому код общий. Вход — по
+GSIT – тоже GLPI (старый, с FusionInventory), поэтому код общий. Вход – по
 токену пользователя (если задан) или по логину и паролю; токен приложения
-(App-Token) — если его требует клиент API в GLPI.
+(App-Token) – если его требует клиент API в GLPI.
 
 Проверка подключения: вход → версия GLPI → число компьютеров → есть ли поле
 с датой последней проверки ПК (по нему сбор отбирает свежие записи) → выход.
 
 Сбор (collect): поиск всех ПК с датой проверки (одним-двумя запросами) → свежие
-(не старше N дней) → по каждому свежему ПК — запись с устройствами, сетевыми
-портами и программами; антивирусы — одним списком на все ПК.
+(не старше N дней) → по каждому свежему ПК – запись с устройствами, сетевыми
+портами и программами; антивирусы – одним списком на все ПК.
 """
 import json
 import re
@@ -37,14 +37,14 @@ GLPI_ERRORS = {
         "GLPI не принимает запросы API с адреса сервера ITDB: добавь его в диапазон IP "
         "клиента API (Настройки → Общие → API)."
     ),
-    "ERROR_API_DISABLED": None,  # текст — API_DISABLED ниже
+    "ERROR_API_DISABLED": None,  # текст – API_DISABLED ниже
     "ERROR_RIGHT_MISSING": "У пользователя GLPI нет права читать компьютеры.",
 }
 
-# GLPI отвечает на выключенный API ["ERROR", "API disabled"] (текст — на языке GLPI)
+# GLPI отвечает на выключенный API ["ERROR", "API disabled"] (текст – на языке GLPI)
 API_DISABLED = (
     "REST API в GLPI выключен: Настройки → Общие → API → «Включить REST API» "
-    "(в GLPI 11 — «Включить устаревший REST API»: ITDB работает через него, как и с GSIT)."
+    "(в GLPI 11 – «Включить устаревший REST API»: ITDB работает через него, как и с GSIT)."
 )
 
 
@@ -93,7 +93,7 @@ def error_text(response):
 
         text = GLPI_ERRORS.get(code)
 
-        # Какой адрес ITDB увидел GLPI — его и вписать в клиент API
+        # Какой адрес ITDB увидел GLPI – его и вписать в клиент API
         seen = re.search(r"\d+\.\d+\.\d+\.\d+", server) if code == "ERROR_NOT_ALLOWED_IP" else None
 
         if text and seen:
@@ -154,7 +154,7 @@ class GlpiSession:
         return False
 
     def call(self, path, **params):
-        """Ответ как есть (Response) — для разбора заголовков и кодов."""
+        """Ответ как есть (Response) – для разбора заголовков и кодов."""
         url = self.base + "/" + path
 
         if params:
@@ -244,7 +244,7 @@ def check(params):
         if fresh:
             parts.append(f"дата проверки ПК: {fresh[1]}")
         else:
-            parts.append("поле с датой проверки ПК не найдено — свежие записи отобрать не получится")
+            parts.append("поле с датой проверки ПК не найдено – свежие записи отобрать не получится")
 
         return "Подключено: " + ", ".join(parts) + "."
 
@@ -265,7 +265,7 @@ OS_FIELDS = {
 
 
 def parse_date(value):
-    """Дата из поиска GLPI (время сервера GLPI); у нескольких агентов — самая поздняя."""
+    """Дата из поиска GLPI (время сервера GLPI); у нескольких агентов – самая поздняя."""
     values = value if isinstance(value, list) else [value]
     best = None
 
@@ -291,7 +291,7 @@ def first(value):
 
 
 def dropdown(value):
-    """Значение выпадающего списка с expand_dropdowns: 0 / "" — пусто."""
+    """Значение выпадающего списка с expand_dropdowns: 0 / "" – пусто."""
     if value in (None, "", 0, "0") or isinstance(value, (int, float)):
         return None
     text = str(value).strip()
@@ -401,10 +401,10 @@ def antivirus_by_computer(glpi, warnings):
 
 def disk_interfaces(glpi):
     """Как подключены диски (этап 26к): {название модели строчными: интерфейс} из
-    списка моделей дисков (DeviceHardDrive, поле «Интерфейс»: SATA, USB…) — у
+    списка моделей дисков (DeviceHardDrive, поле «Интерфейс»: SATA, USB…) – у
     самой записи диска ПК интерфейса нет. По нему отсеиваются флешки и внешние
-    диски. Не получилось (нет права, другой GLPI) — пусто: остаётся отсев по
-    названию. Одно название с разными интерфейсами — интерфейс неизвестен."""
+    диски. Не получилось (нет права, другой GLPI) – пусто: остаётся отсев по
+    названию. Одно название с разными интерфейсами – интерфейс неизвестен."""
     found = {}
     start = 0
 
@@ -436,7 +436,7 @@ def disk_interfaces(glpi):
 
 def computer_details(glpi, computer_id, interfaces=None):
     """Одна запись ПК со всем нужным: устройства, сетевые порты, программы.
-    interfaces — disk_interfaces()."""
+    interfaces – disk_interfaces()."""
     response = glpi.call(
         f"Computer/{computer_id}",
         with_devices="true", with_networkports="true", with_softwares="true", expand_dropdowns="true",
@@ -519,7 +519,7 @@ def collect(params, fresh_days, progress=None):
     """Сбор: все ПК из поиска → свежие по дате проверки → подробности каждого.
 
     Ответ: {"items": [{"id", "checked_at", "raw"}], "stats": {...},
-    "warnings": [...], "version": "…"}; progress(done, total) — по ходу."""
+    "warnings": [...], "version": "…"}; progress(done, total) – по ходу."""
     warnings = []
 
     with glpi_session(params) as glpi:

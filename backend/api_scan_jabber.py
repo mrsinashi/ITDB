@@ -1,14 +1,14 @@
-"""Пользователи Jabber (VACUUM) — страница «Vacuum» (этап 26д; с 26ж — вкладка меню).
+"""Пользователи Jabber (VACUUM) – страница «Vacuum» (этап 26д; с 26ж – вкладка меню).
 
-GET /api/scan/jabber — пользователи из последних сборов (scan_jabber_users):
+GET /api/scan/jabber – пользователи из последних сборов (scan_jabber_users):
 группы общего ростера, в сети ли, когда подключался, с каких адресов (у тех, кто
-не в сети, — последний известный IP) и какой ПК стоит на этом адресе: ПК таблицы
-с таким IP, а если в таблице его нет — запись GLPI / GSIT с таким IP. ПК ищется
-только по IP (этап 26ж). Пометки: gone — пользователя нет, а в группе он остался
-(убрать из группы); no_group — не входит ни в одну группу; stale — не подключался
-дольше срока «Актуальны», ip_stale — адрес видели дольше этого срока назад (этап 31:
+не в сети, – последний известный IP) и какой ПК стоит на этом адресе: ПК таблицы
+с таким IP, а если в таблице его нет – запись GLPI / GSIT с таким IP. ПК ищется
+только по IP (этап 26ж). Пометки: gone – пользователя нет, а в группе он остался
+(убрать из группы); no_group – не входит ни в одну группу; stale – не подключался
+дольше срока «Актуальны», ip_stale – адрес видели дольше этого срока назад (этап 31:
 последнее известное не пропадает, на странице оно серым). Ничего не пишет.
-Сбор — POST /api/scan/sources/jabber/collect (api_scan_records.py). Смотреть —
+Сбор – POST /api/scan/sources/jabber/collect (api_scan_records.py). Смотреть –
 редактор и администратор.
 """
 import ipaddress
@@ -33,7 +33,7 @@ class HostOut(BaseModel):
     computer_id: Optional[int] = None
     hostname: Optional[str] = None
     place: Optional[str] = None
-    source: Optional[str] = None      # «GLPI №12» — если ПК с таким IP в таблице нет
+    source: Optional[str] = None      # «GLPI №12» – если ПК с таким IP в таблице нет
 
 
 class AddressOut(BaseModel):
@@ -46,7 +46,7 @@ class JabberUserOut(BaseModel):
     login: str
     groups: list[str]
     online: bool
-    addresses: list[AddressOut]       # в сети — текущие ресурсы, иначе — последний IP
+    addresses: list[AddressOut]       # в сети – текущие ресурсы, иначе – последний IP
     last_seen_at: Optional[datetime]  # когда ITDB видел в сети (к последнему IP)
     last_login_at: Optional[datetime] # «Последнее подключение» по списку ejabberd
     gone: bool = False                # пользователя нет, а в группе остался
@@ -128,7 +128,7 @@ def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
     for row in rows:
         groups = row.groups or []
 
-        # Удалённый пользователь, которого нет и в группах, — показывать нечего
+        # Удалённый пользователь, которого нет и в группах, – показывать нечего
         if row.registered is False and not groups:
             continue
 

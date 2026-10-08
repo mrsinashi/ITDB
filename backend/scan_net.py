@@ -2,15 +2,15 @@
 
 По каждому адресу (подсети с «Сканировать: да»):
 - отвечает ли: ping (ICMP), иначе запрос имени NetBIOS, иначе порт 445; в своей
-  подсети сервера — ещё и запись ARP (её не скрыть брандмауэром);
+  подсети сервера – ещё и запись ARP (её не скрыть брандмауэром);
 - MAC: из ARP (только подсеть самого сервера ITDB) или из ответа NetBIOS;
-- имя ПК, как он сам себя называет, — NetBIOS (UDP 137); имя в DNS — справочно;
-- по желанию — открытые порты (22, 80, 135, 139, 443, 445, 3389, 5900, 8080; у 5900 —
+- имя ПК, как он сам себя называет, – NetBIOS (UDP 137); имя в DNS – справочно;
+- по желанию – открытые порты (22, 80, 135, 139, 443, 445, 3389, 5900, 8080; у 5900 –
   версия VNC).
 
-Служба работает без прав root: ping — через «ICMP без привилегий» (в Debian
-разрешён всем, net.ipv4.ping_group_range); нельзя — обходится остальным.
-Только стандартная библиотека. В таблицу ничего не пишется — наблюдения
+Служба работает без прав root: ping – через «ICMP без привилегий» (в Debian
+разрешён всем, net.ipv4.ping_group_range); нельзя – обходится остальным.
+Только стандартная библиотека. В таблицу ничего не пишется – наблюдения
 (scan_hosts), из них предложения MAC / IP / имени считает scan_hostmatch.py.
 """
 import ipaddress
@@ -67,7 +67,7 @@ def targets(subnets):
 
 
 def icmp_socket():
-    """Сокет ICMP без привилегий; нельзя — None."""
+    """Сокет ICMP без привилегий; нельзя – None."""
     try:
         return socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_ICMP)
     except OSError:
@@ -85,7 +85,7 @@ def checksum(data):
 
 
 def ping(ip, timeout=PING_TIMEOUT, tries=PING_TRIES):
-    """True — ответил, False — нет, None — ICMP недоступен."""
+    """True – ответил, False – нет, None – ICMP недоступен."""
     sock = icmp_socket()
 
     if sock is None:
@@ -200,7 +200,7 @@ def nbstat(ip, timeout=NBNS_TIMEOUT):
 
 
 def tcp_state(ip, port, timeout=TCP_TIMEOUT):
-    """«open» — принимает, «closed» — отказал (значит, адрес жив), None — молчит."""
+    """«open» – принимает, «closed» – отказал (значит, адрес жив), None – молчит."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
 
@@ -216,7 +216,7 @@ def tcp_state(ip, port, timeout=TCP_TIMEOUT):
 
 
 def rfb_version(ip, timeout=1.0):
-    """Версия протокола VNC на порту 5900: «003.008»; не VNC — None."""
+    """Версия протокола VNC на порту 5900: «003.008»; не VNC – None."""
     try:
         with socket.create_connection((ip, 5900), timeout=timeout) as sock:
             sock.settimeout(timeout)
@@ -243,7 +243,7 @@ def arp_table(path=ARP_FILE):
     for line in lines:
         parts = line.split()
 
-        # IP, тип, флаги (0x2 — запись полная), MAC, маска, интерфейс
+        # IP, тип, флаги (0x2 – запись полная), MAC, маска, интерфейс
         if len(parts) >= 4 and int(parts[2], 16) & 0x2:
             mac = norm_mac(parts[3])
 
@@ -280,7 +280,7 @@ class Dns:
 
 
 def probe(ip, options, dns):
-    """Один адрес: None — молчит; иначе наблюдение без MAC из ARP (его допишет collect)."""
+    """Один адрес: None – молчит; иначе наблюдение без MAC из ARP (его допишет collect)."""
     how = []
     netbios = None
     answered = ping(ip)
@@ -374,10 +374,10 @@ def collect(params, fresh_days=None, progress=None):
     warnings = []
 
     if icmp_socket() is None:
-        warnings.append("ping недоступен службе — адреса проверены по NetBIOS, порту 445 и ARP.")
+        warnings.append("ping недоступен службе – адреса проверены по NetBIOS, порту 445 и ARP.")
 
     if options["names"] and dns.slow >= DNS_SLOW_LIMIT:
-        warnings.append("DNS не отвечает на запросы имён по адресу — имена только из NetBIOS.")
+        warnings.append("DNS не отвечает на запросы имён по адресу – имена только из NetBIOS.")
 
     stats = {
         "total": total, "alive": len(items), "subnets": len(subnets),
@@ -400,7 +400,7 @@ def check(params):
 
     can_arp = os.access(ARP_FILE, os.R_OK)
     parts = [
-        "ping — " + ("есть" if sock is not None else "нет (обойдётся NetBIOS и портом 445)"),
-        "ARP — " + ("есть" if can_arp else "нет"),
+        "ping – " + ("есть" if sock is not None else "нет (обойдётся NetBIOS и портом 445)"),
+        "ARP – " + ("есть" if can_arp else "нет"),
     ]
     return f"Готов: подсетей {len(subnets)}, адресов {total}; " + ", ".join(parts) + "."

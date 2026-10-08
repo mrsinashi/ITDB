@@ -59,7 +59,7 @@ def test_deleted_choice_keeps_title(editor):
     assert record["changes"]["deleted"]["old"] == "i9"
     assert record["title"] == "Процессор: i9"
 
-    # Истории удалённого — только просмотр
+    # Истории удалённого – только просмотр
     data = value_of(editor, "choices", choice_id, "italic")
     assert data["kind"] == "gone" and data["title"] == "Процессор: i9"
 
@@ -78,7 +78,7 @@ def test_field_def_history_and_restore_from_archive(editor):
     assert archived["changes"] == {"archived": {"old": False, "new": True}}
     assert archived["title"] == "Тел. кабинета"
 
-    # Отмена архивации — поле снова в списке
+    # Отмена архивации – поле снова в списке
     ok(editor.post("/api/history/cancel", json={"items": [{"id": archived["id"]}]}))
     labels = [f["label"] for f in ok(editor.get("/api/field-defs"))["items"]]
     assert "Тел. кабинета" in labels
@@ -95,12 +95,12 @@ def test_column_style_history_by_key(editor):
     data = value_of(editor, "column_styles", 0, "bold", entity_key="os")
     assert len(data["items"]) == 1 and data["current"] is True
 
-    # Отмена — стиль стал пустым и удалился; у CPU не тронуто
+    # Отмена – стиль стал пустым и удалился; у CPU не тронуто
     ok(editor.post("/api/history/cancel", json={"items": [{"id": record["id"]}]}))
     styles = {s["field"]: s for s in ok(editor.get("/api/column-styles"))["items"]}
     assert "os" not in styles and styles["cpu"]["italic"] is True
 
-    # Восстановить — стиль снова создан
+    # Восстановить – стиль снова создан
     ok(editor.post("/api/history/cancel", json={"items": [{"id": record["id"]}], "cancel": False}))
     styles = {s["field"]: s for s in ok(editor.get("/api/column-styles"))["items"]}
     assert styles["os"]["bold"] is True and styles["os"]["color"] == "#112233"
@@ -121,7 +121,7 @@ def test_users_history_admin_only(admin, editor, reader):
     assert editor.post("/api/history/cancel", json={"items": [{"id": record["id"], "field": "role"}]}).status_code == 403
     assert reader.get("/api/history/value", params={"entity": "users", "entity_id": user["id"], "field": "role"}).status_code == 403
 
-    # Смена пароля не отменяется, роль — отменяется
+    # Смена пароля не отменяется, роль – отменяется
     assert admin.post("/api/history/cancel", json={"items": [{"id": record["id"]}]}).status_code == 400
     ok(admin.post("/api/history/cancel", json={"items": [{"id": record["id"], "field": "role"}]}))
     row = next(u for u in ok(admin.get("/api/users")) if u["id"] == user["id"])
@@ -133,7 +133,7 @@ def test_admin_cannot_undo_own_role(admin):
     other = ok(admin.post("/api/users", json={"login": login, "role": "admin", "password": "secret1"}))
     me = ok(admin.get("/api/auth/me"))
 
-    # Другой админ понизил нашего — запись о нас; отменить её сами мы не можем
+    # Другой админ понизил нашего – запись о нас; отменить её сами мы не можем
     second = https_client()
     ok(second.post("/api/auth/login", json={"login": login, "password": "secret1"}))
     ok(second.patch(f"/api/users/{me['id']}", json={"role": "editor"}))

@@ -1,4 +1,4 @@
-"""Этап 35: правила имён ПК — часть имени и галочки у узлов дерева, «своё имя» у
+"""Этап 35: правила имён ПК – часть имени и галочки у узлов дерева, «своё имя» у
 ПК, переименование нескольких ПК по правилу одним действием."""
 from conftest import add_computer, add_location, get_row, ok
 
@@ -38,12 +38,12 @@ def test_node_rules(editor, reader, room):
     assert nodes[room["department"]]["name_part"] == "ter"
     assert (nodes[room["room"]]["name_part"], nodes[room["room"]]["name_single"]) == ("proc", True)
 
-    # Только переданные поля; пустая часть — None
+    # Только переданные поля; пустая часть – None
     ok(editor.patch("/api/naming/nodes", json={"items": [{"id": room["room"], "own": True, "part": ""}]}))
     node = tree_nodes(reader)[room["room"]]
     assert (node["name_part"], node["name_own"], node["name_single"]) == (None, True, True)
 
-    # В Истории узла — что поменялось
+    # В Истории узла – что поменялось
     records = history(reader, "locations", room["room"])
     assert records[0]["changes"] == {"name_part": {"old": "proc", "new": None}, "name_own": {"old": False, "new": True}}
     assert records[1]["changes"] == {"name_part": {"old": None, "new": "proc"}, "name_single": {"old": False, "new": True}}
@@ -59,19 +59,19 @@ def test_node_rules_checks(editor, reader, room):
     same = [{"id": room["room"], "part": "a"}, {"id": room["room"], "part": "b"}]
     assert editor.patch("/api/naming/nodes", json={"items": same}).status_code == 400
 
-    # Ошибка у одного узла — не меняется ни один
+    # Ошибка у одного узла – не меняется ни один
     bad = [{"id": room["department"], "part": "ter"}, {"id": room["room"], "part": "кабинет"}]
     assert editor.patch("/api/naming/nodes", json={"items": bad}).status_code == 400
     assert tree_nodes(reader)[room["department"]]["name_part"] is None
 
-    # Из архива — нет
+    # Из архива – нет
     other = add_location(editor, "room", "Склад", room["department"], code="299")
     ok(editor.post(f"/api/locations/{other}/archive"))
     assert editor.patch("/api/naming/nodes", json={"items": [{"id": other, "part": "x"}]}).status_code == 404
 
 
 def test_node_rules_undo(editor, reader, room):
-    # «Взять из таблицы» — одним действием: Ctrl+Z отменяет всё сразу
+    # «Взять из таблицы» – одним действием: Ctrl+Z отменяет всё сразу
     ok(editor.patch("/api/naming/nodes", json={"items": [
         {"id": room["department"], "part": "ter"},
         {"id": room["room"], "part": "proc", "single": True},
@@ -81,7 +81,7 @@ def test_node_rules_undo(editor, reader, room):
     assert nodes[room["department"]]["name_part"] is None
     assert (nodes[room["room"]]["name_part"], nodes[room["room"]]["name_single"]) == (None, False)
 
-    # Вернуть значение из Истории — как у названия узла
+    # Вернуть значение из Истории – как у названия узла
     ok(editor.patch("/api/naming/nodes", json={"items": [{"id": room["room"], "part": "proc"}]}))
     ok(editor.patch("/api/naming/nodes", json={"items": [{"id": room["room"], "part": "k201"}]}))
     record = history(reader, "locations", room["room"])[0]
@@ -101,11 +101,11 @@ def test_keep(editor, reader, room):
     record = history(reader, "naming", pc1)[0]
     assert record["changes"] == {"name_keep": {"old": None, "new": "zam-popov"}}
 
-    # Повторно — без новой записи
+    # Повторно – без новой записи
     ok(editor.post("/api/naming/keep", json={"ids": [pc1], "keep": True}))
     assert len(history(reader, "naming", pc1)) == 1
 
-    # ПК переименовали — его «своё имя» больше не действует и при следующей правке списка уходит
+    # ПК переименовали – его «своё имя» больше не действует и при следующей правке списка уходит
     version = get_row(editor, pc2)["version"]
     ok(editor.patch(f"/api/computers/{pc2}", json={"hostname": "srv-2", "_version": version}))
     items = ok(editor.post("/api/naming/keep", json={"ids": [pc1], "keep": False}))["items"]

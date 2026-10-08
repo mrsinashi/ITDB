@@ -1,4 +1,4 @@
-"""История: порции с точными счётчиками — всего и по дням."""
+"""История: порции с точными счётчиками – всего и по дням."""
 from datetime import datetime, timedelta, timezone
 
 from conftest import add_computer, ok
@@ -34,13 +34,13 @@ def test_history_pages_with_exact_counts(reader):
 
 
 def test_history_days_by_time_zone(reader):
-    # 20:00 UTC — в Иркутске (UTC+8) уже следующий день
+    # 20:00 UTC – в Иркутске (UTC+8) уже следующий день
     at = datetime(2026, 9, 27, 20, 0, tzinfo=timezone.utc)
     add_history(3, at)
 
     assert ok(reader.get("/api/history", params={"tz": "UTC"}))["days"] == {"27.09.2026": 3}
     assert ok(reader.get("/api/history", params={"tz": "Asia/Irkutsk"}))["days"] == {"28.09.2026": 3}
-    # Неизвестный пояс — как UTC, без ошибки
+    # Неизвестный пояс – как UTC, без ошибки
     assert ok(reader.get("/api/history", params={"tz": "Нет/Такого"}))["days"] == {"27.09.2026": 3}
 
 

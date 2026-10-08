@@ -1,16 +1,16 @@
 """Расписание сборов (этап 28): когда программа сама собирает данные из
-источников. Работает внутри службы — отдельным потоком того же процесса, что и
+источников. Работает внутри службы – отдельным потоком того же процесса, что и
 сам сбор (scan_collect.start); раз в полминуты смотрит, не пора ли.
 
 Настройка у каждого источника своя (app_settings, ключ «schedule»):
-- mode: off — только вручную; every — каждые minutes минут, в часы с time_from до
-  time_to (одинаковые — круглые сутки); daily — раз в день в time_at;
-- days: all — каждый день, work — по будням.
-Время — по часам сервера ITDB.
+- mode: off – только вручную; every – каждые minutes минут, в часы с time_from до
+  time_to (одинаковые – круглые сутки); daily – раз в день в time_at;
+- days: all – каждый день, work – по будням.
+Время – по часам сервера ITDB.
 
-Следующий запуск считается от последнего (любого — и ручного): «каждые 30 мин»
+Следующий запуск считается от последнего (любого – и ручного): «каждые 30 мин»
 значит «не чаще, чем через 30 минут после прошлого». Сбор ещё идёт или источник
-выключен — запуск пропускается. Пропущенное за время простоя программы не
+выключен – запуск пропускается. Пропущенное за время простоя программы не
 навёрстывается пачкой: будет один запуск.
 """
 import logging
@@ -36,7 +36,7 @@ RUNS_KEEP_DAYS = 90
 
 
 def parse_time(text):
-    """«8:05» → time(8, 5); не время — None."""
+    """«8:05» → time(8, 5); не время – None."""
     try:
         hours, minutes = str(text or "").strip().split(":")
         return time(int(hours), int(minutes))
@@ -87,8 +87,8 @@ def in_window(moment, start, end):
 
 
 def next_run(conf, last, now):
-    """Когда следующий запуск (время сервера, с поясом); None — только вручную.
-    last — когда начался прошлый сбор; время в прошлом — пора сейчас."""
+    """Когда следующий запуск (время сервера, с поясом); None – только вручную.
+    last – когда начался прошлый сбор; время в прошлом – пора сейчас."""
     if conf["mode"] == "off":
         return None
 
@@ -108,7 +108,7 @@ def next_run(conf, last, now):
     moment = last + timedelta(minutes=conf["minutes"]) if last is not None else now
     moment = max(moment, now - timedelta(days=1))
 
-    # Не тот день или не те часы — на ближайшее начало разрешённых часов
+    # Не тот день или не те часы – на ближайшее начало разрешённых часов
     for _ in range(16):
         if day_allowed(moment, conf["days"]) and in_window(moment, start, end):
             return moment
@@ -135,7 +135,7 @@ def available(session, kind):
 
 
 def tick(session, now=None):
-    """Запустить сборы, которым пора. Ответ — какие источники запущены."""
+    """Запустить сборы, которым пора. Ответ – какие источники запущены."""
     now = now or datetime.now().astimezone()
     started = []
 
@@ -152,7 +152,7 @@ def tick(session, now=None):
             scan_collect.start(session, kind, USER)
             started.append(kind)
         except scan_collect.CollectRefused:
-            session.rollback()   # ещё идёт прошлый — в другой раз
+            session.rollback()   # ещё идёт прошлый – в другой раз
 
     return started
 
@@ -194,7 +194,7 @@ def _loop():
                 prune_runs(session)
 
             ticks += 1
-        except Exception:  # noqa: BLE001 — сбой одного прохода не должен остановить расписание
+        except Exception:  # noqa: BLE001 – сбой одного прохода не должен остановить расписание
             logger.exception("Расписание сборов: ошибка")
             session.rollback()
         finally:

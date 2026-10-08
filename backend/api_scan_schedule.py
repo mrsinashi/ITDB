@@ -1,8 +1,8 @@
-"""Расписание сборов (этап 28) — вкладка «Расписание» в «Сканере». Только администратор.
+"""Расписание сборов (этап 28) – вкладка «Расписание» в «Сканере». Только администратор.
 
-- GET   /api/scan/schedule — настройка каждого источника, последний и следующий запуск;
-- PATCH /api/scan/schedule/{kind} — изменить (пишется в Историю, видит администратор).
-Сам запуск по расписанию — scan_schedule.py.
+- GET   /api/scan/schedule – настройка каждого источника, последний и следующий запуск;
+- PATCH /api/scan/schedule/{kind} – изменить (пишется в Историю, видит администратор).
+Сам запуск по расписанию – scan_schedule.py.
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -105,11 +105,11 @@ def update_schedule(kind: str, payload: ScheduleUpdate, me=Depends(require_admin
         raise HTTPException(status_code=400, detail="Такой частоты нет.")
 
     if "days" in data and data["days"] not in scan_schedule.DAYS:
-        raise HTTPException(status_code=400, detail="Дни — каждый день или по будням.")
+        raise HTTPException(status_code=400, detail="Дни – каждый день или по будням.")
 
     for field in ("time_from", "time_to", "time_at"):
         if field in data and scan_schedule.parse_time(data[field]) is None:
-            raise HTTPException(status_code=400, detail="Время — в виде ЧЧ:ММ.")
+            raise HTTPException(status_code=400, detail="Время – в виде ЧЧ:ММ.")
 
     # Строка настроек одна на все источники: два изменения разом не должны её ни
     # создать дважды, ни затереть друг друга

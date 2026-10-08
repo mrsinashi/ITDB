@@ -1,4 +1,4 @@
-"""Этап 26к: флешки и внешние диски — не DRIVE (по названию и по интерфейсу из
+"""Этап 26к: флешки и внешние диски – не DRIVE (по названию и по интерфейсу из
 GLPI); выделения значений в Таблице настраиваются (повтор, «нет в Jabber»,
 «давно не подключался», «имя на ПК другое», «срок прошёл»)."""
 import scan_normalize as sn
@@ -18,7 +18,7 @@ def test_usb_disks_by_name_and_interface():
         {"name": "Seagate Expansion Desk", "mb": 1907729},
     ]
     assert sn.drives_short(disks) == "SSD 250"
-    # Название обычное, но интерфейс — USB (бокс с диском)
+    # Название обычное, но интерфейс – USB (бокс с диском)
     assert sn.drives_short([disks[0], {"name": "ST1000LM035-1RK172", "mb": 953869, "interface": "USB"}]) == "SSD 250"
     assert sn.drives_short([disks[0], {"name": "ST1000LM035-1RK172", "mb": 953869, "interface": "SATA"}]) == "SSD 250\nHDD 1TB"
 
@@ -34,7 +34,7 @@ def test_collect_skips_usb_interface(admin, glpi_url):
     assert recs[1]["values"]["drive"] == "SSD 250"
     assert recs[2]["values"]["drive"] == "SSD 250\nHDD 2TB"
 
-    # Список моделей дисков не отдали (нет права) — сбор идёт, отсев только по названию
+    # Список моделей дисков не отдали (нет права) – сбор идёт, отсев только по названию
     Glpi.disk_models = False
     assert collect(admin)["status"] == "ok"
     assert records(admin)[1][1]["values"]["drive"] == "SSD 250\nHDD 1TB"

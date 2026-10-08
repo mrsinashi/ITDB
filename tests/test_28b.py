@@ -31,10 +31,10 @@ def save_hosts(*items):
 def test_confirmed():
     computers = {
         1: {"hostname": "pc-1", "ip": "10.0.5.11", "mac": ""},                    # по IP, имя то же
-        2: {"hostname": "pc-2", "ip": "10.0.5.12", "mac": ""},                    # на адресе — другое имя
+        2: {"hostname": "pc-2", "ip": "10.0.5.12", "mac": ""},                    # на адресе – другое имя
         3: {"hostname": "pc-3", "ip": "10.0.5.13", "mac": ""},                    # имя неизвестно
         4: {"hostname": "pc-4", "ip": "10.0.5.14", "mac": "D8:CB:8A:00:00:14"},   # по MAC, на другом адресе
-        5: {"hostname": "pc-5", "ip": "10.0.5.15", "mac": ""},                    # на адресе — MAC ПК 4
+        5: {"hostname": "pc-5", "ip": "10.0.5.15", "mac": ""},                    # на адресе – MAC ПК 4
     }
     seen = [
         obs("10.0.5.11", "D8:CB:8A:00:00:11", "PC-1.corp.lan"),
@@ -65,7 +65,7 @@ def test_hosts_page(admin, editor, reader, room):
     assert [s["kind"] for s in data["sources"]] == ["dhcp", "net"]
     hosts = {h["ip"]: h for h in data["hosts"]}
 
-    # Источники говорят разное — оба значения, у каждого — откуда; привязка — последней
+    # Источники говорят разное – оба значения, у каждого – откуда; привязка – последней
     both = hosts["10.0.5.11"]
     assert both["mac"] == [
         {"value": "D8:CB:8A:00:00:11", "sources": ["Сканер", "Leases"], "stale": False},
@@ -82,7 +82,7 @@ def test_hosts_page(admin, editor, reader, room):
     assert both["ports"] == [445, 5900] and both["rfb"] == "003.008"
     assert [(c["computer_id"], c["by"]) for c in both["computers"]] == [(first, ["ip"])]
 
-    # Привязка: ПК найден по MAC из настроек, хотя IP в таблице у него другой; «когда» — пусто
+    # Привязка: ПК найден по MAC из настроек, хотя IP в таблице у него другой; «когда» – пусто
     fixed = hosts["10.0.5.12"]
     assert fixed["conf"]["text"] == "привязка" and fixed["dhcp"] is None and fixed["net"] is None
     assert fixed["seen_at"] is None and fixed["ports"] is None
@@ -99,7 +99,7 @@ def test_hosts_page(admin, editor, reader, room):
 
 
 def test_verified(admin, editor, reader, room, glpi_url):
-    """Проверен — и запись GLPI / GSIT сопоставлена, и сеть видит ПК наверняка."""
+    """Проверен – и запись GLPI / GSIT сопоставлена, и сеть видит ПК наверняка."""
     loc = room["room"]
     both = add_pc(editor, loc, "pc-1", ip="10.0.5.11", mac="D8:BB:C1:00:00:01")
     only_glpi = add_pc(editor, loc, "pc-2", ip="10.0.5.12", mac="D8:BB:C1:00:00:02")
@@ -120,13 +120,13 @@ def test_verified(admin, editor, reader, room, glpi_url):
     assert verified == {str(both): ["GLPI", "Сеть"]}
     assert str(only_glpi) not in verified and str(only_net) not in verified
 
-    # Сеть выключена — проверенных нет
+    # Сеть выключена – проверенных нет
     ok(admin.patch("/api/scan/sources/net", json={"enabled": False}))
     assert ok(reader.get("/api/scan/diffs"))["verified"] == {}
 
 
 def test_mark_and_antivirus_styles(editor, reader):
-    """У выделений и антивирусов — те же кнопки, что у значений: Ч, З, фон блочком."""
+    """У выделений и антивирусов – те же кнопки, что у значений: Ч, З, фон блочком."""
     marks = {m["kind"]: m for m in ok(reader.get("/api/table-marks"))}
     assert marks["verified"]["label"] == "Проверен сетью и GLPI / GSIT"
     # «Проверен» сам ничего не выделяет, пока вид не задан
@@ -162,17 +162,17 @@ def test_undo_last(admin, editor, reader, room):
     ok(editor.patch(f"/api/computers/{first}", json={"ram": "16", "_version": get_row(editor, first)["version"]}))
     ok(editor.patch(f"/api/computers/{first}", json={"os": "Win 11", "_version": get_row(editor, first)["version"]}))
 
-    # Последнее действие — ОС
+    # Последнее действие – ОС
     undone = ok(editor.post("/api/history/undo-last"))
-    assert undone["text"] == "pc-1 — Операционная система" and undone["count"] == 1 and undone["entities"] == ["computers"]
+    assert undone["text"] == "pc-1 – Операционная система" and undone["count"] == 1 and undone["entities"] == ["computers"]
     row = get_row(editor, first)
     assert (row["os"], row["ram"]) == (None, "16")
 
-    # Следующее — ОЗУ; отменённое в счёт не идёт
+    # Следующее – ОЗУ; отменённое в счёт не идёт
     again = ok(editor.post("/api/history/undo-last"))
-    assert again["text"] == "pc-1 — Оперативная память" and get_row(editor, first)["ram"] == "8"
+    assert again["text"] == "pc-1 – Оперативная память" and get_row(editor, first)["ram"] == "8"
 
-    # Вернуть (Ctrl+Y) — обычным восстановлением отменённого
+    # Вернуть (Ctrl+Y) – обычным восстановлением отменённого
     ok(editor.post("/api/history/cancel", json={"items": again["items"], "cancel": False}))
     assert get_row(editor, first)["ram"] == "16"
 
@@ -191,7 +191,7 @@ def test_undo_last_stops_at_creation(editor, room):
 
 
 def test_undo_last_stops_at_settings(editor, room):
-    """Последним была настройка без отмены — Ctrl+Z не трогает то, что было раньше."""
+    """Последним была настройка без отмены – Ctrl+Z не трогает то, что было раньше."""
     first = add_pc(editor, room["room"], "pc-1")
     ok(editor.patch(f"/api/computers/{first}", json={"ram": "16", "_version": get_row(editor, first)["version"]}))
     ok(editor.patch("/api/table-marks/verified", json={"bold": True}))

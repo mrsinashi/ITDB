@@ -27,7 +27,7 @@ def style_dict(item):
 
 
 def is_empty(item):
-    """Оформления нет («блочком» без фона ничего не значит) — строка не нужна."""
+    """Оформления нет («блочком» без фона ничего не значит) – строка не нужна."""
     return not (item.color or item.bg_color or item.bold or item.italic or item.underline or item.strike)
 
 
@@ -69,7 +69,7 @@ def update_column_style(
             setattr(item, name, bool(payload.get(name)))
 
     result = style_dict(item)
-    # Оформление столбца: entity_id 0, столбец — в entity_key
+    # Оформление столбца: entity_id 0, столбец – в entity_key
     log_change(session, "column_styles", 0, user["login"],
                {name: {"old": before[name], "new": result[name]} for name in STYLE_FIELDS},
                title=column_label(session, field), entity_key=field)

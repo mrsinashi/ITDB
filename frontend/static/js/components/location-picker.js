@@ -1,9 +1,10 @@
 // Выбор расположения ПК: поле поиска и список узлов дерева путями
 // («ул. Ленина, 1 → Терапия → 201»). Слова ищутся в любом месте пути.
-// editor — редактор поверх ячейки: открыт сразу, Esc и уход фокуса — отмена.
+// editor – редактор поверх ячейки: открыт сразу, Esc и уход фокуса – отмена.
 // Список выносится в body: таблица и карточка обрезают всё, что за краем.
-// can-add-room — внизу списка «＋ новый кабинет» в найденном отделении или этаже
-// (у отделения и этажа под курсором — тоже): событие add-room { parentId, code, name }.
+// can-add-room – внизу списка «＋ новый кабинет» в найденном отделении или этаже
+// (у отделения и этажа под курсором – тоже; у кабинета – новый после него, этап 37):
+// событие add-room { parentId, afterId, code, name }.
 
 import { searchWordsIn } from "../util.js";
 
@@ -15,8 +16,8 @@ function isRoomParent(o) {
     return ROOM_PARENTS.indexOf(o.kind) !== -1;
 }
 
-// Слова, которых нет в пути узла, — номер и название нового кабинета:
-// первое слово с цифрой — номер, остальные — название (с прописной)
+// Слова, которых нет в пути узла, – номер и название нового кабинета:
+// первое слово с цифрой – номер, остальные – название (с прописной)
 function roomFromTokens(tokens) {
     let code = "";
     const rest = [];
@@ -50,7 +51,7 @@ export default {
             const value = this.value;
             return this.options.find(function (o) { return o.id === value; }) || null;
         },
-        // Слово, которого нет ни в одном пути, — в другой раскладке
+        // Слово, которого нет ни в одном пути, – в другой раскладке
         words() {
             return searchWordsIn(this.query, this.options.map(function (o) { return o.search; }));
         },
@@ -63,9 +64,9 @@ export default {
                 return words.every(function (w) { return o.search.indexOf(w) !== -1; });
             });
         },
-        // Кабинета среди найденного нет — новый кабинет: в отделениях и этажах, где
-        // нашлось больше всего слов поиска; остальные слова — номер и название.
-        // Нигде не нашлось — один пункт без места (выбрать в строке нового кабинета)
+        // Кабинета среди найденного нет – новый кабинет: в отделениях и этажах, где
+        // нашлось больше всего слов поиска; остальные слова – номер и название.
+        // Нигде не нашлось – один пункт без места (выбрать в строке нового кабинета)
         addItems() {
             const words = this.words;
             if (!this.canAddRoom || !words.length || this.filtered.some(function (o) { return o.kind === "room"; })) {
@@ -91,7 +92,7 @@ export default {
                 const room = roomFromTokens(tokens);
                 return [{ add: true, key: "add", parent: null, code: room.code, name: room.name, label: [room.code, room.name].filter(Boolean).join(" ") }];
             }
-            // Отделение с этажами — кабинет на этаж: отделение, у которого нашлись этажи, не предлагать
+            // Отделение с этажами – кабинет на этаж: отделение, у которого нашлись этажи, не предлагать
             const deepest = found.filter(function (o) {
                 return !found.some(function (x) { return x !== o && x.path.indexOf(o.path + " → ") === 0; });
             });
@@ -130,7 +131,7 @@ export default {
         query() {
             this.active = 0;
         },
-        // Дерево догрузилось, пока список открыт, — встать на текущий узел
+        // Дерево догрузилось, пока список открыт, – встать на текущий узел
         options() {
             if (this.open && !this.query) {
                 this.activateCurrent();
@@ -243,7 +244,7 @@ export default {
                 }
             } else if (key === "Enter") {
                 if (!this.open) {
-                    return; // в форме Enter без открытого списка — дальше, к форме
+                    return; // в форме Enter без открытого списка – дальше, к форме
                 }
                 event.preventDefault();
                 event.stopPropagation();
@@ -273,12 +274,17 @@ export default {
             this.hide();
             this.$emit("pick", option.id);
         },
-        // «＋ кабинет» у отделения или этажа под курсором: номер и название — из слов
-        // поиска, которых нет в его пути
+        // «＋ кабинет» у отделения или этажа под курсором – кабинет в нём, у кабинета –
+        // рядом, сразу после него; номер и название – из слов поиска, которых нет в пути
         addHere(option) {
             const words = this.words;
             const tokens = this.query.trim().split(/\s+/).filter(Boolean);
             const room = roomFromTokens(tokens.filter(function (t, i) { return option.search.indexOf(words[i]) === -1; }));
+            if (option.kind === "room") {
+                this.hide();
+                this.$emit("add-room", { parentId: option.parentId, afterId: option.id, code: room.code, name: room.name });
+                return;
+            }
             this.addRoom(option, room.code, room.name);
         },
         addRoom(parent, code, name) {
@@ -286,7 +292,7 @@ export default {
             this.$emit("add-room", { parentId: parent ? parent.id : null, code: code, name: name });
         },
         canAddHere(option) {
-            return this.canAddRoom && isRoomParent(option);
+            return this.canAddRoom && (isRoomParent(option) || (option.kind === "room" && !!option.parentId));
         }
     },
     template: `
@@ -304,7 +310,7 @@ export default {
                             title="Новый кабинет" @mousemove="active = i" @click="pick(o)"><template v-if="o.parent">{{ o.parent.path }} → </template><b>＋ {{ o.label || "новый кабинет" }}</b></div>
                         <div v-else class="ll-item"
                             :class="['kind-' + o.kind, { active: i === active, current: o.id === value }]"
-                            @mousemove="active = i" @click="pick(o)"><span v-if="i === active && canAddHere(o)" class="ll-add" title="Новый кабинет здесь" @click.stop="addHere(o)">＋ кабинет</span>{{ o.path }}</div>
+                            @mousemove="active = i" @click="pick(o)"><span v-if="i === active && canAddHere(o)" class="ll-add" :title="o.kind === 'room' ? 'Новый кабинет после этого' : 'Новый кабинет здесь'" @click.stop="addHere(o)">＋ кабинет</span>{{ o.path }}</div>
                     </template>
                 </div>
             </teleport>

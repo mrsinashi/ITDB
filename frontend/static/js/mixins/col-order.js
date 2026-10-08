@@ -1,17 +1,17 @@
-// Таблица: порядок столбцов — перетаскивание шапки мышью. У каждого вида свой,
-// запоминается в браузере; вернуть исходный — меню «Столбцы».
+// Таблица: порядок столбцов – перетаскивание шапки мышью. У каждого вида свой,
+// запоминается в браузере; вернуть исходный – меню «Столбцы».
 
 import { saveJson } from "../util.js";
 import { COLUMN_ORDER_KEY, COLUMN_ORDER2_KEY } from "../columns.js";
 
-// Сдвиг мыши, после которого нажатие на шапке — перетаскивание, а не клик
+// Сдвиг мыши, после которого нажатие на шапке – перетаскивание, а не клик
 const DRAG_START = 5;
 // Полоса у левого и правого края области таблицы: там она прокручивается сама
 const SCROLL_ZONE = 40;
 
 export default {
     computed: {
-        // Порядок столбцов текущего вида; null — как с сервера
+        // Порядок столбцов текущего вида; null – как с сервера
         columnOrderNow() {
             const order = this.tableView === 2 ? this.columnOrder2 : this.columnOrder;
             return Array.isArray(order) ? order : null;
@@ -24,9 +24,9 @@ export default {
     },
 
     methods: {
-        // Нажатие на шапке: отпустили на месте — клик (сортировка, с Ctrl — закрепление),
-        // повели мышь в сторону — перетаскивание столбца. Всё, что меняется на каждое
-        // движение, — прямо в стилях элементов, в данные — только итог
+        // Нажатие на шапке: отпустили на месте – клик (сортировка, с Ctrl – закрепление),
+        // повели мышь в сторону – перетаскивание столбца. Всё, что меняется на каждое
+        // движение, – прямо в стилях элементов, в данные – только итог
         onHeadMouseDown(event, col) {
             if (event.button !== 0 || this._colDrag || col.virtual || event.target.closest(".resize-handle, .th-filter")) {
                 return;
@@ -57,7 +57,7 @@ export default {
                 this.colDragUpdate();
                 this.colDragAutoScroll();
             };
-            // Esc — отменить; кнопку ещё держат, поэтому отпускание ждём дальше
+            // Esc – отменить; кнопку ещё держат, поэтому отпускание ждём дальше
             const onKey = (e) => {
                 if (e.key === "Escape" && drag.started && !drag.cancelled) {
                     e.preventDefault();
@@ -79,7 +79,7 @@ export default {
                     this.moveColumn(drag.field, drag.target);
                 }
                 this.clearColDrag(drag);
-                // Отпускание после перетаскивания — не клик по шапке
+                // Отпускание после перетаскивания – не клик по шапке
                 this.colDragDone = true;
                 setTimeout(() => {
                     this.colDragDone = false;
@@ -93,7 +93,7 @@ export default {
             window.addEventListener("blur", onBlur);
         },
 
-        // Столбец «в руке» — полупрозрачный призрак за курсором; куда встанет — линия
+        // Столбец «в руке» – полупрозрачный призрак за курсором; куда встанет – линия
         startColDrag(drag) {
             drag.started = true;
             const box = drag.th.getBoundingClientRect();
@@ -107,7 +107,7 @@ export default {
             const head = document.createElement("div");
             head.className = "cdg-head";
             head.textContent = drag.label;
-            // Шапка призрака — как у столбца, и в масштабе по ширине окна
+            // Шапка призрака – как у столбца, и в масштабе по ширине окна
             head.style.height = head.style.lineHeight = box.height + "px";
             head.style.fontSize = (12 * (this.tableFit ? this.tableZoom : 1)) + "px";
             ghost.appendChild(head);
@@ -134,7 +134,7 @@ export default {
         },
 
         // Куда встанет столбец: ближняя к курсору граница столбца шапки под ним
-        // (прилипший закреплённый — поверх тех, что уехали под него)
+        // (прилипший закреплённый – поверх тех, что уехали под него)
         colDragUpdate() {
             const drag = this._colDrag;
             const wrap = this.$refs.tableWrap;
@@ -167,14 +167,14 @@ export default {
                 index = ths.indexOf(th) + (after ? 1 : 0);
                 edge = after ? r.right : r.left;
             } else if (x < tableBox.left + tableBox.width / 2) {
-                // Таблица уже окна — левее или правее её
+                // Таблица уже окна – левее или правее её
                 index = 0;
                 edge = ths[0].getBoundingClientRect().left;
             } else {
                 index = ths.length;
                 edge = ths[ths.length - 1].getBoundingClientRect().right;
             }
-            // На своё же место — линии нет
+            // На своё же место – линии нет
             const from = ths.indexOf(drag.th);
             drag.target = index === from || index === from + 1 ? null : index;
             const mark = drag.mark.style;
@@ -188,7 +188,7 @@ export default {
             mark.height = height + "px";
         },
 
-        // У левого и правого края — прокрутка, пока держат мышь
+        // У левого и правого края – прокрутка, пока держат мышь
         colDragAutoScroll() {
             const drag = this._colDrag;
             const wrap = this.$refs.tableWrap;
@@ -220,9 +220,9 @@ export default {
             step();
         },
 
-        // Переставить столбец на место index среди столбцов на экране (счёт — до
-        // перестановки). Скрытые столбцы остаются, где были; «По правилу» (этап 36) — не
-        // столбец: место перед ним — это место перед HOSTNAME
+        // Переставить столбец на место index среди столбцов на экране (счёт – до
+        // перестановки). Скрытые столбцы остаются, где были; «По правилу» (этап 36) – не
+        // столбец: место перед ним – это место перед HOSTNAME
         moveColumn(field, at) {
             const shown = this.viewColumns;
             const index = at - shown.filter(function (col, i) { return col.virtual && i < at; }).length;

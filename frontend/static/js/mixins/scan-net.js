@@ -1,24 +1,24 @@
 // Вкладка «Сеть» «Сканера» (этап 28б): что собрали DHCP (аренды и привязки из
-// настроек) и проход подсетей — по строке на адрес: MAC, имя машины, что сказал
+// настроек) и проход подсетей – по строке на адрес: MAC, имя машины, что сказал
 // каждый источник, открытые порты и какой ПК таблицы на этом адресе (по IP из
-// таблицы или по MAC). Источники называют разный MAC или имя — значения строками,
-// откуда каждое — в подсказке (28в). Этап 31: фильтры по источникам (Сканер — проход
-// подсетей, Leases — аренды DHCP, DHCP Config — привязки), у каждого значения в
-// подсказке — «Источник: …»; то, что видели давно (старше срока «Актуальны»), не
-// удаляется, а показывается серым. Данные — /api/scan/hosts; собирает сервер
+// таблицы или по MAC). Источники называют разный MAC или имя – значения строками,
+// откуда каждое – в подсказке (28в). Этап 31: фильтры по источникам (Сканер – проход
+// подсетей, Leases – аренды DHCP, DHCP Config – привязки), у каждого значения в
+// подсказке – «Источник: …»; то, что видели давно (старше срока «Актуальны»), не
+// удаляется, а показывается серым. Данные – /api/scan/hosts; собирает сервер
 // («Собрать» на «Проверке», расписание).
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 
 export const NET_FILTERS = [
     { key: "all", label: "Все" },
-    { key: "known", label: "В таблице", title: "На адресе — ПК таблицы" },
+    { key: "known", label: "В таблице", title: "На адресе – ПК таблицы" },
     { key: "unknown", label: "Нет в таблице" },
     { key: "differ", label: "Расхождения", title: "Источники называют разный MAC или имя", optional: true }
 ];
 
 // Фильтры по источникам: адреса, о которых источник что-то знает. Нажатие на
-// включённый — снять
+// включённый – снять
 export const NET_SOURCES = [
     { key: "net", label: "Сканер", title: "Ответили при проходе подсетей" },
     { key: "dhcp", label: "Leases", title: "Есть аренда DHCP" },
@@ -51,7 +51,7 @@ export default {
             return NET_FILTERS;
         },
 
-        // «Расхождения» — только когда они есть
+        // «Расхождения» – только когда они есть
         netFiltersShown() {
             return NET_FILTERS.filter((f) => !f.optional || this.netCounts[f.key] || this.net.filter === f.key);
         },
@@ -73,7 +73,7 @@ export default {
             return NET_SOURCES;
         },
 
-        // Числа на кнопках: у первого ряда — с учётом выбранного источника, у источников —
+        // Числа на кнопках: у первого ряда – с учётом выбранного источника, у источников –
         // с учётом первого ряда
         netCounts() {
             const counts = {};
@@ -124,7 +124,7 @@ export default {
             if (this.net.loading && !this.net.data) {
                 return "Загрузка…";
             }
-            return this.netHosts.length ? "Ничего не найдено." : "Пока пусто — собери DHCP или Сеть.";
+            return this.netHosts.length ? "Ничего не найдено." : "Пока пусто – собери DHCP или Сеть.";
         },
 
         setNetSource(key) {
@@ -162,7 +162,7 @@ export default {
             if (!s) {
                 return null;
             }
-            return [who ? fromText([who]) : "", this.formatTime(s.seen_at) + (s.stale ? " — давно" : ""), s.mac ? "MAC: " + s.mac : "", s.name ? "Имя: " + s.name : ""].concat(s.details || []).filter(Boolean).join("\n");
+            return [who ? fromText([who]) : "", this.formatTime(s.seen_at) + (s.stale ? " – давно" : ""), s.mac ? "MAC: " + s.mac : "", s.name ? "Имя: " + s.name : ""].concat(s.details || []).filter(Boolean).join("\n");
         },
 
         // Столбец «DHCP»: аренда и (или) привязка из настроек
@@ -186,7 +186,7 @@ export default {
             }
             return [fromText(["Сканер"])].concat(h.ports.map(function (port) {
                 const name = PORT_NAMES[port] || "";
-                return port + (name ? " — " + name : "") + (port === 5900 && h.rfb ? " (RFB " + h.rfb + ")" : "");
+                return port + (name ? " – " + name : "") + (port === 5900 && h.rfb ? " (RFB " + h.rfb + ")" : "");
             })).join("\n");
         },
 

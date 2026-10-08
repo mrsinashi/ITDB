@@ -6,7 +6,7 @@ async function checkAlreadyLogged() {
       window.location.replace("/");
     }
   } catch (e) {
-    // не залогинен — оставляем форму входа
+    // не залогинен – оставляем форму входа
   }
 }
 

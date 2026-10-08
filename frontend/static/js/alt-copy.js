@@ -1,7 +1,7 @@
 // Alt + клик копирует значение под курсором во всех таблицах, кроме главной (у неё
-// своё копирование, по строкам значения — mixins/table.js) и карточки ПК (там
+// своё копирование, по строкам значения – mixins/table.js) и карточки ПК (там
 // значение копирует обычный клик). Пока Alt зажат, значение затемнено, после
-// клика — зелёное. Подсветка — один элемент в body, стиль пишется прямо в него:
+// клика – зелёное. Подсветка – один элемент в body, стиль пишется прямо в него:
 // данные Vue не трогаются, страница не перерисовывается.
 
 // Где копировать: ячейки таблиц, строки Дерева, значения Справочников
@@ -43,7 +43,7 @@ function targetAt(x, y) {
     if (!caret || caret.node.nodeType !== 3 || !cell.contains(caret.node)) {
         return null;
     }
-    // Значение — кусок текста под курсором; в многострочном — одна строка
+    // Значение – кусок текста под курсором; в многострочном – одна строка
     const data = caret.node.data;
     let start = 0;
     let end = data.length;
@@ -55,7 +55,7 @@ function targetAt(x, y) {
         }
     }
     const text = data.slice(start, end).replace(/\s+/g, " ").trim();
-    if (!text || text === "—") {
+    if (!text || text === "–") {
         return null;
     }
     const range = document.createRange();
@@ -65,7 +65,7 @@ function targetAt(x, y) {
     const box = cell.getBoundingClientRect();
     const left = Math.max(rect.left, box.left + 2);
     const right = Math.min(rect.right, box.right - 2);
-    // Курсор далеко от текста (пустое место ячейки рядом с другим значением) — не оно
+    // Курсор далеко от текста (пустое место ячейки рядом с другим значением) – не оно
     if (right <= left || !rect.height || y < rect.top - 6 || y > rect.bottom + 6) {
         return null;
     }
@@ -83,7 +83,7 @@ function show(target) {
     const top = Math.round(target.rect.top) - 1;
     const left = Math.round(target.rect.left) - 3;
     if (shown && shown.text === target.text && shown.top === top && shown.left === left) {
-        return; // то же значение — не сбрасывать зелёный «скопировано»
+        return; // то же значение – не сбрасывать зелёный «скопировано»
     }
     if (!hintEl) {
         hintEl = document.createElement("div");
@@ -96,7 +96,7 @@ function show(target) {
     shown = { text: target.text, top: top, left: left };
 }
 
-// Подсветить значение под курсором (Alt зажат); true — есть что копировать
+// Подсветить значение под курсором (Alt зажат); true – есть что копировать
 function update() {
     const target = mouseX === null ? null : targetAt(mouseX, mouseY);
     if (target) {
@@ -123,7 +123,7 @@ document.addEventListener("scroll", function () {
     }
 }, { capture: true, passive: true });
 
-// Отпущенный Alt в Windows выделяет меню браузера — над значением это гасится
+// Отпущенный Alt в Windows выделяет меню браузера – над значением это гасится
 window.addEventListener("keydown", function (event) {
     if (event.key === "Alt" && update()) {
         event.preventDefault();

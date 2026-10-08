@@ -1,6 +1,6 @@
 """Jabber (VACUUM, этап 26д): сбор пользователей из веб-админки ejabberd 14.12 и
 вкладка «Vacuum». Веб-админка изображается маленьким HTTP-сервером в этом же
-процессе: страницы — как у ejabberd 14.12 (прислал пользователь 30.09)."""
+процессе: страницы – как у ejabberd 14.12 (прислал пользователь 30.09)."""
 import base64
 import threading
 import time
@@ -27,7 +27,7 @@ class Ejabberd:
     groups = {}      # группа → [JID]
     online = {}      # логин → [(клиент, адрес)]
     roster_fails = False
-    users = None     # список пользователей (этап 26ж): логин → «Последнее подключение»; None — страницы нет
+    users = None     # список пользователей (этап 26ж): логин → «Последнее подключение»; None – страницы нет
     asked = []       # какие страницы users/… спрашивали
 
 
@@ -179,11 +179,11 @@ def test_collect_and_tab(admin, editor, reader, room, jabber_url):
     addresses = users["petrova"]["addresses"]
     assert [a["ip"] for a in addresses] == ["10.0.2.12", "10.9.9.9"]
     assert addresses[0]["hosts"][0]["hostname"] == "ter-201-2" and addresses[1]["hosts"] == []
-    # Списка пользователей у этой веб-админки нет — пометок нет, в итоге — предупреждение
+    # Списка пользователей у этой веб-админки нет – пометок нет, в итоге – предупреждение
     assert "Список пользователей не получен" in run["message"]
     assert not users["ivanov"]["gone"] and not users["ivanov"]["no_group"]
 
-    # Ушёл из сети — остаются последний IP и время; пропал из групп — без групп
+    # Ушёл из сети – остаются последний IP и время; пропал из групп – без групп
     seen = users["ivanov"]["last_seen_at"]
     Ejabberd.online = {"petrova": [("Vacuum-IM", "10.0.2.12")]}
     Ejabberd.groups = {"ИТ": [f"petrova@{DOMAIN}"]}
@@ -194,13 +194,13 @@ def test_collect_and_tab(admin, editor, reader, room, jabber_url):
     assert [a["ip"] for a in ivanov["addresses"]] == ["10.0.2.11"]
     assert users["petrova"]["groups"] == ["ИТ"]
 
-    # Группы не получены — прежние остаются, в итоге сбора — предупреждение
+    # Группы не получены – прежние остаются, в итоге сбора – предупреждение
     Ejabberd.roster_fails = True
     run = collect(admin)
     assert run["status"] == "ok" and "Группы не получены" in run["message"]
     assert users_of(admin)["petrova"]["groups"] == ["ИТ"]
 
-    # Смотреть — редактор и администратор; собирать — администратор
+    # Смотреть – редактор и администратор; собирать – администратор
     assert reader.get("/api/scan/jabber").status_code == 403
     assert editor.post("/api/scan/sources/jabber/collect").status_code == 403
     data = ok(editor.get("/api/scan/jabber"))

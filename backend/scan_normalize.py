@@ -1,10 +1,10 @@
 """Данные из GLPI / GSIT → значения в формате ITDB и признаки для сопоставления
 (этап 25). Здесь только разбор: без базы и без сети.
 
-Признаки (keys) — то, по чему запись источника можно надёжно связать с ПК:
+Признаки (keys) – то, по чему запись источника можно надёжно связать с ПК:
 физические MAC (без виртуальных адаптеров и случайных MAC), настоящий серийный
 (без «Default string», «To be filled by O.E.M.», испорченных Excel-ом и т. п.),
-UUID (без заводских заглушек). Значения (values) — как их пишут в таблице ITDB:
+UUID (без заводских заглушек). Значения (values) – как их пишут в таблице ITDB:
 «Win 10», «i5-10400», «8», «SSD 250», MAC прописными через «:».
 """
 import ipaddress
@@ -64,7 +64,7 @@ def clean_uuid(value):
 # Виртуальные адаптеры, одинаковые на многих ПК или не отражающие железо
 VIRTUAL_MAC_PREFIXES = (
     "00:15:5D",        # Hyper-V (адаптеры хоста)
-    "00:50:56:C0",     # VMware Workstation — VMnet на хосте (у всех одинаковые)
+    "00:50:56:C0",     # VMware Workstation – VMnet на хосте (у всех одинаковые)
     "00:FF:",          # TAP-Windows (OpenVPN и др.)
     "00:05:9A",        # Cisco AnyConnect
     "00:09:0F:FE",     # FortiClient
@@ -83,7 +83,7 @@ MAC_RE = re.compile(r"^[0-9A-F]{2}([:-]?[0-9A-F]{2}){5}$")
 
 
 def norm_mac(value):
-    """«aa-bb-cc-dd-ee-ff» → «AA:BB:CC:DD:EE:FF»; не MAC — None."""
+    """«aa-bb-cc-dd-ee-ff» → «AA:BB:CC:DD:EE:FF»; не MAC – None."""
     text = str(value or "").strip().upper()
 
     if not MAC_RE.match(text):
@@ -97,7 +97,7 @@ def is_virtual_mac(mac):
     if mac.startswith(VIRTUAL_MAC_PREFIXES) or mac == "FF:FF:FF:FF:FF:FF":
         return True
 
-    # Второй бит первого байта — «локально назначенный» MAC: виртуальные
+    # Второй бит первого байта – «локально назначенный» MAC: виртуальные
     # адаптеры и случайные MAC Wi-Fi. Для опознания ПК не годится
     return bool(int(mac[:2], 16) & 0x02)
 
@@ -168,7 +168,7 @@ def windows_by_kernel(text):
 
 def os_short(name, version=None, kernel=None):
     """«Microsoft Windows 10 Pro» → «Win 10», «Astra Linux…» → «Astra».
-    GSIT (FusionInventory) пишет просто «Windows» + «22H2» — тогда номер
+    GSIT (FusionInventory) пишет просто «Windows» + «22H2» – тогда номер
     берётся из версии ядра (10.0.19045 → 10, 10.0.22631 → 11)."""
     full = tidy(name)
 
@@ -253,7 +253,7 @@ DISK_SKIP = re.compile(
     r"|my\s*passport|my\s*book|\belements\b|\bexpansion\b|backup\+?\s*plus|canvio|uas\b|uasp",
     re.I,
 )
-# Как подключён диск (GLPI: «Интерфейс» у модели диска): внешние — не DRIVE
+# Как подключён диск (GLPI: «Интерфейс» у модели диска): внешние – не DRIVE
 DISK_SKIP_INTERFACE = re.compile(r"usb|1394|firewire|thunderbolt", re.I)
 SSD_WORDS = re.compile(
     r"ssd|nvme|solid\s*state|\bm\.2\b|kingston\s+s[auvnkq]|\bsa400|\bsuv|\bskc|\bsnv|\bct\d+(bx|mx|p\d)"
@@ -293,7 +293,7 @@ def nearest_size(gb):
 def size_in_name(name, gb):
     """Объём из названия модели, если он сходится с объёмом диска (±12%):
     «KINGSTON SA400S37240G» → 240, «Samsung SSD 860 EVO 250GB» → 250,
-    «CT480BX500SSD1» → 480, «… 1TB» → 1000. Нет — None."""
+    «CT480BX500SSD1» → 480, «… 1TB» → 1000. Нет – None."""
     text = (name or "").upper()
     found = []
 
@@ -314,10 +314,10 @@ def disk_size_text(mb, name=None):
     """Объём, как пишут на наклейке и в названии диска.
 
     Агенты GLPI и FusionInventory пишут объём в «двоичных» МБ (1024×1024 байт):
-    128 ГБ = 122 104 МБ, 256 ГБ = 244 198 МБ. Поэтому: сначала — объём из
+    128 ГБ = 122 104 МБ, 256 ГБ = 244 198 МБ. Поэтому: сначала – объём из
     названия модели («SA400S37240G» → 240), если он сходится с объёмом диска;
-    иначе — ближайший объём с наклейки (128, 240, 256, 500…) по объёму в
-    двоичных МБ. Если источник записал обычные МБ (250 059 у диска 250 ГБ) —
+    иначе – ближайший объём с наклейки (128, 240, 256, 500…) по объёму в
+    двоичных МБ. Если источник записал обычные МБ (250 059 у диска 250 ГБ) –
     берётся то прочтение, которое ближе к объёму с наклейки."""
     binary = mb * MIB_TO_GB
     decimal = mb / 1000
@@ -350,7 +350,7 @@ def disk_kind(name, kind=None):
 
 def drives_short(disks):
     """[{"name", "mb", "kind", "interface"}] → «SSD 250\\nHDD 1TB» (SSD первыми).
-    Флешки и внешние диски (USB — по названию или интерфейсу) не считаются."""
+    Флешки и внешние диски (USB – по названию или интерфейсу) не считаются."""
     items = []
 
     for disk in disks:
@@ -397,7 +397,7 @@ def gpu_list(names):
 
 def gpu_short(names):
     """Дискретные видеокарты: «NVIDIA GeForce GT 1030» → «GT 1030». Встроенные
-    (Intel, Radeon Graphics в Ryzen) в столбце GPU не пишут — None."""
+    (Intel, Radeon Graphics в Ryzen) в столбце GPU не пишут – None."""
     result = []
 
     for text in gpu_list(names):
@@ -452,7 +452,7 @@ def manufacturer_short(name):
 
 
 def model_short(manufacturer, model):
-    """«HP» + «ProDesk 400 G7» → «HP ProDesk 400 G7»; заглушки — None."""
+    """«HP» + «ProDesk 400 G7» → «HP ProDesk 400 G7»; заглушки – None."""
     brand = manufacturer_short(manufacturer)
     text = tidy(model)
 
@@ -471,19 +471,19 @@ VNC_KINDS = [
     (r"tigervnc", "TigerVNC"),
     (r"realvnc|vnc\s+(server|connect)", "RealVNC"),
 ]
-# Только просмотрщик — не сервер: «UltraVNC Viewer», «VNC Viewer», «TightVNC Viewer»
+# Только просмотрщик – не сервер: «UltraVNC Viewer», «VNC Viewer», «TightVNC Viewer»
 VNC_VIEWER = re.compile(r"viewer|просмотр", re.I)
 
 
-# Если найдено несколько, сервер — TightVNC: UltraVNC рядом с ним ставят ради
-# просмотрщика (решение пользователя 01.10: «99,9% сервер — TightVNC»)
+# Если найдено несколько, сервер – TightVNC: UltraVNC рядом с ним ставят ради
+# просмотрщика (решение пользователя 01.10: «99,9% сервер – TightVNC»)
 VNC_MAIN = "TightVNC"
 
 
 def vnc_short(software_names):
     """VNC-сервер из установленных программ. Просмотрщики не в счёт. Найдено
-    несколько и среди них TightVNC — это TightVNC. Несколько других — все
-    строками (в расхождениях — «неточно»); точно покажет этап 28 — какой
+    несколько и среди них TightVNC – это TightVNC. Несколько других – все
+    строками (в расхождениях – «неточно»); точно покажет этап 28 – какой
     сервер отвечает на порту 5900."""
     found = []
 
@@ -504,11 +504,11 @@ def vnc_short(software_names):
 # ---------- Запись целиком ----------
 
 def build(raw):
-    """raw — то, что собрал клиент источника (scan_glpi.collect):
+    """raw – то, что собрал клиент источника (scan_glpi.collect):
     name, serial, uuid, manufacturer, model, os_name, os_version, cpus[],
     memory_mb, disks[{name, mb, kind}], gpus[], ports[{name, mac, ips}],
     softwares[], antivirus[{name, active, uptodate, version}], tag.
-    Ответ: (values, keys, data) — values в формате ITDB, keys для сопоставления."""
+    Ответ: (values, keys, data) – values в формате ITDB, keys для сопоставления."""
     macs = []        # признаки: только физические адаптеры с заводским MAC
     value_macs = []  # столбец MAC: все адаптеры железа (и Wi-Fi, Bluetooth)
     ips = []
@@ -527,7 +527,7 @@ def build(raw):
         if mac and mac not in value_macs:
             value_macs.append(mac)
 
-        # IP Wi-Fi со случайным MAC — тоже адрес этого ПК
+        # IP Wi-Fi со случайным MAC – тоже адрес этого ПК
         for ip in port_ips:
             if ip not in ips:
                 ips.append(ip)

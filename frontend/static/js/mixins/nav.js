@@ -1,10 +1,10 @@
 // Адреса страниц и переходы по ним (средняя кнопка открывает нужное место в
-// новой вкладке), Ctrl+Z — отменить своё последнее изменение, Ctrl+Y — вернуть.
+// новой вкладке), Ctrl+Z – отменить своё последнее изменение, Ctrl+Y – вернуть.
 
 import { apiFetch } from "../util.js";
 import { pageLink, parseHash } from "../route.js";
 
-// Вкладки «Сканера»: какие есть у редактора (остальные — только администратор)
+// Вкладки «Сканера»: какие есть у редактора (остальные – только администратор)
 const SCAN_TABS = ["check", "net", "names", "schedule", "settings"];
 const EDITOR_SCAN_TABS = ["check", "net"];
 
@@ -15,7 +15,7 @@ export default {
             return pageLink(page, params);
         },
 
-        // Обычный клик по ссылке-вкладке — переход на месте; с Ctrl / Shift —
+        // Обычный клик по ссылке-вкладке – переход на месте; с Ctrl / Shift –
         // как у любой ссылки (новая вкладка, новое окно)
         navClick(event, run) {
             if (event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -25,7 +25,7 @@ export default {
             run();
         },
 
-        // Адрес в строке браузера — как у открытой страницы (без записи в журнал переходов)
+        // Адрес в строке браузера – как у открытой страницы (без записи в журнал переходов)
         syncHash() {
             const page = this.view === "scan" ? "scan/" + this.scanTab
                 : (this.view === "choices" && this.choicesTab === "names" ? "choices/names" : this.view);
@@ -34,7 +34,7 @@ export default {
                 try {
                     window.history.replaceState(null, "", hash);
                 } catch (e) {
-                    // адрес не поменялся — не страшно
+                    // адрес не поменялся – не страшно
                 }
             }
         },
@@ -100,7 +100,7 @@ export default {
 
         // ---------- Ctrl+Z / Ctrl+Y ----------
 
-        // После отмены или возврата — перечитать то, что на экране
+        // После отмены или возврата – перечитать то, что на экране
         async reloadAfterUndo() {
             await this.afterHistoryAction();
             this.loadDiffs();

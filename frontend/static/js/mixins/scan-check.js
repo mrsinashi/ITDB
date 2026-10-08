@@ -1,20 +1,20 @@
 // «Сканирование» → «Проверка» (этап 26г): вместо вкладок «Сопоставление» и
-// «Расхождения» — один список того, что сканер (GLPI, GSIT) знает о ПК.
+// «Расхождения» – один список того, что сканер (GLPI, GSIT) знает о ПК.
 //
-// Строка — ПК, с которым сопоставлены записи источников (по признаку или вручную),
+// Строка – ПК, с которым сопоставлены записи источников (по признаку или вручную),
 // или запись, которую не удалось уверенно связать с ПК («привязать?», конфликт,
 // нет в таблице). Фильтры: «Нужно решить» (по умолчанию), «Не узнал ПК»,
 // «Предлагает другое», «В порядке», «Нет в таблице», «Отклонённые», «Все».
-// Клик по строке — подробности: поле | в таблице | GLPI | GSIT | что предлагается,
-// у каждого предложения ✓ / ✕, «ещё у N ПК» — такие же пары разом. Выделение — как
-// в Таблице (Ctrl / Shift + клик, Ctrl+A, Esc), «Выбрано: N ▾» — действия над
+// Клик по строке – подробности: поле | в таблице | GLPI | GSIT | что предлагается,
+// у каждого предложения ✓ / ✕, «ещё у N ПК» – такие же пары разом. Выделение – как
+// в Таблице (Ctrl / Shift + клик, Ctrl+A, Esc), «Выбрано: N ▾» – действия над
 // выбранными. Плашка действий у открытой строки идёт за строкой при прокрутке,
 // не заходя под шапку таблицы (двигается напрямую, без перерисовки Vue).
-// Этап 26е: ПК, о которых говорит только Jabber (VACUUM), — тоже строки;
-// HOSTNAME из источника только сообщается — «взять» его нельзя (d.can_take).
-// Этап 26ж: в подробностях — и «Мат. плата», и номера записей GLPI / GSIT.
-// Этап 28: кнопка «Фильтр» — по атрибутам (у каких полей есть предложения);
-// в подробностях — столбец «Сеть» (что видно по DHCP и проходу подсетей).
+// Этап 26е: ПК, о которых говорит только Jabber (VACUUM), – тоже строки;
+// HOSTNAME из источника только сообщается – «взять» его нельзя (d.can_take).
+// Этап 26ж: в подробностях – и «Мат. плата», и номера записей GLPI / GSIT.
+// Этап 28: кнопка «Фильтр» – по атрибутам (у каких полей есть предложения);
+// в подробностях – столбец «Сеть» (что видно по DHCP и проходу подсетей).
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords, clickSelect } from "../util.js";
 
@@ -59,7 +59,7 @@ function inFilter(row, filter) {
     }
 }
 
-// Поля, по которым у строки есть предложения (и отклонённые — для их фильтра)
+// Поля, по которым у строки есть предложения (и отклонённые – для их фильтра)
 function rowFields(row) {
     return row.diffs.concat(row.rejected).map(function (d) { return d.field; });
 }
@@ -215,8 +215,8 @@ export default {
             return this.checkRows.filter(function (r) { return set.has(r.key); });
         },
 
-        // Что сделают действия над выбранными (с «ещё у N ПК» — только эта пара,
-        // с фильтром по атрибутам — только отмеченные поля)
+        // Что сделают действия над выбранными (с «ещё у N ПК» – только эта пара,
+        // с фильтром по атрибутам – только отмеченные поля)
         checkSelDiffs() {
             const pair = this.check.pair;
             const fields = pair ? [] : this.check.fields;
@@ -231,7 +231,7 @@ export default {
             return list;
         },
 
-        // «Взять» — без имён ПК (их сканер только сообщает)
+        // «Взять» – без имён ПК (их сканер только сообщает)
         checkSelTakeable() {
             return this.checkSelDiffs.filter(function (d) { return d.can_take; });
         },
@@ -240,12 +240,12 @@ export default {
             return this.checkSelectedRows.filter(function (r) { return r.state === "name" && r.pcId; });
         },
 
-        // Jabber включён — в подробностях есть столбец «Vacuum»
+        // Jabber включён – в подробностях есть столбец «Vacuum»
         checkJabberOn() {
             return this.diffs.sources.indexOf("jabber") !== -1;
         },
 
-        // DHCP или «Сеть» включены — в подробностях есть столбец «Сеть»
+        // DHCP или «Сеть» включены – в подробностях есть столбец «Сеть»
         checkNetOn() {
             return this.diffs.sources.indexOf("dhcp") !== -1 || this.diffs.sources.indexOf("net") !== -1;
         },
@@ -255,7 +255,7 @@ export default {
             return key ? this.checkRows.find(function (r) { return r.key === key; }) || null : null;
         },
 
-        // Плашка у строки под курсором (у открытой — своя, она видна всегда)
+        // Плашка у строки под курсором (у открытой – своя, она видна всегда)
         checkHoverRow() {
             const h = this.check.hover;
             if (!h || h.key === this.check.open || this.valueEdit) {
@@ -322,7 +322,7 @@ export default {
 
         // ---------- Строка: клик, выделение, подробности ----------
 
-        // Нажатие мыши: с Ctrl / Shift — без выделения текста; Ctrl — выделение
+        // Нажатие мыши: с Ctrl / Shift – без выделения текста; Ctrl – выделение
         // протягиванием, как в Таблице (этап 26д): первая строка решает, добавлять или снимать
         onCheckRowMouseDown(event, row) {
             if (event.button !== 0 || event.target.closest("a, .act-ico, .value-edit")) {
@@ -406,7 +406,7 @@ export default {
             }
         },
 
-        // Строка под курсором во время протягивания — по высоте, даже если курсор
+        // Строка под курсором во время протягивания – по высоте, даже если курсор
         // ушёл левее или правее таблицы (строки подробностей пропускаются)
         checkDragAtPointer() {
             const drag = this._checkDrag;
@@ -426,7 +426,7 @@ export default {
             }
         },
 
-        // У верхнего / нижнего края списка — прокрутка, пока держат мышь
+        // У верхнего / нижнего края списка – прокрутка, пока держат мышь
         checkDragAutoScroll() {
             const drag = this._checkDrag;
             const scroll = document.querySelector(".ck-wrap .history-scroll");
@@ -496,8 +496,8 @@ export default {
         },
 
         // Плашка открытой строки: идёт за строкой ровно, без задержки (пишем стиль
-        // элемента прямо в обработчике прокрутки); под шапку не заходит — у её нижней
-        // границы останавливается, пока видны подробности; ушли — плашки нет
+        // элемента прямо в обработчике прокрутки); под шапку не заходит – у её нижней
+        // границы останавливается, пока видны подробности; ушли – плашки нет
         placeCheckPlate() {
             const el = this.$refs.checkOpenPlate;
             if (!el) {
@@ -598,8 +598,8 @@ export default {
             return { source: logins.join("\n"), mark: mark, symbol: mark, markTitle: mark === "=" ? "Есть в таблице" : "В таблице нет", rawText: "" };
         },
 
-        // Ячейка «Сеть»: что видно в сети и отметка = / ≠ (имя — без регистра и домена,
-        // у адресов и MAC — есть ли в таблице)
+        // Ячейка «Сеть»: что видно в сети и отметка = / ≠ (имя – без регистра и домена,
+        // у адресов и MAC – есть ли в таблице)
         checkNetCell(field, values, table) {
             const norm = function (v) {
                 const text = String(v).trim().toLowerCase();
@@ -626,7 +626,7 @@ export default {
             return r ? r.title + " №" + r.source_id : "";
         },
 
-        // Когда источник проверял ПК — в подсказке у шапки (серые подписи убраны, 01.10)
+        // Когда источник проверял ПК – в подсказке у шапки (серые подписи убраны, 01.10)
         checkSourceHeadTitle(row, kind) {
             const r = row.recs[kind];
             return r && r.checked_at ? "Проверен " + this.formatTime(r.checked_at) : null;
@@ -636,7 +636,7 @@ export default {
             return r && r.webUrl ? r.webUrl + "/front/computer.form.php?id=" + r.source_id : null;
         },
 
-        // «Ещё у N ПК»: показать только такие пары и выделить их — решить разом
+        // «Ещё у N ПК»: показать только такие пары и выделить их – решить разом
         showCheckPair(d) {
             this.check.pair = { field: d.field, table: d.table, raw: d.raw };
             this.$nextTick(() => {
@@ -689,7 +689,7 @@ export default {
             }
         },
 
-        // «Да, это они»: у выбранных «привязать?» — привязать к предложенному ПК
+        // «Да, это они»: у выбранных «привязать?» – привязать к предложенному ПК
         async checkConfirmSelected() {
             const rows = this.checkSelNames.slice();
             this.closeMenus();
@@ -737,11 +737,11 @@ export default {
                 list.push({ key: "link", title: "Привязать к ПК…", icon: ICONS.link, run: () => this.openScanLinkBar(r) });
             }
             if (this.isAdmin && !row.record) {
-                // ПК, сопоставленный по признаку: если сканер ошибся — «это не он»
+                // ПК, сопоставленный по признаку: если сканер ошибся – «это не он»
                 CHECK_SOURCES.forEach((kind) => {
                     const r = row.recs[kind];
                     if (r && r.state === "key") {
-                        list.push({ key: "unlink-" + kind, title: r.title + " №" + r.source_id + " — это не " + host, icon: ICONS.unlink, run: () => this.scanDecide(r, "reject", row.pcId) });
+                        list.push({ key: "unlink-" + kind, title: r.title + " №" + r.source_id + " – это не " + host, icon: ICONS.unlink, run: () => this.scanDecide(r, "reject", row.pcId) });
                     }
                 });
             }

@@ -1,18 +1,18 @@
-// Фильтры по столбцам (этап 21): воронка в шапке столбца (или правый клик по шапке) —
-// список значений столбца с галочками и числом ПК, как в Excel. Активные фильтры —
+// Фильтры по столбцам (этап 21): воронка в шапке столбца (или правый клик по шапке) –
+// список значений столбца с галочками и числом ПК, как в Excel. Активные фильтры –
 // плашками слева на панели. Фильтры работают вместе с поиском и фильтром по дереву,
 // не запоминаются (после перезагрузки страницы таблица снова полная).
 //
 // Фильтр столбца: colFilters[field] = { exclude, keys, labels }
-//   exclude: true  — показаны все значения, кроме keys (сняли галочки);
-//   exclude: false — показаны только keys («только это», «Снять все» и отметить нужные).
+//   exclude: true  – показаны все значения, кроме keys (сняли галочки);
+//   exclude: false – показаны только keys («только это», «Снять все» и отметить нужные).
 // Так новое значение, появившееся после «кроме списан», в таблице видно.
-// keys — значения строчными (как в Справочниках), "" — пустая ячейка;
-// у IP — подсеть /24, у многострочных (несколько IP, MAC, дисков) — каждая строка:
+// keys – значения строчными (как в Справочниках), "" – пустая ячейка;
+// у IP – подсеть /24, у многострочных (несколько IP, MAC, дисков) – каждая строка:
 // ПК виден, если отмечено хотя бы одно из его значений.
 //
-// «Антивирусы» (этап 26з): в списке сверху — ещё и состояния (работает, базы
-// устарели, выключен); filter.statesOff — снятые состояния. ПК виден, если у него
+// «Антивирусы» (этап 26з): в списке сверху – ещё и состояния (работает, базы
+// устарели, выключен); filter.statesOff – снятые состояния. ПК виден, если у него
 // есть антивирус в отмеченном состоянии с отмеченным названием.
 
 import { matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
@@ -22,7 +22,7 @@ export const EMPTY_KEY = "";
 const EMPTY_LABEL = "(пусто)";
 const AV_STATES = ["on", "old", "off"];
 
-// Значения ячейки для фильтра: [{ key, value }]; пустая — [{ key: "" }]
+// Значения ячейки для фильтра: [{ key, value }]; пустая – [{ key: "" }]
 function valuesOf(row, col) {
     const raw = row[col.field];
     if (raw === null || raw === undefined || String(raw).trim() === "") {
@@ -56,7 +56,7 @@ export default {
             });
         },
 
-        // Строки режима (рабочие / архив) с фильтром по дереву — основа для
+        // Строки режима (рабочие / архив) с фильтром по дереву – основа для
         // фильтров по столбцам и поиска
         locationRows() {
             let rows = this.modeRows;
@@ -69,9 +69,9 @@ export default {
             return rows;
         },
 
-        // Значения столбца открытого фильтра — по строкам, прошедшим все остальные
+        // Значения столбца открытого фильтра – по строкам, прошедшим все остальные
         // фильтры и поиск (как в Excel): сначала справочник в его порядке, потом
-        // остальные по возрастанию, «(пусто)» — в конце. [{ key, value, count }]
+        // остальные по возрастанию, «(пусто)» – в конце. [{ key, value, count }]
         colFilterOptions() {
             const menu = this.colFilterMenu;
             const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
@@ -95,7 +95,7 @@ export default {
                     entry.count += 1;
                 });
             });
-            // Отмеченные в фильтре «только эти», которых сейчас нет в строках, —
+            // Отмеченные в фильтре «только эти», которых сейчас нет в строках, –
             // тоже в списке (с нулём), чтобы галочку можно было снять
             const filter = this.colFilters[col.field];
             if (filter && !filter.exclude) {
@@ -195,7 +195,7 @@ export default {
     },
 
     watch: {
-        // Закрыли меню (Esc, клик мимо, другое меню) — убрать слежение за прокруткой
+        // Закрыли меню (Esc, клик мимо, другое меню) – убрать слежение за прокруткой
         openMenu(name) {
             if (name !== "colFilter" && this.colFilterMenu) {
                 this.colFilterMenu = null;
@@ -205,7 +205,7 @@ export default {
     },
 
     methods: {
-        // Строки, прошедшие фильтры по столбцам; except — поле, фильтр которого не учитывать
+        // Строки, прошедшие фильтры по столбцам; except – поле, фильтр которого не учитывать
         applyColFilters(rows, except) {
             const active = this.activeColFilters.filter(function (f) { return f.col.field !== except; });
             if (!active.length) {
@@ -223,7 +223,7 @@ export default {
         },
 
         // Открыть список значений под шапкой столбца (воронка или правый клик).
-        // Повторный клик по той же воронке — закрыть.
+        // Повторный клик по той же воронке – закрыть.
         openColFilter(col, event) {
             if (col.virtual) {
                 return;
@@ -265,7 +265,7 @@ export default {
             }
         },
 
-        // Меню — угол в угол под ячейкой шапки; за край окна не уходит
+        // Меню – угол в угол под ячейкой шапки; за край окна не уходит
         placeColFilter() {
             const menu = this.colFilterMenu;
             if (!menu) {
@@ -310,8 +310,8 @@ export default {
             });
         },
 
-        // Записать фильтр столбца; «все отмечены» — фильтра нет.
-        // statesOff — снятые состояния антивирусов (остаются при смене значений)
+        // Записать фильтр столбца; «все отмечены» – фильтра нет.
+        // statesOff – снятые состояния антивирусов (остаются при смене значений)
         setColFilter(field, filter, statesOff) {
             const next = Object.assign({}, this.colFilters);
             statesOff = statesOff || [];
@@ -330,7 +330,7 @@ export default {
             return (this.colFilters[field] || {}).statesOff || [];
         },
 
-        // Состояния антивирусов: оставить только allowed (все — фильтра по состоянию нет)
+        // Состояния антивирусов: оставить только allowed (все – фильтра по состоянию нет)
         setAvStates(allowed) {
             const field = this.colFilterMenu.field;
             const off = AV_STATES.filter(function (kind) { return allowed.indexOf(kind) === -1; });
@@ -351,7 +351,7 @@ export default {
             const keys = new Set(old.keys);
             const labels = Object.assign({}, old.labels);
             options.forEach(function (o) {
-                // exclude: в keys — снятые; include: в keys — отмеченные
+                // exclude: в keys – снятые; include: в keys – отмеченные
                 if (checked === !old.exclude) {
                     keys.add(o.key);
                     labels[o.key] = o.value;
@@ -362,7 +362,7 @@ export default {
             });
             const filter = { exclude: old.exclude, keys: Array.from(keys), labels: labels };
             const states = this.colFilterStatesOff(field);
-            // «Только эти», а отмечено всё, что есть в столбце, — фильтра нет
+            // «Только эти», а отмечено всё, что есть в столбце, – фильтра нет
             if (!filter.exclude && this.colFilterOptions.every(function (o) { return keys.has(o.key); })) {
                 this.setColFilter(field, null, states);
                 return;
@@ -374,7 +374,7 @@ export default {
             this.setColFilterChecked([option], !this.isColFilterChecked(option.key));
         },
 
-        // «Все» (при поиске — «Все найденные»)
+        // «Все» (при поиске – «Все найденные»)
         toggleColFilterAll() {
             const menu = this.colFilterMenu;
             const checked = this.colFilterAllState !== true;
@@ -407,7 +407,7 @@ export default {
 
         clearColFilter(field) {
             this.setColFilter(field, null);
-            // В списке «Фильтры: N» осталось меньше трёх — снова плашки, меню не нужно
+            // В списке «Фильтры: N» осталось меньше трёх – снова плашки, меню не нужно
             if (this.openMenu === "colFilterList" && this.activeColFilters.length < 3) {
                 this.closeMenus();
             }
@@ -463,10 +463,10 @@ export default {
                 return "«" + columnTitle(item.col) + "»: " + states;
             }
             return "«" + columnTitle(item.col) + "»: " + (states ? states + "; " : "") + (item.filter.exclude ? "скрыты " : "показаны только ") +
-                (names.join(", ") || "—");
+                (names.join(", ") || "–");
         },
 
-        // Значение в списке — в оформлении из Справочников (цвет, фон, Ж, К)
+        // Значение в списке – в оформлении из Справочников (цвет, фон, Ж, К)
         colFilterItemStyle(option) {
             const menu = this.colFilterMenu;
             if (!menu || option.empty) {
@@ -474,7 +474,7 @@ export default {
             }
             const choice = (this.choiceStyleMap[menu.field] || {})[option.key] || null;
             let st = this.effectiveStyle(menu.field, choice);
-            // Просроченная дата — красным жирным, как в таблице
+            // Просроченная дата – красным жирным, как в таблице
             const col = this.allColumns.find(function (c) { return c.field === menu.field; });
             if (col && col.date && isOverdue(option.value)) {
                 st = Object.assign({}, st, this.markStyle("overdue"));

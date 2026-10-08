@@ -4,15 +4,15 @@
 // ============================================================
 
 export const UI_OPTIONS = {
-    lightToolbar: true,   // светлая панель под меню (false — красная, как было)
-    darkHostname: true,   // HOSTNAME тёмным, подчёркивание при наведении (false — синий)
-    cardGroups: true      // поля карточки разбиты на группы (false — одним списком, как было)
+    lightToolbar: true,   // светлая панель под меню (false – красная, как было)
+    darkHostname: true,   // HOSTNAME тёмным, подчёркивание при наведении (false – синий)
+    cardGroups: true      // поля карточки разбиты на группы (false – одним списком, как было)
 };
 
 document.body.classList.toggle("ui-light-toolbar", UI_OPTIONS.lightToolbar);
 document.body.classList.toggle("ui-dark-hostname", UI_OPTIONS.darkHostname);
 
-// Цветовые схемы (личная настройка, шестерёнка в меню). Цвета — в app.css,
+// Цветовые схемы (личная настройка, шестерёнка в меню). Цвета – в app.css,
 // здесь только список для выбора и цвет кружка.
 export const THEMES = [
     { key: "red", label: "Красная", color: "#8a2828" },
@@ -36,7 +36,7 @@ export function applyTheme(key) {
     return key;
 }
 
-// «Без закруглений» (личная настройка): класс на <html>, кэш — чтобы не мигало при загрузке
+// «Без закруглений» (личная настройка): класс на <html>, кэш – чтобы не мигало при загрузке
 export const NO_RADIUS_KEY = "itdb.noRadius";
 
 export function applyNoRadius(on) {

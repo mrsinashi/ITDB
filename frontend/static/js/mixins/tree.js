@@ -6,13 +6,13 @@ import { computeTreeWidth, treeNodeTexts } from "../tree-utils.js";
 
 export default {
     computed: {
-        // Поиск по дереву: self — совпали сами, anc — предки совпавших
+        // Поиск по дереву: self – совпали сами, anc – предки совпавших
         treeMatch() {
-            // Слова ищутся по всему пути узла («хир орд» — ординаторские
+            // Слова ищутся по всему пути узла («хир орд» – ординаторские
             // хирургии). Найденным считается верхний узел, на котором путь
             // впервые собрал все слова; его потомки видны под ним.
             const q = this.treeQuery.trim();
-            // Слово, которого нет ни в одном пути, — в другой раскладке
+            // Слово, которого нет ни в одном пути, – в другой раскладке
             const paths = [];
             const collect = (nodes, parentPath) => {
                 nodes.forEach((node) => {
@@ -96,7 +96,7 @@ export default {
             return kindLabels[kind] || kind;
         },
 
-        // Плашка действий у строки дерева — одна на всё дерево и стоит
+        // Плашка действий у строки дерева – одна на всё дерево и стоит
         // снаружи таблицы (сама таблица обрезана по скруглённой рамке)
         setTreeHover(node, rowEl) {
             const wrap = rowEl.closest(".tree-wrap");
@@ -109,7 +109,7 @@ export default {
         },
 
         // Когда у дерева появляется полоса прокрутки, колонка расширяется
-        // на её ширину — текст узлов не обрезается
+        // на её ширину – текст узлов не обрезается
         watchTreeScroll() {
             const el = this.$refs.treeScroll;
             const content = this.$refs.treeContent;
@@ -140,7 +140,7 @@ export default {
             }
         },
 
-        // Раскрыт ли узел: по умолчанию всё свёрнуто; что раскрыл пользователь —
+        // Раскрыт ли узел: по умолчанию всё свёрнуто; что раскрыл пользователь –
         // остаётся раскрытым до перезагрузки страницы
         isTreeOpen(node, level) {
             const state = this.treeOpenState[node.id];
@@ -227,15 +227,15 @@ export default {
             });
         },
 
-        // node — родитель («+» у строки дерева); без него — с панели, kind —
-        // что добавить (выбрано в меню «+»), родитель — из списка в форме
+        // node – родитель («+» у строки дерева); без него – с панели, kind –
+        // что добавить (выбрано в меню «+»), родитель – из списка в форме
         openAddForm(node, kind) {
             const allowedChildren = {
                 building: ["department"],
                 department: ["floor", "room"],
                 floor: ["room"]
             };
-            // Кнопка на панели: любой тип, родитель — из списка
+            // Кнопка на панели: любой тип, родитель – из списка
             let kinds = ["building", "department", "floor", "room"];
             let path = "";
             if (node) {
@@ -279,7 +279,7 @@ export default {
             this.treeFormError = "";
         },
 
-        // Куда можно добавить узел этого типа — для формы на панели
+        // Куда можно добавить узел этого типа – для формы на панели
         treeParentOptions(kind) {
             const parentKinds = {
                 department: ["building"],

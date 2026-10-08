@@ -8,7 +8,7 @@ PASSWORD_SET = "задан новый"
 
 
 def log_change(session, entity, entity_id, user_name, changes, title=None, entity_key=None):
-    """Одна запись истории, если что-то изменилось. changes — {поле: {"old", "new"}},
+    """Одна запись истории, если что-то изменилось. changes – {поле: {"old", "new"}},
     поля без изменения (old == new) отбрасываются."""
     changes = {
         field: change
@@ -32,7 +32,7 @@ def log_change(session, entity, entity_id, user_name, changes, title=None, entit
 
 
 def diff(obj, fields, before):
-    """Изменения полей объекта: before — {поле: значение до правки}."""
+    """Изменения полей объекта: before – {поле: значение до правки}."""
     return {field: {"old": before[field], "new": getattr(obj, field)} for field in fields}
 
 

@@ -120,7 +120,7 @@ def test_change_location(editor, room):
     assert data["changes"]["location_id"] == {
         "old": "ул. Ленина, 1 / Терапия / 201 Ординаторская",
         "new": "ул. Ленина, 1 / Терапия / 202 Процедурная",
-        # id узлов — для отмены из истории (этап 19)
+        # id узлов – для отмены из истории (этап 19)
         "old_id": room["room"],
         "new_id": other,
     }

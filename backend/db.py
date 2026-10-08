@@ -25,7 +25,7 @@ Base = declarative_base()
 
 def get_db():
     """Сессия БД на один запрос (FastAPI: session=Depends(get_db)).
-    После ответа закрывается; что не закоммичено — откатывается."""
+    После ответа закрывается; что не закоммичено – откатывается."""
     session = SessionLocal()
 
     try:

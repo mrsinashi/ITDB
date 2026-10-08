@@ -1,13 +1,13 @@
-// Страница «Vacuum» (этап 26д; с 26ж — вкладка верхнего меню): пользователи Jabber
-// (VACUUM) из веб-админки ejabberd — группы, когда подключались, с какого IP и
-// какой ПК на этом IP (ПК таблицы; если в таблице такого нет — как его называет
-// GLPI / GSIT). ПК ищется только по IP. Красным — пользователя уже нет, а в группе
-// он остался; оранжевым — не входит ни в одну группу.
+// Страница «Vacuum» (этап 26д; с 26ж – вкладка верхнего меню): пользователи Jabber
+// (VACUUM) из веб-админки ejabberd – группы, когда подключались, с какого IP и
+// какой ПК на этом IP (ПК таблицы; если в таблице такого нет – как его называет
+// GLPI / GSIT). ПК ищется только по IP. Красным – пользователя уже нет, а в группе
+// он остался; оранжевым – не входит ни в одну группу.
 //
-// Данные — /api/scan/jabber (собирает сервер: «Сканировать» над таблицей (admin),
+// Данные – /api/scan/jabber (собирает сервер: «Сканировать» над таблицей (admin),
 // «Собрать» у Jabber на «Подключениях» или «Собрать» на «Проверке»). Пока идёт
-// сбор — полоса «просмотрено из» над таблицей. Кнопка на панели — перечитать страницу.
-// Этап 31: давно не подключавшиеся (stale) и давний последний IP (ip_stale) — серым.
+// сбор – полоса «просмотрено из» над таблицей. Кнопка на панели – перечитать страницу.
+// Этап 31: давно не подключавшиеся (stale) и давний последний IP (ip_stale) – серым.
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 
@@ -82,7 +82,7 @@ export default {
             return "Пользователей: " + all + ", в сети: " + this.vacuumCounts.online;
         },
 
-        // Идёт сбор из Jabber: { percent, text } — полоса над таблицей
+        // Идёт сбор из Jabber: { percent, text } – полоса над таблицей
         vacuumProgress() {
             const run = this.scanRuns.jabber || (this.vacuum.data && this.vacuum.data.last_run);
             if (!run || run.status !== "running") {
@@ -104,12 +104,12 @@ export default {
             return (block || "Собрать из Jabber") + (info ? "\nПоследний сбор: " + info.time : "");
         },
 
-        // Логины VACUUM из таблицы, которых нет в Jabber (строчными) — в ячейках красным
+        // Логины VACUUM из таблицы, которых нет в Jabber (строчными) – в ячейках красным
         vacuumMissingSet() {
             return new Set(this.diffs.vacuumMissing || []);
         },
 
-        // Логины VACUUM из таблицы, давно не подключавшиеся: логин → дней (null — никогда)
+        // Логины VACUUM из таблицы, давно не подключавшиеся: логин → дней (null – никогда)
         vacuumStale() {
             return this.diffs.vacuumStale || {};
         }
@@ -125,7 +125,7 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 this.vacuum.data = await response.json();
-                // Сбор уже идёт — следить (номер запуска редактору не отдаётся — просто перечитаем позже)
+                // Сбор уже идёт – следить (номер запуска редактору не отдаётся – просто перечитаем позже)
                 const run = this.vacuum.data.last_run;
                 if (run && run.status === "running") {
                     if (this.isAdmin) {
@@ -166,7 +166,7 @@ export default {
             return "Пользователей пока нет.";
         },
 
-        // «в сети» / когда подключался / «никогда»; удалённый — «удалён»
+        // «в сети» / когда подключался / «никогда»; удалённый – «удалён»
         vacuumStatusText(u) {
             if (u.online) {
                 return "в сети";
@@ -175,8 +175,8 @@ export default {
                 return "удалён";
             }
             const last = u.last_login_at || u.last_seen_at;
-            // «никогда» — только если список пользователей получен (иначе просто не знаем)
-            return last ? this.formatTime(last) : (this.vacuum.data.listed ? "никогда" : "—");
+            // «никогда» – только если список пользователей получен (иначе просто не знаем)
+            return last ? this.formatTime(last) : (this.vacuum.data.listed ? "никогда" : "–");
         },
 
         vacuumIpTitle(u, a) {

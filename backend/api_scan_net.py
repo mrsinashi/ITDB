@@ -1,15 +1,15 @@
 """Вкладка «Сеть» «Сканера» (этап 28б): что собрали DHCP и проход подсетей.
 
-GET /api/scan/hosts — адреса из scan_hosts, по строке на адрес: MAC и имя машины,
+GET /api/scan/hosts – адреса из scan_hosts, по строке на адрес: MAC и имя машины,
 что говорит DHCP (аренда, привязка в настройках) и что ответило при проходе подсети
 (чем ответил, открытые порты), и какой ПК таблицы на этом адресе: по IP из таблицы
-или по MAC. Источники говорят разное — значения показываются все, у каждого —
-откуда оно (этап 28в); первым — то, что видно на самом деле (сеть, потом аренда),
-последним — привязка из настроек DHCP. Наблюдения по сроку не удаляются (этап 31):
-что старше срока «Актуальны» своего источника — stale (на странице серым); имя
-источника у значений — как их зовёт пользователь: Сканер, Leases, DHCP Config.
+или по MAC. Источники говорят разное – значения показываются все, у каждого –
+откуда оно (этап 28в); первым – то, что видно на самом деле (сеть, потом аренда),
+последним – привязка из настроек DHCP. Наблюдения по сроку не удаляются (этап 31):
+что старше срока «Актуальны» своего источника – stale (на странице серым); имя
+источника у значений – как их зовёт пользователь: Сканер, Leases, DHCP Config.
 Ничего не пишет.
-Сбор — POST /api/scan/sources/{dhcp|net}/collect. Смотреть — редактор и администратор.
+Сбор – POST /api/scan/sources/{dhcp|net}/collect. Смотреть – редактор и администратор.
 """
 import ipaddress
 from datetime import datetime, timedelta, timezone
@@ -39,22 +39,22 @@ class SeenOut(BaseModel):
     name: Optional[str]
     seen_at: datetime
     text: str                  # коротко: «аренда», «резерв», «ping, NetBIOS»
-    details: list[str] = []    # подробности — для подсказки
-    stale: bool = False        # старше срока «Актуальны» — последнее известное
+    details: list[str] = []    # подробности – для подсказки
+    stale: bool = False        # старше срока «Актуальны» – последнее известное
 
 
 class HostPc(BaseModel):
     computer_id: int
     hostname: Optional[str]
     place: Optional[str]
-    by: list[str]              # ip, mac, conf (MAC привязки из настроек DHCP) — по чему найден
+    by: list[str]              # ip, mac, conf (MAC привязки из настроек DHCP) – по чему найден
 
 
 class ValueOut(BaseModel):
     """Значение и кто его назвал: «Сканер», «Leases», «DHCP Config»."""
     value: str
     sources: list[str]
-    stale: bool = False        # все, кто его назвал, — давно
+    stale: bool = False        # все, кто его назвал, – давно
 
 
 class HostOut(BaseModel):
@@ -64,11 +64,11 @@ class HostOut(BaseModel):
     dhcp: Optional[SeenOut] = None    # аренда
     conf: Optional[SeenOut] = None    # привязка из настроек DHCP
     net: Optional[SeenOut] = None
-    ports: Optional[list[int]] = None   # открытые порты; None — не проверялись
+    ports: Optional[list[int]] = None   # открытые порты; None – не проверялись
     rfb: Optional[str] = None           # версия VNC на порту 5900
     seen_at: Optional[datetime] = None  # когда адрес был занят на самом деле (привязка не в счёт)
     seen_by: Optional[str] = None       # кто видел последним: «Сканер» / «Leases»
-    stale: bool = False                 # всё, что видели на адресе, — давно (привязка не в счёт)
+    stale: bool = False                 # всё, что видели на адресе, – давно (привязка не в счёт)
     differ: bool = False                # источники сейчас называют разный MAC или имя
     computers: list[HostPc]
 
@@ -86,7 +86,7 @@ class HostsOut(BaseModel):
 
 
 def moment(value):
-    """«2026-10-02T03:00:00+00:00» → время; не разобрать — None."""
+    """«2026-10-02T03:00:00+00:00» → время; не разобрать – None."""
     try:
         return datetime.fromisoformat(value) if value else None
     except ValueError:
@@ -94,7 +94,7 @@ def moment(value):
 
 
 WHO = {"net": "Сканер", "dhcp": "Leases", "conf": "DHCP Config"}
-# Сначала — что видно на самом деле; привязка из настроек — последней
+# Сначала – что видно на самом деле; привязка из настроек – последней
 ORDER = ("net", "dhcp", "conf")
 
 
@@ -112,7 +112,7 @@ def dhcp_seen(row, stale=False):
 
 
 def conf_seen(row, elsewhere):
-    """Привязка из настроек DHCP; elsewhere — адреса, где этот MAC виден на самом деле."""
+    """Привязка из настроек DHCP; elsewhere – адреса, где этот MAC виден на самом деле."""
     data = row.data or {}
     details = []
 
@@ -147,7 +147,7 @@ def net_seen(row, stale=False):
 
 
 def ports_of(row):
-    """Открытые порты адреса: список; порты не проверялись — None."""
+    """Открытые порты адреса: список; порты не проверялись – None."""
     ports = (row.data or {}).get("ports") if row is not None else None
 
     if not isinstance(ports, list):
@@ -157,7 +157,7 @@ def ports_of(row):
 
 
 def merge(values, same):
-    """[(значение, кто назвал, давно ли)] → [ValueOut]: одинаковые значения — одной
+    """[(значение, кто назвал, давно ли)] → [ValueOut]: одинаковые значения – одной
     строкой; значение «давнее», если давно его называли все."""
     result = []
 
@@ -213,7 +213,7 @@ def list_hosts(me=Depends(require_editor), session=Depends(get_db)):
     kinds = [kind for group in scan_collect.HOST_SOURCES.values() for kind in group]
     seen_macs = {}   # MAC → адреса, где он виден на самом деле (сеть, аренда) и недавно
     moment_now = datetime.now(timezone.utc)
-    # Раньше этого времени — «давно» (срок «Актуальны» источника)
+    # Раньше этого времени – «давно» (срок «Актуальны» источника)
     since = {
         kind: moment_now - timedelta(days=fresh_days_of(load_source(session, kind), kind))
         for kind in scan_collect.HOST_KINDS
@@ -265,7 +265,7 @@ def list_hosts(me=Depends(require_editor), session=Depends(get_db)):
 
         real = [(entry[kind].seen_at, kind) for kind in ("net", "dhcp") if kind in entry]
         last = max(real) if real else None
-        # Давнее значение рядом с нынешним — не расхождение, а прошлое
+        # Давнее значение рядом с нынешним – не расхождение, а прошлое
         fresh = [[value for value in values if not value.stale] or values for values in (macs, names)]
         elsewhere = sorted(seen_macs.get(conf.mac, set()) - {ip}, key=ip_key) if conf is not None and conf.mac else []
         net = entry.get("net")

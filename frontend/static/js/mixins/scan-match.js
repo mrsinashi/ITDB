@@ -1,6 +1,6 @@
-// Сканер, этап 25: сбор из GLPI / GSIT (с этапа 26д — и Jabber, с 28 — DHCP и сеть), вкладка
+// Сканер, этап 25: сбор из GLPI / GSIT (с этапа 26д – и Jabber, с 28 – DHCP и сеть), вкладка
 // «Названия» и общее для записей источников (с этапа 26г записи показывает вкладка
-// «Проверка», scan-check.js; пользователей Jabber — страница «Vacuum», scan-vacuum.js).
+// «Проверка», scan-check.js; пользователей Jabber – страница «Vacuum», scan-vacuum.js).
 //
 // Сбор идёт на сервере в фоне; страница спрашивает запуск раз в 1,5 с, пока он
 // идёт, и по окончании обновляет итог в блоке источника и «Проверку».
@@ -145,13 +145,13 @@ export default {
             return shown === all ? "Соответствий: " + all : "Показано: " + shown + " из " + all;
         },
 
-        // ПК для «Привязать к…»: имя — расположение, № места (как в «Заменить…»)
+        // ПК для «Привязать к…»: имя – расположение, № места (как в «Заменить…»)
         scanComputerOptions() {
             return this.activeRows.map((row) => {
                 const room = [row.room_code, row.room_name].filter(Boolean).join(" ");
                 const path = [row.building, row.department, room].filter(Boolean).join(" / ");
                 const place = [path, row.seat_no ? "№ " + row.seat_no : ""].filter(Boolean).join(", ");
-                const title = (row.hostname || "без имени") + (place ? " — " + place : "");
+                const title = (row.hostname || "без имени") + (place ? " – " + place : "");
                 return {
                     id: row.id,
                     kind: "pc",
@@ -202,7 +202,7 @@ export default {
 
         // ---------- Сбор ----------
 
-        // Полоса сбора источника: { percent, text }; не собирается — null
+        // Полоса сбора источника: { percent, text }; не собирается – null
         scanProgress(kind) {
             const run = this.scanRunOf(kind);
             if (!run || run.status !== "running") {
@@ -261,7 +261,7 @@ export default {
             return what + "\nПоследний сбор: " + info.time + "\n" + info.text + (info.note ? "\n" + info.note : "");
         },
 
-        // Почему «Собрать» недоступна (пусто — можно)
+        // Почему «Собрать» недоступна (пусто – можно)
         scanCollectBlock(kind) {
             const s = this.scanSource(kind);
             if (!s) {
@@ -339,7 +339,7 @@ export default {
                         this.onScanRunDone(run);
                     }
                 } catch (e) {
-                    // сеть моргнула — спросим в следующий раз
+                    // сеть моргнула – спросим в следующий раз
                 }
             }
             if (Object.values(this.scanRuns).some(function (r) { return r.status === "running"; })) {
@@ -355,14 +355,14 @@ export default {
             const title = s ? s.title : run.source;
             if (run.status === "ok" && run.source === "jabber") {
                 const st = run.stats;
-                this.toast(title + ": собрано — пользователей " + st.total + ", в сети " + st.online, "success");
+                this.toast(title + ": собрано – пользователей " + st.total + ", в сети " + st.online, "success");
             } else if (run.status === "ok" && run.source === "dhcp") {
-                this.toast(title + ": собрано — аренд " + (run.stats.total - run.stats.fixed) + ", действуют " + run.stats.active, "success");
+                this.toast(title + ": собрано – аренд " + (run.stats.total - run.stats.fixed) + ", действуют " + run.stats.active, "success");
             } else if (run.status === "ok" && run.source === "net") {
                 this.toast(title + ": адресов " + run.stats.total + ", ответили " + run.stats.alive, "success");
             } else if (run.status === "ok") {
                 const st = run.stats;
-                this.toast(title + ": собрано — свежих " + st.fresh + "; сопоставлено " + ((st.key || 0) + (st.link || 0)) +
+                this.toast(title + ": собрано – свежих " + st.fresh + "; сопоставлено " + ((st.key || 0) + (st.link || 0)) +
                     ", привязать? " + (st.name || 0) + ", конфликтов " + (st.conflict || 0) + ", нет в ITDB " + (st.none || 0), "success");
             } else {
                 this.toastError(title + ": " + (run.message || "сбор не удался"));
@@ -380,7 +380,7 @@ export default {
             }
         },
 
-        // После загрузки настроек: идущие запуски — следить
+        // После загрузки настроек: идущие запуски – следить
         resumeScanRuns() {
             this.scanCollectSources.forEach((s) => {
                 if (s.last_run && s.last_run.status === "running") {
@@ -469,7 +469,7 @@ export default {
             return ids.map((id) => this.scanComputer(id)).filter(Boolean);
         },
 
-        // «ПК в ITDB»: сопоставленный или предлагаемый; при конфликте — все, на кого указывает
+        // «ПК в ITDB»: сопоставленный или предлагаемый; при конфликте – все, на кого указывает
         scanHostsText(r) {
             if (r.state === "none" || r.state === "dup") {
                 return "";
@@ -517,13 +517,13 @@ export default {
         },
 
         // Строки «поле | источник | ITDB» для раскрытой записи. Сравнивает сервер
-        // (scan_values.py): значение источника — уже в названиях таблицы, raw — как в источнике
+        // (scan_values.py): значение источника – уже в названиях таблицы, raw – как в источнике
         scanCompareRows(r) {
             return (r.compare || []).map((c) => {
                 const col = this.builtinColumns.find(function (x) { return x.field === c.field; });
                 const renamed = c.raw && c.source !== c.raw;
                 const hows = (c.how || "").split(",").filter(Boolean).map(function (h) { return HOW_TITLES[h]; }).filter(Boolean);
-                // Двойной клик по отметке — у однострочных полей-названий, когда есть оба значения
+                // Двойной клик по отметке – у однострочных полей-названий, когда есть оба значения
                 const cycle = NAME_FIELDS.includes(c.field) && c.manual !== undefined;
                 const next = cycle ? this.scanNextMark(c) : null;
                 return Object.assign({}, c, {
@@ -533,8 +533,8 @@ export default {
                     cycle: cycle,
                     next: next,
                     markTitle: (c.manual ? MANUAL_TITLES[c.manual] : (MARK_TITLES[c.mark] || "")) +
-                        (!c.manual && hows.length ? " — " + hows.join("; ") : "") +
-                        (cycle ? "\nДвойной клик — " + (next ? MANUAL_NEXT[next] : "сбросить") : "")
+                        (!c.manual && hows.length ? " – " + hows.join("; ") : "") +
+                        (cycle ? "\nДвойной клик – " + (next ? MANUAL_NEXT[next] : "сбросить") : "")
                 });
             });
         },
@@ -560,15 +560,15 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.toast(c.label + ": «" + c.raw.split("\n").join(", ") + "» и «" + c.itdb + "» — " + (c.next ? MANUAL_NEXT[c.next] : "решение сброшено"), "success");
+                this.toast(c.label + ": «" + c.raw.split("\n").join(", ") + "» и «" + c.itdb + "» – " + (c.next ? MANUAL_NEXT[c.next] : "решение сброшено"), "success");
                 await this.loadCheck();
             } catch (e) {
                 this.toastError(e.message || e);
             }
         },
 
-        // Табличка сравнения не до низа подробностей (пояснения справа выше её) — у неё
-        // своя нижняя линия и скруглённый угол; до низа — линию даёт разделитель строки
+        // Табличка сравнения не до низа подробностей (пояснения справа выше её) – у неё
+        // своя нижняя линия и скруглённый угол; до низа – линию даёт разделитель строки
         scanFitCompare() {
             this.$nextTick(() => {
                 document.querySelectorAll(".sm-compare").forEach(function (table) {
@@ -637,7 +637,7 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.toast(this.scanFieldLabel(n.field) + ": «" + n.source + "» и «" + n.table + "» — разное", "success");
+                this.toast(this.scanFieldLabel(n.field) + ": «" + n.source + "» и «" + n.table + "» – разное", "success");
                 await this.loadScanNames();
             } catch (e) {
                 this.toastError(e.message || e);
@@ -659,10 +659,10 @@ export default {
             if (!a.uptodate) {
                 parts.push("базы устарели");
             }
-            return a.name + (a.version ? " " + a.version : "") + " — " + parts.join(", ");
+            return a.name + (a.version ? " " + a.version : "") + " – " + parts.join(", ");
         },
 
-        // Строки под табличкой: { label, text } — подпись полужирным
+        // Строки под табличкой: { label, text } – подпись полужирным
         scanDetailLines(r) {
             const f = r.full || {};
             const lines = [];
@@ -676,7 +676,7 @@ export default {
             add("ОС:", f.os);
             add("ЦП:", (f.cpu || []).join(", "));
             add("ОЗУ:", f.memory_mb ? f.memory_mb + " МБ" : "");
-            // Объём — как прислал агент: в «двоичных» МБ (128 ГБ = 122 070 МБ), в столбце DRIVE — как на наклейке
+            // Объём – как прислал агент: в «двоичных» МБ (128 ГБ = 122 070 МБ), в столбце DRIVE – как на наклейке
             add("Диски:", (f.disks || []).map(function (d) { return (d.name || "?") + " (" + Number(d.mb || 0).toLocaleString("ru-RU") + " МБ)"; }).join(", "));
             add("Видео:", (f.gpus || []).join(", "));
             add("Модель:", [f.manufacturer, f.model].filter(Boolean).join(" "));
@@ -710,9 +710,9 @@ export default {
                 const host = pc ? pc.hostname : (this.scanLinkBar && this.scanLinkBar.pickedName) || "";
                 const name = r.title + " №" + r.source_id;
                 if (action === "link") {
-                    this.toast(name + " — это " + host, "success");
+                    this.toast(name + " – это " + host, "success");
                 } else if (action === "reject") {
-                    this.toast(name + " — не " + host, "success");
+                    this.toast(name + " – не " + host, "success");
                 } else {
                     this.toast(name + ": решения забыты", "success");
                 }

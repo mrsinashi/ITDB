@@ -1,8 +1,8 @@
-// Форма добавления/правки узла — прямо в дереве, под узлом
+// Форма добавления/правки узла – прямо в дереве, под узлом
 
 import { kindLabels } from "../columns.js";
 
-// Что добавляется / что правится — подпись в начале формы (этап 22)
+// Что добавляется / что правится – подпись в начале формы (этап 22)
 const NEW_LABELS = {
     building: "Новый адрес",
     department: "Новое отделение",
@@ -25,7 +25,7 @@ export default {
         form() {
             return this.root.treeForm;
         },
-        // «Новое отделение в:» (с панели, дальше — выбор, куда), «Новый кабинет:»
+        // «Новое отделение в:» (с панели, дальше – выбор, куда), «Новый кабинет:»
         // (под узлом), «Добавить: [Этаж ▾]» (под узлом, если можно разное),
         // «Изменить кабинет:»
         title() {
@@ -54,7 +54,7 @@ export default {
             input.focus();
         }
         // Форма с панели прилипает под шапкой и не уезжает при прокрутке;
-        // прилипший адрес встаёт под неё — ему нужна её высота (--tf-h)
+        // прилипший адрес встаёт под неё – ему нужна её высота (--tf-h)
         if (this.form && this.form.top && this.$el.nodeType === 1 && window.ResizeObserver) {
             const content = this.$el.parentElement;
             this._ro = new ResizeObserver(() => {
@@ -91,7 +91,7 @@ export default {
                 <option v-for="o in root.treeParentOptions(form.kind)" :key="o.id" :value="o.id">{{ o.path }}</option>
             </select>
             <input v-if="form.kind !== 'floor'" class="input tf-code" v-model="form.code" @keydown.enter="submit" placeholder="Код"
-                title="Необязательно. У кабинета — его номер">
+                title="Необязательно. У кабинета – его номер">
             <input class="input tf-name" v-model="form.name" @keydown.enter="submit" placeholder="Название">
             <span class="tf-buttons">
                 <button class="btn btn-primary icon-only" @click="submit" :title="form.action === 'add' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>

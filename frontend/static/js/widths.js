@@ -8,7 +8,7 @@ export const DEFAULT_MAX_WIDTH = 400;
 export const WIDTH_EXTRA = 0;
 let widthProbe = null;
 
-// Обычная ячейка данных — образец для шрифта и отступов.
+// Обычная ячейка данных – образец для шрифта и отступов.
 export function sampleDataCell() {
     return document.querySelector(".data-table tbody td:not(.editing)");
 }
@@ -54,11 +54,11 @@ export function cellOverhead() {
     const style = window.getComputedStyle(sample);
     const left = parseFloat(style.paddingLeft) || 0;
     const right = parseFloat(style.paddingRight) || 0;
-    // +1 — линия сетки (inset box-shadow), рамки у ячеек нет
+    // +1 – линия сетки (inset box-shadow), рамки у ячеек нет
     return left + right + 1;
 }
 
-// Место под значок фильтра справа в шапке (.th-filter, .th-pad-r) — у всех столбцов:
+// Место под значок фильтра справа в шапке (.th-filter, .th-pad-r) – у всех столбцов:
 // значок не должен наезжать на подпись и при наведении (этап 22)
 export const FILTER_ICON_SPACE = 14;
 
@@ -74,8 +74,8 @@ function chipWidth(probe, text) {
     return max + CHIP_PAD;
 }
 
-// scanChip(row, field) — текст блочка сканера в ячейке или null;
-// lineInfo(row, col, line) — { pad, bold } для выделенного значения (повтор блочком,
+// scanChip(row, field) – текст блочка сканера в ячейке или null;
+// lineInfo(row, col, line) – { pad, bold } для выделенного значения (повтор блочком,
 // жирный логин) или null
 export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMap, columnStyles, scanChip, lineInfo) {
     ensureWidthProbe();

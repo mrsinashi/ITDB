@@ -1,4 +1,4 @@
-"""Этап 26и: оформление значений и столбцов — подчёркнутый, зачёркнутый, фон блочком."""
+"""Этап 26и: оформление значений и столбцов – подчёркнутый, зачёркнутый, фон блочком."""
 from conftest import ok
 
 
@@ -18,7 +18,7 @@ def test_choice_underline_strike_chip(editor):
     record = ok(editor.get("/api/history", params={"entity": "choices"}))["items"][0]
     assert set(record["changes"]) == {"bg_color", "chip", "underline", "strike"}
 
-    # Сбрасывается только то, что передано: фон убран — остальное на месте
+    # Сбрасывается только то, что передано: фон убран – остальное на месте
     ok(editor.patch(f"/api/choices/{choice_id}", json={"bg_color": ""}))
     item = choice(editor, choice_id)
     assert item["bg_color"] is None and item["underline"] is True and item["chip"] is True
@@ -34,7 +34,7 @@ def test_column_style_flags(editor):
     ok(editor.patch("/api/column-styles/type", json={"bg_color": "#eeeeee", "chip": True}))
     assert styles()["type"]["chip"] is True
 
-    # «Блочком» без фона ничего не значит — пустое оформление удаляется
+    # «Блочком» без фона ничего не значит – пустое оформление удаляется
     ok(editor.patch("/api/column-styles/type", json={"bg_color": ""}))
     ok(editor.patch("/api/column-styles/ram", json={"underline": False}))
     assert styles() == {}

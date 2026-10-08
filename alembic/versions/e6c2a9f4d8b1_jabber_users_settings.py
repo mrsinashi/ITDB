@@ -1,4 +1,4 @@
-"""scan_jabber_users — пользователи Jabber (VACUUM) из веб-админки; app_settings —
+"""scan_jabber_users – пользователи Jabber (VACUUM) из веб-админки; app_settings –
 общие настройки (вид столбца «Антивирусы») (этап 26д)
 
 Revision ID: e6c2a9f4d8b1

@@ -1,11 +1,11 @@
-"""Сканирование, этап 24: подключения к источникам (GLPI, GSIT, Jabber; с этапа 28 —
-DHCP по SSH и «Сеть» — проход подсетей) и подсети для сетевого сканирования.
+"""Сканирование, этап 24: подключения к источникам (GLPI, GSIT, Jabber; с этапа 28 –
+DHCP по SSH и «Сеть» – проход подсетей) и подсети для сетевого сканирования.
 Только администратор.
 
 У каждого источника одна строка настроек; строки в базе появляются при
 первом сохранении, до этого отдаются значения по умолчанию. Пароли и токены
-хранятся зашифрованными (secret_box.py) и наружу не отдаются — только «задан».
-Изменения пишутся в Историю (видит администратор); пароли — «задан новый».
+хранятся зашифрованными (secret_box.py) и наружу не отдаются – только «задан».
+Изменения пишутся в Историю (видит администратор); пароли – «задан новый».
 """
 import ipaddress
 from datetime import datetime, timezone
@@ -29,11 +29,11 @@ from secret_box import decrypt, encrypt, key_ready
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
 # Источники: название, какие поля есть в форме, чем проверять подключение
-# form — какая форма у источника: glpi, jabber, ssh (DHCP: адрес, файл, логин,
+# form – какая форма у источника: glpi, jabber, ssh (DHCP: адрес, файл, логин,
 # пароль, ключ), net (проход подсетей: адреса нет, только что проверять).
-# fresh — срок «Актуальны» по умолчанию и наибольший:
+# fresh – срок «Актуальны» по умолчанию и наибольший:
 # - GLPI / GSIT: записи, проверенные не раньше, чем N дней назад;
-# - Jabber: кто не подключался дольше — «давно не в сети» (выделяется в VACUUM);
+# - Jabber: кто не подключался дольше – «давно не в сети» (выделяется в VACUUM);
 # - DHCP: аренды, которые действуют или кончились не раньше N дней назад;
 # - Сеть: сколько дней помнить адрес, который перестал отвечать.
 SOURCES = {
@@ -46,7 +46,7 @@ SOURCES = {
 SECRET_FIELDS = ("password", "user_token", "app_token")
 SECRET_LABELS = {"password": "пароль", "user_token": "токен пользователя", "app_token": "токен приложения"}
 SECRET_REMOVED = "удалён"
-# Ключ SSH (DHCP) создаёт сама программа; хранится в secrets, наружу — только открытая часть
+# Ключ SSH (DHCP) создаёт сама программа; хранится в secrets, наружу – только открытая часть
 SSH_KEY = "ssh_key"
 KEY_CREATED = "создан"
 HOST_KEY_FORGOTTEN = "забыт"
@@ -58,7 +58,7 @@ PURPOSES = {
     "servers": "Серверы",
     "other": "Прочее (не ПК)",
 }
-# Больше /16 (65 тысяч адресов) сканировать не даём — это почти наверняка опечатка
+# Больше /16 (65 тысяч адресов) сканировать не даём – это почти наверняка опечатка
 SUBNET_MIN_PREFIX = 16
 NOTE_MAX = 500
 
@@ -67,7 +67,7 @@ NOTE_MAX = 500
 
 
 class RunOut(BaseModel):
-    """Запуск сбора (этап 25): stats — счётчики отчёта, пока идёт — progress."""
+    """Запуск сбора (этап 25): stats – счётчики отчёта, пока идёт – progress."""
     id: int
     source: str
     status: str
@@ -79,7 +79,7 @@ class RunOut(BaseModel):
 
 
 # Запуск «идёт», начатый до старта программы, уже не идёт: программу
-# перезапускали (в базе его закроет следующий сбор — scan_collect.running_run)
+# перезапускали (в базе его закроет следующий сбор – scan_collect.running_run)
 PROCESS_STARTED = datetime.now(timezone.utc)
 INTERRUPTED = "Сбор прервался: программу перезапустили."
 
@@ -112,9 +112,9 @@ class SourceOut(BaseModel):
     check_message: Optional[str]
     last_run: Optional[RunOut] = None
     form: str = "glpi"
-    ready: bool = False               # можно собирать: адрес указан (Сеть — есть подсети)
+    ready: bool = False               # можно собирать: адрес указан (Сеть – есть подсети)
     path: Optional[str] = None        # DHCP: файл аренд
-    configs: list[str] = []           # DHCP: файлы настроек с привязками MAC — IP
+    configs: list[str] = []           # DHCP: файлы настроек с привязками MAC – IP
     has_key: bool = False             # DHCP: ключ ITDB создан
     host_key: Optional[str] = None    # DHCP: отпечаток ключа сервера (запомнен)
     names: Optional[bool] = None      # Сеть: спрашивать имена (NetBIOS, DNS)
@@ -127,7 +127,7 @@ class SourcesOut(BaseModel):
 
 
 class SourceUpdate(BaseModel):
-    """None — не менять; у паролей и токенов "" — удалить сохранённый."""
+    """None – не менять; у паролей и токенов "" – удалить сохранённый."""
     enabled: Optional[bool] = None
     url: Optional[str] = None
     domain: Optional[str] = None
@@ -180,9 +180,9 @@ def option_of(source, name, default):
 
 
 def dhcp_files(source, data=None):
-    """DHCP: (файл аренд, [файлы настроек]) — сохранённые, поверх них — из формы
-    (data). В «Файл» раньше дописывали и dhcpd.conf через пробел: первый путь —
-    аренды, остальные — настройки. Плохой путь — SourceError."""
+    """DHCP: (файл аренд, [файлы настроек]) – сохранённые, поверх них – из формы
+    (data). В «Файл» раньше дописывали и dhcpd.conf через пробел: первый путь –
+    аренды, остальные – настройки. Плохой путь – SourceError."""
     data = data or {}
     paths = scan_ssh.split_paths(data.get("path") or option_of(source, "path", scan_dhcp.DEFAULT_PATH))
     configs = data["configs"] if "configs" in data else (option_of(source, "configs", None) or [])
@@ -255,14 +255,14 @@ def clean_fresh_days(value, kind):
     if value is None or not (1 <= value <= limit):
         raise HTTPException(
             status_code=400,
-            detail=f"Срок актуальности — от 1 до {limit} дней.",
+            detail=f"Срок актуальности – от 1 до {limit} дней.",
         )
     return value
 
 
 def connection_params(kind, source, overlay=None, session=None):
     """Параметры подключения: сохранённые (пароли расшифрованы) + несохранённые
-    значения из формы (overlay) — чтобы проверить до сохранения. У «Сети» —
+    значения из формы (overlay) – чтобы проверить до сохранения. У «Сети» –
     подсети для прохода (нужна session) и что проверять."""
     secrets = (source.secrets or {}) if source else {}
     form = SOURCES[kind]["form"]
@@ -305,7 +305,7 @@ def connection_params(kind, source, overlay=None, session=None):
         token = secrets.get(SSH_KEY)
         params["ssh_key"] = decrypt(token, "ключ SSH") if token else None
         params["path"], params["configs"] = dhcp_files(source, data)
-        # Адрес в форме другой — запомненный ключ сервера к нему не относится
+        # Адрес в форме другой – запомненный ключ сервера к нему не относится
         same_host = "url" not in data or address_of(data["url"]) == (source.url if source else None)
         params["host_key"] = option_of(source, "host_key", None) if same_host and not data.get("forget_host") else None
 
@@ -381,7 +381,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
     }
     changes = {}
 
-    # Jabber: адрес любой страницы веб-админки → адрес админки, домен — из пути
+    # Jabber: адрес любой страницы веб-админки → адрес админки, домен – из пути
     if form == "jabber" and data.get("url"):
         try:
             data["url"], domain = scan_jabber.normalize(data["url"])
@@ -464,7 +464,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
         source.enabled = data["enabled"]
         changes["enabled"] = {"old": before["enabled"], "new": data["enabled"]}
 
-    # Параметры подключения изменились — прошлая проверка больше ничего не говорит
+    # Параметры подключения изменились – прошлая проверка больше ничего не говорит
     connection = {"url", "domain", "login", "verify_tls", "path", "configs", "host_key"} | set(SECRET_FIELDS)
 
     if any(field in connection for field, change in changes.items() if change["old"] != change["new"]):
@@ -489,7 +489,7 @@ def check_source(
     me=Depends(require_admin),
     session=Depends(get_db),
 ):
-    """Проверка подключения. Можно передать несохранённые значения формы — тогда
+    """Проверка подключения. Можно передать несохранённые значения формы – тогда
     результат не запоминается (он про форму, а не про сохранённые настройки)."""
     check_kind(kind)
     unsaved = payload is not None and bool(payload.model_dump(exclude_none=True))
@@ -564,7 +564,7 @@ def ensure_key(session, kind, me):
 
 @router.post("/sources/{kind}/key", response_model=KeyOut)
 def source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_admin), session=Depends(get_db)):
-    """Открытый ключ ITDB строкой для authorized_keys — поставить на сервер вручную."""
+    """Открытый ключ ITDB строкой для authorized_keys – поставить на сервер вручную."""
     check_ssh_kind(kind)
     source, created = ensure_key(session, kind, me)
     try:
@@ -582,7 +582,7 @@ def source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(req
 @router.post("/sources/{kind}/key/install", response_model=KeyInstallOut)
 def install_source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_admin), session=Depends(get_db)):
     """Поставить ключ ITDB на сервер: вход по паролю (из формы или сохранённому),
-    дальше — по ключу, пароль можно не хранить."""
+    дальше – по ключу, пароль можно не хранить."""
     check_ssh_kind(kind)
     source, _ = ensure_key(session, kind, me)
     session.commit()   # ключ остаётся, даже если поставить не выйдет
@@ -597,7 +597,7 @@ def install_source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Dep
         ok, message, info = False, str(err), None
 
     if ok:
-        # Ключ сервера запоминается, только если адрес в форме — сохранённый
+        # Ключ сервера запоминается, только если адрес в форме – сохранённый
         if source.url and address_of(params["url"]) == source.url:
             remember_host(source, info)
 
@@ -712,7 +712,7 @@ def building_name(session, location_id):
 
 
 def computer_ips(session):
-    """IPv4 адреса рабочих ПК (каждый ПК — список адресов)."""
+    """IPv4 адреса рабочих ПК (каждый ПК – список адресов)."""
     result = []
 
     for (ip_text,) in session.query(Computer.ip).filter(Computer.archived == False, Computer.ip.isnot(None)):
@@ -763,7 +763,7 @@ def list_subnets(me=Depends(require_admin), session=Depends(get_db)):
     uncovered = {}
 
     # ПК считается в самой узкой подсети, куда входит любой его адрес;
-    # адреса вне всех подсетей — подсказкой «добавить» по /24
+    # адреса вне всех подсетей – подсказкой «добавить» по /24
     for ips in computer_ips(session):
         found = set()
         outside = set()

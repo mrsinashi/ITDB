@@ -1,24 +1,24 @@
 // Имена ПК по правилам (этап 35): всё, что считается по дереву и строкам таблицы.
 //
-// Правило — у узлов дерева: часть имени (name_part), «только своя» (name_own —
-// части узлов выше не добавляются), одно место (name_single — имя без номера).
-// Начало имени узла — части по пути от адреса через «-»: отделение ter, кабинет
-// proc → ter-proc, у ПК в нём — ter-proc-1. Без частей на всём пути правила нет.
+// Правило – у узлов дерева: часть имени (name_part), «только своя» (name_own –
+// части узлов выше не добавляются), одно место (name_single – имя без номера).
+// Начало имени узла – части по пути от адреса через «-»: отделение ter, кабинет
+// proc → ter-proc, у ПК в нём – ter-proc-1. Без частей на всём пути правила нет.
 //
-// Номер в имени — по порядку ПК сверху вниз, как в Таблице (узлы по дереву, в узле —
+// Номер в имени – по порядку ПК сверху вниз, как в Таблице (узлы по дереву, в узле –
 // по № места; этап 36): ter-proc-1, ter-proc-2… У узлов с одним началом имён
-// (eko2 на два кабинета) счёт сквозной. ПК по правилу, если имя — ровно такое; у
-// одного места — само начало. «Своё имя» действует, пока у ПК то же имя и то же
+// (eko2 на два кабинета) счёт сквозной. ПК по правилу, если имя – ровно такое; у
+// одного места – само начало. «Своё имя» действует, пока у ПК то же имя и то же
 // расположение; такие ПК в счёт не входят.
 //
-// «По таблице»: как названы ПК сейчас → правила узлов. У узла — самое частое
-// начало имён его ПК; у отделения — ещё и первая часть, общая для большинства
+// «По таблице»: как названы ПК сейчас → правила узлов. У узла – самое частое
+// начало имён его ПК; у отделения – ещё и первая часть, общая для большинства
 // ПК в нём и ниже (ter). Правило ставится так, чтобы начала имён узлов ниже, у
 // которых есть своя часть, не поменялись.
 
 export const NAME_MAX = 15;
 
-// Имена, которые Windows даёт сама, — не образец
+// Имена, которые Windows даёт сама, – не образец
 const DEFAULT_HOST = /^(desktop|win|laptop)-[a-z0-9]{5,}$/;
 
 export function hostKey(name) {
@@ -37,8 +37,8 @@ export function parseHost(name) {
 }
 
 // Узлы дерева → id → { node, parentId, level, order (порядок в дереве), start (начало
-// имени), above (начало узла выше), part, own, single, leaf }. draft — { id, part, own,
-// single }: правило, которое сейчас вводят (части может не быть — как у узла)
+// имени), above (начало узла выше), part, own, single, leaf }. draft – { id, part, own,
+// single }: правило, которое сейчас вводят (части может не быть – как у узла)
 export function namingIndex(roots, draft) {
     const index = new Map();
     let order = 0;
@@ -60,7 +60,7 @@ export function namingIndex(roots, draft) {
     return index;
 }
 
-// Шаблон имени узла: «ter-proc-N», у одного места — «adm1-glav»
+// Шаблон имени узла: «ter-proc-N», у одного места – «adm1-glav»
 export function ruleText(entry) {
     return entry && entry.start ? entry.start + (entry.single ? "" : "-N") : "";
 }
@@ -70,7 +70,7 @@ export function keepValid(keep, row) {
     return !!k && k.name === row.hostname && k.location_id === row.location_id;
 }
 
-// № места для порядка: без номера — в конце узла
+// № места для порядка: без номера – в конце узла
 function seatOf(row) {
     const n = Number(row.seat_no);
     return row.seat_no !== null && row.seat_no !== undefined && row.seat_no !== "" && Number.isFinite(n) ? n : Infinity;
@@ -99,7 +99,7 @@ function countedRows(rows, index, keep) {
 }
 
 // Проверка имён: id ПК → { entry, ok, kept, expected, num }; ПК без правила в карте нет.
-// rows — в порядке Таблицы (с сервера): он решает при одинаковом № места
+// rows – в порядке Таблицы (с сервера): он решает при одинаковом № места
 export function checkNames(rows, index, keep) {
     const result = new Map();
     rows.forEach(function (row) {
@@ -122,8 +122,8 @@ export function checkNames(rows, index, keep) {
     return result;
 }
 
-// Имя нового ПК в узле на месте seat (нет правила — ""): номер — сколько ПК с тем же
-// началом выше него и + 1. Место занято — он встаёт на него, остальные сдвигаются
+// Имя нового ПК в узле на месте seat (нет правила – ""): номер – сколько ПК с тем же
+// началом выше него и + 1. Место занято – он встаёт на него, остальные сдвигаются
 export function newName(index, locationId, seat, rows, keep) {
     const entry = index.get(locationId);
     if (!entry || !entry.start) {
@@ -141,9 +141,9 @@ export function newName(index, locationId, seat, rows, keep) {
     return entry.start + "-" + (before + 1);
 }
 
-// Как названы ПК узлов сейчас: id узла → { base, single, count, total } — самое
-// частое начало имени (у большинства ПК узла с понятным именем); одно место —
-// ни у кого с этим началом нет номера. «Своё имя» и имена Windows — не в счёт
+// Как названы ПК узлов сейчас: id узла → { base, single, count, total } – самое
+// частое начало имени (у большинства ПК узла с понятным именем); одно место –
+// ни у кого с этим началом нет номера. «Своё имя» и имена Windows – не в счёт
 export function observedNames(rows, keep) {
     const byNode = new Map();
     rows.forEach(function (row) {
@@ -196,7 +196,7 @@ function relRule(start, above) {
     return { part: start, own: true };
 }
 
-// Черновик правил всего дерева: правила меняются в нём, а не в узлах; changes() —
+// Черновик правил всего дерева: правила меняются в нём, а не в узлах; changes() –
 // что поменять ([{ id, part, own, single }])
 class RuleDraft {
     constructor(roots) {
@@ -304,7 +304,7 @@ function nodeRule(draft, node, observed) {
     return Object.assign(relRule(o.base, draft.aboveOf(node.id)), { single: o.single });
 }
 
-// Предложения «по таблице» у строк: id узла → { text, title, items } — что взять
+// Предложения «по таблице» у строк: id узла → { text, title, items } – что взять
 // этой строкой (одно изменение; узлы ниже со своей частью не меняют имён)
 export function rowSuggestions(roots, observed) {
     const base = new RuleDraft(roots);

@@ -1,8 +1,8 @@
-"""HTTP-запросы к источникам данных (GLPI, GSIT, веб-админка Jabber) — этап 24.
+"""HTTP-запросы к источникам данных (GLPI, GSIT, веб-админка Jabber) – этап 24.
 
-Только стандартная библиотека. Прокси не используется: источники — внутри сети.
+Только стандартная библиотека. Прокси не используется: источники – внутри сети.
 Сбои связи превращаются в SourceError с понятным текстом по-русски; ответ
-с кодом ошибки (401, 404…) — не исключение, его разбирает вызывающий.
+с кодом ошибки (401, 404…) – не исключение, его разбирает вызывающий.
 """
 import base64
 import socket
@@ -16,7 +16,7 @@ MAX_BYTES = 64 * 1024 * 1024
 
 
 class SourceError(Exception):
-    """Ошибка источника: текст — для пользователя."""
+    """Ошибка источника: текст – для пользователя."""
 
 
 class Response:
@@ -36,7 +36,7 @@ def basic_auth(login, password):
 
 
 def check_url(url, what="Адрес"):
-    """Адрес вида http(s)://имя[:порт][/путь] — без лишних пробелов и хвостового «/»."""
+    """Адрес вида http(s)://имя[:порт][/путь] – без лишних пробелов и хвостового «/»."""
     url = (url or "").strip().rstrip("/")
 
     if not url:
@@ -76,7 +76,7 @@ def _reason_text(url, reason):
     if isinstance(reason, ssl.SSLError):
         text = str(reason)
         if any(mark in text for mark in ("WRONG_VERSION_NUMBER", "wrong version number", "UNEXPECTED_EOF", "EOF occurred")):
-            return f"Не удалось установить защищённое соединение с {host} — похоже, он работает по http://, а не https://"
+            return f"Не удалось установить защищённое соединение с {host} – похоже, он работает по http://, а не https://"
         return f"Ошибка защищённого соединения с {host}: {reason}"
 
     if isinstance(reason, socket.gaierror):
@@ -95,7 +95,7 @@ def _reason_text(url, reason):
 
 
 def request(url, headers=None, verify=True, method="GET", data=None):
-    """Запрос; ответ с любым кодом — Response, сбой связи — SourceError."""
+    """Запрос; ответ с любым кодом – Response, сбой связи – SourceError."""
     req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
 
     try:

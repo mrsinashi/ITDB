@@ -1,5 +1,5 @@
-"""Этап 36: новый кабинет из строки «Новый компьютер» — среди соседей по номеру:
-перед узлом before_id (узлы с ним и дальше сдвигаются), без before_id — в конец."""
+"""Этап 36: новый кабинет из строки «Новый компьютер» – среди соседей по номеру:
+перед узлом before_id (узлы с ним и дальше сдвигаются), без before_id – в конец."""
 from conftest import add_location, ok
 
 
@@ -31,7 +31,7 @@ def test_room_before(editor, reader, room):
     ok(add_room(editor, department, "204", before_id=r205))
     assert children(reader, department) == ["201", "202", "203", "204", "205"]
 
-    # Без before_id — в конец, как раньше
+    # Без before_id – в конец, как раньше
     ok(add_room(editor, department, "100"))
     assert children(reader, department) == ["201", "202", "203", "204", "205", "100"]
 

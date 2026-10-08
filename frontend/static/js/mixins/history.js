@@ -25,14 +25,14 @@ export default {
                 });
                 return searchNorm(parts.filter(function (p) { return p !== null && p !== undefined; }).join("\n"));
             });
-            // Слово, которого нет ни в одной записи, — в другой раскладке
+            // Слово, которого нет ни в одной записи, – в другой раскладке
             const words = searchWordsIn(this.historyQuery, texts);
             return this.historyItems.filter(function (item, i) {
                 return matchesAllWords(texts[i], words);
             });
         },
 
-        // Записи истории, разбитые по дням (порядок — как пришёл с сервера)
+        // Записи истории, разбитые по дням (порядок – как пришёл с сервера)
         historyDays() {
             const days = [];
             let current = null;
@@ -62,14 +62,14 @@ export default {
     },
 
     watch: {
-        // Другой набор дней (поиск, обновление) — пересчитать выталкивание
+        // Другой набор дней (поиск, обновление) – пересчитать выталкивание
         historyDays() {
             this.$nextTick(() => {
                 this.pushHistoryDays();
             });
         },
 
-        // Поиск идёт по всей истории — догрузить остальное
+        // Поиск идёт по всей истории – догрузить остальное
         historyQuery(value) {
             if (value.trim() && this.historyRest > 0) {
                 this.loadMoreHistory(true);
@@ -80,7 +80,7 @@ export default {
     methods: {
         // ---------- История: строки дней ----------
         // Липкая строка дня прилипает под шапкой, но у ячеек таблицы границей
-        // прилипания служит вся таблица, а не день (tbody) — строки дней
+        // прилипания служит вся таблица, а не день (tbody) – строки дней
         // наезжали друг на друга. Поэтому следующий день выталкивает
         // прилипшую строку вверх вручную, как адреса в Дереве.
         onHistoryScroll() {
@@ -93,8 +93,8 @@ export default {
             });
         },
 
-        // Число записей за день: без поиска — точное с сервера (день мог
-        // загрузиться не целиком), с поиском — сколько найдено
+        // Число записей за день: без поиска – точное с сервера (день мог
+        // загрузиться не целиком), с поиском – сколько найдено
         historyDayCount(day) {
             if (this.historyQuery.trim()) {
                 return day.items.length;
@@ -143,9 +143,9 @@ export default {
             this.cardHistoryOpen = !this.cardHistoryOpen;
         },
 
-        // Оформление значения в карточке — как в таблице: значение из
-        // Справочников поверх оформления столбца. line — строка значения
-        // (у многострочных — каждая своя); без line — первая оформленная.
+        // Оформление значения в карточке – как в таблице: значение из
+        // Справочников поверх оформления столбца. line – строка значения
+        // (у многострочных – каждая своя); без line – первая оформленная.
         cardValueStyle(r, line) {
             if (!r.field) {
                 return null;
@@ -173,7 +173,7 @@ export default {
 
         // Копирование в буфер. navigator.clipboard работает только по https
         // или на localhost, поэтому есть запасной путь через execCommand.
-        // doneText — своё сообщение вместо «Скопировано: значение» (для пароля).
+        // doneText – своё сообщение вместо «Скопировано: значение» (для пароля).
         async copyText(text, doneText) {
             text = String(text);
             let ok = false;
@@ -293,7 +293,7 @@ export default {
             return data.items || [];
         },
 
-        // Сначала — последние 200 записей, остальное — «Показать ещё / все»
+        // Сначала – последние 200 записей, остальное – «Показать ещё / все»
         async loadHistory() {
             this.historyLoading = true;
             this.startLoading();
@@ -320,7 +320,7 @@ export default {
                 do {
                     const limit = all ? 5000 : HISTORY_PAGE;
                     const items = await this.fetchHistory(this.historyItems.length, limit);
-                    // Пока листали, могли добавиться новые записи — без повторов
+                    // Пока листали, могли добавиться новые записи – без повторов
                     const seen = new Set(this.historyItems.map(function (item) { return item.id; }));
                     const fresh = items.filter(function (item) { return !seen.has(item.id); });
                     this.historyItems = this.historyItems.concat(fresh);

@@ -2,14 +2,14 @@
 сбор пользователей (этап 26д).
 
 Как в скрипте пользователя check_users.sh: страницы
-  {адрес}/admin/server/{домен}/users/1-1000/      — все пользователи и «Последнее
+  {адрес}/admin/server/{домен}/users/1-1000/      – все пользователи и «Последнее
                                                     подключение» (этап 26ж)
-  {адрес}/admin/server/{домен}/online-users/      — кто в сети (ссылки …/user/<имя>/)
-  {адрес}/admin/server/{домен}/user/<имя>/        — подключённые ресурсы: клиент и IP
-  {адрес}/admin/server/{домен}/shared-roster/     — группы общего ростера
-  {адрес}/admin/server/{домен}/shared-roster/<группа>/ — участники (textarea members)
-с входом по логину и паролю администратора (Basic). Разбор — по HTML ejabberd 14.12
-(прислан пользователем 30.09; устройство страниц — в журнале фазы 3).
+  {адрес}/admin/server/{домен}/online-users/      – кто в сети (ссылки …/user/<имя>/)
+  {адрес}/admin/server/{домен}/user/<имя>/        – подключённые ресурсы: клиент и IP
+  {адрес}/admin/server/{домен}/shared-roster/     – группы общего ростера
+  {адрес}/admin/server/{домен}/shared-roster/<группа>/ – участники (textarea members)
+с входом по логину и паролю администратора (Basic). Разбор – по HTML ejabberd 14.12
+(прислан пользователем 30.09; устройство страниц – в журнале фазы 3).
 """
 import html as html_lib
 import ipaddress
@@ -20,7 +20,7 @@ from datetime import datetime
 from scan_http import SourceError, basic_auth, check_url, request
 
 USER_LINK = re.compile(r"/user/([^\"'/?#]+)/")
-# Версия — в подвале страницы: «<a …>ejabberd</a> 23.10-1 (c) …»
+# Версия – в подвале страницы: «<a …>ejabberd</a> 23.10-1 (c) …»
 VERSION = re.compile(r"ejabberd</a>\s*([0-9][0-9A-Za-z.\-]*)")
 INPUT = re.compile(r"<input\b[^>]*>", re.I)
 ATTR = re.compile(r"""([a-zA-Z_:-]+)\s*=\s*(?:'([^']*)'|"([^"]*)")""")
@@ -43,7 +43,7 @@ USERS_MAX = 20000
 
 def split_admin_url(url, domain=None):
     """Адрес веб-админки и домен XMPP. Можно вставить адрес любой страницы
-    админки (…/admin/server/jabber.lan/shared-roster/) — домен возьмётся из него."""
+    админки (…/admin/server/jabber.lan/shared-roster/) – домен возьмётся из него."""
     url = check_url(url, "Адрес веб-админки")
     parts = urllib.parse.urlsplit(url)
     path = parts.path
@@ -75,7 +75,7 @@ def normalize(url):
 
 
 def full_login(login, domain):
-    """Вход в веб-админку — полным адресом: admin → admin@домен."""
+    """Вход в веб-админку – полным адресом: admin → admin@домен."""
     login = (login or "").strip()
     return login if "@" in login else f"{login}@{domain}"
 
@@ -91,7 +91,7 @@ def admin_page(params, page):
     response = request(url, headers, params.get("verify_tls", True))
 
     if response.status == 401:
-        raise SourceError("Jabber не пустил: неверный логин или пароль (логин — полный, например admin@jabber.lan).")
+        raise SourceError("Jabber не пустил: неверный логин или пароль (логин – полный, например admin@jabber.lan).")
 
     if response.status == 404:
         raise SourceError(f"Нет страницы {url} (404): проверь адрес веб-админки и домен XMPP.")
@@ -112,7 +112,7 @@ def attrs_of(tag):
 
 def roster_groups(html):
     """Группы общего ростера: отмеченные галочкой «selected» строки таблицы
-    (последняя строка — форма добавления, у неё имя namenew)."""
+    (последняя строка – форма добавления, у неё имя namenew)."""
     groups = []
 
     for tag in INPUT.findall(html):
@@ -125,7 +125,7 @@ def roster_groups(html):
 
 
 def group_page(html):
-    """(название, участники): участники — JID из textarea members, по строке."""
+    """(название, участники): участники – JID из textarea members, по строке."""
     title = None
 
     for tag in INPUT.findall(html):
@@ -144,8 +144,8 @@ def group_page(html):
 
 
 def login_of(jid, domain):
-    """«ivanov@jabber.lan» → «ivanov»; чужой домен — JID целиком; «@all@» и
-    подобные служебные записи общего ростера — None."""
+    """«ivanov@jabber.lan» → «ivanov»; чужой домен – JID целиком; «@all@» и
+    подобные служебные записи общего ростера – None."""
     jid = jid.strip()
 
     if not jid or jid.startswith("@"):
@@ -181,7 +181,7 @@ def user_resources(html):
 
 
 def last_login(text):
-    """«Последнее подключение»: (в сети сейчас, когда) — «Подключён» → (True, None),
+    """«Последнее подключение»: (в сети сейчас, когда) – «Подключён» → (True, None),
     «2026-09-18 11:18:44» → (False, время сервера), «Никогда» → (False, None)."""
     text = html_lib.unescape(TAG.sub("", text or "")).strip()
 
@@ -213,7 +213,7 @@ def users_page(html):
 
 def all_users(params):
     """Все пользователи сервера. Страница users/1-N/ отдаёт первых N; спрашиваем
-    1000, потом на 100 больше — и так, пока пользователей прибавляется."""
+    1000, потом на 100 больше – и так, пока пользователей прибавляется."""
     size = USERS_FIRST
     users = users_page(admin_page(params, f"users/1-{size}/"))
 
@@ -234,8 +234,8 @@ def collect(params, fresh_days=None, progress=None):
 
     Ответ: {"items": [{"login", "groups", "online", "resources", "registered",
     "last_login"}], "stats": {...}, "warnings": [...], "groups_ok": группы получены,
-    "users_ok": список пользователей получен, "version": …}; registered — None,
-    если списка нет. progress(просмотрено пользователей, всего) — по ходу."""
+    "users_ok": список пользователей получен, "version": …}; registered – None,
+    если списка нет. progress(просмотрено пользователей, всего) – по ходу."""
     _, domain = split_admin_url(params["url"], params.get("domain"))
     warnings = []
     online_html = admin_page(params, "online-users/")

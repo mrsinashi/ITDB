@@ -30,8 +30,8 @@ class Location(Base):
     note = Column(Text, nullable=True)
     archived = Column(Boolean, nullable=False, server_default="false")
 
-    # Правило имён ПК (этап 35): часть имени узла; «только своя» — части узлов
-    # выше не добавляются; одно место — имя без номера
+    # Правило имён ПК (этап 35): часть имени узла; «только своя» – части узлов
+    # выше не добавляются; одно место – имя без номера
     name_part = Column(Text, nullable=True)
     name_own = Column(Boolean, nullable=False, server_default="false")
     name_single = Column(Boolean, nullable=False, server_default="false")
@@ -97,7 +97,7 @@ class Choice(Base):
     italic = Column(Boolean, nullable=False, server_default="false")
     underline = Column(Boolean, nullable=False, server_default="false")
     strike = Column(Boolean, nullable=False, server_default="false")
-    # Фон — блочком у текста, а не заливкой ячейки (этап 26и)
+    # Фон – блочком у текста, а не заливкой ячейки (этап 26и)
     chip = Column(Boolean, nullable=False, server_default="false")
 
 
@@ -166,15 +166,15 @@ class History(Base):
     id = Column(Integer, primary_key=True)
     entity = Column(Text, nullable=False)
     entity_id = Column(Integer, nullable=False)
-    # Ключ объекта без числового id (оформление столбца — имя столбца; entity_id = 0)
+    # Ключ объекта без числового id (оформление столбца – имя столбца; entity_id = 0)
     entity_key = Column(Text, nullable=True)
-    # Название объекта на момент записи — если объекта уже нет (удалённое значение)
+    # Название объекта на момент записи – если объекта уже нет (удалённое значение)
     title = Column(Text, nullable=True)
     user_name = Column(Text, nullable=True)
     at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    # {поле: {"old", "new"}}; у поля могут быть пометки: "cancelled" — изменение
-    # отменено ({"by", "at"}), "revert" — это возврат значения из истории,
-    # "old_id"/"new_id" — id узлов у расположения (в old/new — путь текстом)
+    # {поле: {"old", "new"}}; у поля могут быть пометки: "cancelled" – изменение
+    # отменено ({"by", "at"}), "revert" – это возврат значения из истории,
+    # "old_id"/"new_id" – id узлов у расположения (в old/new – путь текстом)
     changes = Column(JSONB, nullable=False)
     # Отменены все поля записи: по умолчанию запись не показывается и не считается
     cancelled = Column(Boolean, nullable=False, server_default="false")
@@ -186,10 +186,10 @@ class User(Base):
     )
 
     id = Column(Integer, primary_key=True)
-    # Как ввели (Ivanov.P); вход и занятость — без учёта регистра (индекс
+    # Как ввели (Ivanov.P); вход и занятость – без учёта регистра (индекс
     # uq_users_login_lower по lower(login), миграция c3e8f1a7d2b5)
     login = Column(Text, nullable=False)
-    full_name = Column(Text)   # ФИО: «Иванов Иван Иванович»; на панели — «Иванов И.И.»
+    full_name = Column(Text)   # ФИО: «Иванов Иван Иванович»; на панели – «Иванов И.И.»
     position = Column(Text)    # должность
     password_hash = Column(Text, nullable=False)
     role = Column(Text, nullable=False, server_default="reader")
@@ -237,8 +237,8 @@ class ColumnStyle(Base):
 
 class ScanSource(Base):
     """Подключение к источнику данных для сканирования (этап 24): GLPI, GSIT,
-    Jabber. Строка появляется при первом сохранении настроек (до этого —
-    значения по умолчанию из api_scan.SOURCES). Пароли и токены — в secrets,
+    Jabber. Строка появляется при первом сохранении настроек (до этого –
+    значения по умолчанию из api_scan.SOURCES). Пароли и токены – в secrets,
     зашифрованными ключом ITDB_SECRET_KEY из .env (secret_box.py)."""
     __tablename__ = "scan_sources"
 
@@ -278,7 +278,7 @@ class ScanSubnet(Base):
 class ScanRun(Base):
     """Запуск сбора из источника (этап 25): кто, когда, итог и счётчики отчёта
     (stats: total, fresh, stale, no_date, dups, key, link, name, conflict, none;
-    пока идёт — progress {done, total})."""
+    пока идёт – progress {done, total})."""
     __tablename__ = "scan_runs"
 
     id = Column(Integer, primary_key=True)
@@ -292,13 +292,13 @@ class ScanRun(Base):
 
 
 class ScanRecord(Base):
-    """Запись о ПК из источника (GLPI, GSIT) с последнего сбора — только
+    """Запись о ПК из источника (GLPI, GSIT) с последнего сбора – только
     свежие (проверенные источником не раньше N дней назад). В таблицу ПК
-    ничего не пишется: data — значения в формате ITDB (values), антивирусы,
-    полные названия; keys — признаки для сопоставления (физические MAC,
-    настоящий серийный, UUID); dup_of — запись того же источника, дублем
+    ничего не пишется: data – значения в формате ITDB (values), антивирусы,
+    полные названия; keys – признаки для сопоставления (физические MAC,
+    настоящий серийный, UUID); dup_of – запись того же источника, дублем
     которой эта считается (то же железо). С каким ПК ITDB сопоставлена
-    запись, не хранится — считается на лету (scan_match.py), чтобы правка
+    запись, не хранится – считается на лету (scan_match.py), чтобы правка
     MAC или серийного в таблице сразу меняла сопоставление."""
     __tablename__ = "scan_records"
     __table_args__ = (
@@ -318,8 +318,8 @@ class ScanRecord(Base):
 
 
 class ScanLink(Base):
-    """Решение администратора о записи источника (этап 25): link — это этот ПК
-    (сопоставлять с ним, что бы ни говорили признаки), reject — это не этот ПК
+    """Решение администратора о записи источника (этап 25): link – это этот ПК
+    (сопоставлять с ним, что бы ни говорили признаки), reject – это не этот ПК
     (не предлагать его). Переживает повторные сборы: запись может пропасть
     (устарела) и вернуться."""
     __tablename__ = "scan_links"
@@ -338,11 +338,11 @@ class ScanLink(Base):
 
 
 class ScanAlias(Base):
-    """Соответствие названий (этап 25б): значение источника source в поле field —
+    """Соответствие названий (этап 25б): значение источника source в поле field –
     то же, что table_value в таблице (kind same), или точно не то же (differ),
-    или «в таблице своё» (keep). kind board (field model): это название — не
+    или «в таблице своё» (keep). kind board (field model): это название – не
     модель ПК, а материнская плата: идёт в столбец «Мат. плата» как table_value.
-    Ключи — без регистра и лишних пробелов (scan_values.key_of)."""
+    Ключи – без регистра и лишних пробелов (scan_values.key_of)."""
     __tablename__ = "scan_aliases"
     __table_args__ = (
         UniqueConstraint("field", "source_key", "table_key", name="uq_scan_aliases"),
@@ -361,8 +361,8 @@ class ScanAlias(Base):
 
 class ScanReject(Base):
     """Отклонённое значение сканера (этап 26): этому ПК в этом поле значение
-    value не предлагать, пока источник отдаёт то же самое (value_key — ключ
-    значения как в источнике; изменилось — снова расхождение)."""
+    value не предлагать, пока источник отдаёт то же самое (value_key – ключ
+    значения как в источнике; изменилось – снова расхождение)."""
     __tablename__ = "scan_rejects"
     __table_args__ = (
         UniqueConstraint("computer_id", "field", "value_key", name="uq_scan_rejects"),
@@ -379,9 +379,9 @@ class ScanReject(Base):
 
 class ScanMark(Base):
     """Как помечать в Таблице ячейку, у которой сканер предлагает другое (этап 26б):
-    diff — отличается, fill — в таблице пусто, unsure — неточно, partial — в
-    таблице часть. enabled — помечать вообще; always — и без кнопки на панели
-    (в обычном просмотре). Вид — как оформление в Справочниках + зачёркивание и
+    diff – отличается, fill – в таблице пусто, unsure – неточно, partial – в
+    таблице часть. enabled – помечать вообще; always – и без кнопки на панели
+    (в обычном просмотре). Вид – как оформление в Справочниках + зачёркивание и
     рамка. Строки заводит миграция d1f5b8e2a4c6."""
     __tablename__ = "scan_marks"
 
@@ -399,11 +399,11 @@ class ScanMark(Base):
 
 class ScanJabberUser(Base):
     """Пользователь Jabber (VACUUM) из веб-админки ejabberd (этап 26д): группы
-    общего ростера, в сети ли при последнем сборе и с каких адресов (ресурсы —
-    клиент и IP). Строка не удаляется при пересборе: last_ip / last_seen_at —
+    общего ростера, в сети ли при последнем сборе и с каких адресов (ресурсы –
+    клиент и IP). Строка не удаляется при пересборе: last_ip / last_seen_at –
     последний адрес и когда пользователь был в сети (по сборам ITDB).
-    registered — есть ли в списке пользователей ejabberd (None — список не
-    получали; False — удалён или его там нет), last_login_at — «Последнее
+    registered – есть ли в списке пользователей ejabberd (None – список не
+    получали; False – удалён или его там нет), last_login_at – «Последнее
     подключение» из этого списка."""
     __tablename__ = "scan_jabber_users"
     __table_args__ = (
@@ -425,13 +425,13 @@ class ScanJabberUser(Base):
 
 
 class ScanHost(Base):
-    """Что видно в сети по адресу (этап 28): source dhcp — аренда с сервера DHCP,
-    dhcp_conf — привязка MAC — IP из его настроек (заменяются при каждом сборе
-    DHCP; на адрес может быть и аренда, и привязка), net — ответ адреса при проходе
+    """Что видно в сети по адресу (этап 28): source dhcp – аренда с сервера DHCP,
+    dhcp_conf – привязка MAC – IP из его настроек (заменяются при каждом сборе
+    DHCP; на адрес может быть и аренда, и привязка), net – ответ адреса при проходе
     подсетей (строка остаётся, пока адрес молчит не дольше срока «Актуальны»).
-    mac, name — MAC и имя, которым машина называет себя сама (NetBIOS, имя из
-    аренды); seen_at — когда адрес был занят; data — подробности (состояние
-    аренды, чем ответил, имя в DNS, порты). С ПК таблицы не связано — предложения
+    mac, name – MAC и имя, которым машина называет себя сама (NetBIOS, имя из
+    аренды); seen_at – когда адрес был занят; data – подробности (состояние
+    аренды, чем ответил, имя в DNS, порты). С ПК таблицы не связано – предложения
     считаются на лету (scan_hostmatch.py)."""
     __tablename__ = "scan_hosts"
     __table_args__ = (
@@ -449,10 +449,10 @@ class ScanHost(Base):
 
 
 class AppSetting(Base):
-    """Общая настройка программы (этап 26д): key → value (JSON): «antivirus» — вид
-    столбца «Антивирусы», «table_marks» — выделения в Таблице, «schedule» —
-    расписание сборов (этап 28), «name_keep» — ПК со своим именем не по правилу
-    (этап 35). Нет строки — значения по умолчанию."""
+    """Общая настройка программы (этап 26д): key → value (JSON): «antivirus» – вид
+    столбца «Антивирусы», «table_marks» – выделения в Таблице, «schedule» –
+    расписание сборов (этап 28), «name_keep» – ПК со своим именем не по правилу
+    (этап 35). Нет строки – значения по умолчанию."""
     __tablename__ = "app_settings"
 
     key = Column(Text, primary_key=True)

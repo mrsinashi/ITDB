@@ -1,4 +1,4 @@
-"""Пользователи системы: список и правка — только admin; смена своего пароля — любой роли.
+"""Пользователи системы: список и правка – только admin; смена своего пароля – любой роли.
 
 Таблица users между тестами не чистится (там живут admin/editor/reader на всю сессию),
 поэтому каждый тест заводит своих пользователей с уникальными логинами."""
@@ -46,7 +46,7 @@ def test_change_only_admin(editor, method, url):
 
 
 def test_create_and_login(admin):
-    # Логин хранится как ввели, вход — в любом регистре
+    # Логин хранится как ввели, вход – в любом регистре
     user = create(admin, login="  Ivanov.P ", role="editor")
     assert user["login"] == "Ivanov.P"
     assert user["role"] == "editor"
@@ -85,7 +85,7 @@ def test_change_role(admin):
     assert client.post("/api/field-defs", json={"key": "phone", "label": "Телефон"}).status_code == 403
 
     ok(admin.patch(f"/api/users/{user['id']}", json={"role": "editor"}))
-    # Роль читается при каждом запросе — действует сразу, без нового входа
+    # Роль читается при каждом запросе – действует сразу, без нового входа
     assert ok(client.get("/api/auth/me"))["role"] == "editor"
     ok(client.post("/api/field-defs", json={"key": "phone", "label": "Телефон"}))
 
@@ -110,7 +110,7 @@ def test_disable_and_enable(admin):
     assert client.get("/api/auth/me").status_code == 401
     assert sign_in(user["login"], "secret1")[1] == 401
 
-    # Отключённые — в конце списка
+    # Отключённые – в конце списка
     users = ok(admin.get("/api/users"))
     assert users[-1]["archived"] is True
 
@@ -126,7 +126,7 @@ def test_admin_cannot_demote_or_disable_self(admin):
     response = admin.patch(f"/api/users/{me['id']}", json={"archived": True})
     assert response.status_code == 400
 
-    # То же значение — не изменение, не ошибка
+    # То же значение – не изменение, не ошибка
     ok(admin.patch(f"/api/users/{me['id']}", json={"role": "admin", "archived": False}))
     assert ok(admin.get("/api/auth/me"))["role"] == "admin"
 
@@ -203,15 +203,15 @@ def test_admin_edits_profile(admin):
     }))
     assert (changed["login"], changed["full_name"], changed["position"]) == ("Sidorov.P", "Сидоров Пётр", "Врач")
 
-    # Вход — по новому логину, в любом регистре
+    # Вход – по новому логину, в любом регистре
     _, status = sign_in("sidorov.p", "secret1")
     assert status == 200
 
-    # Занятый логин (без учёта регистра) — нельзя
+    # Занятый логин (без учёта регистра) – нельзя
     response = admin.patch(f"/api/users/{other['id']}", json={"login": "SIDOROV.P"})
     assert response.status_code == 409
 
-    # Пустые ФИО и должность — очищаются
+    # Пустые ФИО и должность – очищаются
     cleared = ok(admin.patch(f"/api/users/{user['id']}", json={"full_name": "", "position": "  "}))
     assert cleared["full_name"] is None and cleared["position"] is None
 
@@ -243,7 +243,7 @@ def test_own_profile_any_role(admin):
     response = client.patch("/api/auth/me/profile", json={"login": "ADMIN"})
     assert response.status_code == 409
 
-    # В Истории — запись о пользователе (видит admin)
+    # В Истории – запись о пользователе (видит admin)
     records = ok(admin.get("/api/history", params={"entity": "users", "limit": 50}))["items"]
     record = next(r for r in records if r["entity_id"] == me["id"] and "full_name" in r["changes"])
     assert record["changes"]["full_name"]["new"] == "Кузнецова Ольга Петровна"
@@ -263,7 +263,7 @@ def test_undo_full_name(admin):
 
 
 def test_http_refused(database):
-    """Не по https (и не с самого сервера) — отказ, даже страница входа."""
+    """Не по https (и не с самого сервера) – отказ, даже страница входа."""
     client = TestClient(app)  # http://testserver, адрес клиента «testclient»
 
     for url in ("/login.html", "/", "/api/auth/me"):
@@ -277,6 +277,6 @@ def test_http_refused(database):
 
 
 def test_http_from_server_itself(database):
-    """С самого сервера (127.0.0.1) http разрешён — проверка curl'ом, туннель SSH."""
+    """С самого сервера (127.0.0.1) http разрешён – проверка curl'ом, туннель SSH."""
     client = TestClient(app, client=("127.0.0.1", 50000))
     assert client.get("/login.html").status_code == 200

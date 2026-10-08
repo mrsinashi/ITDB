@@ -1,8 +1,8 @@
-"""Описание встроенных столбцов ПК — одно место для всего: таблица, карточка,
+"""Описание встроенных столбцов ПК – одно место для всего: таблица, карточка,
 История, Справочники (фронт получает его через GET /api/columns), выгрузка
 в Excel, правка полей и массовая правка на сервере.
 
-Новый встроенный столбец — одна строка в COLUMNS (и, если нужно, в CARD_GROUPS).
+Новый встроенный столбец – одна строка в COLUMNS (и, если нужно, в CARD_GROUPS).
 Пользовательские поля сюда не входят: они в field_defs и добавляются к
 встроенным перед «Статус»."""
 import re
@@ -14,17 +14,17 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api", tags=["columns"])
 
 # Как поле хранится и правится:
-#   text      — строка в computers (пробелы по краям убираются)
-#   multiline — несколько строк в computers (пустые строки убираются)
-#   ip, mac   — несколько значений через перенос строки (MAC прописными)
-#   seat      — № места, целое число
-#   date      — дата (в API — «ДД.ММ.ГГГГ»); просроченная подсвечивается
-#   extra     — значение в computers.extra под ключом extra_key
-#   user      — основной пользователь (связь с people)
-#   vacuum    — логины VACUUM (связь с vacuum_accounts)
-#   location  — часть пути расположения; меняется выбором узла (location_id)
-#   scan      — только из сканера, в computers не хранится и не правится
-#               (антивирусы — из записей GLPI / GSIT, этап 26д)
+#   text      – строка в computers (пробелы по краям убираются)
+#   multiline – несколько строк в computers (пустые строки убираются)
+#   ip, mac   – несколько значений через перенос строки (MAC прописными)
+#   seat      – № места, целое число
+#   date      – дата (в API – «ДД.ММ.ГГГГ»); просроченная подсвечивается
+#   extra     – значение в computers.extra под ключом extra_key
+#   user      – основной пользователь (связь с people)
+#   vacuum    – логины VACUUM (связь с vacuum_accounts)
+#   location  – часть пути расположения; меняется выбором узла (location_id)
+#   scan      – только из сканера, в computers не хранится и не правится
+#               (антивирусы – из записей GLPI / GSIT, этап 26д)
 Kind = Literal["text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan"]
 
 
@@ -54,15 +54,15 @@ class Column(BaseModel):
 
 def col(key, short, title=None, kind="text", **flags):
     title = title or short
-    # В карточке — без расшифровки в скобках: «Процессор (ЦП / CPU)» → «Процессор»
+    # В карточке – без расшифровки в скобках: «Процессор (ЦП / CPU)» → «Процессор»
     card = flags.pop("card", None) or re.sub(r"\s*\(.*\)$", "", title)
-    # Подсказки при вводе — у столбцов с повторяющимися значениями в одну строку
-    # (статус, ТИП, OS, модель, CPU…); у уникальных (имя, ИНВ) и дат — нет
+    # Подсказки при вводе – у столбцов с повторяющимися значениями в одну строку
+    # (статус, ТИП, OS, модель, CPU…); у уникальных (имя, ИНВ) и дат – нет
     flags.setdefault("suggest", flags.get("values", "yes") == "yes" and kind in ("text", "extra"))
     return Column(key=key, short=short, title=title, card=card, kind=kind, **flags)
 
 
-# Порядок — как в таблице и в выгрузке
+# Порядок – как в таблице и в выгрузке
 COLUMNS = [
     col("user", "ФИО", kind="user", values="no", export_width=25),
     col("building", "Адрес", kind="location", card_copy=True, export_width=16, card_always=True),
@@ -89,7 +89,7 @@ COLUMNS = [
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=16),
     col("glpi_id", "GLPI", "GLPI ID", center=True, values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=8),
     col("gsit_id", "GSIT", "GSIT ID", center=True, values="no", card_copy=True, dup=True, bulk=False, export_width=8),
-    # «Агент» — есть ли на ПК агент GLPI / GSIT (до 26ж столбец назывался «GSIT»; ключ в extra прежний)
+    # «Агент» – есть ли на ПК агент GLPI / GSIT (до 26ж столбец назывался «GSIT»; ключ в extra прежний)
     col("gsit", "Агент", kind="extra", extra_key="GSIT", center=True, export_width=8),
     col("state", "Сост.", kind="extra", extra_key="Сост.", center=True, export_width=8),
     col("label", "Метка", kind="extra", extra_key="Метка", center=True, export_width=10),
@@ -100,9 +100,9 @@ COLUMNS = [
 
 COLUMNS_BY_KEY = {column.key: column for column in COLUMNS}
 
-# Карточка ПК: группы строк по порядку. room_code — строка «Кабинет»
-# («[214] Процедурная», вместе с room_name); user_fields — пользовательские поля.
-# ФИО и VACUUM в карточке показываются отдельным блоком, HOSTNAME — в заголовке.
+# Карточка ПК: группы строк по порядку. room_code – строка «Кабинет»
+# («[214] Процедурная», вместе с room_name); user_fields – пользовательские поля.
+# ФИО и VACUUM в карточке показываются отдельным блоком, HOSTNAME – в заголовке.
 CARD_GROUPS = [
     (None, ["status", "temp_until"]),
     ("Размещение", ["building", "department", "floor", "room_code", "seat_no"]),
@@ -120,7 +120,7 @@ HISTORY_LABELS = {
     "replaced": "Заменил",
     "replaced_by": "Заменён на",
     "created": "Создан",
-    "temp_note": "Временно, до…",  # до этапа 16 — текстовое поле
+    "temp_note": "Временно, до…",  # до этапа 16 – текстовое поле
 }
 
 
@@ -131,8 +131,8 @@ def keys_of(*kinds):
 # Поля, которые правятся в PATCH (кроме location_id и пользовательских)
 EDITABLE_KEYS = {column.key for column in COLUMNS if column.kind not in ("location", "scan")}
 
-# Нельзя менять всем выбранным сразу: расположение и № места — через
-# «Переместить», значения, которые у каждого ПК свои, — по одному
+# Нельзя менять всем выбранным сразу: расположение и № места – через
+# «Переместить», значения, которые у каждого ПК свои, – по одному
 BULK_EXCLUDED = {"location_id"} | {column.key for column in COLUMNS if not column.bulk}
 
 # Встроенные поля в computers.extra: ключ в API → ключ в extra

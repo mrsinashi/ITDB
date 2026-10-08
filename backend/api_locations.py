@@ -212,8 +212,8 @@ def create_location(
     sort = next_sort(session, parent_id)
     before_id = payload.get("before_id")
 
-    # Новый кабинет при добавлении ПК (этап 36) — перед узлом before_id (по номеру
-    # кабинета), узлы с ним и дальше сдвигаются; без before_id — в конец
+    # Новый кабинет при добавлении ПК (этап 36) – перед узлом before_id (по номеру
+    # кабинета), узлы с ним и дальше сдвигаются; без before_id – в конец
     if before_id is not None:
         try:
             before = session.get(Location, int(before_id))

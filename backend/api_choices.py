@@ -5,7 +5,7 @@ from db import get_db
 from history_log import choice_title, diff, log_change
 from models import Choice
 
-# Поля значения справочника, которые пишутся в историю (порядок — нет)
+# Поля значения справочника, которые пишутся в историю (порядок – нет)
 # Галочки оформления: жирный, курсив, подчёркнутый, зачёркнутый, фон блочком
 FLAG_FIELDS = ("bold", "italic", "underline", "strike", "chip")
 HISTORY_FIELDS = ("value", "color", "bg_color") + FLAG_FIELDS

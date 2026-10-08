@@ -1,16 +1,16 @@
 """SSH для сбора с сервера DHCP (этап 28): прочитать файл аренд.
 
-Сервер у пользователя — старый Linux (CentOS 6, OpenSSH 5.3): ключ сервера и
+Сервер у пользователя – старый Linux (CentOS 6, OpenSSH 5.3): ключ сервера и
 подпись только ssh-rsa (SHA-1), ключи ed25519 он не понимает. Поэтому paramiko
-версии 4 (в 5-й старые алгоритмы убраны) и ключ ITDB — RSA.
+версии 4 (в 5-й старые алгоритмы убраны) и ключ ITDB – RSA.
 
-Вход — ключом ITDB (хранится зашифрованным в настройках источника, на диск не
+Вход – ключом ITDB (хранится зашифрованным в настройках источника, на диск не
 пишется: служба работает без права записи) или паролем. Ключ на сервер ставит
-install_key (по паролю) — сразу с ограничением: по этому ключу сервер выполняет
+install_key (по паролю) – сразу с ограничением: по этому ключу сервер выполняет
 только «cat файл», что бы ни просили; без терминала и пробросов.
 
 Ключ сервера запоминается при первом подключении (host_key); если потом сервер
-предъявит другой — отказ: это либо переустановка, либо подмена.
+предъявит другой – отказ: это либо переустановка, либо подмена.
 """
 import base64
 import hashlib
@@ -53,10 +53,10 @@ def split_host(address):
     host, _, port = text.partition(":")
 
     if not host or " " in host or "/" in host:
-        raise SourceError("Адрес — имя или IP сервера, например 192.168.0.5 (порт — через двоеточие).")
+        raise SourceError("Адрес – имя или IP сервера, например 192.168.0.5 (порт – через двоеточие).")
 
     if port and not (port.isdigit() and 0 < int(port) < 65536):
-        raise SourceError(f"Порт «{port}» — не число от 1 до 65535.")
+        raise SourceError(f"Порт «{port}» – не число от 1 до 65535.")
 
     return host, int(port) if port else 22
 
@@ -76,7 +76,7 @@ def split_paths(text):
 
     for path in paths:
         if not PATH_RE.match(path) or ".." in path:
-            raise SourceError(f"Путь «{path}» — нужен полный, с «/» в начале, без пробелов и кавычек.")
+            raise SourceError(f"Путь «{path}» – нужен полный, с «/» в начале, без пробелов и кавычек.")
 
     return paths
 
@@ -98,20 +98,20 @@ def config_paths(configs):
 
 
 def all_paths(params):
-    """Все файлы подключения: аренды, за ними — настройки."""
+    """Все файлы подключения: аренды, за ними – настройки."""
     paths = split_paths(params.get("path"))
     return paths + [path for path in config_paths(params.get("configs")) if path not in paths]
 
 
 def read_command(paths):
-    """Перед каждым файлом — строка-метка: по ней видно, какие файлы сервер отдал
+    """Перед каждым файлом – строка-метка: по ней видно, какие файлы сервер отдал
     (ключ на сервере выполняет команду, записанную при его установке)."""
     return "; ".join(f"echo; echo '{FILE_MARK}{path}'; cat -- {shlex.quote(path)}" for path in paths)
 
 
 def split_files(text):
     """Вывод сервера → [(путь, текст)]. Меток нет (ключ поставлен версией до 28в:
-    просто «cat») — [(None, весь текст)]."""
+    просто «cat») – [(None, весь текст)]."""
     parts = FILE_LINE.split(text)
 
     if len(parts) == 1:
@@ -181,8 +181,8 @@ OLD_OPENSSH = re.compile(r"OpenSSH_(?:[1-6]\.|7\.[01](?!\d))")
 
 
 class Session:
-    """Подключение по SSH. info: host_key — ключ сервера, auth — чем вошли
-    (key / password), server — версия сервера."""
+    """Подключение по SSH. info: host_key – ключ сервера, auth – чем вошли
+    (key / password), server – версия сервера."""
 
     def __init__(self, params, use_key=True, use_password=True):
         self.host, self.port = split_host(params.get("url"))
@@ -208,7 +208,7 @@ class Session:
             raise
 
     def _open(self, old_rsa=False):
-        """Соединение и проверка ключа сервера. old_rsa — подписывать по-старому (ssh-rsa)."""
+        """Соединение и проверка ключа сервера. old_rsa – подписывать по-старому (ssh-rsa)."""
         self.close()
 
         try:
@@ -230,7 +230,7 @@ class Session:
         if self.pinned and self.pinned.split()[:2] != seen.split()[:2]:
             raise SourceError(
                 f"Ключ сервера {self.host} изменился (был {fingerprint(self.pinned)}, стал {fingerprint(seen)}). "
-                "Если сервер переустановили — убери отпечаток (✕) и проверь снова."
+                "Если сервер переустановили – убери отпечаток (✕) и проверь снова."
             )
 
     def _auth(self, key, password):
@@ -265,8 +265,8 @@ class Session:
 
     def _auth_key(self, pkey):
         """Вход ключом. Старый сервер (как OpenSSH 5.3 на CentOS 6) не сообщает,
-        какие подписи понимает, и знает только ssh-rsa: ему — сразу старая подпись;
-        незнакомому серверу, который промолчал и ключ не принял, — вторая попытка
+        какие подписи понимает, и знает только ssh-rsa: ему – сразу старая подпись;
+        незнакомому серверу, который промолчал и ключ не принял, – вторая попытка
         со старой подписью в новом соединении."""
         if OLD_OPENSSH.search(self.transport.remote_version or ""):
             self._open(old_rsa=True)
@@ -290,7 +290,7 @@ class Session:
             channel.settimeout(TIMEOUT)
             channel.exec_command(command)
 
-            # Сервер мог уже всё отдать и закрыть канал — вывод всё равно дочитается
+            # Сервер мог уже всё отдать и закрыть канал – вывод всё равно дочитается
             try:
                 if stdin is not None:
                     channel.sendall(stdin)
@@ -310,7 +310,7 @@ class Session:
                 out += chunk
 
                 if len(out) > MAX_BYTES:
-                    raise SourceError("Файл больше 64 МБ — это точно файл аренд DHCP?")
+                    raise SourceError("Файл больше 64 МБ – это точно файл аренд DHCP?")
 
             err = channel.makefile_stderr("rb").read(4096)
             code = channel.recv_exit_status()
@@ -333,8 +333,8 @@ class Session:
 
 
 def read_files(params):
-    """Файлы с сервера [(путь, текст)] и сведения о подключении. Путь None — сервер
-    отдал всё одним куском (ключ на нём — с прежней командой)."""
+    """Файлы с сервера [(путь, текст)] и сведения о подключении. Путь None – сервер
+    отдал всё одним куском (ключ на нём – с прежней командой)."""
     paths = all_paths(params)
 
     with Session(params) as session:
@@ -342,7 +342,7 @@ def read_files(params):
         info = session.info
 
     files = split_files(out.decode("utf-8", errors="replace"))
-    # Не прочитался файл настроек — не повод терять аренды: об этом скажет сборщик
+    # Не прочитался файл настроек – не повод терять аренды: об этом скажет сборщик
     leases_read = files[0][0] in (None, paths[0]) and files[0][1].strip()
 
     if not leases_read and (code != 0 or err):
@@ -353,9 +353,9 @@ def read_files(params):
 
 
 def install_key(params):
-    """Поставить ключ ITDB на сервер (вход — по паролю): строка в
+    """Поставить ключ ITDB на сервер (вход – по паролю): строка в
     ~/.ssh/authorized_keys с ограничением «только читать файл». Прежние строки
-    ITDB заменяются. Ответ — сведения о подключении."""
+    ITDB заменяются. Ответ – сведения о подключении."""
     paths = all_paths(params)
     line = authorized_line(params["ssh_key"], paths)
     marker = shlex.quote(" " + KEY_COMMENT + "$")

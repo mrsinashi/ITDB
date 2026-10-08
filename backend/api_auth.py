@@ -89,8 +89,8 @@ def login(
         value=token,
         httponly=True,
         samesite="lax",
-        # За Caddy по https — кука только для https (схему uvicorn берёт из
-        # заголовков Caddy, см. deploy/itdb.service); dev по http — как раньше
+        # За Caddy по https – кука только для https (схему uvicorn берёт из
+        # заголовков Caddy, см. deploy/itdb.service); dev по http – как раньше
         secure=request.url.scheme == "https",
         max_age=SESSION_DAYS * 24 * 60 * 60,
     )
@@ -137,7 +137,7 @@ def update_profile(
     user=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    """Свои логин, ФИО и должность (любая роль; роль и пароль — не здесь).
+    """Свои логин, ФИО и должность (любая роль; роль и пароль – не здесь).
     Вход остаётся: сессия привязана к пользователю, а не к логину."""
     db_user = session.get(User, user["id"])
 
@@ -182,7 +182,7 @@ def update_prefs(
         if key in payload:
             prefs[key] = bool(payload.get(key))
 
-    # Акцентная шапка — отдельно для каждой страницы
+    # Акцентная шапка – отдельно для каждой страницы
     if "accent_headers" in payload:
         value = payload.get("accent_headers")
 
@@ -198,7 +198,7 @@ def update_prefs(
 
         prefs["accent_headers"] = headers
 
-    db_user.prefs = prefs  # новый dict — иначе JSONB не заметит изменения
+    db_user.prefs = prefs  # новый dict – иначе JSONB не заметит изменения
     session.commit()
 
     return {"ok": True, "prefs": prefs}
@@ -217,7 +217,7 @@ def change_password(
     session=Depends(get_db),
 ):
     """Смена своего пароля (любая роль). Неверный текущий пароль считается
-    неудачной попыткой входа — тот же лимит, что у входа."""
+    неудачной попыткой входа – тот же лимит, что у входа."""
     ip = request.client.host if request.client else "unknown"
 
     check_rate_limit(ip)
@@ -239,7 +239,7 @@ def change_password(
     db_user.password_hash = hash_password(payload.new)
     log_change(session, "users", db_user.id, db_user.login,
                {"password": {"old": None, "new": PASSWORD_SET}}, title=db_user.login)
-    # Входы на других компьютерах завершаются, этот — остаётся
+    # Входы на других компьютерах завершаются, этот – остаётся
     end_sessions(session, db_user.id, keep_token=user["token"])
     session.commit()
 

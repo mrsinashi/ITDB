@@ -1,7 +1,7 @@
 """Общая подготовка API-тестов.
 
 Тесты работают с ОТДЕЛЬНОЙ базой из TEST_DATABASE_URL: перед запуском все таблицы
-в ней удаляются и создаются заново миграциями, перед каждым тестом — очищаются.
+в ней удаляются и создаются заново миграциями, перед каждым тестом – очищаются.
 Рабочую базу (DATABASE_URL) тесты не трогают и отказываются запускаться, если
 адреса совпадают или в имени тестовой базы нет «test».
 """
@@ -63,7 +63,7 @@ if "test" not in (make_url(TEST_DATABASE_URL).database or ""):
         returncode=4,
     )
 
-# Бэкенд читает DATABASE_URL при импорте — подменяем до импорта приложения
+# Бэкенд читает DATABASE_URL при импорте – подменяем до импорта приложения
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -120,7 +120,7 @@ def database():
 
 @pytest.fixture(autouse=True)
 def clean_data(database):
-    """Перед каждым тестом — пустые данные (узлы, ПК, история, справочники…)."""
+    """Перед каждым тестом – пустые данные (узлы, ПК, история, справочники…)."""
     with engine.begin() as conn:
         tables = conn.execute(
             text("select tablename from pg_tables where schemaname = 'public'")

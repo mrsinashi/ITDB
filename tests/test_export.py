@@ -1,4 +1,4 @@
-"""Выгрузка в Excel: доступна любой роли, архив — отдельным листом."""
+"""Выгрузка в Excel: доступна любой роли, архив – отдельным листом."""
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -48,6 +48,6 @@ def test_export_has_user_fields(editor, room):
 
     ws = workbook(editor.get("/api/export/computers.xlsx"))["Компьютеры"]
     headers = [cell.value for cell in ws[1]]
-    # Пользовательское поле — перед «Статус», как в таблице
+    # Пользовательское поле – перед «Статус», как в таблице
     assert headers.index("Телефон") == headers.index("Статус") - 1
     assert column_values(ws, "Телефон") == ["12-34"]

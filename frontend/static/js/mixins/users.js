@@ -1,16 +1,16 @@
 // Пользователи системы (страница только у администратора) и смена своего
-// пароля (меню пользователя справа вверху — у любой роли).
+// пароля (меню пользователя справа вверху – у любой роли).
 //
-// Новый пользователь и «Изменить» (логин, ФИО, должность, роль, новый пароль) —
-// строкой прямо в таблице (этап 26д): поля — под своими столбцами, пароль и повтор —
-// ниже, под «Логином»; ✓ ✕ — плашкой справа у строки. Отключение — архив: удаления нет.
+// Новый пользователь и «Изменить» (логин, ФИО, должность, роль, новый пароль) –
+// строкой прямо в таблице (этап 26д): поля – под своими столбцами, пароль и повтор –
+// ниже, под «Логином»; ✓ ✕ – плашкой справа у строки. Отключение – архив: удаления нет.
 // Свою роль и отключение себя сервер не даёт (в системе всегда есть
 // администратор). Свои логин, ФИО и должность любой меняет в меню пользователя.
 
 import { ROLE_LABELS } from "../settings.js";
 import { apiFetch } from "../util.js";
 
-// Буквы и цифры без похожих друг на друга (l/1, O/0) — пароль диктуют голосом
+// Буквы и цифры без похожих друг на друга (l/1, O/0) – пароль диктуют голосом
 const PASSWORD_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
 
 export default {
@@ -36,7 +36,7 @@ export default {
             });
         },
 
-        // Строки таблицы: пользователи, правка — на месте строки, новый — последней строкой
+        // Строки таблицы: пользователи, правка – на месте строки, новый – последней строкой
         usersView() {
             const bar = this.userBar;
             const rows = this.users.map(function (u) {
@@ -86,7 +86,7 @@ export default {
             return Array.from(bytes, function (n) { return PASSWORD_CHARS[n % PASSWORD_CHARS.length]; }).join("");
         },
 
-        // Придуманный пароль — в оба поля (они скрыты) и в буфер обмена: его можно
+        // Придуманный пароль – в оба поля (они скрыты) и в буфер обмена: его можно
         // вставить в письмо пользователю или посмотреть глазом рядом с полями
         fillPassword() {
             if (this.userBar) {
@@ -95,7 +95,7 @@ export default {
                 this.userBar.repeat = password;
                 this.userBar.error = "";
                 this.copyText(password, "Пароль придуман и скопирован в буфер обмена");
-                // Фокус — в поле пароля: Enter сохраняет, а не придумывает заново
+                // Фокус – в поле пароля: Enter сохраняет, а не придумывает заново
                 this.$nextTick(() => this.focusRef("ub-password"));
             }
         },
@@ -129,7 +129,7 @@ export default {
         },
 
         focusRef(name) {
-            // В строке таблицы (v-for) ссылка — список элементов
+            // В строке таблицы (v-for) ссылка – список элементов
             const ref = this.$refs[name];
             const el = Array.isArray(ref) ? ref[0] : ref;
             if (el) {
@@ -138,7 +138,7 @@ export default {
         },
 
         // Строка добавления / правки в таблице (пользователи, подсети): показать её,
-        // поставить плашку ✓ ✕ рядом и фокус — в нужное поле
+        // поставить плашку ✓ ✕ рядом и фокус – в нужное поле
         showEditRow(name, focus) {
             this.$nextTick(() => {
                 const tr = document.querySelector(".users-wrap tr.er-row");
@@ -152,7 +152,7 @@ export default {
             });
         },
 
-        // Плашка ✓ ✕ — у первой строки правки, снаружи рамки; ушла строка из вида — нет плашки
+        // Плашка ✓ ✕ – у первой строки правки, снаружи рамки; ушла строка из вида – нет плашки
         placeEditPlate(name) {
             const bar = this[name];
             if (!bar) {
@@ -189,7 +189,7 @@ export default {
             if (!bar || bar.saving) {
                 return;
             }
-            // Повтор пароля: у нового — всегда, при изменении — если пароль задают
+            // Повтор пароля: у нового – всегда, при изменении – если пароль задают
             if ((bar.password || bar.repeat) && bar.password !== bar.repeat) {
                 bar.error = bar.repeat ? "Пароль и повтор не совпадают." : "Повтори пароль во втором поле.";
                 this.$nextTick(() => this.focusRef(bar.repeat ? "ub-password" : "ub-repeat"));
@@ -238,7 +238,7 @@ export default {
                 const saved = await response.json();
                 await this.loadUsers();
                 if (bar.kind === "new") {
-                    // Строка остаётся открытой — можно завести следующего
+                    // Строка остаётся открытой – можно завести следующего
                     this.toast("Добавлен пользователь: " + saved.login, "success");
                     this.userBar = this.emptyUserBar(bar.role, bar.show);
                     this.showEditRow("userBar", "ub-login");
@@ -248,13 +248,13 @@ export default {
                         parts.push("данные изменены");
                     }
                     if (body.role) {
-                        parts.push("роль — " + this.roleName(body.role).toLowerCase());
+                        parts.push("роль – " + this.roleName(body.role).toLowerCase());
                     }
                     if (body.password) {
                         parts.push("пароль изменён");
                     }
                     this.toast(saved.login + ": " + parts.join(", "), "success");
-                    // Себя — сразу и на панели
+                    // Себя – сразу и на панели
                     if (bar.self && this.user) {
                         Object.assign(this.user, { login: saved.login, full_name: saved.full_name, position: saved.position });
                         this.$nextTick(() => this.snapNavUser());

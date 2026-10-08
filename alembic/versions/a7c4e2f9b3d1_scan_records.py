@@ -1,4 +1,4 @@
-"""scan_runs, scan_records, scan_links — сбор из GLPI и GSIT (этап 25)
+"""scan_runs, scan_records, scan_links – сбор из GLPI и GSIT (этап 25)
 
 Revision ID: a7c4e2f9b3d1
 Revises: d8f2b6c4e1a9

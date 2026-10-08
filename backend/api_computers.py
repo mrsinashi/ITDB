@@ -157,7 +157,7 @@ def parse_seat_no(value):
 
 def parse_date(value):
     """Дата из ввода: «15.10.2026», «15.10.26», «15.10» (этот год),
-    «2026-10-15». Пусто — None, не дата — 400."""
+    «2026-10-15». Пусто – None, не дата – 400."""
     text = normalize_single(value)
 
     if text is None:
@@ -183,12 +183,12 @@ def parse_date(value):
 
     raise HTTPException(
         status_code=400,
-        detail=f"«{text}» — не дата. Нужно ДД.ММ.ГГГГ, например 15.10.2026.",
+        detail=f"«{text}» – не дата. Нужно ДД.ММ.ГГГГ, например 15.10.2026.",
     )
 
 
 def format_date(value):
-    """Дата для API и истории — только цифрами: «15.10.2026»."""
+    """Дата для API и истории – только цифрами: «15.10.2026»."""
     return value.strftime("%d.%m.%Y") if value else None
 
 
@@ -200,7 +200,7 @@ def load_locations(session):
 
 
 def location_parts(location_id, locations_by_id):
-    """Адрес / отделение / этаж / кабинет ПК — для строки таблицы."""
+    """Адрес / отделение / этаж / кабинет ПК – для строки таблицы."""
     parts = {field: None for field in LOCATION_PART_FIELDS}
 
     current = locations_by_id.get(location_id) if location_id is not None else None
@@ -260,7 +260,7 @@ def location_path(location_id, locations_by_id):
 
 
 def get_active_location(session, value):
-    """Узел дерева по id из запроса; архивный или несуществующий — ошибка."""
+    """Узел дерева по id из запроса; архивный или несуществующий – ошибка."""
     if value is None or value == "":
         raise HTTPException(
             status_code=400,
@@ -288,7 +288,7 @@ def get_active_location(session, value):
 
 def seat_sort_in_location(session, location_id, seat_no, exclude_id=None):
     """Порядок строки ПК в узле: после соседей с номером места не больше
-    его номера, без номера места — в конец узла."""
+    его номера, без номера места – в конец узла."""
     query = session.query(Computer).filter(
         Computer.location_id == location_id,
         Computer.seat_sort.isnot(None),
@@ -323,9 +323,9 @@ def seat_sort_in_location(session, location_id, seat_no, exclude_id=None):
 
 
 class ChangeBatch:
-    """Изменения нескольких ПК за одно действие: на каждый ПК — одна запись
+    """Изменения нескольких ПК за одно действие: на каждый ПК – одна запись
     истории (поле: было → стало), версия +1. Повторная правка того же поля
-    сливается: «было» — первое, «стало» — последнее."""
+    сливается: «было» – первое, «стало» – последнее."""
 
     def __init__(self, user_name):
         self.user_name = user_name
@@ -333,7 +333,7 @@ class ChangeBatch:
         self.computers = {}
 
     def record(self, computer, field, old, new, old_id=None, new_id=None):
-        """old_id / new_id — id узлов у расположения (old / new — путь текстом)."""
+        """old_id / new_id – id узлов у расположения (old / new – путь текстом)."""
         changes = self.changes[computer.id]
         self.computers[computer.id] = computer
 
@@ -378,8 +378,8 @@ class ChangeBatch:
 
 
 def shift_seats(session, batch, location_id, seat_no, exclude_ids=()):
-    """Номер места seat_no в узле занят — ПК с этим и следующими подряд
-    номерами сдвигаются на +1 (3, 4, 5 → 4, 5, 6; после пропуска — не трогаются).
+    """Номер места seat_no в узле занят – ПК с этим и следующими подряд
+    номерами сдвигаются на +1 (3, 4, 5 → 4, 5, 6; после пропуска – не трогаются).
     ПК из архива места не занимают."""
     if location_id is None or seat_no is None:
         return
@@ -414,7 +414,7 @@ def shift_seats(session, batch, location_id, seat_no, exclude_ids=()):
 
 def replace_people(session, batch, source, target):
     """Пользователи и VACUUM ПК source переходят к ПК target (у target прежние
-    связи снимаются). source=None — у target просто всё снимается."""
+    связи снимаются). source=None – у target просто всё снимается."""
     old_main, target_links = get_main_person_link(session, target.id)
     old_person = session.get(Person, old_main.person_id) if old_main else None
     old_logins = get_vacuum_logins(session, target.id)
@@ -470,7 +470,7 @@ def normalize_person_name(value):
 
 
 def get_main_person_link(session, computer_id):
-    """Связь ПК с «главным» человеком — тот, кого показывает таблица."""
+    """Связь ПК с «главным» человеком – тот, кого показывает таблица."""
     links = (
         session.query(ComputerPerson)
         .filter(ComputerPerson.computer_id == computer_id)
@@ -497,7 +497,7 @@ def set_main_person(session, computer, value):
     if old_name == new_name:
         return None
 
-    # Тот же человек, поменялся только регистр букв — правим само ФИО
+    # Тот же человек, поменялся только регистр букв – правим само ФИО
     if old_person and new_name and old_name.lower() == new_name.lower():
         old_person.full_name = new_name
         return old_name, new_name
@@ -623,7 +623,7 @@ def column_values(computer, parts, user_name, vacuum):
         elif column.kind == "date":
             values[column.key] = format_date(getattr(computer, column.key))
         elif column.kind == "scan":
-            continue    # только из сканера: фронт берёт из /api/scan/diffs, выгрузка — сама
+            continue    # только из сканера: фронт берёт из /api/scan/diffs, выгрузка – сама
         else:
             values[column.key] = getattr(computer, column.key)
 
@@ -635,8 +635,8 @@ ARCHIVED_FILTERS = ("no", "yes", "all")
 
 @router.get("/computers")
 def list_computers(archived: str = "no", session=Depends(get_db)):
-    """Строки таблицы. archived: no — рабочие ПК (по умолчанию),
-    yes — только архив, all — все (у строки есть признак archived)."""
+    """Строки таблицы. archived: no – рабочие ПК (по умолчанию),
+    yes – только архив, all – все (у строки есть признак archived)."""
     if archived not in ARCHIVED_FILTERS:
         raise HTTPException(
             status_code=400,
@@ -793,7 +793,7 @@ def create_computer(
     user=Depends(require_editor),
     session=Depends(get_db),
 ):
-    """Новый ПК: расположение обязательно, № места, HOSTNAME, IP — по желанию.
+    """Новый ПК: расположение обязательно, № места, HOSTNAME, IP – по желанию.
     Остальное заполняется потом в таблице или карточке."""
     location = get_active_location(session, payload.get("location_id"))
 
@@ -801,7 +801,7 @@ def create_computer(
     hostname = normalize_single(payload.get("hostname"))
     ip = normalize_ip(payload.get("ip"))
 
-    # Место занято — ПК на нём и дальше подряд сдвигаются на +1
+    # Место занято – ПК на нём и дальше подряд сдвигаются на +1
     batch = ChangeBatch(user["login"])
     shift_seats(session, batch, location.id, seat_no)
     batch.finish(session)
@@ -852,7 +852,7 @@ def archive_computers(
     session=Depends(get_db),
 ):
     """В архив или обратно: {"ids": [...], "archived": true/false}.
-    ПК уже в нужном состоянии пропускаются. История — запись на каждый ПК."""
+    ПК уже в нужном состоянии пропускаются. История – запись на каждый ПК."""
     ids = payload.get("ids")
     archived = payload.get("archived")
 
@@ -959,7 +959,7 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
                 changes["location_id"] = {
                     "old": location_path(computer.location_id, locations_by_id),
                     "new": location_path(location.id, locations_by_id),
-                    # id узлов — чтобы откат из истории не зависел от названий
+                    # id узлов – чтобы откат из истории не зависел от названий
                     "old_id": computer.location_id,
                     "new_id": location.id,
                 }
@@ -1002,7 +1002,7 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
             old_value = getattr(computer, field)
 
             if old_value != new_value:
-                # В историю — как видно в таблице: «15.10.2026»
+                # В историю – как видно в таблице: «15.10.2026»
                 changes[field] = {"old": format_date(old_value), "new": format_date(new_value)}
                 setattr(computer, field, new_value)
 
@@ -1049,7 +1049,7 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
     if extra_changed:
         computer.extra = extra
 
-    # Новый номер места занят — соседи сдвигаются; строка встаёт в узле по номеру
+    # Новый номер места занят – соседи сдвигаются; строка встаёт в узле по номеру
     if seat_given:
         shift_seats(session, batch, computer.location_id, computer.seat_no, {computer.id})
 
@@ -1092,7 +1092,7 @@ def update_computer(
     payload = dict(payload)
 
     # Версия записи, которую видел пользователь. Если за это время ПК
-    # кто-то изменил — не затираем чужую правку, а просим обновить.
+    # кто-то изменил – не затираем чужую правку, а просим обновить.
     expected_version = payload.pop("_version", None)
 
     computer = (
@@ -1121,7 +1121,7 @@ def update_computer(
             raise HTTPException(
                 status_code=409,
                 detail="Этот компьютер уже изменил другой пользователь. "
-                "Таблица будет обновлена — проверь значение и повтори правку.",
+                "Таблица будет обновлена – проверь значение и повтори правку.",
             )
 
     user_field_keys = user_field_keys_of(session)

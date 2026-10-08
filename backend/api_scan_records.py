@@ -1,15 +1,15 @@
-"""Сбор из GLPI / GSIT (и Jabber — этап 26д) и сопоставление с ПК (этап 25).
+"""Сбор из GLPI / GSIT (и Jabber – этап 26д) и сопоставление с ПК (этап 25).
 Только администратор.
 
-- POST /api/scan/sources/{kind}/collect — начать сбор (в фоне; glpi, gsit, jabber); ответ — запуск;
-- GET  /api/scan/runs/{id} — запуск (пока идёт — «сделано из»);
-- GET  /api/scan/runs?source=… — журнал запусков;
-- GET  /api/scan/records?source=… — записи последнего сбора GLPI / GSIT и их сопоставление
+- POST /api/scan/sources/{kind}/collect – начать сбор (в фоне; glpi, gsit, jabber); ответ – запуск;
+- GET  /api/scan/runs/{id} – запуск (пока идёт – «сделано из»);
+- GET  /api/scan/runs?source=… – журнал запусков;
+- GET  /api/scan/records?source=… – записи последнего сбора GLPI / GSIT и их сопоставление
   с ПК ITDB (считается сейчас, по текущим данным таблицы);
-- POST /api/scan/records/{kind}/{source_id}/link {computer_id} — «это этот ПК»;
-- POST /api/scan/records/{kind}/{source_id}/reject {computer_id} — «не этот ПК»;
-- DELETE /api/scan/records/{kind}/{source_id}/decisions — забыть решения;
-- GET /api/scan/names, POST /api/scan/names, DELETE /api/scan/names/{id} —
+- POST /api/scan/records/{kind}/{source_id}/link {computer_id} – «это этот ПК»;
+- POST /api/scan/records/{kind}/{source_id}/reject {computer_id} – «не этот ПК»;
+- DELETE /api/scan/records/{kind}/{source_id}/decisions – забыть решения;
+- GET /api/scan/names, POST /api/scan/names, DELETE /api/scan/names/{id} –
   соответствия названий источника и таблицы (этап 25б, scan_values.py).
 
 Решения пишутся в Историю (видит администратор, отмены нет).
@@ -44,7 +44,7 @@ def check_collect_kind(kind):
 
 
 def check_record_kind(kind):
-    """Записи о ПК — только у GLPI и GSIT (у Jabber — пользователи, /api/scan/jabber)."""
+    """Записи о ПК – только у GLPI и GSIT (у Jabber – пользователи, /api/scan/jabber)."""
     if kind not in scan_collect.RECORD_KINDS:
         raise HTTPException(status_code=404, detail="Нет такого источника.")
 
@@ -141,7 +141,7 @@ def web_url_of(source):
 
     try:
         return api_base(source.url)[: -len("/apirest.php")]
-    except Exception:  # noqa: BLE001 — неверный адрес: просто без ссылок
+    except Exception:  # noqa: BLE001 – неверный адрес: просто без ссылок
         return None
 
 
@@ -160,8 +160,8 @@ def computer_brief(computer, locations):
 
 @router.get("/records", response_model=RecordsOut)
 def list_records(source: str, me=Depends(require_editor), session=Depends(get_db)):
-    """Записи последнего сбора и их сопоставление. Смотреть — редактор и
-    администратор (вкладка «Проверка», этап 26г); решать о сопоставлении — admin."""
+    """Записи последнего сбора и их сопоставление. Смотреть – редактор и
+    администратор (вкладка «Проверка», этап 26г); решать о сопоставлении – admin."""
     check_record_kind(source)
     records = session.query(ScanRecord).filter(ScanRecord.source == source).order_by(ScanRecord.name, ScanRecord.source_id).all()
     matches, _ = scan_collect.match(session, source)
@@ -369,7 +369,7 @@ class NameOut(BaseModel):
     source: str
     table: str
     kind: str
-    origin: str            # manual — вручную, learned — по таблице
+    origin: str            # manual – вручную, learned – по таблице
     count: int = 0         # у скольких сопоставленных ПК так (learned)
     user_name: Optional[str] = None
     at: Optional[datetime] = None
@@ -408,7 +408,7 @@ def list_names(me=Depends(require_admin), session=Depends(get_db)):
 
 
 def save_alias(session, me, field, source, table, kind):
-    """Записать решение по паре (без commit). kind auto — забыть решение."""
+    """Записать решение по паре (без commit). kind auto – забыть решение."""
     if field not in NAME_FIELD_KEYS:
         raise HTTPException(status_code=400, detail="Для этого поля соответствия не задаются.")
 
@@ -429,7 +429,7 @@ def save_alias(session, me, field, source, table, kind):
     source_key, table_key = key_of(source), key_of(table)
     query = session.query(ScanAlias).filter(ScanAlias.field == field, ScanAlias.source_key == source_key)
     removed = []
-    # «Одно и то же» и «материнская плата» — одно на значение источника
+    # «Одно и то же» и «материнская плата» – одно на значение источника
     single = ("same", "board")
 
     # Новое решение по той же паре заменяет старое
@@ -462,10 +462,10 @@ def save_alias(session, me, field, source, table, kind):
 
 @router.post("/names")
 def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db)):
-    """Решение по паре «значение источника — значение таблицы»: same («одно и то
-    же» — для всех ПК, одно на значение источника), differ («это разное»), keep
-    («в таблице своё» — не расхождение, но и не одно и то же), board (название
-    модели — это материнская плата), auto (забыть решение по паре — как решит
+    """Решение по паре «значение источника – значение таблицы»: same («одно и то
+    же» – для всех ПК, одно на значение источника), differ («это разное»), keep
+    («в таблице своё» – не расхождение, но и не одно и то же), board (название
+    модели – это материнская плата), auto (забыть решение по паре – как решит
     сравнение). Редактор тоже может: это решения вкладки «Проверка»."""
     save_alias(session, me, payload.field, payload.source, payload.table, payload.kind)
     session.commit()

@@ -1,5 +1,5 @@
 """Действия с выбранными ПК: переместить, поменять местами, заменить,
-изменить поле у всех. На каждый затронутый ПК — одна запись истории."""
+изменить поле у всех. На каждый затронутый ПК – одна запись истории."""
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api_columns import BULK_EXCLUDED
@@ -85,8 +85,8 @@ def move_computers(
     session=Depends(get_db),
 ):
     """{ids, location_id, seat_no, with_people}. ПК встают в узел по порядку ids
-    с номерами seat_no, seat_no+1, … (без номера — в конец узла). Занятые
-    номера сдвигаются. with_people=false — пользователи и VACUUM снимаются."""
+    с номерами seat_no, seat_no+1, … (без номера – в конец узла). Занятые
+    номера сдвигаются. with_people=false – пользователи и VACUUM снимаются."""
     ids = parse_ids(payload.get("ids"))
     location = get_active_location(session, payload.get("location_id"))
     start = parse_seat_no(payload.get("seat_no"))
@@ -123,7 +123,7 @@ def swap_computers(
     user=Depends(require_editor),
     session=Depends(get_db),
 ):
-    """{ids: [a, b]} — два ПК меняются местами (узел, № места, порядок строки).
+    """{ids: [a, b]} – два ПК меняются местами (узел, № места, порядок строки).
     Всё остальное (пользователь, VACUUM, имя, IP…) остаётся при своём ПК."""
     ids = parse_ids(payload.get("ids"), 2)
     first, second = lock_computers(session, ids)
@@ -155,7 +155,7 @@ def replace_computer(
     """{old_id, new_id, location_id, with_people}. Новый ПК встаёт на место
     старого (узел, № места, порядок строки) со статусом «установлен»; старый
     уходит в узел location_id (например, склад) без номера места, статус
-    «склад». with_people (по умолчанию да) — пользователи и VACUUM старого
+    «склад». with_people (по умолчанию да) – пользователи и VACUUM старого
     переходят к новому."""
     ids = parse_ids([payload.get("old_id"), payload.get("new_id")], 2)
     old, new = lock_computers(session, ids)
@@ -198,7 +198,7 @@ def bulk_update(
     user=Depends(require_editor),
     session=Depends(get_db),
 ):
-    """{ids, field, value} — одно поле у всех выбранных ПК (пустое — очистить)."""
+    """{ids, field, value} – одно поле у всех выбранных ПК (пустое – очистить)."""
     ids = parse_ids(payload.get("ids"))
     field = payload.get("field")
 

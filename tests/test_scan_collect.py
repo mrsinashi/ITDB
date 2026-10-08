@@ -101,7 +101,7 @@ class FakeGlpi(BaseHTTPRequestHandler):
             return self.send(200, Glpi.antivirus[start:end + 1])
 
         if path == "DeviceHardDrive":
-            # модели дисков с интерфейсом: диск ПК — (название, объём[, интерфейс])
+            # модели дисков с интерфейсом: диск ПК – (название, объём[, интерфейс])
             if not Glpi.disk_models:
                 return self.send(403, ["ERROR_RIGHT_MISSING", "нет права"])
             start, end = (int(x) for x in query["range"][0].split("-"))
@@ -251,13 +251,13 @@ def test_collect_and_match(admin, editor, room, glpi_url):
         9: pc("two", serial="SER-TWO-B", ports=[(ETH, "d8:bb:c1:00:00:0a", [])]),
         10: pc("gone-pc", ports=[(ETH, "d8:bb:c1:00:00:0c", [])]),
         11: pc("unknown-pc", ports=[(ETH, "d8:bb:c1:00:00:0b", [])]),
-        # Устаревшая и без даты — не берутся
+        # Устаревшая и без даты – не берутся
         20: pc("stale-pc", days=10, ports=[(ETH, "d8:bb:c1:00:00:20", [])]),
         21: pc("manual-pc", days=None),
-        # Дубль: то же железо (MAC), запись старее — остаётся 23
+        # Дубль: то же железо (MAC), запись старее – остаётся 23
         22: pc("dup-pc", days=2, ports=[(ETH, "d8:bb:c1:00:00:22", [])]),
         23: pc("dup-pc", days=0, ports=[(ETH, "d8:bb:c1:00:00:22", [])]),
-        # Серийный на трёх записях — общий, не признак (и не склеивает)
+        # Серийный на трёх записях – общий, не признак (и не склеивает)
         30: pc("s-1", serial="US00040148", ports=[(ETH, "d8:bb:c1:00:00:31", [])]),
         31: pc("s-2", serial="US00040148", ports=[(ETH, "d8:bb:c1:00:00:32", [])]),
         32: pc("s-3", serial="US00040148", ports=[(ETH, "d8:bb:c1:00:00:33", [])]),
@@ -327,7 +327,7 @@ def test_match_follows_table_edits(admin, editor, room, glpi_url):
 
 
 def test_two_records_same_name(admin, editor, room, glpi_url):
-    """Два ПК с одним именем в GLPI: один сопоставлен по MAC, второй — конфликт."""
+    """Два ПК с одним именем в GLPI: один сопоставлен по MAC, второй – конфликт."""
     computer = add_pc(editor, room["room"], "glaz-kdp3-3", mac="D8:BB:C1:00:00:04")
     Glpi.computers = {
         4: pc("glaz-kdp3-3", ports=[(ETH, "d8:bb:c1:00:00:04", [])]),
@@ -353,13 +353,13 @@ def test_decisions(admin, editor, reader, room, glpi_url):
     assert reader.get("/api/scan/records", params={"source": "glpi"}).status_code == 403
     assert editor.get("/api/scan/records", params={"source": "glpi"}).status_code == 200   # «Проверка» (26г)
 
-    # «Не этот ПК» — больше не предлагается
+    # «Не этот ПК» – больше не предлагается
     ok(admin.post("/api/scan/records/glpi/1/reject", json={"computer_id": first}))
     r = records(admin)[1][1]
     assert r["state"] == "none"
     assert [(d["action"], d["hostname"]) for d in r["decisions"]] == [("reject", "pc-1")]
 
-    # «Это этот ПК» — главнее признаков (у pc-2 MAC другой)
+    # «Это этот ПК» – главнее признаков (у pc-2 MAC другой)
     ok(admin.post("/api/scan/records/glpi/1/link", json={"computer_id": second}))
     r = records(admin)[1][1]
     assert (r["state"], r["computer_id"]) == ("link", second)
@@ -368,17 +368,17 @@ def test_decisions(admin, editor, reader, room, glpi_url):
     collect(admin)
     assert records(admin)[1][1]["state"] == "link"
 
-    # Забыть решения — снова по признакам (имени)
+    # Забыть решения – снова по признакам (имени)
     ok(admin.delete("/api/scan/records/glpi/1/decisions"))
     r = records(admin)[1][1]
     assert (r["state"], r["computer_id"], r["decisions"]) == ("name", first, [])
 
-    # В архив привязать нельзя; нет записи — 404
+    # В архив привязать нельзя; нет записи – 404
     ok(editor.post("/api/computers/archive", json={"ids": [second], "archived": True}))
     assert admin.post("/api/scan/records/glpi/1/link", json={"computer_id": second}).status_code == 400
     assert admin.post("/api/scan/records/glpi/99/link", json={"computer_id": first}).status_code == 404
 
-    # История — у администратора, без значений ПК
+    # История – у администратора, без значений ПК
     items = ok(admin.get("/api/history", params={"entity": "scan_records"}))["items"]
     fields = [list(item["changes"]) for item in items]
     assert sorted(f[0] for f in fields) == ["link", "reject", "reset"]
@@ -392,7 +392,7 @@ def test_collect_refused(admin, editor, glpi_url):
     setup_source(admin, glpi_url, enabled=False)
     response = admin.post("/api/scan/sources/glpi/collect")
     assert response.status_code == 400 and "выключен" in response.json()["detail"]
-    assert admin.post("/api/scan/sources/jabber/collect").status_code == 400        # Jabber — тоже (этап 26д)
+    assert admin.post("/api/scan/sources/jabber/collect").status_code == 400        # Jabber – тоже (этап 26д)
     assert admin.post("/api/scan/sources/nope/collect").status_code == 404
     assert admin.get("/api/scan/records", params={"source": "jabber"}).status_code == 404
     assert editor.post("/api/scan/sources/glpi/collect").status_code == 403
@@ -403,19 +403,19 @@ def test_collect_errors_keep_old_records(admin, glpi_url):
     setup_source(admin, glpi_url)
     assert collect(admin)["status"] == "ok"
 
-    # Сбой на середине — прежние записи остаются
+    # Сбой на середине – прежние записи остаются
     Glpi.fail_details = True
     run = collect(admin)
     assert run["status"] == "error" and run["message"]
     assert list(records(admin)[1]) == [1]
 
-    # Нет поля даты проверки — сбор не начинается
+    # Нет поля даты проверки – сбор не начинается
     Glpi.fail_details = False
     Glpi.fresh_field = False
     run = collect(admin)
     assert run["status"] == "error" and "дат" in run["message"]
 
-    # Последний запуск — в настройках источника, журнал — новые сверху
+    # Последний запуск – в настройках источника, журнал – новые сверху
     source = next(s for s in ok(admin.get("/api/scan/sources"))["sources"] if s["kind"] == "glpi")
     assert source["last_run"]["id"] == run["id"]
     runs = ok(admin.get("/api/scan/runs", params={"source": "glpi"}))
@@ -437,7 +437,7 @@ def test_same_by_meaning():
     assert not sv.same_line("model", "HP ProDesk 400 G7", "HP ProDesk 400 G6")
     assert sv.same_line("vnc", "TightVNC", "Tight")
     assert not sv.same_line("vnc", "UltraVNC", "Tight")
-    assert not sv.same_line("drive", "SSD 256", "SSD 250")    # 26е: объём точный — разные диски
+    assert not sv.same_line("drive", "SSD 256", "SSD 250")    # 26е: объём точный – разные диски
     assert sv.same_line("drive", "HDD 1TB", "HDD 1000")
     assert not sv.same_line("drive", "SSD 240", "SSD 250")    # разные диски
     assert sv.same_line("drive", "HDD 500", "500")
@@ -458,7 +458,7 @@ def test_names_learned_and_manual():
         ("cpu", "Pentium J3710", "Intel Pentium J3710"),
         ("drive", "HDD 500", "HDD 500"),
         ("drive", "HDD 500", "HDD 500"),
-        ("drive", "HDD 500", "500"),              # небрежно у одного — не учится
+        ("drive", "HDD 500", "500"),              # небрежно у одного – не учится
     ]
     names = sv.Names(
         aliases=[{"field": "os", "source": "Win 10", "table": "Десятка", "kind": "same"},
@@ -490,7 +490,7 @@ def test_names_api(admin, editor, reader, room, glpi_url):
     assert (rows["os"]["source"], rows["os"]["raw"], rows["os"]["mark"]) == ("Windows 10", "Win 10", "=")
     assert (rows["cpu"]["source"], rows["cpu"]["mark"]) == ("Intel Pentium J3710", "=")
     assert (rows["model"]["source"], rows["model"]["mark"]) == ("M600", "=")
-    # У другого ПК (нет в ITDB) — те же названия, как в таблице
+    # У другого ПК (нет в ITDB) – те же названия, как в таблице
     other = {c["field"]: c for c in recs[2]["compare"]}
     assert (other["cpu"]["source"], other["cpu"]["how"]) == ("Intel Pentium J3710", "learned")
     assert other["os"]["source"] == "Windows 10"
@@ -500,7 +500,7 @@ def test_names_api(admin, editor, reader, room, glpi_url):
         ("os", "Win 10", "Windows 10", "learned"), ("cpu", "Pentium J3710", "Intel Pentium J3710", "learned"),
     }
 
-    # Вручную: «одно и то же» — главнее, «это разное» — не считать одинаковыми
+    # Вручную: «одно и то же» – главнее, «это разное» – не считать одинаковыми
     ok(admin.post("/api/scan/names", json={"field": "os", "source": "Win 10", "table": "Win10 Pro"}))
     ok(admin.post("/api/scan/names", json={"field": "cpu", "source": "Pentium J3710", "table": "Intel Pentium J3710", "kind": "differ"}))
     recs = records(admin)[1]
@@ -511,7 +511,7 @@ def test_names_api(admin, editor, reader, room, glpi_url):
     manual = [n for n in ok(admin.get("/api/scan/names")) if n["origin"] == "manual"]
     assert len(manual) == 2
     assert admin.post("/api/scan/names", json={"field": "hostname", "source": "a", "table": "b"}).status_code == 400
-    # Редактор тоже решает (режим «Расхождения»), только чтение — нет
+    # Редактор тоже решает (режим «Расхождения»), только чтение – нет
     assert reader.post("/api/scan/names", json={"field": "os", "source": "a", "table": "b"}).status_code == 403
     for n in manual:
         ok(admin.delete(f"/api/scan/names/{n['id']}"))
@@ -528,7 +528,7 @@ def diffs_of(client, rejected=False):
 
 
 def test_keep_is_not_same():
-    """«В таблице своё» (ЕГИСЗ): пара — не расхождение, но ничему не учит."""
+    """«В таблице своё» (ЕГИСЗ): пара – не расхождение, но ничему не учит."""
     names = sv.Names(
         aliases=[{"field": "model", "source": "ASUS PRIME H370-PLUS", "table": "ЕГИСЗ", "kind": "keep"}],
         table_values={"model": {"ЕГИСЗ": 30}},
@@ -536,9 +536,9 @@ def test_keep_is_not_same():
     )
     row = names.compare("model", "ASUS PRIME H370-PLUS", "ЕГИСЗ")
     assert (row["mark"], row["manual"], row["source"]) == ("=", "keep", "ЕГИСЗ")
-    # ПК без значения в таблице — получит значение источника, не «ЕГИСЗ»
+    # ПК без значения в таблице – получит значение источника, не «ЕГИСЗ»
     assert names.canonical_line("model", "ASUS PRIME H370-PLUS") == ("ASUS PRIME H370-PLUS", "")
-    # Другое значение таблицы при той же плате — расхождение
+    # Другое значение таблицы при той же плате – расхождение
     assert names.compare("model", "ASUS PRIME H370-PLUS", "Aquarius")["mark"] == "≠"
 
 
@@ -553,7 +553,7 @@ def test_diffs_accept_reject_keep(admin, editor, reader, room, glpi_url):
     setup_source(admin, glpi_url)
     collect(admin)
 
-    # Смотреть пометки может и «только чтение», решать — нет
+    # Смотреть пометки может и «только чтение», решать – нет
     assert reader.get("/api/scan/diffs").status_code == 200
     assert reader.post("/api/scan/diffs/reject", json={"items": []}).status_code == 403
     data = diffs_of(editor)
@@ -567,11 +567,11 @@ def test_diffs_accept_reject_keep(admin, editor, reader, room, glpi_url):
     src = model["sources"][0]
     assert (src["title"], src["state"], src["by"], src["value"]) == ("GLPI", "key", ["mac"], "ASUS PRIME H370-PLUS")
 
-    # «В таблице своё» — у обоих ПК модель больше не расхождение
+    # «В таблице своё» – у обоих ПК модель больше не расхождение
     ok(editor.post("/api/scan/names", json={"field": "model", "source": "ASUS PRIME H370-PLUS", "table": "ЕГИСЗ", "kind": "keep"}))
     assert not [d for d in diffs_of(editor)["items"] if d["field"] == "model"]
 
-    # Отклонить RAM у первого — скрыто, но видно среди отклонённых; вернуть
+    # Отклонить RAM у первого – скрыто, но видно среди отклонённых; вернуть
     ok(editor.post("/api/scan/diffs/reject", json={"items": [{"computer_id": first, "field": "ram", "raw": "8"}]}))
     data = diffs_of(editor)
     assert (first, "ram") not in {(d["computer_id"], d["field"]) for d in data["items"]} and data["rejected"] == 1
@@ -580,7 +580,7 @@ def test_diffs_accept_reject_keep(admin, editor, reader, room, glpi_url):
     ok(editor.post("/api/scan/diffs/unreject", json={"items": [{"computer_id": first, "field": "ram", "raw": "8"}]}))
     assert (first, "ram") in {(d["computer_id"], d["field"]) for d in diffs_of(editor)["items"]}
 
-    # Принять IP и OS — в ПК и в Историю с пометкой источника
+    # Принять IP и OS – в ПК и в Историю с пометкой источника
     result = ok(editor.post("/api/scan/diffs/accept", json={"items": [
         {"computer_id": first, "field": "ip", "value": "10.0.1.60", "table": "", "source": "GLPI №1"},
         {"computer_id": first, "field": "os", "value": "Win 10", "table": "", "source": "GLPI №1"},
@@ -594,7 +594,7 @@ def test_diffs_accept_reject_keep(admin, editor, reader, room, glpi_url):
     assert {(d["computer_id"], d["field"]) for d in diffs_of(editor)["items"]} >= {(second, "os")}
     assert (first, "os") not in {(d["computer_id"], d["field"]) for d in diffs_of(editor)["items"]}
 
-    # Выключенный источник — расхождений нет
+    # Выключенный источник – расхождений нет
     ok(admin.patch("/api/scan/sources/glpi", json={"enabled": False}))
     assert diffs_of(editor)["items"] == []
 
@@ -627,14 +627,14 @@ def test_canonical_keeps_model_numbers():
     names = sv.Names(table_values={"model": {"HP ProDesk 400": 5, "M600": 3}})
     assert names.canonical_line("model", "HP ProDesk 400 G6 MT") == ("HP ProDesk 400 G6 MT", "")
     assert names.canonical_line("model", "Lenovo ThinkCentre M600") == ("M600", "table")
-    # У самого ПК менее подробное значение — не расхождение
+    # У самого ПК менее подробное значение – не расхождение
     assert names.compare("model", "HP ProDesk 400 G6 MT", "HP ProDesk 400")["mark"] == "="
 
 
 
 def test_diffs_unsure_and_partial(admin, editor, room, glpi_url):
-    """VNC: просмотрщик не сервер, TightVNC рядом с другим — TightVNC; два других —
-    неточно. В таблице часть (≈) — не в счёт; ручное «=» у многострочного значения."""
+    """VNC: просмотрщик не сервер, TightVNC рядом с другим – TightVNC; два других –
+    неточно. В таблице часть (≈) – не в счёт; ручное «=» у многострочного значения."""
     assert sn.vnc_short(["TightVNC", "UltraVNC 1.4"]) == "TightVNC"     # решение пользователя 01.10
     assert sn.vnc_short(["UltraVNC 1.4", "RealVNC Server"]) == "UltraVNC\nRealVNC"
 
@@ -655,12 +655,12 @@ def test_diffs_unsure_and_partial(admin, editor, room, glpi_url):
     items = {(d["computer_id"], d["field"]): d for d in data["items"]}
     vnc1 = items[(pc1, "vnc")]
     assert vnc1["kind"] == "unsure" and "VNC" in vnc1["unsure"]
-    assert items[(pc2, "vnc")]["kind"] == "partial"                     # «UltraVNC» — один из двух
+    assert items[(pc2, "vnc")]["kind"] == "partial"                     # «UltraVNC» – один из двух
     assert (pc3, "vnc") not in items                                    # Tight = TightVNC
     counted = {d["computer_id"] for d in data["items"] if d["kind"] != "partial" and not d.get("rejected_by")}
     assert data["computers"] == len(counted)                            # partial не в счёт ПК
 
-    # Двойной клик по «≈» у многострочного: «одно и то же» целиком — отметка «=»
+    # Двойной клик по «≈» у многострочного: «одно и то же» целиком – отметка «=»
     rec = records(admin)[1][2]
     vnc = next(c for c in rec["compare"] if c["field"] == "vnc")
     assert vnc["mark"] == "≈" and vnc["manual"] is None and vnc["auto_equal"] is False
@@ -683,7 +683,7 @@ def test_marks_settings(admin, editor, reader):
     items = ok(admin.get("/api/history", params={"entity": "scan_marks"}))["items"]
     assert items[0]["title"] == "Замена" and set(items[0]["changes"]) == {"strike", "frame", "always"}
 
-    # Вернуть как было — таблица пометок между тестами не очищается
+    # Вернуть как было – таблица пометок между тестами не очищается
     ok(editor.patch("/api/scan/marks/diff", json={"strike": False, "frame": "", "always": False}))
 
 
@@ -712,13 +712,13 @@ def test_antivirus_column(admin, editor, reader, room, glpi_url):
     setup_source(admin, glpi_url)
     assert collect(admin)["status"] == "ok"
 
-    # Антивирусы ПК — вместе с расхождениями (видят все), состояние словом
+    # Антивирусы ПК – вместе с расхождениями (видят все), состояние словом
     av = ok(reader.get("/api/scan/diffs"))["antivirus"]
     assert [(a["name"], a["status"]) for a in av[str(first)]] == [("Kaspersky Endpoint Security", "on"), ("Windows Defender", "off")]
     assert av[str(first)][0]["version"] == "11.11" and av[str(first)][0]["source"] == "GLPI №1"
     assert [a["status"] for a in av[str(second)]] == ["old"]
 
-    # Главнее GLPI; нет у него антивирусов — берутся из GSIT
+    # Главнее GLPI; нет у него антивирусов – берутся из GSIT
     x, y = {"name": "x"}, {"name": "y"}
     assert pick_antivirus({5: {"glpi": [y], "gsit": [x]}}) == {5: [y]}
     assert pick_antivirus({5: {"glpi": [], "gsit": [x]}}) == {5: [x]}
@@ -757,6 +757,6 @@ def test_antivirus_column(admin, editor, reader, room, glpi_url):
     ws = load_workbook(BytesIO(response.content))["Компьютеры"]
     values = {row[headers.index("HOSTNAME")].value: row[headers.index("Антивирус")].value for row in ws.iter_rows(min_row=2)}
     assert values == {
-        "pc-1": "Kaspersky Endpoint Security\nWindows Defender — выключен",
-        "pc-2": "Kaspersky Endpoint Security — базы устарели",
+        "pc-1": "Kaspersky Endpoint Security\nWindows Defender – выключен",
+        "pc-2": "Kaspersky Endpoint Security – базы устарели",
     }

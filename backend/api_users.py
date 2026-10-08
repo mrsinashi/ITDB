@@ -1,10 +1,10 @@
-"""Пользователи системы — раздел администратора: список, новый пользователь,
+"""Пользователи системы – раздел администратора: список, новый пользователь,
 логин, ФИО, должность, роль, новый пароль, отключение (архив, удаления нет).
-Свои логин, ФИО и должность любой пользователь меняет сам — api_auth.py.
+Свои логин, ФИО и должность любой пользователь меняет сам – api_auth.py.
 
-Свою роль и отключение себя администратор менять не может — так в системе
+Свою роль и отключение себя администратор менять не может – так в системе
 всегда остаётся хотя бы один работающий администратор (он сам). Изменения
-пишутся в Историю (видит только администратор); пароль — только «задан новый»."""
+пишутся в Историю (видит только администратор); пароль – только «задан новый»."""
 import re
 from datetime import datetime
 from typing import Optional
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 ROLES = ("admin", "editor", "reader")
 
 # Логин: латиница (любой регистр), цифры, точка, дефис, подчёркивание. Хранится
-# как ввели; вход и проверка занятости — без учёта регистра
+# как ввели; вход и проверка занятости – без учёта регистра
 LOGIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$")
 TEXT_MAX = 200
 
@@ -83,14 +83,14 @@ def clean_login(value):
     if not LOGIN_RE.match(login):
         raise HTTPException(
             status_code=400,
-            detail="Логин — латинские буквы, цифры, точка, дефис или подчёркивание (до 40 символов).",
+            detail="Логин – латинские буквы, цифры, точка, дефис или подчёркивание (до 40 символов).",
         )
 
     return login
 
 
 def check_login_free(session, login, exclude_id=None):
-    """Логин свободен без учёта регистра (ivanov и Ivanov — один логин)."""
+    """Логин свободен без учёта регистра (ivanov и Ivanov – один логин)."""
     query = session.query(User).filter(func.lower(User.login) == login.lower())
 
     if exclude_id is not None:
@@ -100,12 +100,12 @@ def check_login_free(session, login, exclude_id=None):
 
     if exists:
         detail = "Такой логин уже есть"
-        detail += " (пользователь отключён — его можно включить)." if exists.archived else "."
+        detail += " (пользователь отключён – его можно включить)." if exists.archived else "."
         raise HTTPException(status_code=409, detail=detail)
 
 
 def clean_text(value, what):
-    """ФИО, должность: лишние пробелы убираются, пусто — None."""
+    """ФИО, должность: лишние пробелы убираются, пусто – None."""
     text = " ".join((value or "").split())
 
     if len(text) > TEXT_MAX:
@@ -114,12 +114,12 @@ def clean_text(value, what):
     return text or None
 
 
-# Логин, ФИО, должность — общее для правки администратором и своей правки
+# Логин, ФИО, должность – общее для правки администратором и своей правки
 PROFILE_FIELDS = ("login", "full_name", "position")
 
 
 def apply_profile(session, user, payload):
-    """Записать в пользователя login / full_name / position из payload (None — не
+    """Записать в пользователя login / full_name / position из payload (None – не
     менять). Возвращает изменения для истории."""
     before = {name: getattr(user, name) for name in PROFILE_FIELDS}
 
@@ -169,7 +169,7 @@ def user_out(user, me):
 
 @router.get("", response_model=list[UserOut])
 def list_users(me=Depends(require_admin), session=Depends(get_db)):
-    # Сначала работающие, потом отключённые; внутри — по логину
+    # Сначала работающие, потом отключённые; внутри – по логину
     users = session.query(User).order_by(User.archived, func.lower(User.login)).all()
     return [user_out(user, me) for user in users]
 
@@ -223,7 +223,7 @@ def update_user(
         if is_self:
             raise HTTPException(
                 status_code=400,
-                detail="Свою роль изменить нельзя — это может сделать другой администратор.",
+                detail="Свою роль изменить нельзя – это может сделать другой администратор.",
             )
 
         check_role(payload.role)
@@ -242,7 +242,7 @@ def update_user(
         check_password(payload.password)
         user.password_hash = hash_password(payload.password)
         changes["password"] = {"old": None, "new": PASSWORD_SET}
-        # Старые входы с прежним паролем больше не действуют (свой текущий — остаётся)
+        # Старые входы с прежним паролем больше не действуют (свой текущий – остаётся)
         end_sessions(session, user.id, keep_token=me["token"] if is_self else None)
 
     for name, old in before.items():
