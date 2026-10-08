@@ -334,7 +334,7 @@
 
             <!-- Таблица уже окна – по центру (отступ слева – целым числом пикселей, иначе линии мылятся) -->
             <div class="table-wrap" :class="{ fit: tableFit, 'fit-scroll': tableFit && tableFitScroll }" @scroll="onTableScroll" ref="tableWrap" @mousemove="onTableMouseMove" @mouseleave="onTableMouseLeave">
-                <table class="data-table" :class="{ 'sticky-stuck': !!stuckEdge, 'alt-copy': altDown }" ref="table" :style="tableStyle">
+                <table class="data-table" :class="{ 'sticky-stuck': !!stuckEdge || !!stuckEdgeRight, 'alt-copy': altDown }" ref="table" :style="tableStyle">
                     <!-- Полоска у последней нажатой строки (этапы 31, 36, 40): подпись таблицы липкая у левого края видимой части -->
                     <caption class="row-mark-rail"><div ref="rowMark" class="row-mark"></div></caption>
                     <colgroup>
@@ -343,8 +343,8 @@
                     <thead>
                         <tr>
                             <th v-for="col in viewColumns" :key="'th-' + col.field" :data-field="col.field"
-                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field, 'th-virtual': col.virtual }"
-                                :style="col.sticky ? { left: stickyLeft(col) + 'px' } : null"
+                                :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, 'sticky-edge-r': col.field === stuckEdgeRight, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field, 'th-virtual': col.virtual }"
+                                :style="col.sticky ? stickyStyle(col) : null"
                                 :title="scanOpenFields.has(col.field) && isColumnHidden(col.field) ? 'Скрытый столбец: виден со значениями сканера' : null"
                                 @mousedown="onHeadMouseDown($event, col)" @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
                                 <!-- Подпись по центру; справа всегда место под воронку: не хватает – подпись левее -->
@@ -1414,14 +1414,17 @@
                             </table>
                         </div>
                     </div>
-                    <!-- Плашки действий: у открытой строки (идёт за ней при прокрутке, место – placeCheckPlate) и у строки под курсором -->
-                    <div v-if="checkOpenRow && checkRowHasActions(checkOpenRow) && !valueEdit" ref="checkOpenPlate" class="tree-actions ck-plate-open">
-                        <span class="na-box">
-                            <template v-for="(a, ai) in checkActions(checkOpenRow)" :key="a.key">
-                                <span v-if="ai" class="na-sep"></span>
-                                <span class="icon-btn" :class="{ danger: a.danger }" :title="a.title" @click.stop="a.run()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="a.icon"></svg></span>
-                            </template>
-                        </span>
+                    <!-- Плашки действий: у открытой строки (идёт за ней при прокрутке, место – placeCheckPlate; в полосе высотой
+                         с поле таблицы – выше и ниже поля не выходит) и у строки под курсором -->
+                    <div v-if="checkOpenRow && checkRowHasActions(checkOpenRow) && !valueEdit" ref="checkPlateRail" class="ck-plate-rail">
+                        <div ref="checkOpenPlate" class="tree-actions ck-plate-open">
+                            <span class="na-box">
+                                <template v-for="(a, ai) in checkActions(checkOpenRow)" :key="a.key">
+                                    <span v-if="ai" class="na-sep"></span>
+                                    <span class="icon-btn" :class="{ danger: a.danger }" :title="a.title" @click.stop="a.run()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="a.icon"></svg></span>
+                                </template>
+                            </span>
+                        </div>
                     </div>
                     <div v-if="checkHoverRow && checkRowHasActions(checkHoverRow)" class="tree-actions" :style="{ top: check.hover.top + 'px', height: check.hover.height + 'px' }">
                         <span class="na-box">
@@ -1667,7 +1670,7 @@
                     <label v-for="st in colFilterStates" :key="'cfs-' + st.kind" class="cf-item" :title="st.title">
                         <input type="checkbox" :checked="st.checked" @change="toggleColState(st.kind)">
                         <span class="cf-value" :class="{ 'val-chip': st.chip }" :style="st.style">{{ st.label }}</span>
-                        <span class="cf-only" title="Только это" @click.prevent.stop="setColStates([st.kind])">только</span>
+                        <span class="cf-only" title="Только это" @click.prevent.stop="setColStates({ only: [st.kind] })">только</span>
                         <span class="cf-count" title="Число ПК">{{ st.count }}</span>
                     </label>
                 </div>

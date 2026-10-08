@@ -71,7 +71,7 @@ COLUMNS = [
     col("room_code", "Каб", "№ Кабинета", kind="location", center=True, values="no", card_copy=True, export_width=8, card_always=True),
     col("room_name", "Кабинет", kind="location", export_width=18),
     col("seat_no", "№", "№ Места", kind="seat", center=True, values="no", bulk=False, export_width=6),
-    col("hostname", "HOSTNAME", link=True, sticky=True, bold=True, values="no", dup=True, bulk=False, export_width=18),
+    col("hostname", "HOSTNAME", link=True, sticky=True, values="no", dup=True, bulk=False, export_width=18),
     col("ip", "IP", "IP адрес", kind="ip", sticky=True, multiline=True, values="subnet", card_copy=True, dup=True, bulk=False, export_width=16, card_always=True),
     col("vacuum", "VACUUM", "Vacuum", kind="vacuum", multiline=True, values="no", dup=True, bulk=False, export_width=16),
     col("os", "OS", "Операционная система (ОС / OS)", center=True, card_copy=True, export_width=14, card_always=True),

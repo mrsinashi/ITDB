@@ -12,8 +12,9 @@
 // ПК виден, если отмечено хотя бы одно из его значений.
 //
 // «Антивирусы» (этап 26з): в списке сверху – ещё и состояния (работает, базы
-// устарели, выключен); filter.statesOff – снятые состояния. ПК виден, если у него
-// есть антивирус в отмеченном состоянии с отмеченным названием.
+// устарели, выключен); filter.states – отметки состояний: { only: [виды] } после
+// «только» (как exclude: false у значений) или { off: [виды] } – снятые галочки.
+// ПК виден, если у него есть антивирус в отмеченном состоянии с отмеченным названием.
 //
 // Остальные столбцы (этап 40) – так же, по выделению значения: выделения Таблицы
 // (повтор, проверен, нет в Jabber, срок прошёл… – Справочники), блочок сканера (по
@@ -31,6 +32,16 @@ const MARK_STATES = ["dup", "hostname", "gone", "stale", "overdue", "verified", 
 const SCAN_STATES = ["diff", "fill", "unsure", "partial", "link"].map(function (kind) { return "scan-" + kind; });
 const PLAIN_STATE = "none";
 const VALUE_STATES = MARK_STATES.concat(SCAN_STATES, [PLAIN_STATE]);
+const NO_STATES = { only: null, off: [] };
+
+// Отмечено ли состояние в фильтре
+function stateOn(states, kind) {
+    return states.only ? states.only.indexOf(kind) !== -1 : states.off.indexOf(kind) === -1;
+}
+
+function statesActive(states) {
+    return !!states && (!!states.only || states.off.length > 0);
+}
 
 // Значения ячейки для фильтра: [{ key, value }]; пустая – [{ key: "" }]
 function valuesOf(row, col) {
@@ -62,7 +73,7 @@ export default {
                 return !!filters[col.field];
             }).map(function (col) {
                 const filter = filters[col.field];
-                return { col: col, filter: filter, set: new Set(filter.keys), statesOff: filter.statesOff || [] };
+                return { col: col, filter: filter, set: new Set(filter.keys), states: filter.states || NO_STATES };
             });
         },
 
@@ -191,18 +202,21 @@ export default {
                 const seen = col.scanOnly ? new Set(this.avItems(row).map(function (a) { return a.status; })) : this.valueStates(row, col);
                 seen.forEach(function (kind) { counts[kind] = (counts[kind] || 0) + 1; });
             });
-            const off = (this.colFilters[col.field] || {}).statesOff || [];
+            const states = this.colFilterStatesOf(col.field) || NO_STATES;
             if (col.scanOnly) {
                 return this.avSettings.statuses.filter(function (st) { return st.show; }).map((st) => {
                     const style = this.avStatusStyle(st);
                     return {
                         kind: st.kind, label: st.label, count: counts[st.kind] || 0,
-                        checked: off.indexOf(st.kind) === -1, style: style, chip: !!(style || {}).backgroundColor
+                        checked: stateOn(states, st.kind), style: style, chip: !!(style || {}).backgroundColor
                     };
                 });
             }
+            // Те, что есть в столбце, и выбранные (снятые / «только»), которых в строках
+            // сейчас нет, – чтобы галочку можно было вернуть
+            const picked = states.only || states.off;
             const list = VALUE_STATES.filter(function (kind) {
-                return kind !== PLAIN_STATE && (counts[kind] || off.indexOf(kind) !== -1);
+                return kind !== PLAIN_STATE && (counts[kind] || picked.indexOf(kind) !== -1);
             });
             if (!list.length) {
                 return [];
@@ -212,7 +226,7 @@ export default {
                 const style = this.valueStateStyle(kind);
                 return {
                     kind: kind, label: this.valueStateLabel(kind), count: counts[kind] || 0,
-                    checked: off.indexOf(kind) === -1, style: style,
+                    checked: stateOn(states, kind), style: style,
                     chip: !!style && !!(style.backgroundColor || style.boxShadow),
                     title: kind === PLAIN_STATE ? "Без выделений и значений сканера" : this.valueStateLabel(kind)
                 };
@@ -296,13 +310,13 @@ export default {
             return this.markStyle(kind);
         },
 
-        // Отметки выделений: у значения есть отмеченное (снятых нет – фильтра нет)
+        // Отметки выделений: у значения есть отмеченное (отметок нет – фильтра нет)
         statesPass(row, f) {
-            if (!f.statesOff.length) {
+            if (!statesActive(f.states)) {
                 return true;
             }
             for (const kind of this.valueStates(row, f.col)) {
-                if (f.statesOff.indexOf(kind) === -1) {
+                if (stateOn(f.states, kind)) {
                     return true;
                 }
             }
@@ -394,53 +408,54 @@ export default {
             const check = function (key) { return f.filter.exclude ? !f.set.has(key) : f.set.has(key); };
             const list = this.avItems(row);
             if (!list.length) {
-                return !f.statesOff.length && check(EMPTY_KEY);
+                return !statesActive(f.states) && check(EMPTY_KEY);
             }
             return list.some(function (a) {
-                return f.statesOff.indexOf(a.status) === -1 && check(a.title.trim().toLowerCase());
+                return stateOn(f.states, a.status) && check(a.title.trim().toLowerCase());
             });
         },
 
         // Записать фильтр столбца; «все отмечены» – фильтра нет.
-        // statesOff – снятые состояния антивирусов (остаются при смене значений)
-        setColFilter(field, filter, statesOff) {
+        // states – отметки состояний ({ only } / { off }, остаются при смене значений)
+        setColFilter(field, filter, states) {
             const next = Object.assign({}, this.colFilters);
-            statesOff = statesOff || [];
-            if (!filter && statesOff.length) {
+            states = statesActive(states) ? { only: states.only || null, off: states.only ? [] : states.off } : null;
+            if (!filter && states) {
                 filter = { exclude: true, keys: [], labels: {} };
             }
-            if (!filter || (filter.exclude && !filter.keys.length && !statesOff.length)) {
+            if (!filter || (filter.exclude && !filter.keys.length && !states)) {
                 delete next[field];
             } else {
-                next[field] = Object.assign({}, filter, { statesOff: statesOff });
+                next[field] = Object.assign({}, filter, { states: states || NO_STATES });
             }
             this.colFilters = next;
         },
 
-        colFilterStatesOff(field) {
-            return (this.colFilters[field] || {}).statesOff || [];
+        colFilterStatesOf(field) {
+            return (this.colFilters[field] || {}).states || null;
         },
 
-        // Все состояния столбца: у «Антивирусов» – свои, у остальных – выделения значений
-        colStatesOf(col) {
-            return col && col.scanOnly ? AV_STATES : VALUE_STATES;
-        },
-
-        // Состояния открытого столбца: оставить только allowed (все – фильтра по ним нет)
-        setColStates(allowed) {
+        // Отметки состояний открытого столбца: { only: [виды] } / { off: [виды] }; null – без фильтра
+        setColStates(states) {
             const field = this.colFilterMenu.field;
-            const col = this.allColumns.find(function (c) { return c.field === field; });
-            const off = this.colStatesOf(col).filter(function (kind) { return allowed.indexOf(kind) === -1; });
             const old = this.colFilters[field];
-            this.setColFilter(field, old ? { exclude: old.exclude, keys: old.keys, labels: old.labels } : null, off);
+            this.setColFilter(field, old ? { exclude: old.exclude, keys: old.keys, labels: old.labels } : null, states);
         },
 
+        // Галочка у состояния: после «только» – дописать / убрать из «только этих» (отмечены
+        // все из списка – фильтра нет), иначе – из снятых
         toggleColState(kind) {
-            const field = this.colFilterMenu.field;
-            const col = this.allColumns.find(function (c) { return c.field === field; });
-            const off = this.colFilterStatesOff(field);
-            const allowed = this.colStatesOf(col).filter(function (k) { return k === kind ? off.indexOf(k) !== -1 : off.indexOf(k) === -1; });
-            this.setColStates(allowed);
+            const states = this.colFilterStatesOf(this.colFilterMenu.field) || NO_STATES;
+            const flip = function (list) {
+                return list.indexOf(kind) === -1 ? list.concat([kind]) : list.filter(function (k) { return k !== kind; });
+            };
+            if (!states.only) {
+                this.setColStates({ off: flip(states.off) });
+                return;
+            }
+            const only = flip(states.only);
+            const all = this.colFilterStates.every(function (st) { return only.indexOf(st.kind) !== -1; });
+            this.setColStates(all ? null : { only: only });
         },
 
         // Отметить / снять значения открытого столбца
@@ -460,7 +475,7 @@ export default {
                 }
             });
             const filter = { exclude: old.exclude, keys: Array.from(keys), labels: labels };
-            const states = this.colFilterStatesOff(field);
+            const states = this.colFilterStatesOf(field);
             // «Только эти», а отмечено всё, что есть в столбце, – фильтра нет
             if (!filter.exclude && this.colFilterOptions.every(function (o) { return keys.has(o.key); })) {
                 this.setColFilter(field, null, states);
@@ -478,7 +493,7 @@ export default {
             const menu = this.colFilterMenu;
             const checked = this.colFilterAllState !== true;
             if (!searchWords(menu.query).length) {
-                this.setColFilter(menu.field, checked ? null : { exclude: false, keys: [], labels: {} }, this.colFilterStatesOff(menu.field));
+                this.setColFilter(menu.field, checked ? null : { exclude: false, keys: [], labels: {} }, this.colFilterStatesOf(menu.field));
                 return;
             }
             this.setColFilterChecked(this.colFilterShown, checked);
@@ -492,7 +507,7 @@ export default {
                 exclude: false,
                 keys: options.map(function (o) { return o.key; }),
                 labels: labels
-            }, this.colFilterStatesOff(this.colFilterMenu.field));
+            }, this.colFilterStatesOf(this.colFilterMenu.field));
         },
 
         // Enter в поиске по значениям: только найденные, меню закрывается
@@ -520,23 +535,23 @@ export default {
         },
 
         // Отмеченные состояния словами: «выключен, базы устарели»; у выделений значений
-        // (этап 40) – отмеченные, если их меньше, иначе «кроме повтор»
+        // (этап 40) – «повтор» после «только», иначе «кроме повтор»
         statesText(item) {
-            const off = item.statesOff || [];
-            if (!off.length) {
+            const states = item.states;
+            if (!statesActive(states)) {
                 return "";
             }
             const labels = this.avStatusMap;
+            const text = (list) => list.map((kind) => {
+                return (item.col.scanOnly ? (labels[kind] ? labels[kind].label : kind) : this.valueStateLabel(kind)).toLowerCase();
+            }).join(", ") || "ничего";
+            if (states.only) {
+                return text(states.only);
+            }
             if (item.col.scanOnly) {
-                return AV_STATES.filter(function (kind) { return off.indexOf(kind) === -1; })
-                    .map(function (kind) { return (labels[kind] ? labels[kind].label : kind).toLowerCase(); }).join(", ") || "ничего";
+                return text(AV_STATES.filter(function (kind) { return states.off.indexOf(kind) === -1; }));
             }
-            const allowed = VALUE_STATES.filter(function (kind) { return off.indexOf(kind) === -1; });
-            const text = (list) => list.map((kind) => this.valueStateLabel(kind).toLowerCase()).join(", ");
-            if (!allowed.length) {
-                return "ничего";
-            }
-            return allowed.length <= off.length ? text(allowed) : "кроме " + text(off);
+            return "кроме " + text(states.off);
         },
 
         // Текст плашки: «OS: Win 7, Win 10», «Статус: кроме списан», «ИНВ: (пусто)»,

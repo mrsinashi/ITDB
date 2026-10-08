@@ -120,6 +120,24 @@ export default {
             return list;
         },
 
+        // Отступы закреплённых столбцов: слева – ширины закреплённых левее, справа – правее
+        // (этап 41). { поле: { left, right } }
+        stickyOffsets() {
+            const result = {};
+            const cols = this.viewColumns.filter(function (col) { return col.sticky; });
+            let left = 0;
+            cols.forEach(function (col) {
+                result[col.field] = { left: left, right: 0 };
+                left += col.width;
+            });
+            let right = 0;
+            for (let i = cols.length - 1; i >= 0; i--) {
+                result[cols[i].field].right = right;
+                right += cols[i].width;
+            }
+            return result;
+        },
+
         // Столбцы для расчёта ширины: встроенные, общий «Кабинет» и «По правилу»
         widthColumns() {
             return this.builtinColumns.concat(this.nameCheck ? [ROOM_COLUMN, NAME_RULE_COLUMN] : [ROOM_COLUMN]);
@@ -495,6 +513,9 @@ export default {
             if (col.field === this.stuckEdge) {
                 cls["sticky-edge"] = true;
             }
+            if (col.field === this.stuckEdgeRight) {
+                cls["sticky-edge-r"] = true;
+            }
             if (this.isEditing(row, col)) {
                 cls["editing"] = true;
             }
@@ -770,7 +791,7 @@ export default {
                 style.fontWeight = "700";
             }
             if (col.sticky) {
-                style.left = this.stickyLeft(col) + "px";
+                Object.assign(style, this.stickyStyle(col));
             }
             // Заливка – как в Excel: фон идёт поверх линий сетки. У каждой
             // ячейки свои линии справа и снизу; такая линия берёт цвет соседа
@@ -836,17 +857,11 @@ export default {
             return base;
         },
 
-        stickyLeft(col) {
-            let left = 0;
-            for (const c of this.viewColumns) {
-                if (c.field === col.field) {
-                    break;
-                }
-                if (c.sticky) {
-                    left += c.width;
-                }
-            }
-            return left;
+        // Закреплённый столбец липнет и к левому краю (после закреплённых левее), и к правому
+        // (этап 41: перед закреплёнными правее)
+        stickyStyle(col) {
+            const at = this.stickyOffsets[col.field];
+            return at ? { left: at.left + "px", right: at.right + "px" } : null;
         },
 
         handleNoteEnter(event, row, col) {
@@ -1275,20 +1290,38 @@ export default {
             if (!wrap) {
                 return;
             }
-            // Закреплённый столбец прилипает, когда уезжают все незакреплённые перед ним.
-            // Тень – у последнего из прилипших (закреплённые могут стоять не подряд)
-            const scrollLeft = wrap.scrollLeft / (this.tableZoom || 1);
+            // Закреплённый столбец прилипает к левому краю, когда уезжают все незакреплённые
+            // перед ним, к правому (этап 41) – когда за правым краем все незакреплённые после
+            // него. Тень – у крайнего из прилипших с каждой стороны (закреплённые могут стоять
+            // не подряд)
+            const zoom = this.tableZoom || 1;
+            const scrollLeft = wrap.scrollLeft / zoom;
+            const hiddenRight = (wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft) / zoom;
+            const cols = this.viewColumns;
             let loose = 0;
             let edge = null;
-            for (const col of this.viewColumns) {
+            for (const col of cols) {
                 if (!col.sticky) {
                     loose += col.width;
                 } else if (scrollLeft > 0 && scrollLeft >= loose - 0.5) {
                     edge = col.field;
                 }
             }
+            loose = 0;
+            let edgeRight = null;
+            for (let i = cols.length - 1; i >= 0; i--) {
+                const col = cols[i];
+                if (!col.sticky) {
+                    loose += col.width;
+                } else if (hiddenRight > 0.5 && hiddenRight >= loose - 0.5 && col.field !== edge) {
+                    edgeRight = col.field;
+                }
+            }
             if (this.stuckEdge !== edge) {
                 this.stuckEdge = edge;
+            }
+            if (this.stuckEdgeRight !== edgeRight) {
+                this.stuckEdgeRight = edgeRight;
             }
         },
         

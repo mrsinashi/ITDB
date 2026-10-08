@@ -124,8 +124,10 @@ const app = Vue.createApp({
             pendingCells: {},
             openMenu: null,
             noteTooltip: { visible: false, text: "", top: 0, left: 0, width: 0 },
-            // Закреплённый столбец, у правого края которого сейчас тень (под него уехали соседи)
+            // Закреплённый столбец, у правого края которого сейчас тень (под него уехали соседи),
+            // и прилипший к правому краю окна, у которого тень слева (этап 41)
             stuckEdge: null,
+            stuckEdgeRight: null,
             // Закреплённые столбцы: список полей; null – как в описании столбцов (HOSTNAME, IP)
             pinnedColumns: loadJson(PINNED_COLUMNS_KEY, null),
             // Порядок столбцов основного и второго вида: список полей; null – как с сервера
@@ -327,7 +329,7 @@ const app = Vue.createApp({
         if (this.user) {
             await this.$nextTick();
             this.snapNavUser();
-            window.addEventListener("resize", () => this.snapNavUser());
+            window.addEventListener("resize", () => { this.snapNavUser(); this.updateStickyShadow(); });
             window.addEventListener("resize", () => { this.scanFitCompare(); this.placeCheckPlate(); });
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();

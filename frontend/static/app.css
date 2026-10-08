@@ -97,6 +97,7 @@
     --copy-hint-done: rgba(30, 140, 30, 0.28);
     --saved-bg: #d5efd5;
     --sticky-shadow: 3px 0 4px rgba(0, 0, 0, 0.12);
+    --sticky-shadow-r: -3px 0 4px rgba(0, 0, 0, 0.12);   /* у прилипшего к правому краю */
     --host-color: #0645ad;
     /* Перетаскивание столбца: призрак столбца за курсором */
     --col-drag-tint: rgba(0, 0, 0, 0.05);
@@ -1563,6 +1564,30 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .data-table.sticky-stuck td.sticky-edge,
 .data-table.sticky-stuck th.sticky-edge {
     box-shadow: var(--grid-shadow), var(--sticky-shadow);
+}
+/* Прилипший к правому краю (этап 41): тень слева и своя левая линия – соседа слева, чья
+   это линия, под ним не видно. Линия – на 1px левее ячейки, как у соседа: там же ложится
+   рамка ячейки под курсором */
+.data-table tbody td.sticky-edge-r {
+    --l-line: var(--grid-line);
+}
+.data-table tbody tr.row-hover td.sticky-edge-r {
+    --l-line: var(--row-hover-line);
+}
+.data-table tbody tr.row-selected td.sticky-edge-r {
+    --l-line: var(--row-sel-line);
+}
+.data-table.sticky-stuck td.sticky-edge-r {
+    box-shadow: calc(-1 * var(--px)) 0 0 var(--l-line), var(--grid-shadow), var(--sticky-shadow-r);
+}
+.data-table.sticky-stuck th.sticky-edge-r {
+    box-shadow: calc(-1 * var(--px)) 0 0 var(--grid-head-line-v), var(--grid-shadow), var(--sticky-shadow-r);
+}
+.data-table.sticky-stuck tbody td.sticky-edge-r:has(+ td:hover) {
+    box-shadow: inset calc(-1 * var(--px)) 0 0 var(--hf-right, var(--hf-row)), calc(-1 * var(--px)) 0 0 var(--l-line), var(--grid-shadow), var(--sticky-shadow-r);
+}
+.data-table.sticky-stuck td.sticky-edge-r.cell-saved {
+    box-shadow: calc(-1 * var(--px)) 0 0 var(--l-line), var(--grid-shadow), var(--sticky-shadow-r), inset 0 0 0 100vmax var(--flash);
 }
 
 /* Примечание: обрезка и подсказка */
@@ -4638,8 +4663,37 @@ button.scan-chip {
 .sm-lines .ck-lines-head:first-child {
     margin-top: 0;
 }
-.ck-plate-open {
+/* Плашка открытой строки (этап 41) – в полосе справа от таблицы высотой с поле таблицы
+   (от шапки до низа, место – placeCheckPlate): выше и ниже поля обрезается. За строкой
+   её двигает браузер – анимацией по прокрутке таблицы (ключевые кадры – из скрипта),
+   поэтому без задержки, как липкая полоска строки в Таблице */
+.ck-wrap {
+    timeline-scope: --ck-scroll;
+}
+.ck-wrap .history-scroll {
+    scroll-timeline: --ck-scroll block;
+}
+.ck-plate-rail {
+    position: absolute;
+    left: 100%;
+    width: 110px;
     display: none;
+    overflow-x: visible;
+    overflow-y: clip;
+    pointer-events: none;
+    z-index: 5;
+}
+.ck-plate-rail .ck-plate-open {
+    top: 0;
+    left: 0;
+    pointer-events: auto;
+    will-change: transform;
+}
+.ck-plate-rail .ck-plate-open.ck-plate-anim {
+    animation-duration: auto;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: --ck-scroll;
 }
 
 /* ============================================================
@@ -5543,11 +5597,13 @@ html.no-radius .nr-table .nr-suf {
 }
 
 /* Закреплённые столбцы (Ctrl+клик по шапке): зажат Ctrl и курсор на шапке – шапки
-   закреплённых столбцов цветом выделения системы, текст – цветом выделенного текста
-   (этап 38, вместо тени цвета схемы). Только в шапке */
+   закреплённых столбцов цветом схемы, текст белый, линии – как у акцентной шапки
+   (этап 41; в 38 был цвет выделения системы). Только в шапке */
 html.ctrl-down .data-table thead:hover th.sticky {
-    background: Highlight;
-    color: HighlightText;
+    background: var(--brand);
+    color: #fff;
+    --grid-head-line-v: rgba(255, 255, 255, 0.22);
+    --grid-head-line-h: var(--brand-dark);
 }
 html.ctrl-down .data-table thead:hover th.sticky .sort-arrow,
 html.ctrl-down .data-table thead:hover th.sticky .th-filter {

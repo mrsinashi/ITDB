@@ -9,7 +9,7 @@
 // у каждого предложения ✓ / ✕, «ещё у N ПК» – такие же пары разом. Выделение – как
 // в Таблице (Ctrl / Shift + клик, Ctrl+A, Esc), «Выбрано: N ▾» – действия над
 // выбранными. Плашка действий у открытой строки идёт за строкой при прокрутке,
-// не заходя под шапку таблицы (двигается напрямую, без перерисовки Vue).
+// не выходя за поле таблицы (двигает браузер, без перерисовки Vue; этап 41).
 // Этап 26е: ПК, о которых говорит только Jabber (VACUUM), – тоже строки;
 // HOSTNAME из источника только сообщается – «взять» его нельзя (d.can_take).
 // Этап 26ж: в подробностях – и «Мат. плата», и номера записей GLPI / GSIT.
@@ -21,6 +21,21 @@ import { apiFetch, searchNorm, searchWordsIn, matchesAllWords, clickSelect } fro
 export const CHECK_SOURCES = ["glpi", "gsit"];
 const COMPARE_FIELDS = ["hostname", "ip", "vacuum", "mac", "serial", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "vnc", "glpi_id", "gsit_id"];
 const STATE_ORDER = { name: 0, conflict: 0, diff: 1, ok: 2, none: 3 };
+// Анимации по прокрутке (плашка открытой строки, этап 41); нет – плашка по событию прокрутки
+const SCROLL_TIMELINE = typeof CSS !== "undefined" && !!CSS.supports &&
+    CSS.supports("animation-timeline: --a") && CSS.supports("timeline-scope: --a");
+let plateFrames = 0;
+
+// Ключевые кадры плашки – свой элемент <style>
+function plateStyle() {
+    let el = document.getElementById("ck-plate-frames");
+    if (!el) {
+        el = document.createElement("style");
+        el.id = "ck-plate-frames";
+        document.head.appendChild(el);
+    }
+    return el;
+}
 // Значки плашки (Lucide): галочка, крестик, звено, «вернуть»
 const ICONS = {
     ok: '<path d="M20 6 9 17l-5-5"/>',
@@ -485,7 +500,9 @@ export default {
             if (this.check.hover) {
                 this.check.hover = null;
             }
-            this.placeCheckPlate();
+            if (!SCROLL_TIMELINE) {
+                this.placeCheckPlate();
+            }
         },
 
         // После перерисовки: ширина таблички сравнения и место плашки открытой строки
@@ -496,12 +513,17 @@ export default {
             });
         },
 
-        // Плашка открытой строки: идёт за строкой ровно, без задержки (пишем стиль
-        // элемента прямо в обработчике прокрутки); под шапку не заходит – у её нижней
-        // границы останавливается, пока видны подробности; ушли – плашки нет
+        // Плашка открытой строки (этап 41): идёт за строкой, пока видны подробности –
+        // стоит у шапки, потом уходит под неё; выше шапки и ниже поля таблицы её обрезает
+        // полоса (.ck-plate-rail). Сдвиг – функция прокрутки: y(t) = min(max(r0 - t, 0),
+        // d0 - h - t), её изломы – ключевые кадры анимации по прокрутке таблицы, так
+        // плашку двигает браузер вместе с таблицей. Здесь – только при перерисовке и смене
+        // размеров; без анимаций по прокрутке (Firefox) – и на каждую прокрутку
         placeCheckPlate() {
+            const rail = this.$refs.checkPlateRail;
             const el = this.$refs.checkOpenPlate;
-            if (!el) {
+            if (!rail || !el) {
+                this.watchCheckPlate(null);
                 return;
             }
             const key = this.check.open;
@@ -509,25 +531,62 @@ export default {
             const wrap = tr && tr.closest(".users-wrap");
             const scroll = tr && tr.closest(".history-scroll");
             if (!tr || !wrap || !scroll) {
-                el.style.display = "none";
+                rail.style.display = "none";
+                this.watchCheckPlate(null);
                 return;
             }
+            this.watchCheckPlate(scroll);
             const detail = tr.nextElementSibling && tr.nextElementSibling.classList.contains("sm-detail") ? tr.nextElementSibling : null;
-            const w = wrap.getBoundingClientRect();
             const s = scroll.getBoundingClientRect();
             const head = scroll.querySelector("thead");
-            const headBottom = s.top + (head ? head.offsetHeight : 0);
+            const headH = head ? head.offsetHeight : 0;
+            const fieldTop = s.top + scroll.clientTop + headH;
+            rail.style.display = "block";
+            rail.style.top = (fieldTop - wrap.getBoundingClientRect().top) + "px";
+            rail.style.height = Math.max(0, scroll.clientHeight - headH) + "px";
             const r = tr.getBoundingClientRect();
             const h = r.height;
-            const bottom = detail ? detail.getBoundingClientRect().bottom : r.bottom;
-            const top = Math.min(Math.max(r.top, headBottom), bottom - h);
-            if (top < headBottom - 0.5 || top > s.bottom - h) {
-                el.style.display = "none";
+            const t = scroll.scrollTop;
+            // Строка и низ подробностей в поле при прокрутке 0
+            const r0 = r.top - fieldTop + t;
+            const d0 = (detail ? detail.getBoundingClientRect().bottom : r.bottom) - fieldTop + t;
+            const y = function (at) { return Math.min(Math.max(r0 - at, 0), d0 - h - at); };
+            el.style.height = h + "px";
+            el.style.transform = "translateY(" + y(t) + "px)";
+            const max = scroll.scrollHeight - scroll.clientHeight;
+            if (!SCROLL_TIMELINE || max <= 0) {
+                el.classList.remove("ck-plate-anim");
                 return;
             }
-            el.style.display = "flex";
-            el.style.top = (top - w.top) + "px";
-            el.style.height = h + "px";
+            const points = [0, r0, d0 - h, max].filter(function (at) { return at >= 0 && at <= max; })
+                .sort(function (a, b) { return a - b; });
+            const frames = points.map(function (at) {
+                return (at / max * 100).toFixed(4) + "% { transform: translateY(" + y(at).toFixed(2) + "px); }";
+            }).join(" ");
+            const name = "ck-plate-move-" + (++plateFrames);
+            plateStyle().textContent = "@keyframes " + name + " { " + frames + " }";
+            el.style.animationName = name;
+            el.classList.add("ck-plate-anim");
+        },
+
+        // Строки и подробности поменяли высоту (своё значение, табличка сравнения, окно) –
+        // плашку на место
+        watchCheckPlate(scroll) {
+            const table = scroll && scroll.querySelector(".ck-table");
+            if (this._ckPlateWatch && this._ckPlateWatch.table === table) {
+                return;
+            }
+            if (this._ckPlateWatch) {
+                this._ckPlateWatch.observer.disconnect();
+                this._ckPlateWatch = null;
+            }
+            if (!table || typeof ResizeObserver === "undefined") {
+                return;
+            }
+            const observer = new ResizeObserver(() => this.placeCheckPlate());
+            observer.observe(table);
+            observer.observe(scroll);
+            this._ckPlateWatch = { table: table, observer: observer };
         },
 
         // ---------- Что показывать ----------
