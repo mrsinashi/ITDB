@@ -5,11 +5,12 @@
 // Начало имени узла – части по пути от адреса через «-»: отделение ter, кабинет
 // proc → ter-proc, у ПК в нём – ter-proc-1. Без частей на всём пути правила нет.
 //
-// Номер в имени – по порядку ПК сверху вниз, как в Таблице (узлы по дереву, в узле –
-// по № места; этап 36): ter-proc-1, ter-proc-2… У узлов с одним началом имён
-// (eko2 на два кабинета) счёт сквозной. ПК по правилу, если имя – ровно такое; у
-// одного места – само начало. «Своё имя» действует, пока у ПК то же имя и то же
-// расположение; такие ПК в счёт не входят.
+// Номер в имени – № места ПК (этап 39): ter-proc-3 на месте 3. Без № места – место
+// ПК по счёту в узле, как в Таблице (номер занят – следующий свободный); ПК со
+// «своим именем» место тоже занимают. У узлов с одним началом имён (eko2 на два
+// кабинета) номера следующего узла идут после самого большого номера предыдущего.
+// ПК по правилу, если имя – ровно такое; у одного места – само начало. «Своё имя»
+// действует, пока у ПК то же имя и то же расположение.
 //
 // «По таблице»: как названы ПК сейчас → правила узлов. У узла – самое частое
 // начало имён его ПК; у отделения – ещё и первая часть, общая для большинства
@@ -70,61 +71,104 @@ export function keepValid(keep, row) {
     return !!k && k.name === row.hostname && k.location_id === row.location_id;
 }
 
-// № места для порядка: без номера – в конце узла
-function seatOf(row) {
-    const n = Number(row.seat_no);
-    return row.seat_no !== null && row.seat_no !== undefined && row.seat_no !== "" && Number.isFinite(n) ? n : Infinity;
+// № места: целое больше нуля, иначе null
+function seatOf(seat) {
+    const n = Number(seat);
+    return seat !== null && seat !== undefined && seat !== "" && Number.isInteger(n) && n > 0 ? n : null;
 }
 
-// ПК, которые считаются по порядку: start → [{ row, order, pos }] сверху вниз
-function countedRows(rows, index, keep) {
-    const groups = new Map();
+// ПК узлов с номером в имени: id узла → [{ row, seat, pos }] как в Таблице (по № места,
+// без номера – в конце, дальше – порядок строк с сервера)
+function nodeRows(rows, index) {
+    const nodes = new Map();
     rows.forEach(function (row, pos) {
         const entry = row.archived ? null : index.get(row.location_id);
-        if (!entry || !entry.start || entry.single || keepValid(keep, row)) {
+        if (!entry || !entry.start || entry.single) {
             return;
         }
-        let list = groups.get(entry.start);
+        let list = nodes.get(row.location_id);
         if (!list) {
-            groups.set(entry.start, list = []);
+            nodes.set(row.location_id, list = []);
         }
-        list.push({ row: row, order: entry.order, seat: seatOf(row), pos: pos });
+        list.push({ row: row, seat: seatOf(row.seat_no), pos: pos });
     });
-    groups.forEach(function (list) {
+    nodes.forEach(function (list) {
         list.sort(function (a, b) {
-            return a.order - b.order || a.seat - b.seat || a.pos - b.pos;
+            return (a.seat === null ? Infinity : a.seat) - (b.seat === null ? Infinity : b.seat) || a.pos - b.pos;
         });
     });
-    return groups;
+    return nodes;
+}
+
+// Номера ПК узла: № места; без него (или № повторяется) – место по счёту, занятый номер –
+// следующий свободный. { nums: id ПК → номер, taken, max }
+function localNumbers(list) {
+    const nums = new Map();
+    const taken = new Set();
+    list.forEach(function (x) {
+        if (x.seat !== null && !taken.has(x.seat)) {
+            taken.add(x.seat);
+            nums.set(x.row.id, x.seat);
+        }
+    });
+    list.forEach(function (x, i) {
+        if (nums.has(x.row.id)) {
+            return;
+        }
+        let n = i + 1;
+        while (taken.has(n)) {
+            n += 1;
+        }
+        taken.add(n);
+        nums.set(x.row.id, n);
+    });
+    let max = 0;
+    taken.forEach(function (n) { max = Math.max(max, n); });
+    return { nums: nums, taken: taken, max: max };
+}
+
+// Номера в именах: { numbers: id ПК → номер, nodes: id узла → { list, local, offset } }.
+// Узлы – по порядку дерева; у узлов с одним началом номера следующего – после max предыдущего
+function numberPlan(rows, index) {
+    const byNode = nodeRows(rows, index);
+    const offsets = new Map();
+    const numbers = new Map();
+    const nodes = new Map();
+    index.forEach(function (entry, id) {
+        if (!entry.start || entry.single) {
+            return;
+        }
+        const list = byNode.get(id) || [];
+        const offset = offsets.get(entry.start) || 0;
+        const local = localNumbers(list);
+        local.nums.forEach(function (n, rowId) { numbers.set(rowId, offset + n); });
+        offsets.set(entry.start, offset + local.max);
+        nodes.set(id, { list: list, local: local, offset: offset });
+    });
+    return { numbers: numbers, nodes: nodes };
 }
 
 // Проверка имён: id ПК → { entry, ok, kept, expected, num }; ПК без правила в карте нет.
 // rows – в порядке Таблицы (с сервера): он решает при одинаковом № места
 export function checkNames(rows, index, keep) {
     const result = new Map();
+    const numbers = numberPlan(rows, index).numbers;
     rows.forEach(function (row) {
         const entry = row.archived ? null : index.get(row.location_id);
         if (!entry || !entry.start) {
             return;
         }
         const kept = keepValid(keep, row);
-        const expected = kept ? null : (entry.single ? entry.start : null);
-        result.set(row.id, { entry: entry, ok: kept || (!!expected && hostKey(row.hostname) === expected), kept: kept, expected: expected, num: null });
-    });
-    countedRows(rows, index, keep).forEach(function (list, start) {
-        list.forEach(function (x, i) {
-            const item = result.get(x.row.id);
-            item.num = i + 1;
-            item.expected = start + "-" + (i + 1);
-            item.ok = hostKey(x.row.hostname) === item.expected;
-        });
+        const num = kept || entry.single ? null : numbers.get(row.id);
+        const expected = kept ? null : (entry.single ? entry.start : entry.start + "-" + num);
+        result.set(row.id, { entry: entry, ok: kept || hostKey(row.hostname) === expected, kept: kept, expected: expected, num: num });
     });
     return result;
 }
 
-// Имя нового ПК в узле на месте seat (нет правила – ""): номер – сколько ПК с тем же
-// началом выше него и + 1. Место занято – он встаёт на него, остальные сдвигаются
-export function newName(index, locationId, seat, rows, keep) {
+// Имя нового ПК в узле на месте seat (нет правила – ""): номер – № места (место занято –
+// он встаёт на него, остальные сдвигаются); без № – встанет последним в узле
+export function newName(index, locationId, seat, rows) {
     const entry = index.get(locationId);
     if (!entry || !entry.start) {
         return "";
@@ -132,13 +176,15 @@ export function newName(index, locationId, seat, rows, keep) {
     if (entry.single) {
         return entry.start;
     }
-    const list = countedRows(rows, index, keep).get(entry.start) || [];
-    const n = Number(seat);
-    const at = String(seat || "").trim() && Number.isFinite(n) ? n : Infinity;
-    const before = list.filter(function (x) {
-        return x.order < entry.order || (x.order === entry.order && (at === Infinity || x.seat < at));
-    }).length;
-    return entry.start + "-" + (before + 1);
+    const node = numberPlan(rows, index).nodes.get(locationId);
+    let n = seatOf(seat);
+    if (n === null) {
+        n = node.list.length + 1;
+        while (node.local.taken.has(n)) {
+            n += 1;
+        }
+    }
+    return entry.start + "-" + (node.offset + n);
 }
 
 // Как названы ПК узлов сейчас: id узла → { base, single, count, total } – самое

@@ -680,9 +680,9 @@ export default {
                 return false;
             }
             const kinds = this.scanShownKinds;
-            return this.columns.some(function (col) {
+            return this.columns.some((col) => {
                 const d = entry[col.field];
-                return !!d && kinds.has(d.kind);
+                return !!d && kinds.has(d.kind) && !this.scanChipHidden(d);
             });
         },
 

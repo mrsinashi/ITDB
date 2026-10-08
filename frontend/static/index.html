@@ -525,7 +525,7 @@
                             <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namingHelp' }" @click="toggleMenu('namingHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
                             <div v-if="openMenu === 'namingHelp'" class="dropdown right attached names-help">
                                 <p>Имя ПК – начало от узлов выше, своя часть и номер: <b>ter-proc-1</b>.</p>
-                                <p>Номер – по порядку № места сверху вниз.</p>
+                                <p>Номер – № места; без него – место по счёту в кабинете.</p>
                                 <p>Серое в имени – клик: убрать или вернуть.</p>
                                 <p>Клик по строке – её ПК справа.</p>
                                 <p>«В таблице» – как названы ПК сейчас; клик – взять.</p>
@@ -1706,7 +1706,7 @@
 
         <!-- ================= Значение сканера: что сделать (этап 26в) ================= -->
         <teleport to="body">
-            <div v-if="scanPop" ref="scanPop" class="scan-pop" :class="{ placed: scanPop.placed, 'link-pop': scanPop.d.kind === 'link' }" :style="{ left: scanPop.left + 'px', top: scanPop.top + 'px' }"
+            <div v-if="scanPop" ref="scanPop" class="scan-pop" :class="{ placed: scanPop.placed, 'compare-pop': scanPop.d.compare.length }" :style="{ left: scanPop.left + 'px', top: scanPop.top + 'px' }"
 >
                 <div class="sp-head" @mousedown.prevent="startScanPopDrag">
                     <span class="sp-title">{{ scanPop.col.headerName }}<span class="sp-host">{{ scanPop.row.hostname || "" }}</span></span>
@@ -1716,8 +1716,8 @@
                     <tr><td class="sp-label">В таблице</td><td class="sp-v"><span v-if="scanPop.d.table">{{ scanPop.d.table }}</span><span v-else class="sp-empty">пусто</span></td></tr>
                     <tr><td class="sp-label">Сканер</td><td class="sp-v"><span class="scan-chip" :style="scanChipStyle(scanMarkByKind[scanPop.d.kind] || {})">{{ scanChipText(scanPop.d) }}</span><span v-if="scanPop.d.proposed && scanPop.d.raw !== scanPop.d.proposed" class="sp-raw">в источнике: {{ scanPop.d.raw.split("\n").join(", ") }}</span></td></tr>
                 </table>
-                <!-- «Привязать?» (этап 38): запись и этот ПК по полям -->
-                <table v-if="scanPop.d.kind === 'link' && scanPop.d.compare.length" class="sp-compare">
+                <!-- Номер записи GLPI / GSIT (этапы 38, 39): запись и этот ПК по полям -->
+                <table v-if="scanPop.d.compare.length" class="sp-compare">
                     <tr><th></th><th>В таблице</th><th></th><th>{{ diffSourceShort(scanPop.d) }}</th></tr>
                     <tr v-for="c in scanPop.d.compare" :key="c.field" :class="{ same: c.mark === '=' }">
                         <td class="sp-label">{{ diffFieldLabel(c.field) }}</td>

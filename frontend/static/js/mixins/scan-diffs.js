@@ -306,7 +306,9 @@ export default {
                 }
                 const data = await response.json();
                 this.diffs.items = data.items;
-                this.diffs.count = data.items.filter(function (d) { return !d.rejected_by && d.kind !== "partial"; }).length;
+                // В счётчике – только то, что показывается блочком: без «в таблице часть» и без
+                // другого имени ПК (этап 39)
+                this.diffs.count = data.items.filter((d) => !d.rejected_by && d.kind !== "partial" && !this.scanChipHidden(d)).length;
                 this.diffs.rejected = data.rejected;
                 this.diffs.sources = data.sources;
                 this.diffs.antivirus = data.antivirus || {};

@@ -741,7 +741,7 @@ export default {
             if (form.hostname && form.hostname !== form.autoName) {
                 return;
             }
-            const name = form.location_id ? newName(this.namingIdx, form.location_id, form.seat_no, this.rows, this.nameKeep) : "";
+            const name = form.location_id ? newName(this.namingIdx, form.location_id, form.seat_no, this.rows) : "";
             form.hostname = name;
             form.autoName = name;
         }

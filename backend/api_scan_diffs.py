@@ -37,6 +37,8 @@
 (/not-this) – запись этому ПК больше не предлагается. Проверен ПК (verified – и записью,
 и сетью; checked – одним из них) – только по актуальным данным: запись проверена в
 источнике не раньше срока «Актуальны».
+Этап 39: сравнение записи с ПК (compare) – у любого предложения номера записи в столбец
+GLPI / GSIT, не только у «привязать?».
 """
 import ipaddress
 import re
@@ -112,7 +114,7 @@ class DiffOut(BaseModel):
     same_pair: int        # ещё у скольких ПК такая же пара «таблица – сканер»
     rejected_by: Optional[str] = None
     rejected_at: Optional[datetime] = None
-    # «привязать?» (kind link, этап 38): запись и ПК по полям – [{field, table, source, mark}]
+    # номер записи в GLPI / GSIT (этапы 38, 39): запись и ПК по полям – [{field, table, source, mark}]
     compare: list[dict] = []
 
 
@@ -427,6 +429,15 @@ def host_observations(session):
     return result, kinds
 
 
+def compare_rows(compared):
+    """Запись и ПК по полям – для карточки у блочка номера записи (этапы 38, 39)."""
+    return [
+        {"field": row["field"], "table": row["itdb"], "source": row["source"], "mark": row["mark"]}
+        for row in compared
+        if row["itdb"] or row["raw"]
+    ]
+
+
 def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
     которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
@@ -472,19 +483,22 @@ def compute(session, with_rejected=False):
             "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id,
             "checked_at": record.checked_at, "state": item["state"], "by": item["by"],
         }
-        # Номер записи – в столбец GLPI / GSIT (этап 26ж)
+        # Номер записи – в столбец GLPI / GSIT (этап 26ж), к нему – сравнение записи с ПК
+        # (этап 39: тот ли это ПК – видно всегда, когда предлагается номер)
         number = clean_text((numbers.get(computer_id) or {}).get(ID_FIELDS[kind]))
+        compared = scan_collect.compare_record(names, values, computers[computer_id])
 
         if number != str(source_id):
             rows[(computer_id, ID_FIELDS[kind])] = {
                 "rows": [{"itdb": number, "source": str(source_id), "raw": str(source_id), "mark": "≠" if number else ""}],
                 "sources": [dict(source, value=str(source_id))],
+                "compare": compare_rows(compared),
             }
 
         for ip in ipv4_set(values.get("ip")):
             record_ips[ip].add(computer_id)
 
-        for row in scan_collect.compare_record(names, values, computers[computer_id]):
+        for row in compared:
             if not row["raw"]:
                 continue
 
@@ -507,11 +521,7 @@ def compute(session, with_rejected=False):
                 "state": "name", "by": item["by"], "value": str(source_id),
             },
             "note": item["note"] or "Совпадает только имя",
-            "compare": [
-                {"field": row["field"], "table": row["itdb"], "source": row["source"], "mark": row["mark"]}
-                for row in scan_collect.compare_record(names, values, computers[computer_id])
-                if row["itdb"] or row["raw"]
-            ],
+            "compare": compare_rows(scan_collect.compare_record(names, values, computers[computer_id])),
         }
 
     # Сеть (этап 28): MAC, IP и имя – там, где записи GLPI / GSIT об этом поле молчат
@@ -598,7 +608,8 @@ def compute(session, with_rejected=False):
         else:
             continue
 
-        add(computer_id, field, row["itdb"], row["source"], row["raw"], diff_kind, unsure, entry["sources"])
+        add(computer_id, field, row["itdb"], row["source"], row["raw"], diff_kind, unsure, entry["sources"],
+            compare=entry.get("compare"))
 
     for (computer_id, field), offer in offered.items():
         add(computer_id, field, offer["table"], offer["value"], offer["value"], "link", "", [offer["source"]],
