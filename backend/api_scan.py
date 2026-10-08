@@ -43,6 +43,10 @@ SOURCES = {
     "dhcp": {"title": "DHCP", "check": scan_dhcp.check, "glpi": False, "form": "ssh", "fresh": (30, 365)},
     "net": {"title": "Сеть", "check": scan_net.check, "glpi": False, "form": "net", "fresh": (7, 365)},
 }
+# Jabber: быстрая проверка «кто в сети» для кружков у VACUUM в Таблице (этап 41) – по
+# умолчанию включена, раз в 2 минуты; можно 1–60
+ONLINE_MINUTES = 2
+ONLINE_MAX_MINUTES = 60
 SECRET_FIELDS = ("password", "user_token", "app_token")
 SECRET_LABELS = {"password": "пароль", "user_token": "токен пользователя", "app_token": "токен приложения"}
 SECRET_REMOVED = "удалён"
@@ -119,6 +123,8 @@ class SourceOut(BaseModel):
     host_key: Optional[str] = None    # DHCP: отпечаток ключа сервера (запомнен)
     names: Optional[bool] = None      # Сеть: спрашивать имена (NetBIOS, DNS)
     ports: Optional[bool] = None      # Сеть: проверять порты
+    online_watch: Optional[bool] = None   # Jabber: быстрая проверка «кто в сети» (этап 41)
+    online_minutes: Optional[int] = None  # …раз в столько минут
 
 
 class SourcesOut(BaseModel):
@@ -141,6 +147,8 @@ class SourceUpdate(BaseModel):
     configs: Optional[list[str]] = None
     names: Optional[bool] = None
     ports: Optional[bool] = None
+    online_watch: Optional[bool] = None
+    online_minutes: Optional[int] = None
     forget_host: Optional[bool] = None
 
 
@@ -179,6 +187,12 @@ def option_of(source, name, default):
     return default if value is None else value
 
 
+def online_settings(source):
+    """Jabber: (быстрая проверка «кто в сети» включена, раз в сколько минут)."""
+    minutes = option_of(source, "online_minutes", ONLINE_MINUTES)
+    return bool(option_of(source, "online_watch", True)), minutes if isinstance(minutes, int) else ONLINE_MINUTES
+
+
 def dhcp_files(source, data=None):
     """DHCP: (файл аренд, [файлы настроек]) – сохранённые, поверх них – из формы
     (data). В «Файл» раньше дописывали и dhcpd.conf через пробел: первый путь –
@@ -214,8 +228,11 @@ def source_out(kind, source, last_run=None, ready=None):
     fields = SECRET_FIELDS if glpi else (() if form == "net" else ("password",))
     host_key = option_of(source, "host_key", None)
     files = dhcp_files(source) if form == "ssh" else None
+    watch, minutes = online_settings(source) if form == "jabber" else (None, None)
 
     return SourceOut(
+        online_watch=watch,
+        online_minutes=minutes,
         form=form,
         ready=bool(source and source.url) if ready is None else ready,
         path=files[0] if files else None,
@@ -352,7 +369,8 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
             data.pop(field, None)
 
     if form != "jabber":
-        data.pop("domain", None)
+        for field in ("domain", "online_watch", "online_minutes"):
+            data.pop(field, None)
 
     if form != "ssh":
         for field in ("path", "configs", "forget_host"):
@@ -432,6 +450,17 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
     for field, default in (("names", True), ("ports", False)):
         if field in data:
             old = option_of(source, field, default)
+            source.options = dict(source.options or {}, **{field: data[field]})
+            changes[field] = {"old": old, "new": data[field]}
+
+    # Jabber: быстрая проверка «кто в сети» (этап 41)
+    if "online_minutes" in data and not (1 <= data["online_minutes"] <= ONLINE_MAX_MINUTES):
+        raise HTTPException(status_code=400, detail=f"Проверять «в сети» – раз в 1–{ONLINE_MAX_MINUTES} мин.")
+
+    old_watch, old_minutes = online_settings(source)
+
+    for field, old in (("online_watch", old_watch), ("online_minutes", old_minutes)):
+        if field in data:
             source.options = dict(source.options or {}, **{field: data[field]})
             changes[field] = {"old": old, "new": data[field]}
 

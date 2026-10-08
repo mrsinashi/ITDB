@@ -56,6 +56,25 @@ export function splitMulti(value) {
         .filter(Boolean);
 }
 
+// Длинная строка подсказки – переносом по словам, не длиннее width знаков в строке
+// (подсказка браузера переносит только очень длинные: группы VACUUM, этап 41)
+export function wrapLine(text, width) {
+    const lines = [];
+    let line = "";
+    String(text).split(" ").forEach(function (word) {
+        if (line && line.length + 1 + word.length > width) {
+            lines.push(line);
+            line = word;
+        } else {
+            line = line ? line + " " + word : word;
+        }
+    });
+    if (line) {
+        lines.push(line);
+    }
+    return lines.join("\n");
+}
+
 // «Иванов Иван Иванович» → «Иванов И.И.»; без ФИО – логин (панель, этап 22)
 export function shortName(fullName, login) {
     const words = String(fullName || "").trim().split(/\s+/).filter(Boolean);

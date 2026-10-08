@@ -26,7 +26,8 @@
 //                        vnc (подключение к ПК через внешнее приложение, itdb://vnc/…),
 //                        print (печать Таблицы: окно с настройками и листом),
 //                        table-fit (масштаб по ширине окна), col-order (порядок столбцов перетаскиванием),
-//                        naming (имена ПК по правилам: вкладка Справочников, проверка в Таблице)
+//                        naming (имена ПК по правилам: вкладка Справочников, проверка в Таблице),
+//                        vacuum-online (кружок «в сети» у логинов VACUUM: быстрая проверка Jabber)
 //   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        – tree-node, tree-form, style-controls, location-picker, count-select
 //
@@ -65,6 +66,7 @@ import print from "./mixins/print.js";
 import tableFit from "./mixins/table-fit.js";
 import colOrder from "./mixins/col-order.js";
 import naming from "./mixins/naming.js";
+import vacuumOnline from "./mixins/vacuum-online.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -73,7 +75,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, naming],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, naming, vacuumOnline],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -272,6 +274,7 @@ const app = Vue.createApp({
                 links: {},          // столбец с номером записи (glpi_id, gsit_id) → начало ссылки
                 vacuumMissing: [],  // логины VACUUM из таблицы, которых нет в Jabber
                 vacuumStale: {},    // давно не подключавшиеся: логин → сколько дней (null – никогда)
+                vacuumGroups: {},   // группы Jabber логинов VACUUM: логин → [группы] (этап 41)
                 jabber: {},         // кого Jabber видит с адреса ПК: id ПК → логины
                 net: {},            // что о ПК видно в сети (DHCP, проход подсетей): id ПК → { ip, mac, hostname }
                 verified: {},       // ПК, проверенные и GLPI / GSIT, и сетью: id ПК → чем
@@ -342,6 +345,9 @@ const app = Vue.createApp({
             // Страница из адреса (#scan/net, #table?pc=12): ссылки открываются в новой вкладке
             window.addEventListener("hashchange", () => this.applyHash());
             this.applyHash();
+            if (this.view === "table") {
+                this.loadVacuumOnline();
+            }
         }
     }
 });

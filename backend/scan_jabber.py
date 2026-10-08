@@ -106,6 +106,12 @@ def online_users(html):
     return sorted({urllib.parse.unquote(name) for name in USER_LINK.findall(html)})
 
 
+def online_now(params):
+    """Кто в сети сейчас – одна страница online-users/ (быстрая проверка для кружков у
+    VACUUM в Таблице, этап 41): логины строчными."""
+    return {login.lower() for login in online_users(admin_page(params, "online-users/"))}
+
+
 def attrs_of(tag):
     return {m.group(1).lower(): html_lib.unescape(m.group(2) if m.group(2) is not None else m.group(3)) for m in ATTR.finditer(tag)}
 

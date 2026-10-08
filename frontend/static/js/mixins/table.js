@@ -1,13 +1,15 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
-import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown } from "../util.js";
+import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, wrapLine } from "../util.js";
 import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, orderColumns, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
-import { CHIP_PAD, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
+import { CHIP_PAD, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE – антивирусов нет
 const AV_RANK = { on: 0, old: 1, off: 2 };
 const AV_NONE = 9;
+// Строка подсказки с группами VACUUM – не длиннее (≈ столбец «Группы» на странице Vacuum, 320px)
+const VACUUM_TITLE_WIDTH = 48;
 
 export default {
     computed: {
@@ -484,13 +486,16 @@ export default {
             };
             // Блочок повтора и антивируса шире текста, выделенные логины VACUUM – жирные
             const avBold = !!this.avSettings && this.avSettings.statuses.some(function (st) { return st.bold; });
+            // Кружок «в сети» слева от логина VACUUM (этап 41) – ещё ONLINE_DOT
+            const dots = this.vacuumDots;
             const lineInfo = (row, col, line) => {
                 if (col.field === "antivirus") {
                     return { pad: CHIP_PAD, bold: avBold };
                 }
                 const ms = this.markStyle(this.lineMarkKinds(this.lineMarks(row, col, line)));
                 const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
-                return ms || chip ? { pad: (ms && ms.backgroundColor) || chip ? CHIP_PAD : 0, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» – запас не мешает
+                const dot = dots && col.field === "vacuum" && !row.archived && line.trim() ? ONLINE_DOT : 0;
+                return ms || chip || dot ? { pad: ((ms && ms.backgroundColor) || chip ? CHIP_PAD : 0) + dot, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» – запас не мешает
             };
             this.autoWidths = computeAutoWidths(this.rows, this.widthColumns, this.tableFieldDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
@@ -576,7 +581,8 @@ export default {
         // Значения ячейки по строкам, если какое-то надо выделить (иначе null –
         // ячейка рисуется одним текстом): выделения Таблицы (повтор, имя на ПК
         // другое, логин VACUUM, срок – вид из Справочников, фон – блочком у самого
-        // значения), фон из Справочников блочком, номер записи GLPI / GSIT – ссылкой
+        // значения), фон из Справочников блочком, номер записи GLPI / GSIT – ссылкой.
+        // VACUUM – всегда по строкам (этап 41): у логина своя подсказка и кружок «в сети»
         cellParts(row, col) {
             void this.dupVersion; // дубли считаются вне Vue – зависимость вручную
             const value = row[col.field];
@@ -591,7 +597,8 @@ export default {
                 return null;
             }
             // Имя ПК – всегда ссылкой на его карточку: средняя кнопка открывает её в новой вкладке
-            let special = host;
+            const vacuum = col.field === "vacuum";
+            let special = host || vacuum;
             const lines = col.multiline ? String(value).split("\n") : [String(value)];
             const parts = lines.map((line) => {
                 const m = this.lineMarks(row, col, line) || {};
@@ -606,6 +613,7 @@ export default {
                 }
                 const checked = m.verified || m.checked;
                 const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", checked ? "Проверен: " + checked.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                const online = vacuum && !row.archived && line.trim() ? this.vacuumIsOnline(line) : null;
                 const style = Object.assign({}, chip ? {
                     backgroundColor: look.bg_color,
                     color: look.color,
@@ -621,8 +629,9 @@ export default {
                     }
                 }
                 return {
-                    text: line, href: href, card: host ? pageLink("table", { pc: row.id }) : null, title: titles.join(" · ") || null,
-                    cls: { "fill-chip": !!style.backgroundColor },
+                    text: line, href: href, card: host ? pageLink("table", { pc: row.id }) : null,
+                    title: (vacuum ? this.vacuumTitle(line, m.gone ? null : online, titles) : titles.join(" · ")) || null,
+                    cls: { "fill-chip": !!style.backgroundColor, "vac-dot": online !== null, "vac-on": !!online },
                     style: style
                 };
             });
@@ -684,14 +693,27 @@ export default {
             return m.stale === null ? "Не подключался никогда" : "Не подключался " + m.stale + " дн.";
         },
 
-        // Логин в карточке ПК: класс и подсказка
+        // Подсказка логина VACUUM (этап 41): группы Jabber в [ ] первой строкой (переносом – не
+        // шире столбца «Группы» на странице Vacuum), дальше – в сети ли (online: null – не писать)
+        // и прочие подсказки
+        vacuumTitle(login, online, titles) {
+            const groups = this.diffs.vacuumGroups[String(login).trim().toLowerCase()];
+            return [
+                groups && groups.length ? wrapLine("[" + groups.join(", ") + "]", VACUUM_TITLE_WIDTH) : "",
+                online === null ? "" : (online ? "В сети" : "Не в сети")
+            ].concat(titles).filter(Boolean).join("\n");
+        },
+
+        // Логин в карточке ПК: класс, подсказка и кружок «в сети» (online: null – без кружка)
         vacuumLoginMark(login) {
             const key = String(login).trim().toLowerCase();
             const m = { gone: this.vacuumMissingSet.has(key), stale: undefined };
             if (!m.gone && key in this.vacuumStale) {
                 m.stale = this.vacuumStale[key];
             }
-            return { style: this.markStyle(this.lineMarkKinds(m)), title: this.vacuumMarkTitle(m) || "Скопировать" };
+            const online = this.vacuumIsOnline(key);
+            const title = this.vacuumTitle(key, m.gone ? null : online, [this.vacuumMarkTitle(m)]);
+            return { style: this.markStyle(this.lineMarkKinds(m)), title: title ? title + "\nСкопировать" : "Скопировать", online: online };
         },
 
         // Строка, где сейчас виден блочок сканера (в показанных столбцах)
@@ -1391,6 +1413,8 @@ export default {
             }
             // Любое нажатие запоминает ПК для Enter (VNC), Alt+P (ping), Alt+R (RDP)
             this.setActiveRow(row);
+            // …и проверяет, в сети ли его логины VACUUM (этап 41)
+            this.checkRowOnline(row);
             if (event.altKey || event.shiftKey) {
                 return;
             }

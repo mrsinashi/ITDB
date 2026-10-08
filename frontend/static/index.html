@@ -1196,6 +1196,12 @@
                                     <td><label class="sf-check" title="Снять, если сертификат самоподписанный"><input type="checkbox" v-model="scanForms[s.kind].verify_tls"> проверять (для https)</label></td>
                                 </tr>
                                 </template>
+                                <!-- Jabber: кружки «в сети» у VACUUM в Таблице – быстрая проверка (этап 41) -->
+                                <tr v-if="s.form === 'jabber'">
+                                    <td class="sf-label">В сети</td>
+                                    <td><label class="sf-check" title="Кружки у VACUUM в Таблице: кто в сети сейчас"><input type="checkbox" v-model="scanForms[s.kind].online_watch"> проверять раз в
+                                        <input class="input sf-days" type="number" min="1" max="60" v-model.number="scanForms[s.kind].online_minutes" :disabled="!scanForms[s.kind].online_watch"> мин.</label></td>
+                                </tr>
                                 <tr v-if="s.fresh_days !== null">
                                     <td class="sf-label">Актуальны</td>
                                     <td><label class="sf-check" :title="scanFreshTitle(s)">не старше <input class="input sf-days" type="number" min="1" :max="s.form === 'glpi' ? 60 : 365" v-model.number="scanForms[s.kind].fresh_days"> дн.</label></td>
@@ -1843,7 +1849,7 @@
                     <div class="card-section">VACUUM</div>
                     <div class="card-sec-body">
                         <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">–</div>
-                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span class="copy-val" :style="vacuumLoginMark(login).style" :title="vacuumLoginMark(login).title" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
+                        <span v-for="login in cardVacuum" :key="login" class="copy-line"><span v-if="vacuumLoginMark(login).online !== null" class="vac-dot" :class="{ on: vacuumLoginMark(login).online }"></span><span class="copy-val" :style="vacuumLoginMark(login).style" :title="vacuumLoginMark(login).title" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                     </div>
                     <div class="card-section toggle-sec" :class="{ open: cardHistoryOpen }" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
                         <span>История</span><span v-if="!cardLoading" class="sec-count" title="Изменений">{{ cardHistoryShown.length }}</span>

@@ -4948,6 +4948,37 @@ button.scan-chip {
 .data-table td .cell-line.fill-chip + .cell-line.fill-chip {
     margin-top: 1px;
 }
+/* Кружок «в сети» слева от логина VACUUM (этап 41): зелёный – в сети, серый – нет; как
+   на странице Vacuum. Стоит на отступе строки – вне блочка выделения */
+.data-table td .cell-line.vac-dot {
+    position: relative;
+    margin-left: 11px;
+    max-width: calc(100% - 11px);
+}
+.data-table td .cell-line.vac-dot::before {
+    content: "";
+    position: absolute;
+    left: -11px;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--tint-line, #c4c4c4);
+}
+.data-table td .cell-line.vac-dot.vac-on::before,
+.card-sec-body .vac-dot.on {
+    background: var(--success);
+}
+.card-sec-body .vac-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 4px;
+    border-radius: 50%;
+    background: var(--tint-line, #c4c4c4);
+    vertical-align: 1px;
+}
 .data-table td a.id-link:hover {
     text-decoration: underline;
 }
@@ -5029,7 +5060,9 @@ html.no-radius *::before,
 html.no-radius *::after {
     border-radius: 0 !important;
 }
-html.no-radius .vacuum-table .vc-dot {
+html.no-radius .vacuum-table .vc-dot,
+html.no-radius .data-table td .cell-line.vac-dot::before,
+html.no-radius .card-sec-body .vac-dot {
     border-radius: 50% !important;
 }
 

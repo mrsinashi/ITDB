@@ -340,6 +340,7 @@ export default {
                 this.diffs.links = data.links || {};
                 this.diffs.vacuumMissing = data.vacuum_missing || [];
                 this.diffs.vacuumStale = data.vacuum_stale || {};
+                this.diffs.vacuumGroups = data.vacuum_groups || {};
                 this.diffs.jabber = data.jabber || {};
                 this.diffs.net = data.net || {};
                 this.diffs.verified = data.verified || {};

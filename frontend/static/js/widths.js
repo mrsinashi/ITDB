@@ -64,6 +64,8 @@ export const FILTER_ICON_SPACE = 14;
 
 // Блочок значения сканера под значением ячейки (этап 26г): шрифт ячейки, поля 5px
 export const CHIP_PAD = 10;
+// Кружок «в сети» слева от логина VACUUM (этап 41): 7px и отступ 4px (.cell-line.vac-dot)
+export const ONLINE_DOT = 11;
 
 function chipWidth(probe, text) {
     probe.style.fontWeight = "400";

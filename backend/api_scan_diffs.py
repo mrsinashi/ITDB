@@ -135,6 +135,7 @@ class DiffsOut(BaseModel):
     vacuum_missing: list[str] = []  # логины из таблицы, которых в Jabber нет (строчными)
     # логины из таблицы, давно не подключавшиеся: логин → сколько дней (None – никогда)
     vacuum_stale: dict[str, Optional[int]] = {}
+    vacuum_groups: dict[str, list[str]] = {}   # группы Jabber логинов из таблицы (этап 41)
     jabber: dict[int, list[str]] = {}   # кого Jabber видит с адреса ПК: id ПК → логины
     # что о ПК видно в сети (DHCP, проход подсетей): id ПК → {ip, mac, hostname: [значения]}
     net: dict[int, dict[str, list[str]]] = {}
@@ -240,18 +241,20 @@ def jabber_state(session):
     by_ip – {IP: {логины}}: в сети – адреса ресурсов, не в сети – последний адрес,
             если был в сети не раньше срока «Актуальны» (адреса по DHCP меняются);
     seen – {логин: когда был в сети}; names – {логин: как пишется};
+    groups – {логин: группы общего ростера};
     stale – не подключались дольше срока; gone – таких пользователей нет.
     stale и gone – только если получали список пользователей (listed)."""
     since = datetime.now(timezone.utc) - jabber_fresh(session)
     users = session.query(ScanJabberUser).all()
     listed = any(user.registered is not None for user in users)
     by_ip = defaultdict(set)
-    seen, names = {}, {}
+    seen, names, groups = {}, {}, {}
     stale, gone = set(), set()
 
     for user in users:
         login = user.login.strip().lower()
         names[login] = user.login.strip()
+        groups[login] = list(user.groups or [])
         last = max((d for d in (user.last_login_at, user.last_seen_at) if d), default=None)
         seen[login] = last
 
@@ -271,7 +274,7 @@ def jabber_state(session):
             if ipv4_set(ip):
                 by_ip[ip].add(login)
 
-    return {"by_ip": by_ip, "seen": seen, "names": names, "stale": stale, "gone": gone, "listed": listed}
+    return {"by_ip": by_ip, "seen": seen, "names": names, "groups": groups, "stale": stale, "gone": gone, "listed": listed}
 
 
 def computer_vacuum(session, computers):
@@ -310,6 +313,12 @@ def vacuum_stale(state, vacuum):
         result[login] = (now - last).days if last else None
 
     return result
+
+
+def vacuum_groups(state, vacuum):
+    """Группы логинов из ячеек VACUUM – для подсказки в Таблице (этап 41): {логин: группы}."""
+    table = {login for logins in vacuum.values() for login in logins}
+    return {login: state["groups"][login] for login in sorted(table) if state["groups"].get(login)}
 
 
 # Буквы, одинаковые на вид в латинице и кириллице: логин «cумкина» с латинской «c»
@@ -454,7 +463,7 @@ def compute(session, with_rejected=False):
     """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
     которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
     подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью, ПК,
-    проверенные одним из них) по всем включённым источникам. Одно поле ПК – одна строка;
+    проверенные одним из них, группы Jabber логинов VACUUM) по всем включённым источникам. Одно поле ПК – одна строка;
     если источники предлагают разное – «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
@@ -636,12 +645,14 @@ def compute(session, with_rejected=False):
     missing = []
     seen_at = {}
     stale = {}
+    groups = {}
 
     if jabber_enabled(session):
         state = jabber_state(session)
         vacuum = computer_vacuum(session, computers)
         missing = vacuum_missing(state, vacuum)
         stale = vacuum_stale(state, vacuum)
+        groups = vacuum_groups(state, vacuum)
 
         jabber, seen_at = jabber_rows(computers, record_ips, state, vacuum)
 
@@ -679,7 +690,7 @@ def compute(session, with_rejected=False):
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
 
     result.sort(key=lambda d: ((d.hostname or "").lower(), d.computer_id, order.get(d.field, 99)))
-    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen, verified, checked
+    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen, verified, checked, groups
 
 
 def record_links(session):
@@ -701,7 +712,7 @@ def list_diffs(
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
-    items, rejected_count, kinds, antivirus, missing, seen_at, stale, net_seen, verified, checked = compute(
+    items, rejected_count, kinds, antivirus, missing, seen_at, stale, net_seen, verified, checked, groups = compute(
         session, with_rejected=rejected,
     )
     return DiffsOut(
@@ -713,6 +724,7 @@ def list_diffs(
         links=record_links(session),
         vacuum_missing=missing,
         vacuum_stale=stale,
+        vacuum_groups=groups,
         jabber=seen_at,
         net=net_seen,
         verified=verified,

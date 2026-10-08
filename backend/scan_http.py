@@ -5,6 +5,7 @@
 с кодом ошибки (401, 404…) – не исключение, его разбирает вызывающий.
 """
 import base64
+import http.client
 import socket
 import ssl
 import urllib.error
@@ -109,6 +110,8 @@ def request(url, headers=None, verify=True, method="GET", data=None):
     except (socket.timeout, TimeoutError) as err:
         raise SourceError(_reason_text(url, err))
     except ssl.SSLError as err:
+        raise SourceError(_reason_text(url, err))
+    except (ConnectionError, http.client.HTTPException) as err:   # оборвал соединение без ответа (этап 41)
         raise SourceError(_reason_text(url, err))
     except ValueError as err:
         raise SourceError(f"Неверный адрес: {err}")

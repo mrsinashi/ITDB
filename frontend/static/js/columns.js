@@ -197,6 +197,8 @@ export const SIMPLE_FIELD_LABELS = {
     host_key: "Отпечаток сервера",
     names: "Имена (NetBIOS, DNS)",
     ports: "Проверять порты",
+    online_watch: "Проверять «в сети»",
+    online_minutes: "Проверка «в сети», мин",
     run_mode: "Запуск",
     run_time: "Время",
     run_days: "Дни",

@@ -107,6 +107,8 @@ export default {
                 configs: s.configs && s.configs.length ? s.configs.slice() : [""],
                 names: s.names,
                 ports: s.ports,
+                online_watch: s.online_watch,       // Jabber: кружки «в сети» в Таблице (этап 41)
+                online_minutes: s.online_minutes,
                 forget_host: false,   // DHCP: забыть запомненный ключ сервера при сохранении
                 keyBusy: false,
                 show: false,
@@ -161,6 +163,14 @@ export default {
                         body[name] = f[name];
                     }
                 });
+            }
+            if (s.form === "jabber") {
+                if (f.online_watch !== s.online_watch) {
+                    body.online_watch = f.online_watch;
+                }
+                if (Number(f.online_minutes) !== s.online_minutes) {
+                    body.online_minutes = Number(f.online_minutes);
+                }
             }
             if (s.fresh_days !== null && Number(f.fresh_days) !== s.fresh_days) {
                 body.fresh_days = Number(f.fresh_days);

@@ -10,22 +10,37 @@ GET /api/scan/jabber – пользователи из последних сбо
 последнее известное не пропадает, на странице оно серым). Ничего не пишет.
 Сбор – POST /api/scan/sources/jabber/collect (api_scan_records.py). Смотреть –
 редактор и администратор.
+
+GET /api/scan/jabber/online (этап 41) – кто в сети сейчас, для кружков у VACUUM в
+Таблице: одна страница online-users/ ejabberd, не чаще раза в N минут (настройка
+подключения), по клику по строке ПК (click=1) – не чаще раза в CLICK_SECONDS. Итог –
+в памяти процесса (служба – один процесс), в базу не пишется. Смотреть – все.
 """
 import ipaddress
+import math
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import scan_collect
+import scan_jabber
 from api_computers import load_locations, location_path
-from api_scan import SOURCES, RunOut, fresh_days_of, last_run_of, load_source
-from auth import require_editor
+from api_scan import SOURCES, RunOut, connection_params, fresh_days_of, last_run_of, load_source, online_settings
+from auth import get_current_user, require_editor
 from db import get_db
 from models import Computer, ScanJabberUser, ScanRecord
+from scan_http import SourceError
 
 router = APIRouter(prefix="/api/scan/jabber", tags=["scan"])
+
+CLICK_SECONDS = 5
+# Последняя быстрая проверка: when – time.monotonic(), key – настройки подключения на тот момент
+_online = {"when": None, "at": None, "logins": None, "error": None, "key": None}
+_online_lock = threading.Lock()
 
 
 class HostOut(BaseModel):
@@ -164,3 +179,55 @@ def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
         users=users,
         last_run=last_run_of(session, "jabber"),
     )
+
+
+class OnlineOut(BaseModel):
+    enabled: bool                     # Jabber включён и быстрая проверка включена
+    minutes: int                      # раз в сколько минут проверять
+    checked_at: Optional[datetime] = None
+    next_in: int = 0                  # через сколько секунд проверить снова
+    online: Optional[list[str]] = None    # логины в сети (строчными); None – не удалось
+    error: Optional[str] = None
+
+
+@router.get("/online", response_model=OnlineOut)
+def jabber_online(click: bool = Query(False), me=Depends(get_current_user), session=Depends(get_db)):
+    source = load_source(session, "jabber")
+    watch, minutes = online_settings(source)
+
+    if not (source and source.enabled and source.url and watch):
+        return OnlineOut(enabled=False, minutes=minutes)
+
+    key = (source.url, source.domain, source.login, source.updated_at)
+
+    try:
+        params = connection_params("jabber", source)
+    except SourceError as err:
+        params, failed = None, str(err)
+    except HTTPException as err:      # пароль не расшифровать – сменился ключ
+        params, failed = None, err.detail
+
+    # Транзакцию не держать, пока ждём ejabberd
+    session.rollback()
+    limit = CLICK_SECONDS if click else minutes * 60
+
+    with _online_lock:
+        state = _online
+
+        if state["key"] != key or state["when"] is None or time.monotonic() - state["when"] >= limit:
+            try:
+                if params is None:
+                    raise SourceError(failed)
+                state["logins"] = sorted(scan_jabber.online_now(params))
+                state["error"] = None
+            except SourceError as err:
+                state["logins"] = None
+                state["error"] = str(err)
+
+            state.update(when=time.monotonic(), at=datetime.now(timezone.utc), key=key)
+
+        age = time.monotonic() - state["when"]
+        return OnlineOut(
+            enabled=True, minutes=minutes, checked_at=state["at"], next_in=max(0, math.ceil(minutes * 60 - age)),
+            online=state["logins"], error=state["error"],
+        )
