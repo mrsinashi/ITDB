@@ -653,6 +653,27 @@ def test_net_collect(admin, editor, room, monkeypatch):
     assert (second, "mac") not in diffs and (first, "mac") in diffs
 
 
+def test_net_arp_read_during_pass(monkeypatch):
+    """ARP читается и по ходу прохода: запись, которую ядро вычистило к концу, не теряется."""
+    table = {}
+
+    def probe(ip, options, dns):
+        table[ip] = "D8:CB:8A:00:08:0" + ip[-1]
+        time.sleep(0.1)
+        return None
+
+    def progress(done, total):
+        if done == total:
+            table.clear()
+
+    monkeypatch.setattr(scan_net, "probe", probe)
+    monkeypatch.setattr(scan_net, "arp_table", lambda: dict(table))
+    monkeypatch.setattr(scan_net, "ARP_EVERY", 0.02)
+    result = scan_net.collect({"subnets": ["10.0.8.0/30"]}, progress=progress)
+    assert {i["ip"]: i["mac"] for i in result["items"]} == {"10.0.8.1": "D8:CB:8A:00:08:01", "10.0.8.2": "D8:CB:8A:00:08:02"}
+    assert all(i["data"]["how"] == ["arp"] and i["data"]["mac_from"] == "arp" for i in result["items"])
+
+
 # ---------- Расписание ----------
 
 

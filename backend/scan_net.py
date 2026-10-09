@@ -1,9 +1,9 @@
 """Сеть (этап 28): что отвечает по адресам подсетей из списка «Подсети».
 
 По каждому адресу (подсети с «Сканировать: да»):
-- отвечает ли: ping (ICMP), иначе запрос имени NetBIOS, иначе порт 445; в своей
-  подсети сервера – ещё и запись ARP (её не скрыть брандмауэром);
-- MAC: из ARP (только подсеть самого сервера ITDB) или из ответа NetBIOS;
+- отвечает ли: ping (ICMP), иначе запрос имени NetBIOS, иначе порт 445; в подсетях,
+  где у сервера свой адрес, – ещё и запись ARP (её не скрыть брандмауэром);
+- MAC: из ARP (только подсети, где у сервера свой адрес) или из ответа NetBIOS;
 - имя ПК, как он сам себя называет, – NetBIOS (UDP 137); имя в DNS – справочно;
 - по желанию – открытые порты (22, 80, 135, 139, 443, 445, 3389, 5900, 8080; у 5900 –
   версия VNC).
@@ -19,6 +19,7 @@ import random
 import select
 import socket
 import struct
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -36,6 +37,9 @@ ALIVE_PORT = 445
 # SSH, HTTP, RPC, NetBIOS, HTTPS, SMB, RDP, VNC, HTTP (8080)
 PORTS = (22, 80, 135, 139, 443, 445, 3389, 5900, 8080)
 ARP_FILE = "/proc/net/arp"
+# Таблицу ARP читать и по ходу прохода: при тысячах адресов ядро вычищает записи
+# старше 5 секунд, к концу прохода MAC первых адресов там уже нет
+ARP_EVERY = 2.0
 # DNS, который не отвечает, не должен тормозить весь проход
 DNS_SLOW = 3.0
 DNS_SLOW_LIMIT = 3
@@ -231,7 +235,7 @@ def rfb_version(ip, timeout=1.0):
 
 
 def arp_table(path=ARP_FILE):
-    """{IP: MAC} из таблицы ARP сервера (только его собственная подсеть)."""
+    """{IP: MAC} из таблицы ARP сервера (только подсети, где у него свой адрес)."""
     result = {}
 
     try:
@@ -334,23 +338,39 @@ def collect(params, fresh_days=None, progress=None):
     dns = Dns()
     found = {}
     done = 0
+    wanted = set(addresses)
+    arp = {}
+    stop = threading.Event()
+
+    def read_arp():
+        arp.update((ip, mac) for ip, mac in arp_table().items() if ip in wanted)
+
+    def watch_arp():
+        while not stop.wait(ARP_EVERY):
+            read_arp()
 
     if progress:
         progress(0, total)
 
-    with ThreadPoolExecutor(max_workers=min(WORKERS, max(total, 1)), thread_name_prefix="scan-net") as pool:
-        for item in pool.map(lambda ip: (ip, probe(ip, options, dns)), addresses):
-            done += 1
+    watcher = threading.Thread(target=watch_arp, daemon=True, name="scan-net-arp")
+    watcher.start()
 
-            if item[1]:
-                found[item[0]] = item[1]
+    try:
+        with ThreadPoolExecutor(max_workers=min(WORKERS, max(total, 1)), thread_name_prefix="scan-net") as pool:
+            for item in pool.map(lambda ip: (ip, probe(ip, options, dns)), addresses):
+                done += 1
 
-            if progress and (done % 20 == 0 or done == total):
-                progress(done, total)
+                if item[1]:
+                    found[item[0]] = item[1]
+
+                if progress and (done % 20 == 0 or done == total):
+                    progress(done, total)
+    finally:
+        stop.set()
+        watcher.join()
 
     # MAC из ARP: и у тех, кто промолчал (брандмауэр ARP не скрывает)
-    wanted = set(addresses)
-    arp = {ip: mac for ip, mac in arp_table().items() if ip in wanted}
+    read_arp()
 
     for ip, mac in arp.items():
         item = found.setdefault(ip, {"ip": ip, "mac": None, "name": None, "data": {"how": []}})
