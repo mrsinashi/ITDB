@@ -5,13 +5,14 @@
 // тем, что записан у ПК, а если не записан – тем, что выбран по умолчанию в
 // Справочниках (блок «Тип VNC»).
 // Alt+P (itdb://ping/IP) и Alt+R (itdb://rdp/IP) работают с последним ПК, по строке
-// которого нажали мышью (выделять строку не нужно); открыта карточка – с её ПК.
+// которого нажали мышью (выделять GLPI / GSIT не нужно); открыта карточка – с её ПК.
 // Enter (этап 40) – только к строке с полоской: по строке нажали и больше ни по чему
 // (карточка, кнопки, поля, меню); иначе подключения нет, а полоска снимается.
+// Так же – на «GLPI/GSIT», «Сети» и «Vacuum» (этап 43, mixins/page-mark.js).
 // Строка отмечена полоской слева (элемент .row-mark ставится прямо в DOM: данные Vue
 // не меняются – таблица на каждый клик не перерисовывается). Полоска – в «подписи»
 // таблицы, липкой у левого края: при прокрутке её ведёт сам браузер, как закреплённые
-// столбцы (этап 40); строку скрыли поиском или фильтром – она забыта (этап 36).
+// столбцы (этап 40); GLPI / GSIT скрыли поиском или фильтром – она забыта (этап 36).
 
 import { apiFetch, isTypingTarget } from "../util.js";
 
@@ -76,7 +77,7 @@ export default {
     },
 
     watch: {
-        // Строку скрыли поиском или фильтром – она больше не «последняя нажатая» (этап 36)
+        // GLPI / GSIT скрыли поиском или фильтром – она больше не «последняя нажатая» (этап 36)
         displayRows(rows) {
             const id = this.activeRowId;
             if (id !== null && id !== undefined && !rows.some(function (r) { return r.id === id; })) {
@@ -178,13 +179,13 @@ export default {
             }
         },
 
-        // Запомнить строку, по которой нажали (Enter, Alt+P, Alt+R – к этому ПК)
+        // Запомнить GLPI / GSIT, по которой нажали (Enter, Alt+P, Alt+R – к этому ПК)
         setActiveRow(row) {
             this.activeRowId = row ? row.id : null;
             this.markActiveRow();
         },
 
-        // Полоска у запомненной строки; Vue мог перерисовать строку
+        // Полоска у запомненной строки; Vue мог перерисовать GLPI / GSIT
         markActiveRow() {
             const table = this.$refs.table;
             const id = this.activeRowId;
@@ -279,14 +280,19 @@ export default {
             if (!row) {
                 return false;
             }
+            this.connectRow(row, what);
+            return true;
+        },
+
+        // Ping / RDP к ПК (или { ip, hostname } строки другой страницы, этап 43)
+        connectRow(row, what) {
             const ip = firstIp(row.ip);
             if (!ip) {
                 this.toastError("У ПК нет IP.");
-                return true;
+                return;
             }
             launch("itdb://" + what + "/" + ip);
             this.toast((what === "rdp" ? "RDP" : "Ping") + ": " + (row.hostname || ip) + " (" + ip + ")");
-            return true;
         }
     }
 };

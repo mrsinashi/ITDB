@@ -58,6 +58,14 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
+    // Окно «Виды таблицы» (этап 43): Esc – закрыть
+    if (vm.viewsDlg && !vm.dialog) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            vm.closeViewsDlg();
+        }
+        return;
+    }
     // Открыт диалог подтверждения: Esc – отмена, Enter – OK
     if (vm.dialog) {
         if (event.key === "Escape") {
@@ -121,7 +129,12 @@ window.addEventListener("keydown", function (event) {
             return;
         }
         if (vm.view === "scan" && vm.scanLinkBar) {
-            vm.scanLinkBar = null;
+            // Сначала – строка нового ПК под ней (этап 43)
+            if (vm.scanLinkBar.pc) {
+                vm.closeScanNewPc();
+            } else {
+                vm.scanLinkBar = null;
+            }
             return;
         }
     }
@@ -129,6 +142,10 @@ window.addEventListener("keydown", function (event) {
     if (vm.view === "choices" && vm.choicesTab === "names" && vm.nameSelId !== null && event.key === "Escape" &&
         !event.defaultPrevented && !vm.openMenu && !isTypingTarget(document.activeElement)) {
         vm.nameSelId = null;
+        return;
+    }
+    // Полоска строки на «GLPI / GSIT», «Сети», «Vacuum» (этап 43): Enter – VNC, Alt+P – ping, Alt+R – RDP
+    if (vm.pageMarkPage() && vm.onPageMarkKey(event)) {
         return;
     }
     // История: Ctrl+A – выделить все видимые записи, Esc – снять выделение

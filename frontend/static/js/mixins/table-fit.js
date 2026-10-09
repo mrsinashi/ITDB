@@ -1,7 +1,5 @@
-// Таблица: масштаб по ширине окна (кнопка между видом и печатью).
-
-import { saveJson } from "../util.js";
-import { TABLE_FIT_KEY } from "../columns.js";
+// Таблица: масштаб по ширине окна (кнопка между видом и печатью). Запоминается у видов
+// 2…9 (этап 43, mixins/table-views.js); у вида 1 – только пока не сменили вид.
 
 // Мельче – не прочесть, крупнее – незачем
 const FIT_MIN = 0.5;
@@ -32,7 +30,9 @@ export default {
             this.cancelEdit();
             this.scanPop = null;
             this.tableFit = !this.tableFit;
-            saveJson(TABLE_FIT_KEY, this.tableFit);
+            if (this.tableView > 1) {
+                this.patchView({ fit: this.tableFit });
+            }
             // Полоса прокрутки справа появляется с классом – мерить после него
             this.$nextTick(() => {
                 this.updateTableFit();

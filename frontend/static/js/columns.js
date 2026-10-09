@@ -259,17 +259,19 @@ export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
 export const DEFAULT_HIDDEN_SEEN_KEY = "itdb.defaultHiddenSeen.v1";
 export const SEARCH_HIDDEN_KEY = "itdb.searchHidden.v1";
 
-// Второй вид таблицы (этап 28б, кнопка справа от поиска): свой набор столбцов.
+// Виды таблицы (этап 43, mixins/table-views.js; до него – второй вид, этап 28б): номер
+// вида на экране и виды. Второй вид до этапа 43 – свои ключи (переносятся в виды).
 // «Каб» и «Кабинет» в Таблице – одним столбцом «Кабинет» («[214] Процедурная», как в
-// карточке): сначала только во втором виде, с 28в – в обоих. Оформляется он как
+// карточке): сначала только во втором виде, с 28в – во всех. Оформляется он как
 // «Кабинет» (название) из Справочников: STYLE_OF
 export const TABLE_VIEW_KEY = "itdb.tableView.v1";
+export const TABLE_VIEWS_KEY = "itdb.tableViews.v1";
 export const HIDDEN_COLUMNS2_KEY = "itdb.hiddenColumns2.v1";
-// Закреплённые столбцы (Ctrl+клик по шапке; нет записи – как в описании столбцов) и
-// масштаб таблицы по ширине окна (кнопка на панели)
+// Закреплённые столбцы вида 1 (Ctrl+клик по шапке; нет записи – как в описании столбцов) и
+// масштаб таблицы по ширине окна до этапа 43 (общий – достаётся второму виду)
 export const PINNED_COLUMNS_KEY = "itdb.pinnedColumns.v1";
 export const TABLE_FIT_KEY = "itdb.tableFit.v1";
-// Порядок столбцов (перетаскивание шапки) – у каждого вида свой; нет записи – как с сервера
+// Порядок столбцов (перетаскивание шапки) вида 1 и второго до этапа 43; нет записи – как с сервера
 export const COLUMN_ORDER_KEY = "itdb.columnOrder.v1";
 export const COLUMN_ORDER2_KEY = "itdb.columnOrder2.v1";
 export const ROOM_PARTS = ["room_code", "room_name"];
@@ -277,7 +279,7 @@ export const ROOM_COLUMN = {
     field: "room", headerName: "Кабинет", cardLabel: "Кабинет",
     location: true, editable: false, values: false, bulk: false
 };
-// Столбцы второго вида, пока пользователь не выбрал свои
+// Столбцы второго вида, пока пользователь до этапа 43 не выбрал свои
 export const VIEW2_COLUMNS = ["building", "department", "room", "hostname", "ip", "vacuum", "os", "type", "model", "cpu", "ram", "drive", "gpu"];
 
 // Чьё оформление из Справочников у общего столбца: столбец и значения названия

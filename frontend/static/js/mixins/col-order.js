@@ -1,8 +1,8 @@
-// Таблица: порядок столбцов – перетаскивание шапки мышью. У каждого вида свой,
-// запоминается в браузере; вернуть исходный – меню «Столбцы».
+// Таблица: порядок столбцов – перетаскивание шапки мышью. У каждого вида свой
+// (mixins/table-views.js), запоминается в браузере; вернуть исходный – меню «Столбцы».
 
 import { saveJson } from "../util.js";
-import { COLUMN_ORDER_KEY, COLUMN_ORDER2_KEY } from "../columns.js";
+import { COLUMN_ORDER_KEY } from "../columns.js";
 
 // Сдвиг мыши, после которого нажатие на шапке – перетаскивание, а не клик
 const DRAG_START = 5;
@@ -13,7 +13,7 @@ export default {
     computed: {
         // Порядок столбцов текущего вида; null – как с сервера
         columnOrderNow() {
-            const order = this.tableView === 2 ? this.columnOrder2 : this.columnOrder;
+            const order = this.tableView === 1 ? this.columnOrder : this.viewNow.order;
             return Array.isArray(order) ? order : null;
         },
 
@@ -242,12 +242,11 @@ export default {
         },
 
         setColumnOrder(order) {
-            if (this.tableView === 2) {
-                this.columnOrder2 = order;
-                saveJson(COLUMN_ORDER2_KEY, order);
-            } else {
+            if (this.tableView === 1) {
                 this.columnOrder = order;
                 saveJson(COLUMN_ORDER_KEY, order);
+            } else {
+                this.patchView({ order: order });
             }
             this.$nextTick(() => {
                 this.updateStickyShadow();

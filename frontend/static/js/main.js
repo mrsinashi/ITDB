@@ -26,8 +26,10 @@
 //                        vnc (подключение к ПК через внешнее приложение, itdb://vnc/…),
 //                        print (печать Таблицы: окно с настройками и листом),
 //                        table-fit (масштаб по ширине окна), col-order (порядок столбцов перетаскиванием),
+//                        table-views (виды таблицы: наборы столбцов, окно «Виды таблицы»),
 //                        naming (имена ПК по правилам: вкладка Справочников, проверка в Таблице),
-//                        vacuum-online (кружок «в сети» у логинов VACUUM: быстрая проверка Jabber)
+//                        vacuum-online (кружок «в сети» у логинов VACUUM: быстрая проверка Jabber),
+//                        page-mark (полоска нажатой строки на «GLPI / GSIT», «Сети», «Vacuum»: Enter – VNC)
 //   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        – tree-node, tree-form, style-controls, location-picker, count-select
 //
@@ -35,7 +37,7 @@
 
 import "./settings.js";
 import { loadJson } from "./util.js";
-import { COLUMN_ORDER_KEY, COLUMN_ORDER2_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN_KEY, TABLE_FIT_KEY, TABLE_VIEW_KEY, mergeRoomHidden } from "./columns.js";
+import { COLUMN_ORDER_KEY, HIDDEN_COLUMNS_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN_KEY, mergeRoomHidden } from "./columns.js";
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
 import "./alt-copy.js";
@@ -65,8 +67,10 @@ import vnc from "./mixins/vnc.js";
 import print from "./mixins/print.js";
 import tableFit from "./mixins/table-fit.js";
 import colOrder from "./mixins/col-order.js";
+import tableViews from "./mixins/table-views.js";
 import naming from "./mixins/naming.js";
 import vacuumOnline from "./mixins/vacuum-online.js";
+import pageMark from "./mixins/page-mark.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -75,7 +79,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, naming, vacuumOnline],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -111,11 +115,8 @@ const app = Vue.createApp({
             builtinColumns: [],
             cardGroups: [],
             historyLabels: {},
+            // Скрытые столбцы вида 1; виды таблицы – mixins/table-views.js (этап 43)
             hiddenColumns: mergeRoomHidden(loadJson(HIDDEN_COLUMNS_KEY, [])),
-            // Второй вид таблицы (кнопка справа от поиска): 1 – основной, 2 – второй;
-            // его скрытые столбцы (null – ещё не меняли: столбцы по умолчанию)
-            tableView: loadJson(TABLE_VIEW_KEY, 1) === 2 ? 2 : 1,
-            hiddenColumns2: loadJson(HIDDEN_COLUMNS2_KEY, null),
             searchHidden: loadJson(SEARCH_HIDDEN_KEY, false),
             locationFilter: null,
             // Фильтры по столбцам: поле → { exclude, keys, labels } (mixins/col-filters.js)
@@ -130,13 +131,11 @@ const app = Vue.createApp({
             // и прилипший к правому краю окна, у которого тень слева (этап 41)
             stuckEdge: null,
             stuckEdgeRight: null,
-            // Закреплённые столбцы: список полей; null – как в описании столбцов (HOSTNAME, IP)
+            // Закреплённые столбцы вида 1: список полей; null – как в описании столбцов (HOSTNAME, IP)
             pinnedColumns: loadJson(PINNED_COLUMNS_KEY, null),
-            // Порядок столбцов основного и второго вида: список полей; null – как с сервера
+            // Порядок столбцов вида 1: список полей; null – как с сервера
             columnOrder: loadJson(COLUMN_ORDER_KEY, null),
-            columnOrder2: loadJson(COLUMN_ORDER2_KEY, null),
-            // Масштаб таблицы по ширине окна: включён ли, сам масштаб и отступ слева
-            tableFit: loadJson(TABLE_FIT_KEY, false) === true,
+            // Масштаб таблицы по ширине окна (включён ли – tableFit у вида): сам масштаб и отступ слева
             tableZoom: 1,
             tableFitMargin: 0,
             tableFitScroll: false,
@@ -244,7 +243,7 @@ const app = Vue.createApp({
             // Страница «Vacuum» – пользователи Jabber (/api/scan/jabber)
             vacuum: { data: null, loading: false, error: "", filter: "all" },
             // Вкладка «Сеть»: адреса из DHCP и прохода подсетей (/api/scan/hosts)
-            net: { data: null, loading: false, error: "", filter: "all", source: null },
+            net: { data: null, loading: false, error: "", filter: "all", source: null, age: null },
             // Общие настройки (/api/settings): VNC по умолчанию
             appSettings: { vnc_default: "tight" },
             undone: [],          // что отменил Ctrl+Z – для возврата Ctrl+Y

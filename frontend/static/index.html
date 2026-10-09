@@ -178,10 +178,9 @@
                     <span v-if="quickFilter" class="clear" title="Очистить (Esc)" @click="quickFilter = ''">×</span>
                 </span>
                 <div class="tb-right tb-right-wide">
-                    <!-- Второй вид таблицы: свой набор столбцов; у кнопки меняется только значок -->
-                    <button class="btn icon-only tb-view" @click="toggleTableView" :title="tableView === 2 ? 'Основной вид' : 'Второй вид'">
-                        <svg v-if="tableView === 2" class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
-                        <svg v-else class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+                    <!-- Виды таблицы (этап 43): номер вида в квадратике; нажатие – следующий, с Ctrl – окно «Виды таблицы» -->
+                    <button class="btn icon-only tb-view" @click="onViewButton" :title="viewButtonTitle">
+                        <svg class="ico view-num" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="17.2" text-anchor="middle" fill="currentColor" stroke="none">{{ tableView }}</text></svg>
                     </button>
                     <!-- Масштаб таблицы по ширине окна -->
                     <button class="btn icon-only tb-fit" :class="{ active: tableFit }" @click="toggleTableFit" :title="tableFit ? 'Обычный масштаб' : 'По ширине окна'">
@@ -255,6 +254,8 @@
                         </button>
                         <div v-if="openMenu === 'add'" class="dropdown right attached">
                             <button @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
+                            <!-- Вид таблицы (этап 43): набор столбцов для кнопки вида – копия текущего, сразу в окне «Виды таблицы» -->
+                            <button @click="addTableView" :disabled="tableViews.length >= viewsMax" :title="tableViews.length >= viewsMax ? 'Видов – не больше ' + viewsMax : 'Набор столбцов'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>Вид</button>
                         </div>
                     </span>
                     <span v-if="canEdit" class="tb-divider"></span>
@@ -1031,7 +1032,7 @@
             <div class="toolbar">
                 <div class="tb-left">
                     <nav class="tb-tabs">
-                        <a href="#scan/check" :class="{ active: scanTab === 'check' }" @click="navClick($event, () => setScanTab('check'))" title="Что сканер предлагает изменить">Проверка</a>
+                        <a href="#scan/check" :class="{ active: scanTab === 'check' }" @click="navClick($event, () => setScanTab('check'))" title="Что сканер предлагает изменить">GLPI / GSIT</a>
                         <!-- «Сеть» (этап 28б): что собрали DHCP и проход подсетей -->
                         <a href="#scan/net" :class="{ active: scanTab === 'net' }" @click="navClick($event, () => setScanTab('net'))" title="DHCP и проход подсетей">Сеть</a>
                         <a v-if="isAdmin" href="#scan/names" :class="{ active: scanTab === 'names' }" @click="navClick($event, () => setScanTab('names'))" title="Как значения источников называются в таблице">Названия</a>
@@ -1070,7 +1071,7 @@
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namesHelp' }" @click="toggleMenu('namesHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
                         <div v-if="openMenu === 'namesHelp'" class="dropdown right attached names-help">
                             <p>Значения источников сравниваются с таблицей по смыслу и показываются так, как названы в таблице.</p>
-                            <p>Изменить – двойной клик по отметке в подробностях на «Проверке»:</p>
+                            <p>Изменить – двойной клик по отметке в подробностях на «GLPI / GSIT»:</p>
                             <p class="nh-marks"><b>=</b> одно и то же<br><b>≠</b> разное<br><b>⇐</b> в таблице своё<br><b>→</b> это материнская плата</p>
                         </div>
                     </span>
@@ -1089,9 +1090,21 @@
             <div v-if="scanLinkBar && scanTab === 'check'" class="add-bar scan-link-bar">
                 <span class="ab-title">Привязать {{ scanLinkBar.record.title }} №{{ scanLinkBar.source_id }}<template v-if="scanLinkBar.record.name"> «{{ scanLinkBar.record.name }}»</template> к:</span>
                 <location-picker ref="sl-picker" class="ab-loc ab-pc" input-class="input" :value="null" :options="scanComputerOptions" empty-text="Нет ПК"
-                    placeholder="ПК: имя, ИНВ, IP, MAC или расположение" @pick="onScanLinkPick"></location-picker>
+                    add-text="новый компьютер" placeholder="ПК: имя, ИНВ, IP, MAC или расположение" @pick="onScanLinkPick" @add="openScanNewPc"></location-picker>
                 <button class="btn icon-only" @click="scanLinkBar = null" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="scanLinkBar.error" class="ab-error">{{ scanLinkBar.error }}</span>
+            </div>
+            <!-- «＋ новый компьютер» в списке (этап 43): добавить ПК и сразу привязать к нему запись; имя и IP – из записи -->
+            <div v-if="scanLinkBar && scanLinkBar.pc && scanTab === 'check'" class="add-bar scan-link-bar" @keydown.enter="submitScanNewPc">
+                <span class="ab-title">Новый компьютер:</span>
+                <location-picker ref="sl-location" class="ab-loc" input-class="input" :value="scanLinkBar.pc.location_id" :options="locationOptions"
+                    placeholder="Расположение: начни вводить адрес, отделение или кабинет" @pick="onScanNewPcLocation"></location-picker>
+                <input ref="sl-seat" class="input ab-seat" v-model="scanLinkBar.pc.seat_no" placeholder="№ места" title="№ Места – только число">
+                <input ref="sl-hostname" class="input ab-host" v-model="scanLinkBar.pc.hostname" placeholder="HOSTNAME" spellcheck="false">
+                <input ref="sl-ip" class="input ab-ip" v-model="scanLinkBar.pc.ip" placeholder="IP" spellcheck="false" autocomplete="off" @input="onIpInput($event, scanLinkBar.pc, 'ip')">
+                <button class="btn btn-primary icon-only" :disabled="scanLinkBar.pc.saving" @click="submitScanNewPc" title="Добавить и привязать (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn icon-only" @click="closeScanNewPc" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <span v-if="scanLinkBar.pc.error" class="ab-error">{{ scanLinkBar.pc.error }}</span>
             </div>
 
             <div v-if="scanTab === 'settings'" class="page scan-page" :class="{ 'accent-head': accentHeaders.scan }">
@@ -1297,9 +1310,26 @@
 
             <!-- Проверка (этап 26г): записи GLPI и GSIT по ПК и что сканер предлагает изменить -->
             <div v-else-if="scanTab === 'check'" class="page scan-match-page check-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <!-- Сбор – своей строкой над фильтрами (этап 43): «Собрать ▾» – меню с галочками, что собрать;
+                     когда собирали – в подсказке; идёт сбор – полоса -->
+                <div v-if="isAdmin || checkProgress" class="sm-actions">
+                    <span v-if="isAdmin" class="dropdown-wrap" ref="collectWrap">
+                        <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'collect' }" @click="toggleMenu('collect')" :title="openMenu === 'collect' ? null : checkCollectTitle">{{ checkCollecting ? "Собираю…" : "Собрать" }}<span class="caret">▼</span></button>
+                        <div v-if="openMenu === 'collect'" class="dropdown attached collect-menu">
+                            <div class="dd-title">Что собрать</div>
+                            <label v-for="o in collectOptions" :key="o.kind" :class="{ off: !!o.block }" :title="o.title">
+                                <input type="checkbox" :checked="o.checked" :disabled="!!o.block" @change="toggleCollectKind(o.kind)"> {{ o.label }}<span v-if="o.running" class="dd-count">идёт</span>
+                            </label>
+                            <div class="dd-sep"></div>
+                            <button class="btn btn-primary cm-go" :disabled="!collectChosen.length" @click="collectChosenScan">Собрать</button>
+                        </div>
+                    </span>
+                    <span v-if="checkProgress" class="scan-progress" :title="checkProgress.title">
+                        <span class="sp-bar"><span class="sp-fill" :style="{ width: checkProgress.percent + '%' }"></span></span>
+                        <span class="sp-text">{{ checkProgress.text }}</span>
+                    </span>
+                </div>
                 <div class="sm-filters">
-                    <!-- Один «Собрать» – из всех включённых источников; когда собирали – в подсказке -->
-                    <button v-if="isAdmin" class="btn ck-collect" :disabled="!!checkCollectBlock" @click="collectAllScan" :title="checkCollectTitle">{{ checkCollecting ? "Собираю…" : "Собрать" }}</button>
                     <template v-if="!check.pair">
                         <template v-for="f in checkFilters" :key="f.key">
                             <button v-if="f.key !== 'rejected' || checkCounts.rejected" class="sm-chip" :class="{ on: check.filter === f.key }" :title="f.title" @click="setCheckFilter(f.key)">
@@ -1327,11 +1357,6 @@
                         </span>
                     </template>
                     <button v-else class="sm-chip on" @click="clearCheckPair" title="Вернуться ко всем">{{ checkPairText(check.pair) }}<span class="su-n">{{ checkShown.length }}</span> ✕</button>
-                    <!-- Идёт сбор: сколько сделано по всем источникам -->
-                    <span v-if="checkProgress" class="scan-progress" :title="checkProgress.title">
-                        <span class="sp-bar"><span class="sp-fill" :style="{ width: checkProgress.percent + '%' }"></span></span>
-                        <span class="sp-text">{{ checkProgress.text }}</span>
-                    </span>
                 </div>
                 <div v-if="check.error" class="sm-error">{{ check.error }}</div>
                 <div class="users-wrap sm-wrap ck-wrap" @mouseleave="check.hover = null">
@@ -1350,7 +1375,7 @@
                                     <template v-for="row in checkShown" :key="row.key">
                                         <tr class="ck-row" :data-key="row.key"
                                             :class="{ 'is-hover': check.hover && check.hover.key === row.key, 'sm-open': check.open === row.key, 'row-selected': isCheckSelected(row) }"
-                                            @mouseenter="setCheckHover(row, $event.currentTarget)" @mousedown="onCheckRowMouseDown($event, row)" @click="onCheckRowClick($event, row)"
+                                            @mouseenter="setCheckHover(row, $event.currentTarget)" @mousedown="onCheckRowMouseDown($event, row); onPageRowMouseDown($event, 'check', row.key)" @click="onCheckRowClick($event, row)"
                                             >
                                             <td class="ck-pc"><a v-if="row.pc" class="ck-host" :href="pageHref('table', { pc: row.pc.id })" draggable="false" @click.prevent>{{ row.name }}</a><span v-else class="ck-host ck-noname">{{ row.name }}</span><span class="ck-place">{{ checkPlace(row) }}</span></td>
                                             <td v-for="k in checkSourceKinds" :key="row.key + k" class="ck-src-cell">
@@ -1444,14 +1469,26 @@
             </div>
             <!-- Сеть (этап 28б): адреса из DHCP и прохода подсетей и какой ПК таблицы на каждом -->
             <div v-else-if="scanTab === 'net'" class="page scan-match-page net-page" :class="{ 'accent-head': accentHeaders.scan }">
+                <!-- «Сканировать» (этап 43) – своей строкой: DHCP и проход подсетей -->
+                <div v-if="isAdmin || netProgress" class="sm-actions">
+                    <button v-if="isAdmin" class="btn ck-collect" :disabled="!!netCollectBlock" @click="collectNet" :title="netCollectTitle">{{ netCollecting ? "Сканирую…" : "Сканировать" }}</button>
+                    <span v-if="netProgress" class="scan-progress" :title="netProgress.title">
+                        <span class="sp-bar"><span class="sp-fill" :style="{ width: netProgress.percent + '%' }"></span></span>
+                        <span class="sp-text">{{ netProgress.text }}</span>
+                    </span>
+                </div>
                 <div class="sm-filters">
                     <button v-for="f in netFiltersShown" :key="f.key" class="sm-chip" :class="{ on: net.filter === f.key }" :title="f.title" @click="net.filter = f.key">
                         {{ f.label }}<span class="su-n">{{ netCounts[f.key] }}</span>
                     </button>
-                    <!-- По источникам (этап 31): нажатие на включённый – снять -->
+                    <!-- По источникам (этап 31) и по давности (этап 43): нажатие на включённый – снять -->
                     <span class="sm-sep"></span>
                     <button v-for="s in netSources" :key="s.key" class="sm-chip" :class="{ on: net.source === s.key }" :title="s.title" @click="setNetSource(s.key)">
                         {{ s.label }}<span class="su-n">{{ netCounts[s.key] }}</span>
+                    </button>
+                    <span class="sm-sep"></span>
+                    <button v-for="a in netAges" :key="a.key" class="sm-chip" :class="{ on: net.age === a.key }" :title="a.title" @click="setNetAge(a.key)">
+                        {{ a.label }}<span class="su-n">{{ netCounts[a.key] }}</span>
                     </button>
                 </div>
                 <div v-if="net.error" class="sm-error">{{ net.error }}</div>
@@ -1465,7 +1502,7 @@
                                 <tbody>
                                     <tr v-if="!netShown.length" class="h-empty"><td colspan="8">{{ netEmptyText() }}</td></tr>
                                     <!-- Давно не видели (старше срока «Актуальны») – не удаляется, а серым (этап 31) -->
-                                    <tr v-for="h in netShown" :key="h.ip" :class="{ 'nt-stale': h.stale }">
+                                    <tr v-for="h in netShown" :key="h.ip" :data-key="h.ip" :class="{ 'nt-stale': h.stale }" @mousedown="onPageRowMouseDown($event, 'net', h.ip)">
                                         <td class="nt-ip" :title="netIpTitle(h)">{{ h.ip }}</td>
                                         <!-- Источники говорят разное – значения строками; откуда каждое – в подсказке -->
                                         <td class="nt-mac"><div v-for="m in h.mac" :key="m.value" class="vc-line" :class="{ 'nt-old': m.stale }" :title="netValueTitle(m)">{{ m.value }}</div></td>
@@ -1617,19 +1654,20 @@
                 </div>
             </div>
             <div class="page scan-match-page vacuum-page" :class="{ 'accent-head': accentHeaders.vacuum }">
-                <div class="sm-filters">
-                    <!-- Просканировать Vacuum заново (этап 31): как «Собрать» на «Проверке» -->
+                <!-- Просканировать Vacuum заново (этап 31) – своей строкой (этап 43); идёт сбор – сколько пользователей просмотрено -->
+                <div v-if="isAdmin || vacuumProgress" class="sm-actions">
                     <button v-if="isAdmin" class="btn ck-collect" :disabled="!!vacuumProgress || !!scanCollectBlock('jabber')" @click="refreshVacuum" :title="vacuumRefreshTitle">{{ vacuumProgress ? "Сканирую…" : "Сканировать" }}</button>
+                    <span v-if="vacuumProgress" class="scan-progress">
+                        <span class="sp-bar"><span class="sp-fill" :style="{ width: vacuumProgress.percent + '%' }"></span></span>
+                        <span class="sp-text">{{ vacuumProgress.text }}</span>
+                    </span>
+                </div>
+                <div class="sm-filters">
                     <template v-for="f in vacuumFilters" :key="f.key">
                         <button v-if="!f.optional || vacuumCounts[f.key]" class="sm-chip" :class="['vf-' + f.key, { on: vacuum.filter === f.key }]" :title="f.title" @click="setVacuumFilter(f.key)">
                             {{ f.label }}<span class="su-n">{{ vacuumCounts[f.key] }}</span>
                         </button>
                     </template>
-                    <!-- Идёт сбор: сколько пользователей просмотрено -->
-                    <span v-if="vacuumProgress" class="scan-progress">
-                        <span class="sp-bar"><span class="sp-fill" :style="{ width: vacuumProgress.percent + '%' }"></span></span>
-                        <span class="sp-text">{{ vacuumProgress.text }}</span>
-                    </span>
                 </div>
                 <div class="users-wrap sm-wrap vacuum-wrap">
                     <div class="history-frame" :class="{ 'accent-head': accentHeaders.vacuum }">
@@ -1641,7 +1679,8 @@
                                 <tbody>
                                     <tr v-if="!vacuumShown.length" class="h-empty"><td colspan="5">{{ vacuumEmptyText() }}</td></tr>
                                     <!-- Давно не подключался – серым; последний IP видели давно – серые IP и ПК (этап 31) -->
-                                    <tr v-for="u in vacuumShown" :key="u.login" :class="{ 'vc-gone': u.gone, 'vc-nogroup': u.no_group, 'vc-stale': u.stale, 'vc-ip-stale': u.ip_stale }">
+                                    <tr v-for="u in vacuumShown" :key="u.login" :data-key="u.login" :class="{ 'vc-gone': u.gone, 'vc-nogroup': u.no_group, 'vc-stale': u.stale, 'vc-ip-stale': u.ip_stale }"
+                                        @mousedown="onPageRowMouseDown($event, 'vacuum', u.login)">
                                         <td class="vc-login" :title="u.gone ? 'Пользователя нет – убрать из групп' : (u.no_group ? 'Нет ни в одной группе' : (u.stale ? 'Давно не подключался' : null))">{{ u.login }}</td>
                                         <td class="vc-groups">{{ u.groups.join(", ") }}<span v-if="u.no_group" class="vc-flag">нет групп</span></td>
                                         <td class="vc-hosts">
@@ -1675,7 +1714,7 @@
                 <div v-if="colFilterStates.length" class="cf-states">
                     <label v-for="st in colFilterStates" :key="'cfs-' + st.kind" class="cf-item" :title="st.title">
                         <input type="checkbox" :checked="st.checked" @change="toggleColState(st.kind)">
-                        <span class="cf-value" :class="{ 'val-chip': st.chip }" :style="st.style">{{ st.label }}</span>
+                        <span class="cf-value" :class="{ 'val-chip': st.chip }" :style="st.style"><span v-if="st.dot !== undefined" class="vac-dot" :class="{ on: st.dot }"></span>{{ st.label }}</span>
                         <span class="cf-only" title="Только это" @click.prevent.stop="setColStates({ only: [st.kind] })">только</span>
                         <span class="cf-count" title="Число ПК">{{ st.count }}</span>
                     </label>
@@ -1919,6 +1958,47 @@
                         <button v-if="valueDialog.data.kind === 'value'" class="btn btn-primary" :disabled="!vhCanRevert || valueDialog.busy" @click="vhRevert">Вернуть это значение</button>
                     </template>
                     <button class="btn" @click="closeValueDialog">Закрыть</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= Виды таблицы (этап 43, mixins/table-views.js) ================= -->
+        <!-- Выбор вида в списке – таблица за окном сразу в нём; правка – сразу (как меню «Столбцы») -->
+        <div v-if="viewsDlg" class="dialog-overlay vw-overlay" @mousedown.self="closeViewsDlg">
+            <div class="dialog vw-dialog" role="dialog">
+                <div class="vh-head">
+                    <span class="vh-title"><b>Виды таблицы</b></span>
+                    <span class="vh-close" title="Закрыть (Esc)" @click="closeViewsDlg">×</span>
+                </div>
+                <div class="vw-body">
+                    <div class="vw-list">
+                        <button v-for="(v, i) in tableViews" :key="i" class="vw-item" :class="{ on: tableView === i + 1 }" @click="setTableView(i + 1)">
+                            <span class="vw-num">{{ i + 1 }}</span><span class="vw-name">{{ viewName(i + 1) }}</span>
+                        </button>
+                        <button class="vw-item vw-add" :disabled="tableViews.length >= viewsMax" :title="tableViews.length >= viewsMax ? 'Видов – не больше ' + viewsMax : 'Копия этого вида'" @click="addTableView">
+                            <span class="vw-num">+</span><span class="vw-name">Новый вид</span>
+                        </button>
+                    </div>
+                    <div class="vw-edit">
+                        <div class="vw-row">
+                            <input ref="viewNameInput" class="input vw-name-input" :value="viewNow.name" :placeholder="'Вид ' + tableView" maxlength="40" spellcheck="false" autocomplete="off"
+                                title="Название вида" @input="renameTableView($event.target.value)" @keydown.enter.prevent="closeViewsDlg">
+                            <label v-if="tableView > 1" class="pr-check" title="Масштаб таблицы по ширине окна"><input type="checkbox" :checked="tableFit" @change="toggleTableFit">По ширине окна</label>
+                        </div>
+                        <div class="vw-cols">
+                            <label v-for="col in allColumns" :key="'vw-' + col.field" class="vw-col">
+                                <input type="checkbox" :checked="!isColumnHidden(col.field)" @change="toggleColumn(col.field)">
+                                <span class="vw-col-name">{{ colTitle(col) }}</span>
+                                <span class="vw-pin" :class="{ on: col.sticky }" :title="col.sticky ? 'Закреплён – открепить' : 'Закрепить'" @click.prevent.stop="togglePin(col)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="dialog-buttons">
+                    <button v-if="tableView > 1" class="btn vw-delete" @click="deleteTableView">Удалить вид</button>
+                    <button class="btn" :disabled="hiddenColumnCount === 0" @click="showAllColumns">Показать все</button>
+                    <button class="btn" :disabled="!columnOrderChanged" @click="resetColumnOrder">Исходный порядок</button>
+                    <button class="btn btn-primary" @click="closeViewsDlg">Готово</button>
                 </div>
             </div>
         </div>

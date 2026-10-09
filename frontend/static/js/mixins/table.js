@@ -1,7 +1,7 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
 
 import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, wrapLine } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, HIDDEN_COLUMNS2_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, TABLE_VIEW_KEY, VIEW2_COLUMNS, columnTitle, orderColumns, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
@@ -70,25 +70,30 @@ export default {
         allColumns() {
             const order = this.columnOrderNow;
             const result = order ? orderColumns(this.defaultColumns, order) : this.defaultColumns.slice();
-            // Закрепление своё (Ctrl+клик по шапке) – вместо заданного в описании столбцов
-            const pinned = this.pinnedColumns;
-            if (pinned) {
-                result.forEach(function (col) { col.sticky = pinned.indexOf(col.field) !== -1; });
+            // Закрепление своё (Ctrl+клик по шапке) – вместо заданного в описании столбцов;
+            // у каждого вида своё (этап 43) – копии столбцов, описание не трогается
+            const pinned = this.pinsNow;
+            if (!pinned) {
+                return result;
             }
-            return result;
+            return result.map(function (col) {
+                const sticky = pinned.indexOf(col.field) !== -1;
+                return !!col.sticky === sticky ? col : Object.assign({}, col, { sticky: sticky });
+            });
         },
 
-        // Скрытые столбцы текущего вида. У второго вида набор свой; пока его не
-        // меняли – показаны только столбцы из VIEW2_COLUMNS
+        // Скрытые столбцы текущего вида (mixins/table-views.js): у вида 1 – прежний список,
+        // у остальных – все, кроме показанных
         hiddenNow() {
-            if (this.tableView !== 2) {
+            if (this.tableView === 1) {
                 return this.hiddenColumns;
             }
-            if (this.hiddenColumns2) {
-                return this.hiddenColumns2;
+            const v = this.viewNow;
+            if (!v.shown) {
+                return v.hidden || [];
             }
             return this.allColumns.map(function (col) { return col.field; }).filter(function (field) {
-                return VIEW2_COLUMNS.indexOf(field) === -1;
+                return v.shown.indexOf(field) === -1;
             });
         },
 
@@ -297,13 +302,6 @@ export default {
                 this.updateStickyShadow();
             });
         },
-
-        hiddenColumns2() {
-            saveJson(HIDDEN_COLUMNS2_KEY, this.hiddenColumns2);
-            this.$nextTick(() => {
-                this.updateStickyShadow();
-            });
-        },
     },
 
     methods: {
@@ -379,6 +377,7 @@ export default {
             }
         },
 
+        // Закрепить столбец / снять – у каждого вида своё (этап 43)
         togglePin(col) {
             const pinned = this.allColumns.filter(function (c) { return c.sticky; }).map(function (c) { return c.field; });
             const at = pinned.indexOf(col.field);
@@ -387,8 +386,12 @@ export default {
             } else {
                 pinned.splice(at, 1);
             }
-            this.pinnedColumns = pinned;
-            saveJson(PINNED_COLUMNS_KEY, pinned);
+            if (this.tableView === 1) {
+                this.pinnedColumns = pinned;
+                saveJson(PINNED_COLUMNS_KEY, pinned);
+            } else {
+                this.patchView({ pins: pinned });
+            }
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -1024,6 +1027,7 @@ export default {
                 historySel: this.$refs.historySelWrap,
                 checkSel: this.$refs.checkSelWrap,
                 checkFields: this.$refs.checkFieldsWrap,
+                collect: this.$refs.collectWrap,
                 namesHelp: this.$refs.namesHelpWrap,
                 namingHelp: this.$refs.namingHelpWrap,
                 historyFilter: this.$refs.historyFilterWrap,
@@ -1062,13 +1066,19 @@ export default {
             return this.hiddenNow.indexOf(field) !== -1;
         },
 
-        // Скрытые столбцы – у каждого вида таблицы свои
+        // Скрытые столбцы – у каждого вида таблицы свои; у видов 2…9 хранятся показанные
         setHiddenColumns(list) {
-            if (this.tableView === 2) {
-                this.hiddenColumns2 = list;
-            } else {
+            if (this.tableView === 1) {
                 this.hiddenColumns = list;
+                return;
             }
+            const shown = this.allColumns.map(function (col) { return col.field; }).filter(function (field) {
+                return list.indexOf(field) === -1;
+            });
+            this.patchView({ shown: shown, hidden: null });
+            this.$nextTick(() => {
+                this.updateStickyShadow();
+            });
         },
 
         toggleColumn(field) {
@@ -1084,28 +1094,6 @@ export default {
 
         showAllColumns() {
             this.setHiddenColumns([]);
-        },
-
-        // Второй вид таблицы (кнопка справа от поиска): свой набор столбцов
-        toggleTableView() {
-            this.cancelEdit();
-            this.scanPop = null;
-            this.closeMenus();
-            this.tableView = this.tableView === 2 ? 1 : 2;
-            saveJson(TABLE_VIEW_KEY, this.tableView);
-            // Сортировка и фильтры по столбцу, которого в этом виде нет, снимаются
-            const fields = this.allColumns.map(function (col) { return col.field; });
-            if (this.sortField && fields.indexOf(this.sortField) === -1) {
-                this.resetSort();
-            }
-            Object.keys(this.colFilters).forEach((field) => {
-                if (fields.indexOf(field) === -1) {
-                    this.clearColFilter(field);
-                }
-            });
-            this.$nextTick(() => {
-                this.updateStickyShadow();
-            });
         },
 
         // ---------- Поиск ----------

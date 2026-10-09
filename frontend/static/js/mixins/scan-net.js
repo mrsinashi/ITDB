@@ -6,7 +6,8 @@
 // подсетей, Leases – аренды DHCP, DHCP Config – привязки), у каждого значения в
 // подсказке – «Источник: …»; то, что видели давно (старше срока «Актуальны»), не
 // удаляется, а показывается серым. Данные – /api/scan/hosts; собирает сервер
-// («Собрать» на «Проверке», расписание).
+// («Сканировать» над фильтрами, «Собрать» на «GLPI / GSIT», расписание). Этап 43: фильтр
+// по давности – «Актуальные» / «Неактуальные» (серые строки).
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 
@@ -25,6 +26,13 @@ export const NET_SOURCES = [
     { key: "conf", label: "DHCP Config", title: "Есть привязка в настройках DHCP" }
 ];
 
+// По давности (этап 43): адрес видели в сроке «Актуальны» или давно (строка серым).
+// Нажатие на включённый – снять
+export const NET_AGES = [
+    { key: "fresh", label: "Актуальные", title: "Видели в сроке «Актуальны»" },
+    { key: "stale", label: "Неактуальные", title: "Давно не видели" }
+];
+
 const PORT_NAMES = { 22: "SSH", 80: "HTTP", 135: "RPC", 139: "NetBIOS", 443: "HTTPS", 445: "SMB", 3389: "RDP", 5900: "VNC", 8080: "HTTP" };
 const BY_TEXT = { ip: "по IP из таблицы", mac: "по MAC", conf: "по MAC из DHCP Config" };
 
@@ -39,6 +47,10 @@ function inNetFilter(h, filter) {
         return h.differ;
     }
     return true;
+}
+
+function inNetAge(h, age) {
+    return !age || (age === "stale" ? !!h.stale : !h.stale);
 }
 
 function fromText(sources) {
@@ -73,17 +85,24 @@ export default {
             return NET_SOURCES;
         },
 
-        // Числа на кнопках: у первого ряда – с учётом выбранного источника, у источников –
-        // с учётом первого ряда
+        netAges() {
+            return NET_AGES;
+        },
+
+        // Числа на кнопках: у каждой группы – с учётом того, что выбрано в остальных
         netCounts() {
             const counts = {};
             const source = this.net.source;
             const filter = this.net.filter;
+            const age = this.net.age;
             NET_FILTERS.forEach((f) => {
-                counts[f.key] = this.netHosts.filter(function (h) { return inNetFilter(h, f.key) && (!source || h[source]); }).length;
+                counts[f.key] = this.netHosts.filter(function (h) { return inNetFilter(h, f.key) && (!source || h[source]) && inNetAge(h, age); }).length;
             });
             NET_SOURCES.forEach((s) => {
-                counts[s.key] = this.netHosts.filter(function (h) { return inNetFilter(h, filter) && h[s.key]; }).length;
+                counts[s.key] = this.netHosts.filter(function (h) { return inNetFilter(h, filter) && h[s.key] && inNetAge(h, age); }).length;
+            });
+            NET_AGES.forEach((a) => {
+                counts[a.key] = this.netHosts.filter(function (h) { return inNetFilter(h, filter) && (!source || h[source]) && inNetAge(h, a.key); }).length;
             });
             return counts;
         },
@@ -91,8 +110,9 @@ export default {
         netShown() {
             const words = searchWordsIn(this.scanMatchQuery, this.netHosts.map(function (h) { return h.search; }));
             const source = this.net.source;
+            const age = this.net.age;
             return this.netHosts.filter((h) => {
-                return inNetFilter(h, this.net.filter) && (!source || h[source]) && (!words.length || matchesAllWords(h.search, words));
+                return inNetFilter(h, this.net.filter) && (!source || h[source]) && inNetAge(h, age) && (!words.length || matchesAllWords(h.search, words));
             });
         },
 
@@ -129,6 +149,10 @@ export default {
 
         setNetSource(key) {
             this.net.source = this.net.source === key ? null : key;
+        },
+
+        setNetAge(key) {
+            this.net.age = this.net.age === key ? null : key;
         },
 
         // Подсказка у значения MAC / имени: откуда оно

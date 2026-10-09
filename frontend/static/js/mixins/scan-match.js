@@ -9,10 +9,14 @@
 // конфликт, нет в ITDB, дубль. Решения администратора: «это этот ПК», «не этот
 // ПК», «забыть».
 
-import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
+import { apiFetch, loadJson, saveJson, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 
 const POLL_MS = 1000;
 const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net"];
+// «Сканировать» на «Сети» (этап 43): DHCP и проход подсетей
+const NET_KINDS = ["dhcp", "net"];
+// Меню «Собрать» на «GLPI / GSIT» (этап 43): снятые галочки – в браузере
+const COLLECT_OFF_KEY = "itdb.collectOff.v1";
 // Что считает полоса сбора: «20 из 155 ПК»
 const PROGRESS_UNITS = { jabber: " пользователей", net: " адресов", dhcp: "" };
 const KEY_LABELS = { id: "ID", mac: "MAC", serial: "серийному" };
@@ -60,65 +64,71 @@ function durationText(run) {
 }
 
 export default {
+    data() {
+        return {
+            collectOff: loadJson(COLLECT_OFF_KEY, [])   // меню «Собрать»: источники со снятой галочкой
+        };
+    },
+
     computed: {
         scanCollectSources() {
             return this.scanSources.filter(function (s) { return COLLECT_KINDS.includes(s.kind); });
         },
 
-        // «Собрать» на «Проверке» (этап 26д): из всех включённых источников разом
+        // «Собрать» на «GLPI / GSIT» (этап 26д; с 43 – меню с галочками): из выбранных источников
         checkCollecting() {
             return this.scanCollectSources.some((s) => this.scanCollecting(s.kind));
         },
 
-        checkCollectBlock() {
-            const ready = this.scanCollectSources.filter(function (s) { return s.enabled && s.ready; });
-            if (!ready.length) {
-                return "Нет включённых источников";
-            }
-            if (ready.every((s) => this.scanCollecting(s.kind))) {
-                return "Сбор уже идёт";
-            }
-            return "";
-        },
-
         checkCollectTitle() {
-            const lines = [];
-            this.scanCollectSources.forEach((s) => {
-                if (!s.enabled || !s.ready) {
-                    return;
-                }
-                const info = this.scanRunInfo(s.kind);
-                lines.push(s.title + ": " + (!info ? "ещё не собирали" : (info.running ? info.text : "собрано " + info.time + "\n    " + info.text)));
-            });
-            const block = this.checkCollectBlock;
-            if (block && !lines.length) {
-                return block;
-            }
-            return (block || "Собрать из всех включённых источников") + (lines.length ? "\n\n" + lines.join("\n") : "");
+            return this.sourcesCollectTitle(this.scanCollectSources, "Собрать");
         },
 
-        // Полоса сбора на «Проверке»: по всем источникам, из которых сейчас собирается
+        // Полоса сбора на «GLPI / GSIT»: по всем источникам, из которых сейчас собирается
         checkProgress() {
-            const running = this.scanCollectSources.filter((s) => this.scanCollecting(s.kind));
-            if (!running.length) {
-                return null;
-            }
-            let done = 0;
-            let total = 0;
-            const lines = [];
-            running.forEach((s) => {
-                const p = this.scanProgress(s.kind);
-                const run = this.scanRunOf(s.kind);
-                const st = (run.stats && run.stats.progress) || {};
-                done += st.total ? st.done : 0;
-                total += st.total || 0;
-                lines.push(s.title + ": " + p.text);
+            return this.sourcesProgress(this.scanCollectSources);
+        },
+
+        // Пункты меню «Собрать»: источник, галочка; нельзя собрать – серым, причина в подсказке
+        collectOptions() {
+            return this.scanCollectSources.map((s) => {
+                const block = this.scanCollectBlock(s.kind);
+                const info = this.scanRunInfo(s.kind);
+                const running = this.scanCollecting(s.kind);
+                return {
+                    kind: s.kind,
+                    label: s.title,
+                    block: block,
+                    running: running,
+                    checked: !block && this.collectOff.indexOf(s.kind) === -1,
+                    title: block && !running ? block : (!info ? "Ещё не собирали" : (info.running ? info.text : "Последний сбор: " + info.time + "\n" + info.text))
+                };
             });
-            return {
-                percent: total ? Math.round(done / total * 100) : 0,
-                text: running.length === 1 ? lines[0] : (total ? done + " из " + total : "Собираю…"),
-                title: lines.join("\n")
-            };
+        },
+
+        collectChosen() {
+            return this.collectOptions.filter(function (o) { return o.checked; }).map(function (o) { return o.kind; });
+        },
+
+        // «Сканировать» на «Сети» (этап 43): DHCP и проход подсетей
+        netCollectSources() {
+            return this.scanSources.filter(function (s) { return NET_KINDS.includes(s.kind); });
+        },
+
+        netCollecting() {
+            return this.netCollectSources.some((s) => this.scanCollecting(s.kind));
+        },
+
+        netCollectBlock() {
+            return this.sourcesCollectBlock(this.netCollectSources);
+        },
+
+        netCollectTitle() {
+            return this.sourcesCollectTitle(this.netCollectSources, "Собрать из DHCP и сети");
+        },
+
+        netProgress() {
+            return this.sourcesProgress(this.netCollectSources);
         },
 
         scanNamesShown() {
@@ -297,13 +307,80 @@ export default {
             }
         },
 
-        async collectAllScan() {
-            if (this.checkCollectBlock) {
-                return;
+        // Несколько источников разом: почему нельзя (пусто – можно), подсказка с последними
+        // сборами, полоса сбора по тем, из которых сейчас собирается
+        sourcesCollectBlock(sources) {
+            const ready = sources.filter(function (s) { return s.enabled && s.ready; });
+            if (!ready.length) {
+                return "Нет включённых источников";
             }
-            const kinds = this.scanCollectSources
-                .filter((s) => s.enabled && s.ready && !this.scanCollecting(s.kind))
-                .map(function (s) { return s.kind; });
+            if (ready.every((s) => this.scanCollecting(s.kind))) {
+                return "Сбор уже идёт";
+            }
+            return "";
+        },
+
+        sourcesCollectTitle(sources, what) {
+            const lines = [];
+            sources.forEach((s) => {
+                if (!s.enabled || !s.ready) {
+                    return;
+                }
+                const info = this.scanRunInfo(s.kind);
+                lines.push(s.title + ": " + (!info ? "ещё не собирали" : (info.running ? info.text : "собрано " + info.time + "\n    " + info.text)));
+            });
+            const block = this.sourcesCollectBlock(sources);
+            if (block && !lines.length) {
+                return block;
+            }
+            return (block || what) + (lines.length ? "\n\n" + lines.join("\n") : "");
+        },
+
+        sourcesProgress(sources) {
+            const running = sources.filter((s) => this.scanCollecting(s.kind));
+            if (!running.length) {
+                return null;
+            }
+            let done = 0;
+            let total = 0;
+            const lines = [];
+            running.forEach((s) => {
+                const p = this.scanProgress(s.kind);
+                const run = this.scanRunOf(s.kind);
+                const st = (run.stats && run.stats.progress) || {};
+                done += st.total ? st.done : 0;
+                total += st.total || 0;
+                lines.push(s.title + ": " + p.text);
+            });
+            return {
+                percent: total ? Math.round(done / total * 100) : 0,
+                text: running.length === 1 ? lines[0] : (total ? done + " из " + total : "Собираю…"),
+                title: lines.join("\n")
+            };
+        },
+
+        toggleCollectKind(kind) {
+            const off = this.collectOff;
+            this.collectOff = off.indexOf(kind) === -1 ? off.concat([kind]) : off.filter(function (k) { return k !== kind; });
+            saveJson(COLLECT_OFF_KEY, this.collectOff);
+        },
+
+        // «Собрать» в меню: из отмеченных источников
+        collectChosenScan() {
+            const kinds = this.collectChosen;
+            this.closeMenus();
+            this.collectKinds(kinds);
+        },
+
+        // «Сканировать» на «Сети»: DHCP и проход подсетей, какие включены
+        collectNet() {
+            this.collectKinds(NET_KINDS);
+        },
+
+        // Собрать из источников по очереди запросов (сами сборы идут на сервере параллельно);
+        // выключенные и те, из которых уже собирается, пропускаются
+        async collectKinds(list) {
+            const kinds = list.filter((kind) => !this.scanCollectBlock(kind));
             for (const kind of kinds) {
                 try {
                     const response = await apiFetch("/api/scan/sources/" + kind + "/collect", { method: "POST" });
@@ -372,6 +449,9 @@ export default {
             }
             if (this.view === "scan" && this.scanTab === "schedule") {
                 this.loadSchedule(true);
+            }
+            if (this.view === "scan" && this.scanTab === "net" && NET_KINDS.includes(run.source)) {
+                this.loadNet();
             }
             if (this.view === "scan" && this.scanTab === "check") {
                 this.loadCheck();
@@ -729,7 +809,7 @@ export default {
 
         openScanLinkBar(r) {
             this.check.hover = null;
-            this.scanLinkBar = { source_id: r.source_id, record: r, error: "", pickedName: "" };
+            this.scanLinkBar = { source_id: r.source_id, record: r, error: "", pickedName: "", pc: null };
             this.$nextTick(() => {
                 const picker = this.$refs["sl-picker"];
                 const input = picker && picker.$el ? picker.$el.querySelector("input") : null;
@@ -737,6 +817,83 @@ export default {
                     input.focus();
                 }
             });
+        },
+
+        // «＋ новый компьютер» в «Привязать … к:» (этап 43): строка нового ПК под ней –
+        // имя и IP из записи; добавить – и запись сразу привязывается к нему
+        openScanNewPc(text) {
+            const bar = this.scanLinkBar;
+            if (!bar) {
+                return;
+            }
+            this.ensureTree();
+            const r = bar.record;
+            const ip = String(r.values.ip || "").split("\n").map(function (x) { return x.trim(); }).filter(Boolean)[0] || "";
+            bar.error = "";
+            bar.pc = { location_id: null, seat_no: "", hostname: r.name || text || "", ip: ip, error: "", saving: false };
+            this.$nextTick(() => this.focusScanNewPc("location"));
+        },
+
+        closeScanNewPc() {
+            if (this.scanLinkBar) {
+                this.scanLinkBar.pc = null;
+            }
+        },
+
+        focusScanNewPc(which) {
+            const el = this.$refs["sl-" + which];
+            const input = el && (el.$el ? el.$el.querySelector("input") : el);
+            if (input) {
+                input.focus();
+            }
+        },
+
+        onScanNewPcLocation(locationId) {
+            const form = this.scanLinkBar && this.scanLinkBar.pc;
+            if (!form) {
+                return;
+            }
+            if (form.location_id !== locationId) {
+                form.seat_no = this.nextSeatNo(locationId);
+            }
+            form.location_id = locationId;
+            form.error = "";
+            this.$nextTick(() => this.focusScanNewPc("hostname"));
+        },
+
+        async submitScanNewPc() {
+            const bar = this.scanLinkBar;
+            const form = bar && bar.pc;
+            if (!form || form.saving) {
+                return;
+            }
+            if (!form.location_id) {
+                form.error = "Выбери расположение.";
+                this.focusScanNewPc("location");
+                return;
+            }
+            form.saving = true;
+            form.error = "";
+            try {
+                const response = await apiFetch("/api/computers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ location_id: form.location_id, seat_no: form.seat_no, hostname: form.hostname, ip: form.ip })
+                });
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const data = await response.json();
+                // ПК уже есть: привязать не вышло – ошибка в строке «Привязать», ПК – в её списке
+                bar.pc = null;
+                bar.pickedName = form.hostname.trim();
+                this.toast("Добавлен: " + (bar.pickedName || "компьютер без имени"), "success");
+                await this.loadTable();
+                await this.scanDecide(bar.record, "link", data.id);
+            } catch (e) {
+                form.error = String(e.message || e);
+                form.saving = false;
+            }
         },
 
         onScanLinkPick(computerId) {

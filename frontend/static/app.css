@@ -6051,3 +6051,307 @@ html.no-radius .pr-opts .pr-check input {
     --cb-hover: var(--cb-brand-hover);
     --cb-press: var(--cb-brand-press);
 }
+
+/* ============================================================
+   Этап 43: сбор – своей строкой, меню «Собрать», виды таблицы, полоска строки
+   на «GLPI / GSIT», «Сети», «Vacuum», «В сети» в фильтре VACUUM
+   ============================================================ */
+/* Строка сбора над фильтрами («GLPI / GSIT», «Сеть», «Vacuum»): кнопка и полоса сбора */
+.sm-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+.sm-actions .btn {
+    height: 22px;
+    padding: 0 9px;
+    font-size: 12px;
+}
+.sm-actions .btn .caret {
+    margin-left: 6px;
+}
+.sm-actions .dropdown-wrap .btn.menu-open {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.sm-actions .scan-progress {
+    margin-left: 0;
+}
+/* Меню «Собрать» – в манере меню настроек: заголовок с линией, галочки, кнопка во всю
+   ширину; угол в угол под кнопкой, без рамки (край – тенью), ширина кратна 4px */
+.dropdown.collect-menu {
+    width: 176px;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 4px;
+    gap: 0;
+    border: none;
+    border-radius: 0 3px 3px 3px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2), -1px 1px 0 rgba(0, 0, 0, 0.12);
+}
+.dropdown.collect-menu .dd-title {
+    padding: 3px 8px 5px;
+    margin-bottom: 3px;
+    border-bottom: 1px solid #e5e5e5;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.dropdown.collect-menu label {
+    padding: 4px 8px;
+}
+.dropdown.collect-menu label.off,
+.dropdown.collect-menu label.off:hover {
+    background: transparent;
+    color: var(--menu-muted);
+    cursor: default;
+}
+.dropdown.collect-menu .dd-sep {
+    margin: 4px;
+    background: #e5e5e5;
+}
+.dropdown.collect-menu button.cm-go {
+    justify-content: center;
+    margin: 0 4px 2px;
+    padding: 3px 10px;
+    border: 1px solid var(--brand-dark);
+    background: var(--brand);
+    color: #fff;
+}
+.dropdown.collect-menu button.cm-go:not(:disabled):hover {
+    background: var(--brand-dark);
+    color: #fff;
+}
+.dropdown.collect-menu button.cm-go:disabled {
+    background: var(--brand);
+    opacity: 0.5;
+}
+
+/* Полоска нажатой строки на «GLPI / GSIT», «Сети», «Vacuum» – как в Таблице: 3px у левого
+   края строки (атрибут data-mark ставит mixins/page-mark.js) */
+.history-table tbody tr[data-mark] > td:first-child,
+.history-table.sm-table tbody:first-of-type tr.sm-open[data-mark]:first-child > td:first-child {
+    box-shadow: inset 3px 0 0 var(--row-active-bar);
+}
+.history-table.sm-table tbody tr.sm-open[data-mark] > td:first-child {
+    box-shadow: inset 0 2px 0 var(--sm-detail-line), inset 3px 0 0 var(--row-active-bar);
+}
+
+/* Фильтр столбца VACUUM: «В сети» / «Не в сети» – с кружком, как у логина */
+.cf-menu .cf-value .vac-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: var(--tint-line, #c4c4c4);
+    vertical-align: 1px;
+}
+.cf-menu .cf-value .vac-dot.on {
+    background: var(--success);
+}
+html.no-radius .cf-menu .cf-value .vac-dot {
+    border-radius: 50% !important;
+}
+
+/* Кнопка вида Таблицы: номер вида в квадратике (значок 15px, цифра – в его единицах) */
+.tb-view .view-num text {
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 700;
+}
+
+/* Окно «Виды таблицы»: слева – виды (номер в квадратике, название), справа – название,
+   «По ширине окна» и столбцы выбранного вида (галочка, закрепление) */
+.dialog.vw-dialog {
+    width: 680px;
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+.dialog-overlay.vw-overlay {
+    padding-top: 10vh;
+}
+.vw-dialog .vh-head {
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+.vw-dialog .vh-head .vh-close {
+    margin-left: auto;
+}
+.vw-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+}
+.vw-list {
+    flex: 0 0 188px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px;
+    border-right: 1px solid var(--gray-line);
+    background: var(--surface-alt);
+    overflow-y: auto;
+}
+.vw-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+.vw-item:hover {
+    background: var(--menu-hover-bg);
+}
+.vw-item.on {
+    background: var(--brand);
+    color: #fff;
+    font-weight: 600;
+}
+.vw-item:disabled {
+    opacity: 0.5;
+    cursor: default;
+    background: transparent;
+}
+.vw-item .vw-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vw-num {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+}
+.vw-add {
+    margin-top: 4px;
+    color: var(--text-secondary);
+}
+.vw-edit {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px 8px 12px;
+}
+.vw-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.vw-row .vw-name-input {
+    flex: 1;
+    min-width: 0;
+}
+.vw-row .pr-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+}
+.vw-row .pr-check input {
+    margin: 0;
+    accent-color: var(--brand);
+}
+html.no-radius .vw-row .pr-check input,
+html.no-radius .vw-col input {
+    --cb-on: var(--brand);
+    --cb-hover: var(--cb-brand-hover);
+    --cb-press: var(--cb-brand-press);
+}
+/* Столбцы – в две колонки, прокрутка внутри */
+.vw-cols {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    columns: 2;
+    column-gap: 12px;
+    border: 1px solid var(--gray-line);
+    border-radius: var(--radius);
+    padding: 4px;
+}
+.vw-col {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    break-inside: avoid;
+}
+.vw-col:hover {
+    background: var(--menu-hover-bg);
+}
+.vw-col input {
+    margin: 0;
+    accent-color: var(--brand);
+}
+.vw-col .vw-col-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Закрепление: значок булавки виден при наведении, у закреплённого – всегда, цветом схемы */
+.vw-pin {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    visibility: hidden;
+}
+.vw-col:hover .vw-pin {
+    visibility: visible;
+}
+.vw-pin:hover {
+    background: #e2e2e2;
+    color: var(--text-strong);
+}
+.vw-pin.on {
+    visibility: visible;
+    color: var(--brand);
+}
+.vw-pin svg {
+    width: 12px;
+    height: 12px;
+}
+.vw-dialog .dialog-buttons .vw-delete {
+    margin-right: auto;
+    color: var(--danger-strong);
+}
+
+/* «＋ новый компьютер» в списке ПК «Привязать … к:» – последним, прилипает к низу списка */
+.loc-list .ll-item.ll-sticky {
+    position: sticky;
+    bottom: -3px;
+    background: var(--menu-bg);
+}
+.loc-list .ll-item.ll-sticky.active {
+    background: var(--menu-hover-bg);
+}

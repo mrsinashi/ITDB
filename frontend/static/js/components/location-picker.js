@@ -5,6 +5,9 @@
 // can-add-room – внизу списка «＋ новый кабинет» в найденном отделении или этаже
 // (у отделения и этажа под курсором – тоже; у кабинета – новый после него, этап 37):
 // событие add-room { parentId, afterId, code, name }.
+// add-text – последним пунктом всегда «＋ <add-text>» (этап 43: «новый компьютер» в
+// «Привязать … к:»; виден и при длинном списке – прилипает к низу): событие add с
+// набранным текстом.
 
 import { searchWordsIn } from "../util.js";
 
@@ -40,9 +43,10 @@ export default {
         placeholder: { type: String, default: "" },
         inputClass: { default: "" },
         emptyText: { type: String, default: "Загрузка дерева…" },
-        canAddRoom: Boolean
+        canAddRoom: Boolean,
+        addText: { type: String, default: "" }
     },
-    emits: ["pick", "cancel", "add-room"],
+    emits: ["pick", "cancel", "add-room", "add"],
     data() {
         return { open: false, query: "", active: 0, pos: null };
     },
@@ -101,9 +105,10 @@ export default {
                 return { add: true, key: "add-" + o.id, parent: o, code: room.code, name: room.name, label: [room.code, room.name].filter(Boolean).join(" ") };
             });
         },
-        // Список целиком: найденные узлы, потом «＋ новый кабинет»
+        // Список целиком: найденные узлы, потом «＋ новый кабинет» / «＋ <add-text>»
         items() {
-            return this.addItems.length ? this.filtered.concat(this.addItems) : this.filtered;
+            const items = this.addItems.length ? this.filtered.concat(this.addItems) : this.filtered;
+            return this.addText ? items.concat([{ addNew: true, key: "add-new" }]) : items;
         },
         shownText() {
             return this.open ? this.query : (this.current ? this.current.path : "");
@@ -173,7 +178,7 @@ export default {
         },
         activateCurrent() {
             const value = this.value;
-            const i = this.items.findIndex(function (o) { return !o.add && o.id === value; });
+            const i = this.items.findIndex(function (o) { return !o.add && !o.addNew && o.id === value; });
             this.active = i >= 0 ? i : 0;
             this.$nextTick(() => this.scrollActive(true));
         },
@@ -271,6 +276,12 @@ export default {
                 this.addRoom(option.parent, option.code, option.name);
                 return;
             }
+            if (option.addNew) {
+                const text = this.query.trim();
+                this.hide();
+                this.$emit("add", text);
+                return;
+            }
             this.hide();
             this.$emit("pick", option.id);
         },
@@ -303,11 +314,13 @@ export default {
                 @input="onInput" @focus="onFocus" @blur="onBlur" @keydown="onKeydown" @click="show">
             <teleport to="body">
                 <div v-if="open && pos" ref="list" class="loc-list" :class="{ up: pos.up }" :style="listStyle" @mousedown.prevent>
-                    <div v-if="!options.length" class="ll-empty">{{ emptyText }}</div>
-                    <div v-else-if="!items.length" class="ll-empty">Ничего не найдено</div>
-                    <template v-for="(o, i) in items" :key="o.add ? o.key : o.id">
+                    <div v-if="!options.length && !addText" class="ll-empty">{{ emptyText }}</div>
+                    <div v-else-if="!filtered.length && !addItems.length" class="ll-empty">{{ options.length ? "Ничего не найдено" : emptyText }}</div>
+                    <template v-for="(o, i) in items" :key="o.add || o.addNew ? o.key : o.id">
                         <div v-if="o.add" class="ll-item ll-new" :class="{ active: i === active, 'll-first': i === filtered.length }"
                             title="Новый кабинет" @mousemove="active = i" @click="pick(o)"><template v-if="o.parent">{{ o.parent.path }} → </template><b>＋ {{ o.label || "новый кабинет" }}</b></div>
+                        <div v-else-if="o.addNew" class="ll-item ll-new ll-sticky" :class="{ active: i === active, 'll-first': i === filtered.length }"
+                            @mousemove="active = i" @click="pick(o)"><b>＋ {{ addText }}</b></div>
                         <div v-else class="ll-item"
                             :class="['kind-' + o.kind, { active: i === active, current: o.id === value }]"
                             @mousemove="active = i" @click="pick(o)"><span v-if="i === active && canAddHere(o)" class="ll-add" :title="o.kind === 'room' ? 'Новый кабинет после этого' : 'Новый кабинет здесь'" @click.stop="addHere(o)">＋ кабинет</span>{{ o.path }}</div>

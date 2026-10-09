@@ -20,6 +20,8 @@
 // (повтор, проверен, нет в Jabber, срок прошёл… – Справочники), блочок сканера (по
 // ситуации, и когда кнопка «Значения сканера» выключена) и «Обычные» – без них.
 // ПК виден, если у значения есть отмеченное выделение (и значение отмечено ниже).
+// У VACUUM (этап 43) первыми – «В сети» / «Не в сети» (кружок у логина): это отдельная
+// группа – ПК виден, если подходит и по ней, и по выделениям.
 
 import { matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
 import { columnTitle, dateKey, ipSubnetKey, isOverdue } from "../columns.js";
@@ -31,7 +33,10 @@ const AV_STATES = ["on", "old", "off"];
 const MARK_STATES = ["dup", "hostname", "gone", "stale", "overdue", "verified", "checked"];
 const SCAN_STATES = ["diff", "fill", "unsure", "partial", "link"].map(function (kind) { return "scan-" + kind; });
 const PLAIN_STATE = "none";
-const VALUE_STATES = MARK_STATES.concat(SCAN_STATES, [PLAIN_STATE]);
+// В сети ли логины VACUUM (этап 43) – своя группа отметок
+const ONLINE_STATES = ["online", "offline"];
+const ONLINE_LABELS = { online: "В сети", offline: "Не в сети" };
+const VALUE_STATES = ONLINE_STATES.concat(MARK_STATES, SCAN_STATES, [PLAIN_STATE]);
 const NO_STATES = { only: null, off: [] };
 
 // Отмечено ли состояние в фильтре
@@ -41,6 +46,10 @@ function stateOn(states, kind) {
 
 function statesActive(states) {
     return !!states && (!!states.only || states.off.length > 0);
+}
+
+function isOnlineState(kind) {
+    return ONLINE_STATES.indexOf(kind) !== -1;
 }
 
 // Значения ячейки для фильтра: [{ key, value }]; пустая – [{ key: "" }]
@@ -221,13 +230,17 @@ export default {
             if (!list.length) {
                 return [];
             }
-            list.push(PLAIN_STATE);
+            // «Обычные» – если есть выделения (у «в сети» своей «обычной» нет)
+            if (list.some(function (kind) { return !isOnlineState(kind); })) {
+                list.push(PLAIN_STATE);
+            }
             return list.map((kind) => {
                 const style = this.valueStateStyle(kind);
                 return {
                     kind: kind, label: this.valueStateLabel(kind), count: counts[kind] || 0,
                     checked: stateOn(states, kind), style: style,
                     chip: !!style && !!(style.backgroundColor || style.boxShadow),
+                    dot: isOnlineState(kind) ? kind === "online" : undefined,
                     title: kind === PLAIN_STATE ? "Без выделений и значений сканера" : this.valueStateLabel(kind)
                 };
             });
@@ -287,6 +300,14 @@ export default {
             if (!kinds.size) {
                 kinds.add(PLAIN_STATE);
             }
+            // VACUUM: в сети ли логины – когда кружки показываются (этап 43)
+            if (col.field === "vacuum" && !row.archived && this.vacuumDots) {
+                String(value || "").split("\n").forEach((line) => {
+                    if (line.trim()) {
+                        kinds.add(this.vacuumIsOnline(line) ? "online" : "offline");
+                    }
+                });
+            }
             return kinds;
         },
 
@@ -295,12 +316,15 @@ export default {
             if (kind === PLAIN_STATE) {
                 return "Обычные";
             }
+            if (isOnlineState(kind)) {
+                return ONLINE_LABELS[kind];
+            }
             const m = kind.indexOf("scan-") === 0 ? this.scanMarkByKind[kind.slice(5)] : this.tableMarkMap[kind];
             return m ? m.label : kind;
         },
 
         valueStateStyle(kind) {
-            if (kind === PLAIN_STATE) {
+            if (kind === PLAIN_STATE || isOnlineState(kind)) {
                 return null;
             }
             if (kind.indexOf("scan-") === 0) {
@@ -310,17 +334,22 @@ export default {
             return this.markStyle(kind);
         },
 
-        // Отметки выделений: у значения есть отмеченное (отметок нет – фильтра нет)
+        // Отметки выделений: у значения есть отмеченное выделение (отметок нет – фильтра нет).
+        // «В сети» / «Не в сети» – своя группа: подходить надо по обеим (этап 43); у пустой
+        // ячейки VACUUM отметок «в сети» нет – по ней не отбирается, только после «только»
         statesPass(row, f) {
             if (!statesActive(f.states)) {
                 return true;
             }
-            for (const kind of this.valueStates(row, f.col)) {
-                if (stateOn(f.states, kind)) {
-                    return true;
+            const kinds = Array.from(this.valueStates(row, f.col));
+            return [true, false].every(function (online) {
+                const own = kinds.filter(function (kind) { return isOnlineState(kind) === online; });
+                if (f.states.only) {
+                    const only = f.states.only.filter(function (kind) { return isOnlineState(kind) === online; });
+                    return !only.length || own.some(function (kind) { return only.indexOf(kind) !== -1; });
                 }
-            }
-            return false;
+                return !own.length || own.some(function (kind) { return f.states.off.indexOf(kind) === -1; });
+            });
         },
 
         isColFiltered(field) {
