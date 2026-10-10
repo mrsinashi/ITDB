@@ -214,9 +214,13 @@ export default {
             return map;
         },
 
-        // Все расхождения по ПК: id ПК → { поле → расхождение } (без отклонённых)
+        // Все расхождения по ПК: id ПК → { поле → расхождение } (без отклонённых). На
+        // странице «Принтеры» (этап 44) – пусто: id принтеров – не id ПК
         diffIndex() {
             const map = new Map();
+            if (this.tableKind === "printer") {
+                return map;
+            }
             this.diffs.items.forEach(function (d) {
                 if (d.rejected_by) {
                     return;
@@ -1033,7 +1037,7 @@ export default {
         // Ответ: true – записано, false – значение то же, null – не удалось
         async saveComputerValue(computerId, field, value) {
             const row = this.rows.find(function (r) { return r.id === computerId; });
-            const col = this.allColumns.find(function (c) { return c.field === field; });
+            const col = this.pcColumnDefs.find(function (c) { return c.field === field; });
             if (!row || !col) {
                 this.toastError("ПК не найден – обнови страницу.");
                 return null;

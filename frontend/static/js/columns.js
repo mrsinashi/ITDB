@@ -9,7 +9,8 @@ export function normalizeKey(value) {
 
 // Дубли: поле → множество значений, встречающихся больше одного раза.
 // Какие поля проверять и какие из них многострочные – из описания столбцов.
-let duplicateSets = {};
+// У таблицы ПК и таблицы принтеров (этап 44) – свои: { pc: {…}, printer: {…} }
+const duplicateSets = { pc: {}, printer: {} };
 
 export function buildDuplicateSets(rows, columns) {
     const dupColumns = (columns || []).filter(function (col) { return col.dup; });
@@ -39,15 +40,15 @@ export function buildDuplicateSets(rows, columns) {
     return sets;
 }
 
-// Одно значение (строка многострочной ячейки) – повтор?
-export function isDuplicateLine(line, field) {
-    const set = duplicateSets[field];
+// Одно значение (строка многострочной ячейки) – повтор? kind – pc / printer
+export function isDuplicateLine(line, field, kind) {
+    const set = duplicateSets[kind || "pc"][field];
     return !!set && set.has(normalizeKey(line));
 }
 
 // Пересчитать дубли (после загрузки и правки строк); columns – встроенные столбцы
-export function refreshDuplicates(rows, columns) {
-    duplicateSets = buildDuplicateSets(rows, columns);
+export function refreshDuplicates(rows, columns, kind) {
+    duplicateSets[kind || "pc"] = buildDuplicateSets(rows, columns);
 }
 
 export const kindLabels = {
@@ -78,9 +79,16 @@ export function toColumnDef(c) {
         multiline: c.multiline,
         // location: правка – выбор узла дерева (двойной клик)
         location: c.kind === "location",
-        // scan: только из сканера (антивирусы, этап 26д) – не правится
-        editable: c.kind !== "location" && c.kind !== "scan",
+        // scan: только из сканера (антивирусы, этап 26д) – не правится; у принтера (этап 44)
+        // значения модели и вход Web в ячейке тоже не правятся
+        editable: ["location", "scan", "pattr", "secret"].indexOf(c.kind) === -1,
         scanOnly: c.kind === "scan",
+        // Принтеры у ПК и ПК у принтера – ссылками (этап 44): к какой таблице ведут
+        links: c.kind === "printers" ? "printer" : (c.kind === "computers" ? "pc" : null),
+        // Подсказки при правке – свой список: модели справочника, «есть» / «нет»
+        pick: c.kind === "pmodel" ? "model" : (c.kind === "flag" ? "flag" : null),
+        // Логин и пароль Web: в ячейке – только задан ли, нажатие – окно
+        secret: c.kind === "secret",
         hiddenByDefault: c.hidden,
         dup: c.dup,
         bulk: c.bulk,
@@ -162,7 +170,9 @@ export const ENTITY_LABELS = {
     scan_antivirus: "Антивирусы",
     table_marks: "Выделение",
     app_settings: "Настройка",
-    naming: "Имя ПК"
+    naming: "Своё имя",
+    printers: "Принтер",
+    printer_models: "Модель принтера"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -225,10 +235,37 @@ export const SIMPLE_FIELD_LABELS = {
     hidden: "Не показывать",
     name: "Название",   // своё название антивируса (этап 26е)
     vnc_default: "VNC",
-    name_keep: "Своё имя"   // имя ПК не по правилу (этап 35)
+    name_keep: "Своё имя",   // имя ПК не по правилу (этап 35)
+    // Модели принтеров (этап 44)
+    kind: "Тип",
+    maker: "Производитель",
+    model: "Модель",
+    duplex: "Дуплекс"
 };
-// Не отменяются и не открывают «Историю значения»
-export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password"];
+// Не отменяются и не открывают «Историю значения» (логин и пароль Web – этап 44)
+export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password", "web_login", "web_password"];
+
+// Модели принтеров (этап 44): значения в Истории и справочнике – словами
+export const PRINTER_KINDS = [{ key: "mfu", label: "МФУ" }, { key: "printer", label: "Принтер" }];
+export const COLOR_LABELS = { true: "цветная", false: "ч/б" };
+export const YES_NO_LABELS = { true: "есть", false: "нет" };
+
+export function printerModelValue(field, value) {
+    if (value === null || value === undefined) {
+        return value;
+    }
+    if (field === "kind") {
+        const kind = PRINTER_KINDS.find(function (k) { return k.key === value; });
+        return kind ? kind.label : value;
+    }
+    if (field === "color" && typeof value === "boolean") {
+        return COLOR_LABELS[value];
+    }
+    if (field === "duplex" && typeof value === "boolean") {
+        return YES_NO_LABELS[value];
+    }
+    return value;
+}
 
 export const LOCATION_FIELD_LABELS = {
     name: "Название",
@@ -252,6 +289,12 @@ export const NAME_RULE_COLUMN = {
     virtual: true,
     editable: false
 };
+
+// Ключ в браузере для таблицы принтеров (этап 44): у неё свои столбцы, ширины,
+// порядок, закрепление и виды – «itdb.hiddenColumns.v1» → «itdb.printers.hiddenColumns.v1»
+export function tableStoreKey(key, kind) {
+    return kind === "printer" ? key.replace(/^itdb\./, "itdb.printers.") : key;
+}
 
 export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
 // Столбцы, скрытые по умолчанию, которые уже были скрыты один раз: если

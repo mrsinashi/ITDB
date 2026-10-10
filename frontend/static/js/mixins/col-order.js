@@ -2,7 +2,7 @@
 // (mixins/table-views.js), запоминается в браузере; вернуть исходный – меню «Столбцы».
 
 import { saveJson } from "../util.js";
-import { COLUMN_ORDER_KEY } from "../columns.js";
+import { COLUMN_ORDER_KEY, tableStoreKey } from "../columns.js";
 
 // Сдвиг мыши, после которого нажатие на шапке – перетаскивание, а не клик
 const DRAG_START = 5;
@@ -244,7 +244,7 @@ export default {
         setColumnOrder(order) {
             if (this.tableView === 1) {
                 this.columnOrder = order;
-                saveJson(COLUMN_ORDER_KEY, order);
+                saveJson(tableStoreKey(COLUMN_ORDER_KEY, this.tableKind), order);
             } else {
                 this.patchView({ order: order });
             }

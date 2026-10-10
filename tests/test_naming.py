@@ -51,9 +51,12 @@ def test_node_rules(editor, reader, room):
 
 def test_node_rules_checks(editor, reader, room):
     assert reader.patch("/api/naming/nodes", json={"items": [{"id": room["room"], "part": "x"}]}).status_code == 403
-    for part in ("тер", "a b", "a--b", "a_b", "x" * 16):
+    for part in ("тер", "a b", "a--b", "a_b"):
         response = editor.patch("/api/naming/nodes", json={"items": [{"id": room["room"], "part": part}]})
         assert response.status_code == 400, part
+    # Длина части не ограничена (этап 44)
+    ok(editor.patch("/api/naming/nodes", json={"items": [{"id": room["room"], "part": "x" * 20}]}))
+    assert tree_nodes(reader)[room["room"]]["name_part"] == "x" * 20
     assert editor.patch("/api/naming/nodes", json={"items": [{"id": 99999, "part": "x"}]}).status_code == 404
     assert editor.patch("/api/naming/nodes", json={"items": []}).status_code == 400
     same = [{"id": room["room"], "part": "a"}, {"id": room["room"], "part": "b"}]

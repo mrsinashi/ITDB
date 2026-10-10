@@ -24,7 +24,10 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from api_column_styles import is_empty
-from api_columns import EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY
+from api_columns import (
+    EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY, PRINTER_COLUMNS_BY_KEY, PRINTER_EDITABLE_KEYS,
+    PRINTER_HISTORY_LABELS,
+)
 from api_computers import (
     DATE_FIELDS,
     apply_fields,
@@ -38,9 +41,14 @@ from api_computers import (
 )
 from api_locations import check_can_archive, check_duplicate, clean, validate_name_code
 from api_naming import RULE_FIELDS, set_rule
+from api_printers import (
+    apply_printer_fields, check_model, clean_model_value, model_title, printer_display, printer_value,
+    renumber_after_kind_change,
+)
 from api_users import ROLES, check_login_free, clean_login, clean_text, end_sessions
 from history_log import choice_title, column_label
-from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, User
+from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, Printer, PrinterModel, User
+from printer_links import computer_title, links_ids, links_text, printer_title, printers_by_computer
 
 # Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ – столбец)
 Ref = namedtuple("Ref", "entity entity_id entity_key")
@@ -65,6 +73,8 @@ SIMPLE = {
     "field_defs": {"model": FieldDef, "fields": {"label", "archived"}},
     "column_styles": {"model": ColumnStyle, "fields": {"color", "bg_color"} | STYLE_FLAGS},
     "users": {"model": User, "fields": {"login", "full_name", "position", "role", "archived"}, "admin": True},
+    # Модели принтеров (этап 44): правка модели меняет все её принтеры
+    "printer_models": {"model": PrinterModel, "fields": {"kind", "maker", "model", "color", "duplex"}},
 }
 SIMPLE_LABELS = {
     "value": "Значение", "color": "Цвет текста", "bg_color": "Фон", "bold": "Жирный",
@@ -72,12 +82,20 @@ SIMPLE_LABELS = {
     "label": "Название", "archived": "Архив", "role": "Роль",
     "password": "Пароль", "created": "Создано", "deleted": "Удалено",
     "login": "Логин", "full_name": "ФИО", "position": "Должность",
+    "kind": "Тип", "maker": "Производитель", "model": "Модель", "duplex": "Дуплекс",
 }
+# У модели принтера color – не «Цвет текста», а «Печать»
+MODEL_LABELS = {"color": "Печать"}
 
-ENTITIES = ("computers", "locations") + tuple(SIMPLE)
+ENTITIES = ("computers", "locations", "printers") + tuple(SIMPLE)
 
 # Не отменяются: создание, удаление (удалённое не вернуть), смена пароля
-FIXED_FIELDS = {"created", "deleted", "password"}
+# (с этапа 44 – и логина и пароля Web у принтера)
+FIXED_FIELDS = {"created", "deleted", "password", "web_login", "web_password"}
+
+# Связи принтеров с ПК (этап 44): у ПК – «printers», у принтера – «computers»; в Истории –
+# и номерами записей (old_ids / new_ids), отмена ставит связи по ним
+LINK_FIELDS = {("computers", "printers"), ("printers", "computers")}
 
 # Ключ в extra → ключ в API (GSIT → gsit)
 EXTRA_API_KEYS = {extra_key: key for key, extra_key in EXTRA_FIELDS.items()}
@@ -108,6 +126,9 @@ def field_kind(entity, field):
     if entity == "locations":
         return "value" if field in LOCATION_VALUE_FIELDS else "info"
 
+    if entity == "printers":
+        return "value" if field in PRINTER_EDITABLE_KEYS or field in ("archived", "location_id") else "info"
+
     if field in ("archived", "location_id") or field.startswith("extra."):
         return "value"
 
@@ -120,8 +141,15 @@ def field_kind(entity, field):
 
 
 def field_label(session, entity, field):
+    if entity == "printer_models":
+        return MODEL_LABELS.get(field) or SIMPLE_LABELS.get(field, field)
+
     if entity in SIMPLE:
         return SIMPLE_LABELS.get(field, field)
+
+    if entity == "printers":
+        column = PRINTER_COLUMNS_BY_KEY.get(field)
+        return column.card if column is not None else PRINTER_HISTORY_LABELS.get(field, field)
 
     if entity == "locations":
         return LOCATION_LABELS.get(field, HISTORY_LABELS.get(field, field))
@@ -154,7 +182,7 @@ def find_object(session, ref, lock=True):
         obj = session.get(ColumnStyle, ref.entity_key)
         return obj or ColumnStyle(field=ref.entity_key, **{name: False for name in STYLE_FLAGS})
 
-    models = {"computers": Computer, "locations": Location}
+    models = {"computers": Computer, "locations": Location, "printers": Printer}
     model = models.get(ref.entity) or SIMPLE[ref.entity]["model"]
     query = session.query(model).filter(model.id == ref.entity_id)
 
@@ -179,6 +207,12 @@ def object_title(session, obj, ref):
 
     if entity == "computers":
         return obj.hostname or f"ПК #{obj.id}"
+
+    if entity == "printers":
+        return obj.name or f"Принтер #{obj.id}"
+
+    if entity == "printer_models":
+        return model_title(obj)
 
     if entity == "locations":
         return obj.name or obj.code or f"#{obj.id}"
@@ -251,14 +285,24 @@ class Values:
         return self._path_ids.get(path, "?")
 
     def of_change(self, entity, field, change, side):
-        if entity == "computers" and field == "location_id":
+        if entity in ("computers", "printers") and field == "location_id":
             return self.location_id(change, side)
+
+        # Модель принтера – по id (название могли поменять в справочнике)
+        if entity == "printers" and field == "model":
+            return change.get(side + "_id")
+
+        if (entity, field) in LINK_FIELDS and side + "_ids" in change:
+            return change[side + "_ids"]
 
         return change.get(side)
 
     def current(self, entity, obj, field):
         if entity == "locations" or entity in SIMPLE:
             return getattr(obj, field)
+
+        if entity == "printers":
+            return printer_value(self.session, obj, field)
 
         if field == "archived":
             return obj.archived
@@ -274,6 +318,9 @@ class Values:
         if field == "vacuum":
             return vacuum_text(get_vacuum_logins(self.session, obj.id))
 
+        if field == "printers":
+            return links_ids(printers_by_computer(self.session, [obj.id]).get(obj.id, []))
+
         if field.startswith("extra."):
             return (obj.extra or {}).get(field[6:])
 
@@ -284,7 +331,13 @@ class Values:
 
     def display(self, entity, field, value):
         """Значение для показа (у расположения – путь)."""
-        if entity == "computers" and field == "location_id":
+        if entity == "printers" and field == "model":
+            return printer_display(self.session, field, value)
+
+        if (entity, field) in LINK_FIELDS and isinstance(value, list):
+            return links_display(self.session, entity, value)
+
+        if entity in ("computers", "printers") and field == "location_id":
             if value is None or value == "?":
                 return None
 
@@ -293,9 +346,23 @@ class Values:
         return value
 
 
+def links_display(session, entity, ids):
+    """Связи номерами → текстом, как в ячейке («pc-1\npc-2 [usb]»)."""
+    model, title = (Printer, printer_title) if entity == "computers" else (Computer, computer_title)
+    items = [(session.get(model, item[0]), item[1]) for item in ids]
+    return links_text([(obj, usb) for obj, usb in items if obj is not None], title)
+
+
 def same(field, a, b):
     if a in ("", None) and b in ("", None):
         return True
+
+    # Связи принтеров с ПК – номерами записей [[id, usb]]
+    if isinstance(a, list) or isinstance(b, list):
+        def pairs(value):
+            return sorted((int(item[0]), bool(item[1])) for item in value) if isinstance(value, list) else value
+
+        return pairs(a or []) == pairs(b or [])
 
     if field == "vacuum":
         def lines(value):
@@ -319,7 +386,10 @@ def set_value(session, entity, obj, field, value, batch, user):
         return set_location_value(session, obj, field, value)
 
     if entity in SIMPLE:
-        return set_simple_value(session, entity, obj, field, value, user)
+        return set_simple_value(session, entity, obj, field, value, user, batch)
+
+    if entity == "printers":
+        return set_printer_value(session, obj, field, value, batch)
 
     if field == "archived":
         value = bool(value)
@@ -406,13 +476,52 @@ def set_location_value(session, location, field, value):
     return {field: {"old": old, "new": getattr(location, field)}}
 
 
-def set_simple_value(session, entity, obj, field, value, user):
-    """Справочник, польз. поле, оформление столбца, пользователь системы –
-    с теми же проверками, что и при обычной правке."""
+def set_printer_value(session, printer, field, value, batch):
+    """Поле принтера – как правкой в таблице (модель – по id)."""
+    if field == "archived":
+        value = bool(value)
+
+        if printer.archived == value:
+            return {}
+
+        old = printer.archived
+        printer.archived = value
+        return {"archived": {"old": old, "new": value}}
+
+    if field == "location_id":
+        if value is None or value == "?":
+            raise HTTPException(
+                status_code=400,
+                detail="Узел из этой записи не найден (его переименовали или перенесли). Выбери расположение в таблице.",
+            )
+
+        location = session.get(Location, value)
+
+        if not location or location.archived:
+            path = location_path(value, load_locations(session)) if location else None
+            raise HTTPException(status_code=400, detail=f"Узел «{path or value}» в архиве – сначала верни его из архива.")
+
+    payload = {"model_id": value} if field == "model" else {field: value}
+    return apply_printer_fields(session, printer, payload, batch)
+
+
+def set_simple_value(session, entity, obj, field, value, user, batch=None):
+    """Справочник, польз. поле, оформление столбца, пользователь системы, модель
+    принтера – с теми же проверками, что и при обычной правке."""
     old = getattr(obj, field)
 
     if same(field, old, value):
         return {}
+
+    if entity == "printer_models":
+        setattr(obj, field, clean_model_value(field, value))
+        check_model(session, obj)
+
+        # Сменился тип: у её принтеров, чей № в новом счёте занят, – следующий свободный
+        if field == "kind" and obj.kind != old and batch is not None:
+            renumber_after_kind_change(session, obj, batch)
+
+        return {field: {"old": old, "new": getattr(obj, field)}}
 
     if field in STYLE_FLAGS or field == "archived":
         value = bool(value)
@@ -470,9 +579,9 @@ def set_simple_value(session, entity, obj, field, value, user):
 
 
 def touch(entity, obj):
-    """ПК изменился без новой записи истории – версия +1 (правка из таблицы
-    со старой версией получит «обнови таблицу»)."""
-    if entity == "computers":
+    """ПК или принтер изменился без новой записи истории – версия +1 (правка из
+    таблицы со старой версией получит «обнови таблицу»)."""
+    if entity in ("computers", "printers"):
         obj.version = (obj.version or 1) + 1
         obj.updated_at = datetime.now(timezone.utc)
 

@@ -4,7 +4,8 @@
 
 Новый встроенный столбец – одна строка в COLUMNS (и, если нужно, в CARD_GROUPS).
 Пользовательские поля сюда не входят: они в field_defs и добавляются к
-встроенным перед «Статус»."""
+встроенным перед «Статус». Столбцы таблицы принтеров (этап 44) – здесь же,
+PRINTER_COLUMNS и PRINTER_CARD_GROUPS."""
 import re
 from typing import Literal, Optional
 
@@ -25,7 +26,19 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #   location  – часть пути расположения; меняется выбором узла (location_id)
 #   scan      – только из сканера, в computers не хранится и не правится
 #               (антивирусы – из записей GLPI / GSIT, этап 26д)
-Kind = Literal["text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan"]
+# Принтеры (этап 44):
+#   printers  – у ПК: подключённые принтеры (связь printer_computers), строками
+#               «имя» или «имя [usb]»
+#   computers – у принтера: ПК, к которым он подключён, так же
+#   pmodel    – модель принтера из справочника (выбор модели)
+#   pattr     – значение модели (тип, производитель, печать, дуплекс): у принтера
+#               не правится – меняется модель или сама модель в справочнике
+#   flag      – «есть» / «нет» (веб-страница)
+#   secret    – логин и пароль от веб-страницы: в таблице – только задан ли
+Kind = Literal[
+    "text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan",
+    "printers", "computers", "pmodel", "pattr", "flag", "secret",
+]
 
 
 class Column(BaseModel):
@@ -84,6 +97,7 @@ COLUMNS = [
     col("gpu", "GPU", "Видеокарта (ГП / GPU)", center=True, card_copy=True, export_width=16),
     col("mac", "MAC", "MAC адрес", kind="mac", multiline=True, values="no", card_copy=True, dup=True, bulk=False, export_width=20),
     col("vnc", "VNC", "Тип VNC", center=True, hidden=True, export_width=8),
+    col("printers", "Принтеры", kind="printers", multiline=True, values="no", bulk=False, export_width=22),
     col("antivirus", "Антивирус", "Антивирусы", kind="scan", center=True, multiline=True, values="no", bulk=False, export_width=30),
     col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=16),
@@ -106,7 +120,7 @@ COLUMNS_BY_KEY = {column.key: column for column in COLUMNS}
 CARD_GROUPS = [
     (None, ["status", "temp_until"]),
     ("Размещение", ["building", "department", "floor", "room_code", "seat_no"]),
-    ("Сеть", ["ip", "mac", "vnc"]),
+    ("Сеть", ["ip", "mac", "vnc", "printers"]),
     ("Оборудование", ["type", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "antivirus"]),
     ("Учёт", ["inv_no", "serial", "glpi_id", "gsit_id", "gsit", "state", "label"]),
     ("Прочее", ["user_fields", "note"]),
@@ -131,6 +145,61 @@ def keys_of(*kinds):
 # Поля, которые правятся в PATCH (кроме location_id и пользовательских)
 EDITABLE_KEYS = {column.key for column in COLUMNS if column.kind not in ("location", "scan")}
 
+
+# ---------- Принтеры (этап 44) ----------
+
+# Порядок – как в таблице принтеров и в выгрузке
+PRINTER_COLUMNS = [
+    col("building", "Адрес", kind="location", card_copy=True, export_width=16, card_always=True),
+    col("department", "Отделение", kind="location", card_copy=True, export_width=14, card_always=True),
+    col("floor", "Эт.", "Этаж", kind="location", center=True, export_width=6),
+    col("room_code", "Каб", "№ Кабинета", kind="location", center=True, values="no", card_copy=True, export_width=8, card_always=True),
+    col("room_name", "Кабинет", kind="location", export_width=18),
+    col("number", "№", "№ в кабинете", kind="seat", center=True, values="no", bulk=False, export_width=6, card_always=True),
+    col("name", "Имя", link=True, sticky=True, values="no", card_copy=True, dup=True, bulk=False, export_width=22),
+    col("computers", "Компьютеры", kind="computers", multiline=True, values="no", bulk=False, export_width=24, card_always=True),
+    col("ip", "IP", "IP адрес", kind="ip", sticky=True, multiline=True, values="subnet", card_copy=True, dup=True, bulk=False, export_width=16, card_always=True),
+    col("kind", "Тип", kind="pattr", center=True, export_width=9, card_always=True),
+    col("maker", "Производитель", kind="pattr", center=True, export_width=14, card_always=True),
+    col("model", "Модель", kind="pmodel", center=True, card_copy=True, suggest=True, export_width=20, card_always=True),
+    col("color", "Печать", kind="pattr", center=True, export_width=9),
+    col("duplex", "Дуплекс", kind="pattr", center=True, export_width=9),
+    col("web", "Web", "Веб-страница", kind="flag", center=True, suggest=True, export_width=6),
+    col("web_auth", "Вход", "Логин и пароль Web", kind="secret", center=True, values="no", bulk=False, export_width=8),
+    col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
+    col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=16),
+    col("note", "Примечание", kind="multiline", multiline=True, note=True, max_width=200, values="no", export_width=30, card_always=True),
+]
+
+PRINTER_COLUMNS_BY_KEY = {column.key: column for column in PRINTER_COLUMNS}
+
+# Карточка принтера: группы строк, как у ПК; имя – в заголовке; ссылка Web и вход –
+# своими строками (в таблице ссылки нет)
+PRINTER_CARD_GROUPS = [
+    ("Размещение", ["building", "department", "floor", "room_code", "number"]),
+    ("Сеть", ["ip", "web", "web_url", "web_auth", "computers"]),
+    ("Модель", ["kind", "maker", "model", "color", "duplex"]),
+    ("Учёт", ["inv_no", "serial"]),
+    ("Прочее", ["note"]),
+]
+
+# Подписи в Истории принтера для записей, которые не столбцы
+PRINTER_HISTORY_LABELS = {
+    "location_id": "Расположение",
+    "web_url": "Ссылка Web",
+    "web_login": "Логин Web",
+    "web_password": "Пароль Web",
+    "archived": "Архив",
+    "created": "Создан",
+}
+
+# Поля принтера, которые правятся в PATCH (кроме location_id): значения модели – нет
+PRINTER_EDITABLE_KEYS = {
+    column.key for column in PRINTER_COLUMNS if column.kind not in ("location", "pattr", "secret")
+} | {"web_url"}
+
+PRINTER_BULK_EXCLUDED = {"location_id"} | {column.key for column in PRINTER_COLUMNS if not column.bulk}
+
 # Нельзя менять всем выбранным сразу: расположение и № места – через
 # «Переместить», значения, которые у каждого ПК свои, – по одному
 BULK_EXCLUDED = {"location_id"} | {column.key for column in COLUMNS if not column.bulk}
@@ -148,6 +217,10 @@ class ColumnsInfo(BaseModel):
     columns: list[Column]
     card_groups: list[CardGroup]
     history_labels: dict[str, str]
+    # Таблица принтеров (этап 44)
+    printer_columns: list[Column]
+    printer_card_groups: list[CardGroup]
+    printer_history_labels: dict[str, str]
 
 
 @router.get("/columns", response_model=ColumnsInfo)
@@ -156,4 +229,7 @@ def list_columns():
         columns=COLUMNS,
         card_groups=[CardGroup(title=title, fields=fields) for title, fields in CARD_GROUPS],
         history_labels=HISTORY_LABELS,
+        printer_columns=PRINTER_COLUMNS,
+        printer_card_groups=[CardGroup(title=title, fields=fields) for title, fields in PRINTER_CARD_GROUPS],
+        printer_history_labels=PRINTER_HISTORY_LABELS,
     )

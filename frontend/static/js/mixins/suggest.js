@@ -58,6 +58,11 @@ export default {
             if (!el || !col) {
                 return;
             }
+            // Принтер (этап 44): модель – из справочника, «Web» – есть / нет
+            if (col.pick) {
+                this.openSuggestList(el, col.field, this.pickOptions(col), onPick);
+                return;
+            }
             const scan = rowId ? this.scanSuggestFor(rowId, col.field) : [];
             if (!col.suggest && !scan.length) {
                 return;

@@ -12,6 +12,9 @@
   расположение (переехал или переименован – проверяется снова);
 - переименовать по правилу несколько ПК – обычная правка HOSTNAME одним
   действием (одна отмена Ctrl+Z).
+
+Принтеры (этап 44): имя – начало узла, тип и номер (ter-proc-mfu-1), считает фронт;
+«своё имя» – app_settings «printer_name_keep», переименование – как у ПК (kind=printer).
 """
 import re
 from datetime import datetime, timezone
@@ -26,14 +29,26 @@ from api_computers import ChangeBatch, apply_fields, save_changes, user_field_ke
 from auth import require_editor
 from db import get_db
 from history_log import log_change
-from models import AppSetting, Computer, History, Location
+from api_printers import apply_printer_fields, lock_printers, save_printer_changes
+from models import AppSetting, Computer, History, Location, Printer
 
 router = APIRouter(prefix="/api/naming", tags=["naming"])
 
 KEEP_KEY = "name_keep"
+# «Своё имя» принтеров (этап 44): ключ настройки, таблица, поле имени, ключ id в ответе
+KEEPS = {
+    "pc": (KEEP_KEY, Computer, "hostname", "computer_id"),
+    "printer": ("printer_name_keep", Printer, "name", "printer_id"),
+}
 
-# Имя компьютера в Windows (NetBIOS) – не длиннее 15 знаков
-NAME_MAX = 15
+
+def keep_kind(kind):
+    if kind not in KEEPS:
+        raise HTTPException(status_code=400, detail="kind: pc или printer.")
+
+    return KEEPS[kind]
+
+# Длина части не ограничена (этап 44: бывают имена длиннее 15 знаков NetBIOS)
 PART_RE = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 
 RULE_FIELDS = {"part": "name_part", "own": "name_own", "single": "name_single"}
@@ -48,9 +63,6 @@ def clean_part(value):
 
     if not PART_RE.fullmatch(text):
         raise HTTPException(status_code=400, detail="Часть имени – латиница, цифры и «-».")
-
-    if len(text) > NAME_MAX:
-        raise HTTPException(status_code=400, detail=f"Часть имени длиннее {NAME_MAX} знаков.")
 
     return text
 
@@ -122,81 +134,89 @@ def update_nodes(payload: NodesUpdate, me=Depends(require_editor), session=Depen
 # ---------- «Своё имя» у ПК ----------
 
 
-def keep_items(session):
-    row = session.get(AppSetting, KEEP_KEY)
+def keep_items(session, kind="pc"):
+    row = session.get(AppSetting, keep_kind(kind)[0])
     return dict(row.value or {}) if row else {}
 
 
-def keep_list(items):
-    return [dict(value, computer_id=int(key)) for key, value in sorted(items.items(), key=lambda kv: int(kv[0]))]
+def keep_list(items, kind="pc"):
+    id_key = keep_kind(kind)[3]
+    return [dict(value, **{id_key: int(key)}) for key, value in sorted(items.items(), key=lambda kv: int(kv[0]))]
 
 
 @router.get("/keep")
-def get_keep(session=Depends(get_db)):
-    """ПК со своим именем. Устаревшие (ПК переименовали, перенесли) фронт не
-    считает; убираются при следующей правке списка."""
-    return {"items": keep_list(keep_items(session))}
+def get_keep(kind: str = "pc", session=Depends(get_db)):
+    """ПК (kind=printer – принтеры) со своим именем. Устаревшие (переименовали,
+    перенесли) фронт не считает; убираются при следующей правке списка."""
+    return {"items": keep_list(keep_items(session, kind), kind)}
 
 
 class KeepUpdate(BaseModel):
     ids: List[int]
     keep: bool
+    kind: str = "pc"
 
 
 @router.post("/keep")
 def update_keep(payload: KeepUpdate, me=Depends(require_editor), session=Depends(get_db)):
-    """keep – оставить ПК их нынешние имена (на их нынешнем месте); иначе – снова по правилу."""
+    """keep – оставить ПК (принтерам) их нынешние имена (на их нынешнем месте); иначе –
+    снова по правилу. В Истории – «Своё имя» (entity naming; у принтера – entity_key printer)."""
+    setting_key, model, name_field, _ = keep_kind(payload.kind)
+    printer = payload.kind == "printer"
+    what = "Принтер" if printer else "Компьютер"
     ids = parse_ids(payload.ids)
-    computers = session.query(Computer).filter(Computer.id.in_(ids)).all()
+    objects = session.query(model).filter(model.id.in_(ids)).all()
 
-    if len(computers) != len(ids):
-        raise HTTPException(status_code=404, detail="Часть компьютеров не найдена. Обнови таблицу.")
+    if len(objects) != len(ids):
+        raise HTTPException(status_code=404, detail=f"Часть {'принтеров' if printer else 'компьютеров'} не найдена. Обнови таблицу.")
 
-    session.execute(pg_insert(AppSetting).values(key=KEEP_KEY, value={}).on_conflict_do_nothing())
-    row = session.query(AppSetting).filter(AppSetting.key == KEEP_KEY).with_for_update().one()
+    session.execute(pg_insert(AppSetting).values(key=setting_key, value={}).on_conflict_do_nothing())
+    row = session.query(AppSetting).filter(AppSetting.key == setting_key).with_for_update().one()
     items = dict(row.value or {})
 
     # Устаревшие записи – без следа: они и так уже не действуют
     current = {
-        computer.id: computer
-        for computer in session.query(Computer).filter(Computer.id.in_([int(key) for key in items])).all()
+        obj.id: obj
+        for obj in session.query(model).filter(model.id.in_([int(key) for key in items])).all()
     } if items else {}
 
     for key in list(items):
-        computer = current.get(int(key))
+        obj = current.get(int(key))
 
-        if (computer is None or computer.archived or computer.hostname != items[key].get("name")
-                or computer.location_id != items[key].get("location_id")):
+        if (obj is None or obj.archived or getattr(obj, name_field) != items[key].get("name")
+                or obj.location_id != items[key].get("location_id")):
             del items[key]
 
     now = datetime.now(timezone.utc).isoformat()
+    entity_key = "printer" if printer else None
 
-    for computer in computers:
-        key = str(computer.id)
+    for obj in objects:
+        key = str(obj.id)
         old = items.get(key)
+        name = getattr(obj, name_field)
 
         if payload.keep:
-            if computer.archived:
-                raise HTTPException(status_code=400, detail="Компьютер из архива сначала верни из архива.")
+            if obj.archived:
+                raise HTTPException(status_code=400, detail=f"{what} из архива сначала верни из архива.")
 
-            if not computer.hostname:
-                raise HTTPException(status_code=400, detail="У компьютера нет имени.")
+            if not name:
+                raise HTTPException(status_code=400, detail=f"У {'принтера' if printer else 'компьютера'} нет имени.")
 
             if old:
                 continue
 
-            items[key] = {"name": computer.hostname, "location_id": computer.location_id, "by": me["login"], "at": now}
-            log_change(session, "naming", computer.id, me["login"],
-                       {"name_keep": {"old": None, "new": computer.hostname}}, title=computer.hostname)
+            items[key] = {"name": name, "location_id": obj.location_id, "by": me["login"], "at": now}
+            log_change(session, "naming", obj.id, me["login"],
+                       {"name_keep": {"old": None, "new": name}}, title=name, entity_key=entity_key)
         elif old:
             del items[key]
-            log_change(session, "naming", computer.id, me["login"],
-                       {"name_keep": {"old": old.get("name"), "new": None}}, title=computer.hostname or old.get("name"))
+            log_change(session, "naming", obj.id, me["login"],
+                       {"name_keep": {"old": old.get("name"), "new": None}}, title=name or old.get("name"), entity_key=entity_key)
 
     row.value = items
     row.updated_at = datetime.now(timezone.utc)
     session.commit()
-    return {"items": keep_list(items)}
+    return {"items": keep_list(items, payload.kind)}
 
 
 # ---------- Переименовать по правилу ----------
@@ -209,12 +229,17 @@ class RenameItem(BaseModel):
 
 class RenameRequest(BaseModel):
     items: List[RenameItem]
+    kind: str = "pc"   # printer – принтеры (этап 44): hostname – их новое имя
 
 
 @router.post("/rename")
 def rename(payload: RenameRequest, me=Depends(require_editor), session=Depends(get_db)):
-    """Новые имена нескольким ПК одним действием – как правка HOSTNAME в таблице."""
+    """Новые имена нескольким ПК (принтерам) одним действием – как правка имени в таблице."""
     ids = parse_ids([item.id for item in payload.items])
+
+    if payload.kind == "printer":
+        return rename_printers(session, ids, payload.items, me)
+
     computers = lock_computers(session, ids)
     user_field_keys = user_field_keys_of(session)
     batch = ChangeBatch(me["login"])
@@ -229,6 +254,26 @@ def rename(payload: RenameRequest, me=Depends(require_editor), session=Depends(g
         if changes:
             save_changes(session, computer, changes, me["login"])
             changed.append(computer.id)
+
+    batch.finish(session)
+    session.commit()
+    return {"ok": True, "changed": changed}
+
+
+def rename_printers(session, ids, items, me):
+    """Принтеры (этап 44): новое имя – как правка «Имени» в таблице принтеров."""
+    batch = ChangeBatch(me["login"])
+    changed = []
+
+    for printer, item in zip(lock_printers(session, ids), items):
+        if not item.hostname.strip():
+            raise HTTPException(status_code=400, detail="Пустое имя.")
+
+        changes = apply_printer_fields(session, printer, {"name": item.hostname}, batch)
+
+        if changes:
+            save_printer_changes(session, printer, changes, me["login"])
+            changed.append(printer.id)
 
     batch.finish(session)
     session.commit()

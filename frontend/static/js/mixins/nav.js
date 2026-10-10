@@ -28,7 +28,7 @@ export default {
         // Адрес в строке браузера – как у открытой страницы (без записи в журнал переходов)
         syncHash() {
             const page = this.view === "scan" ? "scan/" + this.scanTab
-                : (this.view === "choices" && this.choicesTab === "names" ? "choices/names" : this.view);
+                : (this.view === "choices" && this.choicesTab !== "styles" ? "choices/" + this.choicesTab : this.view);
             const hash = pageLink(page);
             if (window.location.hash !== hash) {
                 try {
@@ -71,10 +71,17 @@ export default {
                 this.setScanTab(route.tab);
             }
             if (route.view === "choices") {
-                this.setChoicesTab(route.tab === "names" ? "names" : "styles");
+                this.setChoicesTab(route.tab === "names" || route.tab === "models" ? route.tab : "styles");
             }
             if (params.pc) {
                 this.openCardById(Number(params.pc));
+            }
+            // Карточка принтера (этап 44): принтеры могли ещё не загрузиться
+            if (params.pr) {
+                if (!this.printerRows.length) {
+                    await this.loadPrinters();
+                }
+                this.openPrinterCardById(Number(params.pr));
             }
             this.syncHash();
         },

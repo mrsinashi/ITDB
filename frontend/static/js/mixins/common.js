@@ -1,7 +1,7 @@
 // Общее: ошибки запросов, полоска загрузки, сообщения и подтверждения, выгрузка.
 
 import { apiFetch, pad2 } from "../util.js";
-import { ENTITY_LABELS, LOCATION_FIELD_LABELS, SIMPLE_FIELD_LABELS, buildFieldLabels } from "../columns.js";
+import { ENTITY_LABELS, LOCATION_FIELD_LABELS, SIMPLE_FIELD_LABELS, buildFieldLabels, printerModelValue } from "../columns.js";
 import { ROLE_LABELS } from "../settings.js";
 
 export default {
@@ -9,6 +9,11 @@ export default {
         // Подписи полей в Истории: полные названия столбцов + записи не-столбцы
         fieldLabelMap() {
             return buildFieldLabels(this.builtinColumns, this.historyLabels);
+        },
+
+        // То же у принтеров (этап 44)
+        printerFieldLabelMap() {
+            return buildFieldLabels(this.printerColumns, this.printerHistoryLabels);
         },
     },
 
@@ -66,6 +71,13 @@ export default {
         fieldLabel(entity, field) {
             if (entity === "locations") {
                 return LOCATION_FIELD_LABELS[field] || field;
+            }
+            if (entity === "printers") {
+                return this.printerFieldLabelMap[field] || field;
+            }
+            // У модели принтера color – не цвет текста, а печать
+            if (entity === "printer_models" && field === "color") {
+                return "Печать";
             }
             if (entity !== "computers") {
                 return SIMPLE_FIELD_LABELS[field] || field;
@@ -195,6 +207,9 @@ export default {
             if (entity === "users" && field === "role" && value) {
                 return ROLE_LABELS[value] || value;
             }
+            if (entity === "printer_models") {
+                return this.displayValue(printerModelValue(field, value));
+            }
             return this.displayValue(value);
         },
 
@@ -222,16 +237,17 @@ export default {
             return String(value);
         },
 
-        // withArchive – ещё лист «Архив» с ПК из архива
+        // withArchive – ещё лист «Архив» с ПК из архива. На странице «Принтеры» – принтеры
         async downloadExport(withArchive) {
+            const what = this.tableKind === "printer" ? "printers" : "computers";
             try {
-                const response = await apiFetch("/api/export/computers.xlsx" + (withArchive ? "?archive=true" : ""));
+                const response = await apiFetch("/api/export/" + what + ".xlsx" + (withArchive ? "?archive=true" : ""));
                 if (!response.ok) {
                     this.toastError("Не удалось выгрузить: " + (await this.errorText(response)));
                     return;
                 }
                 const blob = await response.blob();
-                let filename = "itdb_computers.xlsx";
+                let filename = "itdb_" + what + ".xlsx";
                 const disposition = response.headers.get("Content-Disposition");
                 if (disposition && disposition.includes("filename=")) {
                     filename = disposition.split("filename=")[1].replace(/["']/g, "");

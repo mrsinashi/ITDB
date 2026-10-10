@@ -160,6 +160,64 @@ class VacuumAccountComputer(Base):
     account_id = Column(Integer, ForeignKey("vacuum_accounts.id"), nullable=False)
     computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
 
+
+class PrinterModel(Base):
+    """Модель принтера из справочника (этап 44): тип (mfu – МФУ, printer –
+    принтер), производитель и параметры. Принтер ссылается на модель – правка
+    модели меняет все её принтеры. color: True – цветная печать, False – ч/б,
+    None – не указано; duplex – так же."""
+    __tablename__ = "printer_models"
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(Text, nullable=False, server_default="printer")
+    maker = Column(Text, nullable=True)
+    model = Column(Text, nullable=False)
+    color = Column(Boolean, nullable=True)
+    duplex = Column(Boolean, nullable=True)
+
+
+class Printer(Base):
+    """Принтер или МФУ (этап 44). number – № в кабинете, у МФУ и принтеров свой
+    счёт; web – есть ли веб-страница (None – не указано), web_url – её адрес
+    (пусто – http://IP); web_secrets – логин и пароль от неё, зашифрованные
+    ключом ITDB_SECRET_KEY (secret_box.py): {"login", "password"}."""
+    __tablename__ = "printers"
+
+    id = Column(Integer, primary_key=True)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    number = Column(Integer, nullable=True)
+    name = Column(Text, nullable=True)
+    ip = Column(Text, nullable=True)
+    model_id = Column(Integer, ForeignKey("printer_models.id"), nullable=True)
+
+    web = Column(Boolean, nullable=True)
+    web_url = Column(Text, nullable=True)
+    web_secrets = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+
+    inv_no = Column(Text, nullable=True)
+    serial = Column(Text, nullable=True)
+    note = Column(Text, nullable=True)
+
+    # Удаления нет – только архив, как у ПК
+    archived = Column(Boolean, nullable=False, server_default="false")
+
+    version = Column(Integer, nullable=False, server_default="1")
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class PrinterComputer(Base):
+    """Принтер подключён к ПК (этап 44): по USB (usb) или по сети."""
+    __tablename__ = "printer_computers"
+    __table_args__ = (
+        UniqueConstraint("printer_id", "computer_id", name="uq_printer_computers"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    printer_id = Column(Integer, ForeignKey("printers.id"), nullable=False)
+    computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
+    usb = Column(Boolean, nullable=False, server_default="false")
+
+
 class History(Base):
     __tablename__ = "history"
 

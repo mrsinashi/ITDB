@@ -3,7 +3,7 @@ from sqlalchemy import func
 
 from auth import require_editor
 from db import get_db
-from models import Computer, History, Location
+from models import Computer, History, Location, Printer
 
 router = APIRouter(prefix="/api", tags=["locations"])
 
@@ -385,4 +385,17 @@ def check_can_archive(session, location):
         raise HTTPException(
             status_code=400,
             detail="В узле есть компьютеры. Сначала перемести их.",
+        )
+
+    # Принтеры (этап 44) – так же
+    printers = (
+        session.query(func.count(Printer.id))
+        .filter(Printer.location_id == location.id, Printer.archived == False)
+        .scalar()
+    )
+
+    if printers:
+        raise HTTPException(
+            status_code=400,
+            detail="В узле есть принтеры. Сначала перемести их.",
         )

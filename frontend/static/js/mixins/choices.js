@@ -86,10 +86,11 @@ export default {
                 };
             });
             // Общий «Кабинет» Таблицы («[214] Процедурная») оформляется как его название
+            // (и у принтеров, этап 44)
             const names = map[ROOM_STYLE_FIELDS[0]];
             if (names) {
                 const room = {};
-                this.rows.forEach(function (row) {
+                this.rows.concat(this.printerRows).forEach(function (row) {
                     const st = row.room && row.room_name ? names[String(row.room_name).trim().toLowerCase()] : null;
                     if (st) {
                         room[String(row.room).trim().toLowerCase()] = st;

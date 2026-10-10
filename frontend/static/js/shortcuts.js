@@ -66,6 +66,14 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
+    // Окно «Логин и пароль Web» (этап 44): Esc – закрыть
+    if (vm.webAuth && !vm.dialog) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            vm.closeWebAuth();
+        }
+        return;
+    }
     // Открыт диалог подтверждения: Esc – отмена, Enter – OK
     if (vm.dialog) {
         if (event.key === "Escape") {
@@ -99,20 +107,40 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
+    // Карточка принтера (этап 44) – так же
+    if (event.key === "Escape" && vm.pcard) {
+        if (vm.pcardEditKey) {
+            vm.pcardEditKey = null;
+        } else if (vm.pcardNameEdit) {
+            vm.cancelPcardName();
+        } else {
+            vm.closePrinterCard();
+        }
+        return;
+    }
     // Esc закрывает строку добавления (Таблица), форму узла (Дерево) и строку
     // «Новый пользователь / Изменить» (Пользователи), «Новая подсеть» (Сканирование),
     // где бы ни был фокус; открытый список выбора расположения закрывается
     // своим Esc раньше (он не пропускает событие дальше)
     if (event.key === "Escape" && !event.defaultPrevented && !vm.card) {
-        if (vm.view === "table" && vm.newRoom) {
+        if (vm.isTablePage() && vm.newRoom) {
             vm.closeNewRoom();
+            return;
+        }
+        // Новая модель – строкой под новым принтером (этап 44)
+        if (vm.isTablePage() && vm.newModel) {
+            vm.closeNewModel();
+            return;
+        }
+        if (vm.isTablePage() && vm.newPrinter) {
+            vm.closeNewPrinter();
             return;
         }
         if (vm.view === "table" && vm.newComputer) {
             vm.closeNewComputer();
             return;
         }
-        if (vm.view === "table" && vm.actionBar) {
+        if (vm.isTablePage() && vm.actionBar) {
             vm.closeAction();
             return;
         }
@@ -169,12 +197,13 @@ window.addEventListener("keydown", function (event) {
         return;
     }
     // Enter – VNC: только к строке с полоской, по которой нажали и больше ничего не трогали;
-    // иначе полоска снимается (этап 40). Поле ввода, кнопка, карточка – их Enter, не VNC
-    if (vm.view === "table" && event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    // иначе полоска снимается (этап 40). Поле ввода, кнопка, карточка – их Enter, не VNC.
+    // На «Принтерах» (этап 44) – веб-страница принтера
+    if (vm.isTablePage() && event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
         vm.onTableEnter(event);
         return;
     }
-    if (vm.view !== "table" || event.defaultPrevented || isTypingTarget(document.activeElement)) {
+    if (!vm.isTablePage() || event.defaultPrevented || isTypingTarget(document.activeElement)) {
         return;
     }
     // Alt+P – ping, Alt+R – RDP: к ПК, по строке которого нажали последним (выделять не
@@ -183,12 +212,12 @@ window.addEventListener("keydown", function (event) {
     const what = altKey && event.code === "KeyP" ? "ping" : (altKey && event.code === "KeyR" ? "rdp" : null);
     if (what) {
         if (!vm.editingRowId && !vm.cardEditKey && !vm.editingHostname && !vm.openMenu && !vm.scanPop && !vm.actionBar &&
-            !vm.newComputer && !vm.showArchive && vm.connectActive(what)) {
+            !vm.newComputer && !vm.newPrinter && !vm.pcardEditKey && !vm.pcardNameEdit && !vm.showArchive && vm.connectActive(what)) {
             event.preventDefault();
         }
         return;
     }
-    if (vm.card) {
+    if (vm.card || vm.pcard) {
         return;
     }
     // Ctrl+A – выделить все видимые строки таблицы

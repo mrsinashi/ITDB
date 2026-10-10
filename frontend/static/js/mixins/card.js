@@ -104,7 +104,8 @@ export default {
                 return CARD_EDIT_EXTRA[r.key];
             }
             const field = r.key.indexOf("x-") === 0 ? r.key.slice(2) : r.key;
-            const col = this.allColumns.find(function (c) { return c.field === field; });
+            // Столбцы ПК – и когда таблица показывает принтеры (этап 44)
+            const col = this.pcColumnDefs.find(function (c) { return c.field === field; });
             return col && col.editable ? col : null;
         },
 

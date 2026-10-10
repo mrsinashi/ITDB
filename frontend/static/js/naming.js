@@ -17,8 +17,6 @@
 // ПК в нём и ниже (ter). Правило ставится так, чтобы начала имён узлов ниже, у
 // которых есть своя часть, не поменялись.
 
-export const NAME_MAX = 15;
-
 // Имена, которые Windows даёт сама, – не образец
 const DEFAULT_HOST = /^(desktop|win|laptop)-[a-z0-9]{5,}$/;
 
@@ -185,6 +183,98 @@ export function newName(index, locationId, seat, rows) {
         }
     }
     return entry.start + "-" + (node.offset + n);
+}
+
+// ---------- Принтеры и МФУ (этап 44) ----------
+// Имя – начало имени узла, тип и номер: ter-proc-mfu-1, ter-proc-printer-2 (и в узле с одним
+// местом – с номером). Номер – № в кабинете (у МФУ и принтеров свой счёт); без № – место
+// по счёту среди своих в кабинете. Узлы с одним началом – номера дальше, как у ПК.
+// Без модели (тип неизвестен) правила нет.
+
+export const PRINTER_LABELS = { mfu: "mfu", printer: "printer" };
+
+export function printerKeepValid(keep, row) {
+    const k = keep && keep[row.id];
+    return !!k && k.name === row.name && k.location_id === row.location_id;
+}
+
+// Шаблон имени принтера узла: «ter-proc-mfu-N»
+export function printerRuleText(entry, kind) {
+    return entry && entry.start && PRINTER_LABELS[kind] ? entry.start + "-" + PRINTER_LABELS[kind] + "-N" : "";
+}
+
+// Номера в именах принтеров: { numbers: id → номер, nodes: «id узла|тип» → { list, local, offset } }
+function printerNumberPlan(rows, index) {
+    const byNode = new Map();
+    rows.forEach(function (row, pos) {
+        const entry = row.archived ? null : index.get(row.location_id);
+        if (!entry || !entry.start || !PRINTER_LABELS[row.kind_key]) {
+            return;
+        }
+        const key = row.location_id + "|" + row.kind_key;
+        let list = byNode.get(key);
+        if (!list) {
+            byNode.set(key, list = []);
+        }
+        list.push({ row: row, seat: seatOf(row.number), pos: pos });
+    });
+    byNode.forEach(function (list) {
+        list.sort(function (a, b) {
+            return (a.seat === null ? Infinity : a.seat) - (b.seat === null ? Infinity : b.seat) || a.pos - b.pos;
+        });
+    });
+    const offsets = new Map();
+    const numbers = new Map();
+    const nodes = new Map();
+    index.forEach(function (entry, id) {
+        if (!entry.start) {
+            return;
+        }
+        Object.keys(PRINTER_LABELS).forEach(function (kind) {
+            const list = byNode.get(id + "|" + kind) || [];
+            const startKey = entry.start + "|" + kind;
+            const offset = offsets.get(startKey) || 0;
+            const local = localNumbers(list);
+            local.nums.forEach(function (n, rowId) { numbers.set(rowId, offset + n); });
+            offsets.set(startKey, offset + local.max);
+            nodes.set(id + "|" + kind, { list: list, local: local, offset: offset });
+        });
+    });
+    return { numbers: numbers, nodes: nodes };
+}
+
+// Проверка имён принтеров: id → { entry, ok, kept, expected, num, kind }
+export function checkPrinterNames(rows, index, keep) {
+    const result = new Map();
+    const numbers = printerNumberPlan(rows, index).numbers;
+    rows.forEach(function (row) {
+        const entry = row.archived ? null : index.get(row.location_id);
+        if (!entry || !entry.start || !PRINTER_LABELS[row.kind_key]) {
+            return;
+        }
+        const kept = printerKeepValid(keep, row);
+        const num = kept ? null : numbers.get(row.id);
+        const expected = kept ? null : entry.start + "-" + PRINTER_LABELS[row.kind_key] + "-" + num;
+        result.set(row.id, { entry: entry, ok: kept || hostKey(row.name) === expected, kept: kept, expected: expected, num: num, kind: row.kind_key });
+    });
+    return result;
+}
+
+// Имя нового принтера в узле: kind – mfu / printer (нет модели – ""), number – его №
+export function newPrinterName(index, locationId, kind, number, rows) {
+    const entry = index.get(locationId);
+    if (!entry || !entry.start || !PRINTER_LABELS[kind]) {
+        return "";
+    }
+    const node = printerNumberPlan(rows, index).nodes.get(locationId + "|" + kind);
+    let n = seatOf(number);
+    if (n === null) {
+        n = node.list.length + 1;
+        while (node.local.taken.has(n)) {
+            n += 1;
+        }
+    }
+    return entry.start + "-" + PRINTER_LABELS[kind] + "-" + (node.offset + n);
 }
 
 // Как названы ПК узлов сейчас: id узла → { base, single, count, total } – самое

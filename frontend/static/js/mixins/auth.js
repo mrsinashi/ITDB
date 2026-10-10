@@ -139,10 +139,15 @@ export default {
         },
 
         setView(view) {
+            // Таблица показывает ПК или принтеры (этап 44): её настройки – меняются местами
+            this.switchTableKind(view === "printers" ? "printer" : "pc");
             this.view = view;
             this.scanPop = null;
             if (view === "table") {
                 this.loadDiffs();
+            } else if (view === "printers") {
+                this.loadPrinters();
+                this.loadPrinterModels();
             } else if (view === "tree") {
                 this.loadTree();
             } else if (view === "history") {
@@ -157,6 +162,8 @@ export default {
                 if (this.choicesTab === "names") {
                     this.ensureTree();
                     this.loadNameKeep();
+                } else if (this.choicesTab === "models") {
+                    this.loadPrinterModels();
                 }
             } else if (view === "users") {
                 this.loadUsers();

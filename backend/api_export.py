@@ -6,8 +6,9 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
-from api_columns import COLUMNS as BUILTIN_COLUMNS
+from api_columns import COLUMNS as BUILTIN_COLUMNS, PRINTER_COLUMNS
 from api_computers import computer_rows, is_reserved_field_key
+from api_printers import printer_rows
 from api_scan_diffs import av_name, av_settings, av_visible, computer_antivirus
 from db import get_db
 from models import FieldDef
@@ -108,12 +109,38 @@ def export_computers(archive: bool = False, session=Depends(get_db)):
     if archive:
         fill_sheet(wb.create_sheet("Архив"), computer_rows(session, "yes")["rows"], columns)
 
+    return workbook_response(wb, "computers", archive)
+
+
+# Принтеры (этап 44): все столбцы таблицы принтеров; логин и пароль Web – не выгружаются
+PRINTER_EXPORT_COLUMNS = [
+    {"field": column.key, "header": column.short, "width": column.export_width, "wrap": column.multiline}
+    for column in PRINTER_COLUMNS
+    if column.kind != "secret"
+]
+
+
+@router.get("/printers.xlsx")
+def export_printers(archive: bool = False, session=Depends(get_db)):
+    """Рабочие принтеры; archive=true – ещё лист «Архив»."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Принтеры"
+    fill_sheet(ws, printer_rows(session, "no"), PRINTER_EXPORT_COLUMNS)
+
+    if archive:
+        fill_sheet(wb.create_sheet("Архив"), printer_rows(session, "yes"), PRINTER_EXPORT_COLUMNS)
+
+    return workbook_response(wb, "printers", archive)
+
+
+def workbook_response(wb, what, archive):
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
 
     suffix = "_archive" if archive else ""
-    filename = f"itdb_computers{suffix}_{date.today().isoformat()}.xlsx"
+    filename = f"itdb_{what}{suffix}_{date.today().isoformat()}.xlsx"
 
     return StreamingResponse(
         buffer,

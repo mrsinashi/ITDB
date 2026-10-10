@@ -5819,11 +5819,6 @@ html.col-dragging * {
     min-width: 0;
     padding: 0;
 }
-.nr-table td.nr-name.long .nr-input,
-.nr-table td.nr-name.long .nr-pre,
-.nr-table td.nr-name.long .nr-suf {
-    color: var(--danger-strong);
-}
 .nr-table td.nr-pcs {
     min-width: 44px;
     font-variant-numeric: tabular-nums;
@@ -6354,4 +6349,201 @@ html.no-radius .vw-col input {
 }
 .loc-list .ll-item.ll-sticky.active {
     background: var(--menu-hover-bg);
+}
+
+/* ============================================================
+   Этап 44: принтеры – ссылки ПК ↔ принтер, окошко принтера, карточка принтера,
+   окно «Логин и пароль Web», строка нового принтера, Справочники → «Модели принтеров»
+   ============================================================ */
+/* Принтер у ПК, ПК у принтера – ссылкой, как номер записи GLPI; справа при наведении на
+   строку – значок таблицы (показать в другой таблице), в манере значка копирования */
+.obj-line {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    white-space: nowrap;
+}
+.data-table td.center .obj-line {
+    margin-left: auto;
+    margin-right: auto;
+}
+a.obj-link {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+a.obj-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.data-table.alt-copy td a.obj-link {
+    cursor: default;
+    text-decoration: none;
+}
+.obj-tbl {
+    display: inline-flex;
+    margin-left: 4px;
+    color: var(--copy-ico);
+    vertical-align: -1px;
+    cursor: pointer;
+    visibility: hidden;
+}
+.obj-tbl svg {
+    width: 12px;
+    height: 12px;
+}
+.obj-line:hover .obj-tbl {
+    visibility: visible;
+}
+.obj-tbl:hover {
+    color: var(--text-strong);
+}
+.data-table.alt-copy .obj-tbl {
+    visibility: hidden;
+}
+/* В карточках – строками */
+.pc-links .obj-line {
+    padding: 1px 0;
+}
+
+/* «Вход» в таблице принтеров: задан – нажатие показывает окно */
+.data-table td .secret-cell {
+    cursor: pointer;
+}
+.data-table td .secret-cell:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.data-table.alt-copy td .secret-cell {
+    cursor: default;
+    text-decoration: none;
+}
+
+/* Окошко принтера – как карточка у блочка сканера */
+.scan-pop.pr-pop .sp-values td.sp-v {
+    overflow-wrap: anywhere;
+}
+a.pr-web {
+    color: var(--host-color);
+    text-decoration: none;
+}
+a.pr-web:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* Карточка принтера: логин и пароль – «есть» и кнопки рядом */
+.pc-auth {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn.pc-auth-btn {
+    padding: 0 7px;
+    font-size: 12px;
+    line-height: 18px;
+}
+.copy-val.pc-copy .copy-ico {
+    margin-left: 4px;
+}
+.copy-line:hover .pc-copy .copy-ico {
+    opacity: 1;
+}
+
+/* Окно «Логин и пароль Web»: поля в столбик, ошибка – красным под ними */
+.dialog.wa-dialog {
+    width: 340px;
+}
+.wa-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+}
+.wa-body .input {
+    width: 100%;
+    box-sizing: border-box;
+}
+.wa-title {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.wa-pass {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.wa-pass .icon-btn {
+    flex: none;
+}
+.wa-shown {
+    border-collapse: collapse;
+}
+.wa-shown td {
+    padding: 3px 0;
+    vertical-align: top;
+}
+.wa-shown td.wa-label {
+    width: 70px;
+    color: var(--text-secondary);
+}
+.wa-shown .copy-val {
+    overflow-wrap: anywhere;
+}
+.wa-error {
+    color: var(--danger);
+    font-size: 12px;
+}
+.dialog-buttons .btn.wa-left {
+    margin-right: auto;
+}
+.dialog-buttons .btn.danger-text {
+    color: var(--danger-strong);
+}
+
+/* Строка нового принтера: модель – список, как расположение, короче */
+.add-bar .ab-model .input {
+    width: 260px;
+}
+.add-bar .ab-kind {
+    width: 90px;
+    padding: 2px 4px;
+}
+.add-bar .ab-maker {
+    width: 120px;
+}
+
+/* Справочники → «Модели принтеров»: столбцы постоянной ширины (строка правки – в таблице) */
+.pm-table col.pm-kind { width: 96px; }
+.pm-table col.pm-maker { width: 160px; }
+.pm-table col.pm-model { width: 260px; }
+.pm-table col.pm-color { width: 96px; }
+.pm-table col.pm-duplex { width: 84px; }
+.pm-table col.pm-count { width: 84px; }
+.pm-table td.pm-name {
+    font-weight: 600;
+}
+.pm-table td.pm-n,
+.pm-table th.pm-n {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.pm-table td.pm-n {
+    position: relative;
+}
+.pm-table a.pm-show {
+    color: inherit;
+    text-decoration: none;
+}
+.pm-table a.pm-show:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+/* Ошибка строки правки – правее таблицы, как у пользователей */
+.pm-table .pm-error {
+    position: absolute;
+    left: calc(100% + 72px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
 }

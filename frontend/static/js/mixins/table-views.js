@@ -6,9 +6,10 @@
 // Вид 1 – основной: скрытые столбцы, порядок и закрепление – прежние записи в браузере,
 // масштаб по ширине окна не запоминается (при входе в вид – обычный). Остальные виды
 // помнят показанные столбцы, порядок, закреплённые и «По ширине окна». Всё – в браузере.
+// У таблицы принтеров (этап 44) виды свои (ключи – tableStoreKey).
 
 import { loadJson, saveJson } from "../util.js";
-import { COLUMN_ORDER2_KEY, HIDDEN_COLUMNS2_KEY, TABLE_FIT_KEY, TABLE_VIEW_KEY, TABLE_VIEWS_KEY, VIEW2_COLUMNS } from "../columns.js";
+import { COLUMN_ORDER2_KEY, HIDDEN_COLUMNS2_KEY, TABLE_FIT_KEY, TABLE_VIEW_KEY, TABLE_VIEWS_KEY, VIEW2_COLUMNS, tableStoreKey } from "../columns.js";
 
 // Номер вида – одна цифра в квадратике
 export const VIEWS_MAX = 9;
@@ -27,13 +28,16 @@ function viewOf(v) {
 }
 
 // Виды из браузера; до этапа 43 – основной и второй (его столбцы, порядок; масштаб
-// по ширине окна был общий – достаётся второму)
-function loadViews() {
-    const saved = loadJson(TABLE_VIEWS_KEY, null);
+// по ширине окна был общий – достаётся второму). У принтеров сначала – один основной
+export function loadViews(kind) {
+    const saved = loadJson(tableStoreKey(TABLE_VIEWS_KEY, kind), null);
     if (Array.isArray(saved) && saved.length && saved[0]) {
         return saved.slice(0, VIEWS_MAX).map(function (v, i) {
             return i ? viewOf(v || {}) : { name: String(saved[0].name || "") };
         });
+    }
+    if (kind === "printer") {
+        return [{ name: "Основной" }];
     }
     const hidden2 = loadJson(HIDDEN_COLUMNS2_KEY, null);
     return [
@@ -48,11 +52,16 @@ function loadViews() {
     ];
 }
 
+// Номер вида на экране из браузера
+export function loadViewNumber(kind, views) {
+    const saved = Number(loadJson(tableStoreKey(TABLE_VIEW_KEY, kind), 1));
+    return saved >= 1 && saved <= views.length ? Math.floor(saved) : 1;
+}
+
 export default {
     data() {
-        const views = loadViews();
-        const saved = Number(loadJson(TABLE_VIEW_KEY, 1));
-        const view = saved >= 1 && saved <= views.length ? Math.floor(saved) : 1;
+        const views = loadViews("pc");
+        const view = loadViewNumber("pc", views);
         return {
             tableViews: views,
             tableView: view,     // номер вида на экране, с 1
@@ -88,7 +97,7 @@ export default {
         },
 
         saveViews() {
-            saveJson(TABLE_VIEWS_KEY, this.tableViews);
+            saveJson(tableStoreKey(TABLE_VIEWS_KEY, this.tableKind), this.tableViews);
         },
 
         // Изменить вид на экране (вид 1 хранит здесь только название)
@@ -117,7 +126,7 @@ export default {
             this.cancelEdit();
             this.scanPop = null;
             this.tableView = n;
-            saveJson(TABLE_VIEW_KEY, n);
+            saveJson(tableStoreKey(TABLE_VIEW_KEY, this.tableKind), n);
             const fit = n > 1 && this.tableViews[n - 1].fit;
             if (fit !== this.tableFit) {
                 this.tableFit = fit;

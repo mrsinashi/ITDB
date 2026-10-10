@@ -10,11 +10,13 @@
 //
 // Таблица: кнопка на панели показывает справа от HOSTNAME столбец «По правилу» –
 // имя по правилу у ПК, названных иначе; клик – карточка: переименовать или оставить своё.
+// На странице «Принтеры» (этап 44) – то же у принтеров: ter-proc-mfu-1 (js/naming.js).
 
 import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
 import { KIND_ICONS, treeNodeTexts } from "../tree-utils.js";
 import {
-    NAME_MAX, checkNames, hostKey, keepValid, learnAll, namingIndex, newName, observedNames, ruleText, rowSuggestions
+    checkNames, checkPrinterNames, hostKey, keepValid, learnAll, namingIndex, newName, observedNames, printerRuleText, ruleText,
+    rowSuggestions
 } from "../naming.js";
 
 // Узел одной строкой, как в дереве: «304 Процедурная»
@@ -57,8 +59,12 @@ export default {
             return this.nameDraft ? namingIndex(this.treeRoots, this.nameDraft) : this.namingIdx;
         },
 
-        // id ПК → { entry, ok, kept, expected, num } (только ПК в узлах с правилом)
+        // id ПК → { entry, ok, kept, expected, num } (только ПК в узлах с правилом); на
+        // странице «Принтеры» – принтеров (ещё kind – тип)
         nameChecks() {
+            if (this.tableKind === "printer") {
+                return checkPrinterNames(this.printerRows, this.namingIdx, this.printerNameKeep);
+            }
             return checkNames(this.rows, this.namingIdx, this.nameKeep);
         },
 
@@ -292,6 +298,10 @@ export default {
             if (tab === "names") {
                 this.ensureTree();
                 this.loadNameKeep();
+            } else if (tab === "models") {
+                // Модели принтеров (этап 44): число принтеров у модели – с сервера
+                this.modelsBar = null;
+                this.loadPrinterModels();
             }
             this.syncHash();
         },
@@ -314,13 +324,32 @@ export default {
             this.nameKeep = map;
         },
 
-        nameRuleText(entry) {
-            return ruleText(entry);
+        // «Своё имя» у принтеров (этап 44)
+        async loadPrinterNameKeep() {
+            try {
+                const response = await apiFetch("/api/naming/keep?kind=printer");
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                this.setPrinterNameKeep((await response.json()).items);
+            } catch (e) {
+                this.toastError("Не удалось загрузить «свои имена»: " + (e.message || e));
+            }
         },
 
-        // Имя длиннее, чем можно в имени Windows (с номером до 99)
-        nameTooLong(entry) {
-            return !!entry && !!entry.start && entry.start.length + (entry.single ? 0 : 3) > NAME_MAX;
+        setPrinterNameKeep(items) {
+            const map = {};
+            items.forEach(function (item) { map[item.printer_id] = item; });
+            this.printerNameKeep = map;
+        },
+
+        // Шаблон правила у проверки имени: ПК – «ter-proc-N», принтер – «ter-proc-mfu-N»
+        nameCheckRule(check) {
+            return check.kind ? printerRuleText(check.entry, check.kind) : ruleText(check.entry);
+        },
+
+        nameRuleText(entry) {
+            return ruleText(entry);
         },
 
         // Своя часть узла в поле: как набрано, пока вводят
@@ -363,13 +392,6 @@ export default {
                 return "Начало имён";
             }
             return r.entry.single ? "Одно место, без номера – вернуть номер" : "Номер по № места – убрать";
-        },
-
-        nameRowTitle(r) {
-            if (!r.entry.start) {
-                return null;
-            }
-            return this.nameTooLong(r.entry) ? "Длиннее " + NAME_MAX + " знаков" : null;
         },
 
         setNamesHover(node, rowEl) {
@@ -521,17 +543,23 @@ export default {
 
         // ---------- «Своё имя» ----------
 
-        async setNameKeepFor(ids, keep) {
+        // printer – «своё имя» принтеров (этап 44)
+        async setNameKeepFor(ids, keep, printer) {
             try {
                 const response = await apiFetch("/api/naming/keep", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ids: ids, keep: keep })
+                    body: JSON.stringify({ ids: ids, keep: keep, kind: printer ? "printer" : "pc" })
                 });
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.setNameKeep((await response.json()).items);
+                const items = (await response.json()).items;
+                if (printer) {
+                    this.setPrinterNameKeep(items);
+                } else {
+                    this.setNameKeep(items);
+                }
                 return true;
             } catch (e) {
                 this.toastError("Не сохранилось: " + (e.message || e));
@@ -550,7 +578,11 @@ export default {
                 return;
             }
             this.ensureTree();
-            this.loadNameKeep();
+            if (this.tableKind === "printer") {
+                this.loadPrinterNameKeep();
+            } else {
+                this.loadNameKeep();
+            }
         },
 
         // Столбец «По правилу»: имя по правилу, если у ПК другое
@@ -569,7 +601,7 @@ export default {
 
         nameChipTitle(row) {
             const c = this.nameChecks.get(row.id);
-            return c ? "Правило: " + ruleText(c.entry) : null;
+            return c ? "Правило: " + this.nameCheckRule(c) : null;
         },
 
         rowHasNameChip(row) {
@@ -658,6 +690,13 @@ export default {
             pop.busy = true;
             const name = pop.check.expected;
             this.closeNamePop();
+            if (pop.row._printer) {
+                const col = this.printerColumns.find(function (c) { return c.field === "name"; });
+                if (await this.saveCellValue(pop.row, col, name)) {
+                    this.toast("Переименован: " + name, "success");
+                }
+                return;
+            }
             if (await this.saveComputerValue(pop.row.id, "hostname", name)) {
                 this.toast("Переименован: " + name, "success");
             }
@@ -670,8 +709,9 @@ export default {
             }
             pop.busy = true;
             this.closeNamePop();
-            if (await this.setNameKeepFor([pop.row.id], true)) {
-                this.toast("Своё имя: " + pop.row.hostname, "success");
+            const printer = !!pop.row._printer;
+            if (await this.setNameKeepFor([pop.row.id], true, printer)) {
+                this.toast("Своё имя: " + (printer ? pop.row.name : pop.row.hostname), "success");
             }
         },
 
@@ -705,25 +745,34 @@ export default {
             this.renameByRule(this.nameSelFixes);
         },
 
+        // Принтеры (этап 44) – на странице «Принтеры»
         async renameByRule(items) {
             if (!items.length) {
                 return;
             }
-            if (!(await this.confirmDialog("Переименовать по правилу " + items.length + " ПК?", { okText: "Переименовать" }))) {
+            const printer = this.tableKind === "printer" && this.view === "printers";
+            if (!(await this.confirmDialog("Переименовать по правилу " + items.length + (printer ? " принтеров?" : " ПК?"), { okText: "Переименовать" }))) {
                 return;
             }
             try {
                 const response = await apiFetch("/api/naming/rename", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ items: items })
+                    body: JSON.stringify({ items: items, kind: printer ? "printer" : "pc" })
                 });
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
                 const data = await response.json();
-                await this.loadTable();
-                data.changed.forEach((id) => this.flashCell(id, "hostname"));
+                if (printer) {
+                    await this.loadPrinters();
+                    this.loadTable();
+                    data.changed.forEach((id) => this.flashCell("p" + id, "name"));
+                } else {
+                    await this.loadTable();
+                    this.loadPrinters();
+                    data.changed.forEach((id) => this.flashCell(id, "hostname"));
+                }
                 this.toast("Переименовано: " + data.changed.length, "success");
             } catch (e) {
                 this.toastError("Не переименовалось: " + (e.message || e));

@@ -1,4 +1,6 @@
 // Таблица: новый компьютер и смена расположения, архив, действия с выбранными строками.
+// На странице «Принтеры» (этап 44) архив, «Изменить значения…» и смена расположения – те
+// же, у принтеров (строка принтера – row._printer, запросы – /api/printers/…).
 
 import { apiFetch, fixIpTyping, searchNorm, splitMulti } from "../util.js";
 import { LOCATION_FIELDS } from "../columns.js";
@@ -103,31 +105,42 @@ export default {
         },
 
         // Смена расположения: строка переезжает на своё место в порядке
-        // дерева, поэтому таблица перечитывается целиком
+        // дерева, поэтому таблица перечитывается целиком (ПК или принтеров)
         async saveLocation(row, locationId) {
             if (!locationId || locationId === row.location_id) {
                 return;
             }
+            const printer = !!row._printer;
+            const reload = async () => {
+                if (printer) {
+                    await this.loadPrinters();
+                } else {
+                    await this.loadTable();
+                    this.refreshCardRow();
+                }
+            };
             try {
-                const response = await apiFetch("/api/computers/" + row.id, {
+                const response = await apiFetch((printer ? "/api/printers/" : "/api/computers/") + row.id, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ location_id: locationId, _version: row.version })
                 });
                 if (response.status === 409) {
                     this.toastError(await this.errorText(response));
-                    await this.loadTable();
-                    this.refreshCardRow();
+                    await reload();
                     return;
                 }
                 if (!response.ok) {
                     this.toastError("Не удалось сохранить: " + (await this.errorText(response)));
                     return;
                 }
-                await this.loadTable();
-                this.refreshCardRow();
-                this.reloadCardHistory(row.id);
-                LOCATION_FIELDS.concat(["location_id"]).forEach((field) => this.flashCell(row.id, field));
+                await reload();
+                if (printer) {
+                    this.reloadPrinterCardHistory(row.id);
+                } else {
+                    this.reloadCardHistory(row.id);
+                }
+                LOCATION_FIELDS.concat(["location_id", "number"]).forEach((field) => this.flashCell(this.rowKey(row), field));
                 this.$nextTick(() => this.scrollToRow(row.id));
             } catch (e) {
                 this.toastError("Не удалось сохранить: " + e);
@@ -183,6 +196,7 @@ export default {
                 this.closeNewComputer();
                 return;
             }
+            this.closeNewPrinter();
             // Новый ПК появится среди рабочих – из архива уходим
             this.setArchiveView(false);
             this.actionBar = null;
@@ -203,7 +217,9 @@ export default {
             this.closeIpSuggest();
             this.newComputer = null;
             this.newComputerError = "";
-            this.newRoom = null;
+            if (!this.newPrinter) {
+                this.newRoom = null;
+            }
         },
 
         focusNewComputer(which) {
@@ -348,10 +364,12 @@ export default {
         // В списке расположений – «＋ кабинет»: строка под строкой нового ПК. Место –
         // найденное в списке, иначе отделение или этаж выбранного расположения
 
-        // data.afterId – «＋ кабинет» у кабинета: новый встаёт сразу после него (этап 37)
+        // data.afterId – «＋ кабинет» у кабинета: новый встаёт сразу после него (этап 37).
+        // Так же – из строки нового принтера (этап 44)
         openNewRoom(data) {
             let parentId = data.parentId;
-            const entry = !parentId && this.newComputer ? this.treeIndex[this.newComputer.location_id] : null;
+            const form = this.newPrinter || this.newComputer;
+            const entry = !parentId && form ? this.treeIndex[form.location_id] : null;
             if (entry) {
                 parentId = entry.node.kind === "room" ? entry.node.parent_id : (ROOM_PARENTS.indexOf(entry.node.kind) !== -1 ? entry.node.id : null);
             }
@@ -367,7 +385,7 @@ export default {
 
         closeNewRoom() {
             this.newRoom = null;
-            this.$nextTick(() => this.focusNewComputer("location"));
+            this.$nextTick(() => (this.newPrinter ? this.focusNewPrinter("location") : this.focusNewComputer("location")));
         },
 
         focusNewRoom(which) {
@@ -429,7 +447,11 @@ export default {
                 await this.loadTree();
                 this.newRoom = null;
                 this.toast("Кабинет добавлен: " + [code, name].filter(Boolean).join(" "), "success");
-                this.onNewComputerLocation(id);
+                if (this.newPrinter) {
+                    this.onNewPrinterLocation(id);
+                } else {
+                    this.onNewComputerLocation(id);
+                }
             } catch (e) {
                 form.error = String(e.message || e);
                 form.saving = false;
@@ -485,8 +507,10 @@ export default {
             this.newComputerSaving = false;
         },
 
+        // id строки таблицы на экране (ПК или принтера)
         flashRow(id) {
-            this.allColumns.forEach((col) => this.flashCell(id, col.field));
+            const key = this.tableKind === "printer" ? "p" + id : id;
+            this.allColumns.forEach((col) => this.flashCell(key, col.field));
         },
 
         // «Создан» – первым: в базе ключи изменений хранятся в другом порядке
@@ -533,8 +557,9 @@ export default {
                 return;
             }
             this.archiveSaving = true;
+            const printers = this.tableKind === "printer";
             try {
-                const response = await apiFetch("/api/computers/archive", {
+                const response = await apiFetch(printers ? "/api/printers/archive" : "/api/computers/archive", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ ids: ids, archived: archived })
@@ -544,16 +569,18 @@ export default {
                 }
                 let text;
                 if (ids.length === 1) {
-                    const row = this.rows.find(function (r) { return r.id === ids[0]; });
-                    const name = (row && row.hostname) || "компьютер без имени";
-                    text = (archived ? "В архиве: " : "Возвращён из архива: ") + name;
+                    text = (archived ? "В архиве: " : "Возвращён из архива: ") + this.rowName(ids[0]);
                 } else {
-                    text = (archived ? "В архив убрано ПК: " : "Возвращено из архива ПК: ") + ids.length;
+                    text = (archived ? "В архив убрано " : "Возвращено из архива ") + (printers ? "принтеров: " : "ПК: ") + ids.length;
                 }
                 this.selectedRows = [];
                 this.selectAnchorId = null;
-                await this.loadTable();
-                if (this.card && ids.indexOf(this.card.id) !== -1) {
+                await this.reloadTableRows();
+                if (printers) {
+                    if (this.pcard && ids.indexOf(this.pcard.id) !== -1) {
+                        this.reloadPrinterCardHistory(this.pcard.id);
+                    }
+                } else if (this.card && ids.indexOf(this.card.id) !== -1) {
                     this.refreshCardRow();
                     this.reloadCardHistory(this.card.id);
                 }
@@ -575,6 +602,10 @@ export default {
         },
 
         rowName(id) {
+            if (this.tableKind === "printer") {
+                const p = this.printerRows.find(function (r) { return r.id === id; });
+                return (p && p.name) || "принтер без имени";
+            }
             const row = this.rows.find(function (r) { return r.id === id; });
             return (row && row.hostname) || "компьютер без имени";
         },
@@ -622,7 +653,7 @@ export default {
             if (!bar) {
                 return "";
             }
-            const what = bar.ids.length === 1 ? "«" + this.rowName(bar.ids[0]) + "»" : bar.ids.length + " ПК";
+            const what = bar.ids.length === 1 ? "«" + this.rowName(bar.ids[0]) + "»" : bar.ids.length + (this.tableKind === "printer" ? " принтеров" : " ПК");
             if (bar.kind === "move") {
                 return "Переместить " + what + " в:";
             }
@@ -700,7 +731,7 @@ export default {
                     bar.error = "Выбери поле.";
                     return;
                 }
-                url = "/api/computers/bulk-update";
+                url = this.tableKind === "printer" ? "/api/printers/bulk-update" : "/api/computers/bulk-update";
                 body = { ids: bar.ids, field: bar.field, value: bar.value };
             }
             bar.error = "";
@@ -712,7 +743,7 @@ export default {
                 if (bar.kind === "replace") {
                     return "Заменён: " + this.rowName(bar.ids[0]) + " → " + this.rowName(bar.new_id);
                 }
-                return "Изменено у ПК: " + data.changed.length + " из " + bar.ids.length;
+                return "Изменено у " + (this.tableKind === "printer" ? "принтеров: " : "ПК: ") + data.changed.length + " из " + bar.ids.length;
             }, (message) => { bar.error = message; });
             bar.saving = false;
             if (done) {
@@ -781,10 +812,13 @@ export default {
                 const text = doneText(data);
                 this.selectedRows = [];
                 this.selectAnchorId = null;
-                await this.loadTable();
+                await this.reloadTableRows();
                 this.refreshCardRow();
                 if (this.card) {
                     this.reloadCardHistory(this.card.id);
+                }
+                if (this.pcard) {
+                    this.reloadPrinterCardHistory(this.pcard.id);
                 }
                 (data.changed || []).forEach((id) => this.flashRow(id));
                 const first = (data.ids || [])[0];

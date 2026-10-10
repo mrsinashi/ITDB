@@ -71,7 +71,7 @@ export default {
     },
 
     updated() {
-        if (this.view === "table") {
+        if (this.isTablePage()) {
             this.markActiveRow();
         }
     },
@@ -242,18 +242,24 @@ export default {
         },
 
         // Enter в Таблице: подключение к строке с полоской, если после нажатия по ней ничего
-        // другого не трогали; иначе подключения нет, полоска снимается (этап 40)
+        // другого не трогали; иначе подключения нет, полоска снимается (этап 40). На странице
+        // «Принтеры» (этап 44) – веб-страница принтера в новой вкладке
         onTableEnter(event) {
             const row = this.activeRowId === null || this.activeRowId === undefined ? null
-                : this.rows.find((r) => r.id === this.activeRowId) || null;
+                : this.tableRows.find((r) => r.id === this.activeRowId) || null;
             const target = event.target;
             const free = !event.defaultPrevented && !isTypingTarget(document.activeElement) &&
                 !(target && target.closest && target.closest("button, .dropdown, .cf-menu, .scan-pop, .add-bar, .card-overlay")) &&
                 !this.editingRowId && !this.cardEditKey && !this.editingHostname && !this.openMenu && !this.scanPop &&
-                !this.namePop && !this.actionBar && !this.newComputer && !this.showArchive;
+                !this.namePop && !this.actionBar && !this.newComputer && !this.newPrinter && !this.showArchive &&
+                !this.pcard && !this.printerPop && !this.webAuth;
             if (row && free) {
                 event.preventDefault();
-                this.vncConnect(row, null);
+                if (row._printer) {
+                    this.openPrinterWeb(row);
+                } else {
+                    this.vncConnect(row, null);
+                }
                 return;
             }
             if (row) {
@@ -262,8 +268,11 @@ export default {
         },
 
         // ПК для Alt+P / Alt+R: открытая карточка, иначе последняя нажатая строка, иначе
-        // единственная выбранная
+        // единственная выбранная. На странице «Принтеры» – принтер (Alt+P – ping, этап 44)
         activePc() {
+            if (this.tableKind === "printer" && this.pcard) {
+                return this.pcard;
+            }
             if (this.card) {
                 return this.card;
             }
@@ -271,7 +280,7 @@ export default {
             if ((id === null || id === undefined) && this.selectedRows.length === 1) {
                 id = this.selectedRows[0];
             }
-            return this.rows.find(function (r) { return r.id === id; }) || null;
+            return this.tableRows.find(function (r) { return r.id === id; }) || null;
         },
 
         // what: ping / rdp. Ответ – нашёлся ли ПК
@@ -280,19 +289,23 @@ export default {
             if (!row) {
                 return false;
             }
+            if (row._printer && what === "rdp") {
+                this.toastError("RDP – только к компьютеру.");
+                return true;
+            }
             this.connectRow(row, what);
             return true;
         },
 
-        // Ping / RDP к ПК (или { ip, hostname } строки другой страницы, этап 43)
+        // Ping / RDP к ПК (или { ip, hostname } строки другой страницы, этап 43; принтер – этап 44)
         connectRow(row, what) {
             const ip = firstIp(row.ip);
             if (!ip) {
-                this.toastError("У ПК нет IP.");
+                this.toastError(row._printer ? "У принтера нет IP." : "У ПК нет IP.");
                 return;
             }
             launch("itdb://" + what + "/" + ip);
-            this.toast((what === "rdp" ? "RDP" : "Ping") + ": " + (row.hostname || ip) + " (" + ip + ")");
+            this.toast((what === "rdp" ? "RDP" : "Ping") + ": " + (row.hostname || row.name || ip) + " (" + ip + ")");
         }
     }
 };

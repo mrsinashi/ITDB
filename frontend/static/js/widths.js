@@ -66,6 +66,8 @@ export const FILTER_ICON_SPACE = 14;
 export const CHIP_PAD = 10;
 // Кружок «в сети» слева от логина VACUUM (этап 41): 7px и отступ 4px (.cell-line.vac-dot)
 export const ONLINE_DOT = 11;
+// Значок «показать в таблице» справа от ссылки на принтер / ПК (этап 44, .obj-tbl): 12px и отступ 4px
+export const LINK_ICON = 16;
 
 function chipWidth(probe, text) {
     probe.style.fontWeight = "400";
@@ -134,9 +136,10 @@ export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMa
     return widths;
 }
 
-export function loadManualWidths() {
+// key – у таблицы принтеров свой (этап 44)
+export function loadManualWidths(key) {
     try {
-        const raw = localStorage.getItem(TABLE_WIDTHS_KEY);
+        const raw = localStorage.getItem(key || TABLE_WIDTHS_KEY);
         if (!raw) {
             return {};
         }

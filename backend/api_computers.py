@@ -9,6 +9,7 @@ from sqlalchemy import func
 from api_columns import COLUMNS, COLUMNS_BY_KEY, EDITABLE_KEYS, EXTRA_FIELDS, keys_of
 from api_import import split_vacuum_logins
 from auth import require_editor
+from printer_links import links_refs, links_text, printer_title, printers_by_computer, set_computer_printers
 
 from db import get_db
 from models import (
@@ -323,19 +324,22 @@ def seat_sort_in_location(session, location_id, seat_no, exclude_id=None):
 
 
 class ChangeBatch:
-    """Изменения нескольких ПК за одно действие: на каждый ПК – одна запись
-    истории (поле: было → стало), версия +1. Повторная правка того же поля
-    сливается: «было» – первое, «стало» – последнее."""
+    """Изменения нескольких ПК (с этапа 44 – и принтеров) за одно действие: на
+    каждый объект – одна запись истории (поле: было → стало), версия +1.
+    Повторная правка того же поля сливается: «было» – первое, «стало» – последнее."""
 
     def __init__(self, user_name):
         self.user_name = user_name
+        # (таблица объекта, id) → {поле: изменение}
         self.changes = defaultdict(dict)
-        self.computers = {}
+        self.objects = {}
 
     def record(self, computer, field, old, new, old_id=None, new_id=None):
-        """old_id / new_id – id узлов у расположения (old / new – путь текстом)."""
-        changes = self.changes[computer.id]
-        self.computers[computer.id] = computer
+        """computer – ПК или принтер. old_id / new_id – id узлов у расположения
+        (old / new – путь текстом)."""
+        key = (computer.__tablename__, computer.id)
+        changes = self.changes[key]
+        self.objects[key] = computer
 
         if field in changes:
             changes[field]["new"] = new
@@ -356,25 +360,25 @@ class ChangeBatch:
     def finish(self, session):
         now = datetime.now(timezone.utc)
 
-        for computer_id, changes in self.changes.items():
+        for (entity, object_id), changes in self.changes.items():
             if not changes:
                 continue
 
-            computer = self.computers[computer_id]
-            computer.version = (computer.version or 1) + 1
-            computer.updated_at = now
+            obj = self.objects[(entity, object_id)]
+            obj.version = (obj.version or 1) + 1
+            obj.updated_at = now
 
             session.add(
                 History(
-                    entity="computers",
-                    entity_id=computer_id,
+                    entity=entity,
+                    entity_id=object_id,
                     user_name=self.user_name,
                     changes=changes,
                 )
             )
 
-    def changed_ids(self):
-        return sorted(key for key, changes in self.changes.items() if changes)
+    def changed_ids(self, entity="computers"):
+        return sorted(key[1] for key, changes in self.changes.items() if changes and key[0] == entity)
 
 
 def shift_seats(session, batch, location_id, seat_no, exclude_ids=()):
@@ -606,8 +610,10 @@ def set_vacuum_logins(session, computer, value):
     return vacuum_text(old_logins), vacuum_text(new_logins)
 
 
-def column_values(computer, parts, user_name, vacuum):
-    """Значения встроенных столбцов ПК (по описанию в api_columns)."""
+def column_values(computer, parts, user_name, vacuum, printers=()):
+    """Значения встроенных столбцов ПК (по описанию в api_columns). printers –
+    подключённые принтеры [(принтер, usb)]: в столбце – текст, ссылкам –
+    printer_refs (этап 44)."""
     extra = computer.extra or {}
     values = {}
 
@@ -620,6 +626,9 @@ def column_values(computer, parts, user_name, vacuum):
             values[column.key] = user_name
         elif column.kind == "vacuum":
             values[column.key] = vacuum
+        elif column.kind == "printers":
+            values[column.key] = links_text(printers, printer_title)
+            values["printer_refs"] = links_refs(printers, printer_title)
         elif column.kind == "date":
             values[column.key] = format_date(getattr(computer, column.key))
         elif column.kind == "scan":
@@ -723,6 +732,8 @@ def computer_rows(session, archived="no"):
     for computer_id, login in vacuum_rows:
         vacuum_by_computer[computer_id].append(login)
 
+    printers_by_id = printers_by_computer(session)
+
     rows = []
 
     for computer in computers:
@@ -745,6 +756,7 @@ def computer_rows(session, archived="no"):
                 parts,
                 main_user_by_computer.get(computer.id),
                 vacuum_text(vacuum_logins),
+                printers_by_id.get(computer.id, []),
             )
         )
         row.update(
@@ -977,6 +989,14 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
 
             continue
 
+        if field == "printers":
+            result = set_computer_printers(session, computer, value)
+
+            if result:
+                changes["printers"] = result
+
+            continue
+
         if field == "seat_no":
             new_value = parse_seat_no(value)
             old_value = computer.seat_no
@@ -1141,6 +1161,7 @@ def update_computer(
         location_parts(computer.location_id, load_locations(session)),
         main_person_name(session, computer),
         vacuum_text(get_vacuum_logins(session, computer.id)),
+        printers_by_computer(session, [computer.id]).get(computer.id, []),
     )
 
     for key in user_field_keys:

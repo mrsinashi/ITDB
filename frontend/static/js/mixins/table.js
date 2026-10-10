@@ -1,8 +1,10 @@
 // Таблица: загрузка, правка ячеек, сортировка, ширина и видимость столбцов, поиск, выделение строк, Alt+клик.
+// С этапа 44 та же таблица показывает и принтеры (страница «Принтеры», mixins/printers.js):
+// строки – tableRows, столбцы – tableBuiltinColumns, всё, что запоминается, – под своими ключами
 
 import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, wrapLine } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
-import { CHIP_PAD, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { CHIP_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE – антивирусов нет
@@ -24,14 +26,14 @@ export default {
         // Для Справочников: оформление задаётся им, а не общему столбцу Таблицы
         baseColumns() {
             const self = this;
-            const base = this.builtinColumns.map(function (col) {
+            const base = this.tableBuiltinColumns.map(function (col) {
                 const manual = self.manualWidths[col.field];
                 const auto = self.autoWidths[col.field];
                 return Object.assign({}, col, {
                     width: manual !== undefined ? manual : (auto || 100)
                 });
             });
-            const extra = self.tableFieldDefs.map(function (fd) {
+            const extra = self.tableUserDefs.map(function (fd) {
                 const manual = self.manualWidths[fd.key];
                 const auto = self.autoWidths[fd.key];
                 return {
@@ -108,14 +110,16 @@ export default {
         },
 
         // Столбцы на экране: видимые и при кнопке «Имена по правилам» – «По правилу»
-        // справа от HOSTNAME (этапы 36, 38; закреплён, если закреплён HOSTNAME). Его нет в
-        // меню «Столбцы», печати, порядке; не сортируется, не фильтруется, не правится
+        // справа от HOSTNAME (этапы 36, 38; закреплён, если закреплён HOSTNAME; у принтеров –
+        // справа от «Имени», этап 44). Его нет в меню «Столбцы», печати, порядке; не
+        // сортируется, не фильтруется, не правится
         viewColumns() {
             const cols = this.columns;
             if (!this.nameCheck) {
                 return cols;
             }
-            const at = cols.findIndex(function (col) { return col.field === "hostname"; });
+            const nameField = this.tableNameField;
+            const at = cols.findIndex(function (col) { return col.field === nameField; });
             const host = at === -1 ? null : cols[at];
             const manual = this.manualWidths[NAME_RULE_COLUMN.field];
             const rule = Object.assign({}, NAME_RULE_COLUMN, {
@@ -147,7 +151,7 @@ export default {
 
         // Столбцы для расчёта ширины: встроенные, общий «Кабинет» и «По правилу»
         widthColumns() {
-            return this.builtinColumns.concat(this.nameCheck ? [ROOM_COLUMN, NAME_RULE_COLUMN] : [ROOM_COLUMN]);
+            return this.tableBuiltinColumns.concat(this.nameCheck ? [ROOM_COLUMN, NAME_RULE_COLUMN] : [ROOM_COLUMN]);
         },
 
         hiddenColumnCount() {
@@ -167,15 +171,16 @@ export default {
             return "Показано: " + this.displayedCount + " из " + this.rowCount + (this.showArchive ? " в архиве" : "");
         },
 
-        // В this.rows – все ПК, и рабочие, и из архива (признак archived)
+        // В this.rows – все ПК, и рабочие, и из архива (признак archived); на странице
+        // «Принтеры» таблица показывает принтеры (tableRows)
         activeRows() {
-            return this.rows.filter(function (row) { return !row.archived; });
+            return this.tableRows.filter(function (row) { return !row.archived; });
         },
 
         // Строки текущего режима таблицы: рабочие или архив
         modeRows() {
             const archive = this.showArchive;
-            return this.rows.filter(function (row) { return !!row.archived === archive; });
+            return this.tableRows.filter(function (row) { return !!row.archived === archive; });
         },
 
         rowCount() {
@@ -297,7 +302,7 @@ export default {
         },
 
         hiddenColumns() {
-            saveJson(HIDDEN_COLUMNS_KEY, this.hiddenColumns);
+            saveJson(tableStoreKey(HIDDEN_COLUMNS_KEY, this.tableKind), this.hiddenColumns);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -318,6 +323,10 @@ export default {
                 this.builtinColumns = (data.columns || []).map(toColumnDef);
                 this.cardGroups = data.card_groups || [];
                 this.historyLabels = data.history_labels || {};
+                // Таблица и карточка принтеров (этап 44)
+                this.printerColumns = (data.printer_columns || []).map(toColumnDef);
+                this.printerCardGroups = data.printer_card_groups || [];
+                this.printerHistoryLabels = data.printer_history_labels || {};
                 this.applyDefaultHidden();
             } catch (e) {
                 this.tableError = String(e.message || e);
@@ -354,7 +363,7 @@ export default {
                 // «Кабинет»: номер и название одной строкой
                 this.rows.forEach(function (row) { row.room = roomText(row); });
                 this.applyAntivirus();
-                refreshDuplicates(this.rows, this.builtinColumns);
+                refreshDuplicates(this.rows, this.builtinColumns, "pc");
                 this.dupVersion++;
                 this.recalcWidths();
             } catch (e) {
@@ -388,7 +397,7 @@ export default {
             }
             if (this.tableView === 1) {
                 this.pinnedColumns = pinned;
-                saveJson(PINNED_COLUMNS_KEY, pinned);
+                saveJson(tableStoreKey(PINNED_COLUMNS_KEY, this.tableKind), pinned);
             } else {
                 this.patchView({ pins: pinned });
             }
@@ -465,7 +474,7 @@ export default {
 
         saveWidths() {
             try {
-                localStorage.setItem(TABLE_WIDTHS_KEY, JSON.stringify(this.manualWidths));
+                localStorage.setItem(tableStoreKey(TABLE_WIDTHS_KEY, this.tableKind), JSON.stringify(this.manualWidths));
             } catch (e) {
                 // ignore
             }
@@ -495,12 +504,16 @@ export default {
                 if (col.field === "antivirus") {
                     return { pad: CHIP_PAD, bold: avBold };
                 }
+                // Принтеры у ПК, ПК у принтера (этап 44): справа от ссылки – значок таблицы
+                if (col.links) {
+                    return { pad: LINK_ICON, bold: false };
+                }
                 const ms = this.markStyle(this.lineMarkKinds(this.lineMarks(row, col, line)));
                 const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
                 const dot = dots && col.field === "vacuum" && !row.archived && line.trim() ? ONLINE_DOT : 0;
                 return ms || chip || dot ? { pad: ((ms && ms.backgroundColor) || chip ? CHIP_PAD : 0) + dot, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» – запас не мешает
             };
-            this.autoWidths = computeAutoWidths(this.rows, this.widthColumns, this.tableFieldDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
+            this.autoWidths = computeAutoWidths(this.tableRows, this.widthColumns, this.tableUserDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
@@ -527,7 +540,7 @@ export default {
             if (this.isEditing(row, col)) {
                 cls["editing"] = true;
             }
-            if (this.savedFlash[row.id + ":" + col.field]) {
+            if (this.savedFlash[this.rowKey(row) + ":" + col.field]) {
                 cls["cell-saved"] = true;
             }
             return cls;
@@ -585,12 +598,16 @@ export default {
         // ячейка рисуется одним текстом): выделения Таблицы (повтор, имя на ПК
         // другое, логин VACUUM, срок – вид из Справочников, фон – блочком у самого
         // значения), фон из Справочников блочком, номер записи GLPI / GSIT – ссылкой.
-        // VACUUM – всегда по строкам (этап 41): у логина своя подсказка и кружок «в сети»
+        // VACUUM – всегда по строкам (этап 41): у логина своя подсказка и кружок «в сети».
+        // Принтеры у ПК и ПК у принтера (этап 44) – ссылками на них
         cellParts(row, col) {
             void this.dupVersion; // дубли считаются вне Vue – зависимость вручную
             const value = row[col.field];
             if (value === null || value === undefined || value === "" || this.isPending(row, col)) {
                 return null;
+            }
+            if (col.links) {
+                return this.linkParts(row, col);
             }
             const link = this.diffs.links[col.field];
             const chips = this.chipColumn(col);
@@ -650,7 +667,7 @@ export default {
             if (row.archived) {
                 return overdue ? { overdue: true } : null;
             }
-            const dup = !!col.dup && isDuplicateLine(line, col.field);
+            const dup = !!col.dup && isDuplicateLine(line, col.field, row._printer ? "printer" : "pc");
             let gone = false;
             let stale;
             let host = null;
@@ -858,7 +875,7 @@ export default {
         // Пока значение сохраняется, в ячейке уже новое (приглушённое),
         // а не старое – без мигания «старое → новое».
         cellText(row, col) {
-            const key = row.id + ":" + col.field;
+            const key = this.rowKey(row) + ":" + col.field;
             if (Object.prototype.hasOwnProperty.call(this.pendingCells, key)) {
                 return this.pendingCells[key];
             }
@@ -866,7 +883,7 @@ export default {
         },
 
         isPending(row, col) {
-            return Object.prototype.hasOwnProperty.call(this.pendingCells, row.id + ":" + col.field);
+            return Object.prototype.hasOwnProperty.call(this.pendingCells, this.rowKey(row) + ":" + col.field);
         },
 
         cellSpanStyle(row, col) {
@@ -922,6 +939,13 @@ export default {
         },
 
         startEdit(row, col) {
+            // Двойной клик по ссылке на принтер / ПК (этап 44) – правка, а не переход
+            this.cancelObjLink();
+            // Логин и пароль Web не заданы – окно, где их задать (заданные открывает клик)
+            if (col.secret && this.canEdit && !row.web_auth) {
+                this.openWebAuth(row, "edit");
+                return;
+            }
             if (!this.canEdit || !(col.editable || col.location)) {
                 return;
             }
@@ -1122,7 +1146,7 @@ export default {
                     return texts.some(function (t) { return t.text.indexOf(w) !== -1; });
                 });
             });
-            // Число среди нескольких слов («хир орд 3») ищется целиком: это № места,
+            // Число среди нескольких слов («хир орд 3») ищется целиком: это № места (у принтера – №),
             // № кабинета или отдельное число внутри текста («Win 10»). Иначе «3»
             // находилось бы в каждом IP 10.0.3.x, в этаже, в кабинете 301.
             // Одно слово – как раньше, кусок где угодно (часть ИНВ, IP).
@@ -1132,7 +1156,7 @@ export default {
                 return words.every(function (w) {
                     if (whole && /^\d+$/.test(w)) {
                         return texts.some(function (t) {
-                            if (t.field === "seat_no" || t.field === "room_code") {
+                            if (t.field === "seat_no" || t.field === "number" || t.field === "room_code") {
                                 return t.text.trim() === w;
                             }
                             // «[214] Процедурная» или просто «214»
@@ -1220,9 +1244,10 @@ export default {
             }
         },
 
-        // Ответ – сохранилось ли (true / false)
+        // Ответ – сохранилось ли (true / false). Строка принтера (этап 44) – в его таблицу
         async saveCellValue(row, col, value) {
-            const pendingKey = row.id + ":" + col.field;
+            const printer = !!row._printer;
+            const pendingKey = this.rowKey(row) + ":" + col.field;
             this.pendingCells = Object.assign({}, this.pendingCells, { [pendingKey]: value });
             const clearPending = () => {
                 const next = Object.assign({}, this.pendingCells);
@@ -1232,7 +1257,7 @@ export default {
             try {
                 const payload = { _version: row.version };
                 payload[col.field] = value;
-                const response = await apiFetch("/api/computers/" + row.id, {
+                const response = await apiFetch((printer ? "/api/printers/" : "/api/computers/") + row.id, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
@@ -1240,7 +1265,7 @@ export default {
                 if (response.status === 409) {
                     clearPending();
                     this.toastError(await this.errorText(response));
-                    await this.loadTable();
+                    await (printer ? this.loadPrinters() : this.loadTable());
                     return false;
                 }
                 if (!response.ok) {
@@ -1250,8 +1275,12 @@ export default {
                 }
                 const data = await response.json();
                 const updated = data.updated || {};
-                const index = this.rows.findIndex((r) => r.id === row.id);
                 clearPending();
+                if (printer) {
+                    await this.afterPrinterSave(row, col, data);
+                    return true;
+                }
+                const index = this.rows.findIndex((r) => r.id === row.id);
                 // Новый № места был занят: соседи сдвинулись, строка встала по номеру
                 if (data.shifted && data.shifted.length || (col.field === "seat_no" && data.changes && data.changes.seat_no)) {
                     await this.loadTable();
@@ -1264,9 +1293,13 @@ export default {
                     this.reloadCardHistory(row.id);
                     return true;
                 }
+                // Имя ПК и его принтеры видны и в таблице принтеров (этап 44)
+                if (col.field === "printers" || col.field === "hostname") {
+                    this.loadPrinters();
+                }
                 if (index !== -1) {
                     Object.assign(this.rows[index], updated);
-                    refreshDuplicates(this.rows, this.builtinColumns);
+                    refreshDuplicates(this.rows, this.builtinColumns, "pc");
                 this.dupVersion++;
                     this.recalcWidths();
                     this.flashCell(row.id, col.field);
@@ -1366,10 +1399,12 @@ export default {
         },
         
         setHoverRow(tr) {
-        // Открыта карточка – подсвечена её строка, куда бы ни ушёл курсор
-        if (this.card) {
+        // Открыта карточка – подсвечена её строка, куда бы ни ушёл курсор (карточка ПК – в
+        // таблице ПК, принтера – в таблице принтеров)
+        const cardId = this.tableKind === "printer" ? (this.pcard ? this.pcard.id : null) : (this.card ? this.card.id : null);
+        if (cardId !== null) {
             const wrap = this.$refs.tableWrap;
-            tr = wrap ? wrap.querySelector('tbody tr[data-id="' + this.card.id + '"]') : null;
+            tr = wrap ? wrap.querySelector('tbody tr[data-id="' + cardId + '"]') : null;
         }
         if (this.hoverRowEl && this.hoverRowEl !== tr) {
             this.hoverRowEl.classList.remove("row-hover");
@@ -1430,12 +1465,19 @@ export default {
             if (event.ctrlKey || event.metaKey) {
                 return;
             }
-            if (col.field === "hostname") {
+            if (col.field === "hostname" || (col.link && row._printer)) {
                 // Протянули мышью, чтобы выделить кусок имени, – карточку не открываем
                 const sel = window.getSelection ? String(window.getSelection()) : "";
                 if (!sel) {
-                    this.openCard(row);
+                    if (row._printer) {
+                        this.openPrinterCard(row);
+                    } else {
+                        this.openCard(row);
+                    }
                 }
+            } else if (col.secret && row.web_auth && !event.target.closest(".cell-edit")) {
+                // Логин и пароль Web (этап 44) – окно по паролю администратора
+                this.openWebAuth(row);
             }
         },
 

@@ -12,6 +12,7 @@ import { FIXED_HISTORY_FIELDS } from "../columns.js";
 
 const ENTITY_FILTERS = {
     computers: "Компьютеры",
+    printers: "Принтеры",
     locations: "Расположения",
     choices: "Справочники",
     field_defs: "Польз. поля",
@@ -26,7 +27,8 @@ const ENTITY_FILTERS = {
     scan_antivirus: "Антивирусы (вид столбца)",
     table_marks: "Выделения в Таблице",
     app_settings: "Настройки",
-    naming: "Имена ПК: своё имя"
+    naming: "Имена: своё имя",
+    printer_models: "Модели принтеров"
 };
 // Только администратор видит эти записи; отмены у них нет (только просмотр)
 const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule"];
@@ -302,6 +304,11 @@ export default {
             const cardId = this.card ? this.card.id : null;
             const tasks = [this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()];
             tasks.push(this.loadTable());
+            // Принтеры и модели (этап 44)
+            tasks.push(this.loadPrinters());
+            if (this.printerModels.length || this.view === "printers" || this.choicesTab === "models") {
+                tasks.push(this.loadPrinterModels());
+            }
             if (this.view === "users" && this.isAdmin) {
                 tasks.push(this.loadUsers());
             }
@@ -319,6 +326,9 @@ export default {
                     this.card = row;
                 }
                 this.reloadCardHistory(cardId);
+            }
+            if (this.pcard) {
+                this.reloadPrinterCardHistory(this.pcard.id);
             }
         },
 

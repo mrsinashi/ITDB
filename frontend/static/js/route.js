@@ -3,8 +3,9 @@
 //   #table, #tree, #vacuum, #choices, #history, #users, #scan/check, #scan/net…
 //   #table?pc=12   – Таблица с открытой карточкой ПК
 //   #table?loc=7   – Таблица с фильтром по узлу дерева
+//   #printers?pr=3 – Принтеры с открытой карточкой принтера (этап 44)
 
-export const VIEWS = ["table", "tree", "vacuum", "scan", "choices", "history", "users"];
+export const VIEWS = ["table", "tree", "vacuum", "printers", "scan", "choices", "history", "users"];
 
 // pageLink("scan/net") → "#scan/net"; pageLink("table", { pc: 12 }) → "#table?pc=12"
 export function pageLink(page, params) {

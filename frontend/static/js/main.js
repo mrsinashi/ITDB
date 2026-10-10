@@ -29,7 +29,10 @@
 //                        table-views (виды таблицы: наборы столбцов, окно «Виды таблицы»),
 //                        naming (имена ПК по правилам: вкладка Справочников, проверка в Таблице),
 //                        vacuum-online (кружок «в сети» у логинов VACUUM: быстрая проверка Jabber),
-//                        page-mark (полоска нажатой строки на «GLPI / GSIT», «Сети», «Vacuum»: Enter – VNC)
+//                        page-mark (полоска нажатой строки на «GLPI / GSIT», «Сети», «Vacuum»: Enter – VNC),
+//                        printers (страница «Принтеры»: та же Таблица с принтерами, ссылки ПК ↔ принтер),
+//                        printer-card (карточка принтера, логин и пароль Web),
+//                        printer-models (Справочники → «Модели принтеров»)
 //   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        – tree-node, tree-form, style-controls, location-picker, count-select
 //
@@ -71,6 +74,9 @@ import tableViews from "./mixins/table-views.js";
 import naming from "./mixins/naming.js";
 import vacuumOnline from "./mixins/vacuum-online.js";
 import pageMark from "./mixins/page-mark.js";
+import printers from "./mixins/printers.js";
+import printerCard from "./mixins/printer-card.js";
+import printerModels from "./mixins/printer-models.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -79,7 +85,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -335,6 +341,8 @@ const app = Vue.createApp({
             window.addEventListener("resize", () => { this.scanFitCompare(); this.placeCheckPlate(); });
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();
+            // Принтеры (этап 44): их имена – и в таблице ПК (ссылки, окошко принтера)
+            this.loadPrinters();
             this.watchTableFit();
             this.loadDiffs();
             this.loadScanMarks();

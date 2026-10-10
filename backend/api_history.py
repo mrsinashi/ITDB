@@ -12,7 +12,7 @@ from history_undo import (
     ENTITIES, SIMPLE, Ref, cancel_changes, field_kind, field_label, find_object, object_title, ref_of, revert_value,
     value_history,
 )
-from models import Computer, History, Location
+from models import Computer, History, Location, Printer
 
 router = APIRouter(prefix="/api", tags=["history"])
 
@@ -108,12 +108,21 @@ def history(
 
     computer_ids = set()
     location_ids = set()
+    printer_ids = set()
 
     for item in items:
         if item.entity == "computers":
             computer_ids.add(item.entity_id)
         elif item.entity == "locations":
             location_ids.add(item.entity_id)
+        elif item.entity == "printers":
+            printer_ids.add(item.entity_id)
+
+    # Принтеры (этап 44): имя сейчас, без имени – «#N» (вид объекта «Принтер» пишет фронт)
+    printer_name_by_id = {
+        printer.id: printer.name or f"#{printer.id}"
+        for printer in (session.query(Printer).filter(Printer.id.in_(printer_ids)).all() if printer_ids else [])
+    }
 
     hostname_by_id = {}
 
@@ -159,6 +168,8 @@ def history(
             title = hostname_by_id.get(item.entity_id)
         elif item.entity == "locations":
             title = location_name_by_id.get(item.entity_id)
+        elif item.entity == "printers":
+            title = printer_name_by_id.get(item.entity_id)
         elif item.entity in SIMPLE:
             title = simple_titles.get(Ref(item.entity, item.entity_id, item.entity_key)) or item.title
         else:
