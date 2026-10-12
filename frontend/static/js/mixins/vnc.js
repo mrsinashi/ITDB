@@ -252,7 +252,7 @@ export default {
                 !(target && target.closest && target.closest("button, .dropdown, .cf-menu, .scan-pop, .add-bar, .card-overlay")) &&
                 !this.editingRowId && !this.cardEditKey && !this.editingHostname && !this.openMenu && !this.scanPop &&
                 !this.namePop && !this.actionBar && !this.newComputer && !this.newPrinter && !this.showArchive &&
-                !this.pcard && !this.printerPop && !this.webAuth;
+                !this.pcard && !this.printerPop && !this.webAsk && !this.webEdit && !this.linkPick;
             if (row && free) {
                 event.preventDefault();
                 if (row._printer) {

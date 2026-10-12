@@ -172,6 +172,8 @@ export default {
             this.cancelEdit();
             this.closeMenus();
             this.closeSuggest();
+            this.hideWebShown();
+            this.closeLinkPick();
             this.closeNewComputer();
             this.closeNewPrinter();
             this.actionBar = null;
@@ -538,13 +540,15 @@ export default {
             }
             this.setArchiveView(false);
             this.actionBar = null;
+            this.hideWebShown();
             this.ensureTree();
             if (!this.printerModels.length) {
                 this.loadPrinterModels();
             }
             const locationId = this.locationFilter ? this.locationFilter.id : null;
-            // autoName – имя по правилу в поле «Имя», пока его не поменяли руками
-            this.newPrinter = { location_id: locationId, model_id: null, number: "", name: "", ip: "", autoName: "", error: "", saving: false };
+            // autoName – имя по правилу в поле «Имя», пока его не поменяли руками; many – после
+            // добавления строка не закрывается (кнопка «Один» / «Несколько», этап 45)
+            this.newPrinter = { location_id: locationId, model_id: null, number: "", name: "", ip: "", autoName: "", error: "", saving: false, many: false };
             this.newRoom = null;
             this.newModel = null;
             this.$nextTick(() => this.focusNewPrinter(locationId ? "model" : "location"));
@@ -657,7 +661,11 @@ export default {
                 (data.shifted || []).forEach((id) => this.flashCell("p" + id, "number"));
                 this.toast("Добавлен: " + (form.name.trim() || "принтер без имени") +
                     (data.shifted && data.shifted.length ? ". № был занят – следующие сдвинуты: " + data.shifted.length : ""), "success");
-                // Строка остаётся: можно сразу добавить следующий в тот же кабинет
+                // Добавили – строка закрывается; «Несколько» – остаётся: следующий в тот же кабинет
+                if (!form.many) {
+                    this.closeNewPrinter();
+                    return;
+                }
                 form.name = "";
                 form.ip = "";
                 form.autoName = "";

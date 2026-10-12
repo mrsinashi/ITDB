@@ -8,7 +8,7 @@
   дуплекс берутся из модели; правка модели меняет все её принтеры.
 - Веб-страница: есть / нет и адрес (пусто – http://IP); логин и пароль от неё –
   зашифрованными (secret_box.py). Показать их можно только по логину и паролю
-  администратора ITDB – кто бы ни смотрел.
+  администратора ITDB – кто бы ни смотрел; сам администратор вводит свой пароль.
 - Подключение к ПК – printer_links.py; имя по правилам узлов считает фронт.
 - История – entity "printers", модели – "printer_models" (отменяются, как ПК и
   справочники); логин и пароль – без значений и без отмены.
@@ -642,13 +642,14 @@ SHOW_WINDOW_SECONDS = 300
 
 
 class AdminCheck(BaseModel):
-    login: str
+    login: Optional[str] = None     # пусто – свой пароль (этап 45: администратору логин не нужен)
     password: str
 
 
 @router.post("/printers/{printer_id}/web-auth/show")
 def show_web_auth(printer_id: int, payload: AdminCheck, request: Request, user=Depends(get_current_user), session=Depends(get_db)):
-    """Логин и пароль Web – по логину и паролю администратора ITDB."""
+    """Логин и пароль Web – по логину и паролю администратора ITDB; сам администратор
+    вводит только свой пароль."""
     ip = request.client.host if request.client else "unknown"
     now = datetime.now(timezone.utc)
     show_attempts[ip] = [at for at in show_attempts[ip] if (now - at).total_seconds() < SHOW_WINDOW_SECONDS]
@@ -656,15 +657,22 @@ def show_web_auth(printer_id: int, payload: AdminCheck, request: Request, user=D
     if len(show_attempts[ip]) >= SHOW_MAX_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Слишком много попыток. Попробуй позже.")
 
-    admin = (
-        session.query(User)
-        .filter(func.lower(User.login) == payload.login.strip().lower(), User.archived == False)  # noqa: E712
-        .first()
-    )
+    login = (payload.login or "").strip()
+
+    if login:
+        admin = (
+            session.query(User)
+            .filter(func.lower(User.login) == login.lower(), User.archived == False)  # noqa: E712
+            .first()
+        )
+    elif user["role"] == "admin":
+        admin = session.get(User, user["id"])
+    else:
+        raise HTTPException(status_code=403, detail="Нужны логин и пароль администратора.")
 
     if not admin or admin.role != "admin" or not verify_password(payload.password, admin.password_hash):
         show_attempts[ip].append(now)
-        raise HTTPException(status_code=403, detail="Нужны логин и пароль администратора.")
+        raise HTTPException(status_code=403, detail="Неверный пароль." if not login else "Нужны логин и пароль администратора.")
 
     show_attempts.pop(ip, None)
     printer = session.get(Printer, printer_id)

@@ -35,6 +35,7 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #               не правится – меняется модель или сама модель в справочнике
 #   flag      – «есть» / «нет» (веб-страница)
 #   secret    – логин и пароль от веб-страницы: в таблице – только задан ли
+#               (точками; показ – по паролю, этап 45)
 Kind = Literal[
     "text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan",
     "printers", "computers", "pmodel", "pattr", "flag", "secret",
@@ -165,7 +166,7 @@ PRINTER_COLUMNS = [
     col("color", "Печать", kind="pattr", center=True, export_width=9),
     col("duplex", "Дуплекс", kind="pattr", center=True, export_width=9),
     col("web", "Web", "Веб-страница", kind="flag", center=True, suggest=True, export_width=6),
-    col("web_auth", "Вход", "Логин и пароль Web", kind="secret", center=True, values="no", bulk=False, export_width=8),
+    col("web_auth", "Доступ", "Доступ (логин и пароль Web)", kind="secret", center=True, values="no", bulk=False, export_width=8),
     col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=16),
     col("note", "Примечание", kind="multiline", multiline=True, note=True, max_width=200, values="no", export_width=30, card_always=True),

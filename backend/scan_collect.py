@@ -21,7 +21,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 from api_scan import (
-    INTERRUPTED, SOURCES, connection_params, fresh_days_of, interrupted, load_source, remember_host, source_ready,
+    INTERRUPTED, SOURCES, connection_params, fresh_days_of, interrupted, load_source, remember_host, scan_subnets,
+    source_ready,
 )
 from db import SessionLocal
 from models import Choice, Computer, ScanAlias, ScanHost, ScanJabberUser, ScanLink, ScanRecord, ScanRun
@@ -84,8 +85,37 @@ def running_run(session, kind):
     return run
 
 
-def start(session, kind, user_name, background=True):
-    """Начать сбор. Ответ – ScanRun; отказ – CollectRefused."""
+def check_only(session, kind, only):
+    """Что собрать (этап 45): у сети – часть подсетей из отмеченных «Сканировать», у DHCP –
+    аренды и / или привязки из файлов настроек. Всё – None."""
+    if not only:
+        return None
+
+    if kind == "net" and only.get("subnets") is not None:
+        marked = scan_subnets(session)
+        wanted = set(only["subnets"])
+        subnets = [cidr for cidr in marked if cidr in wanted]
+
+        if not subnets:
+            raise CollectRefused("Не выбраны подсети.")
+
+        return {"subnets": subnets} if len(subnets) < len(marked) else None
+
+    if kind == "dhcp":
+        leases = only.get("leases", True)
+        configs = only.get("configs", True)
+
+        if not leases and not configs:
+            raise CollectRefused("Не выбрано, что собрать из DHCP.")
+
+        return None if leases and configs else {"leases": leases, "configs": configs}
+
+    return None
+
+
+def start(session, kind, user_name, background=True, only=None):
+    """Начать сбор. Ответ – ScanRun; отказ – CollectRefused. only – что собрать
+    (check_only); пишется в запуск (stats.only) и в его итог."""
     if kind not in COLLECTORS:
         raise CollectRefused("Из этого источника сбор пока не делается.", 404)
 
@@ -108,7 +138,13 @@ def start(session, kind, user_name, background=True):
     if running_run(session, kind):
         raise CollectRefused(f"Сбор из {title} уже идёт.", 409)
 
-    run = ScanRun(source=kind, status="running", user_name=user_name, stats={"progress": {"done": 0, "total": None}})
+    only = check_only(session, kind, only)
+    stats = {"progress": {"done": 0, "total": None}}
+
+    if only:
+        stats["only"] = only
+
+    run = ScanRun(source=kind, status="running", user_name=user_name, stats=stats)
     session.add(run)
     session.commit()
 
@@ -156,7 +192,12 @@ def finish(session, run, status, message=None, stats=None):
 def collect_into(session, run):
     kind = run.source
     source = load_source(session, kind)
-    params = connection_params(kind, source, session=session)
+    # Только часть (этап 45): подсети сети, аренды или привязки DHCP
+    only = (run.stats or {}).get("only") or {}
+    params = dict(connection_params(kind, source, session=session), only=only)
+
+    if only.get("subnets"):
+        params["subnets"] = only["subnets"]
     fresh_days = fresh_days_of(source, kind)
 
     def progress(done, total):
@@ -166,10 +207,13 @@ def collect_into(session, run):
     result = COLLECTORS[kind](params, fresh_days, progress)
     stats = dict(result["stats"], fresh_days=fresh_days, version=result.get("version"))
 
+    if only:
+        stats["only"] = only
+
     if kind in RECORD_KINDS:
         save_records(session, kind, run, result["items"], stats)
     elif kind in HOST_KINDS:
-        save_hosts(session, kind, run, result["items"], fresh_days)
+        save_hosts(session, kind, run, result["items"], fresh_days, only)
         remember_host(load_source(session, kind), result.get("seen"))
     else:
         save_jabber(
@@ -219,15 +263,20 @@ def save_records(session, kind, run, items, stats):
     stats.update(counts)
 
 
-def save_hosts(session, kind, run, items, fresh_days):
+def save_hosts(session, kind, run, items, fresh_days, only=None):
     """Наблюдения сети. По сроку ничего не удаляется (этап 31): ПК может быть
     выключен месяцами и стоять на месте – последнее известное об адресе остаётся
     (что старше срока «Актуальны» – в «Сети» серым и в предложения не идёт).
     DHCP – аренды обновляются по адресу (аренда, которой в файле уже нет, остаётся
     как была), привязки из настроек – это настройка, а не наблюдение: заменяются
-    целиком. Сеть – ответившие адреса обновляются, молчащие остаются."""
+    целиком. Сеть – ответившие адреса обновляются, молчащие остаются.
+    only (этап 45): у DHCP собраны только аренды или только привязки – другое не трогать."""
+    only = only or {}
+    leases = only.get("leases", True)
+
     if kind == "dhcp":
-        session.query(ScanHost).filter(ScanHost.source == CONF_SOURCE).delete(synchronize_session=False)
+        if only.get("configs", True):
+            session.query(ScanHost).filter(ScanHost.source == CONF_SOURCE).delete(synchronize_session=False)
         existing = {}
 
         for row in session.query(ScanHost).filter(ScanHost.source == kind):
@@ -262,7 +311,7 @@ def save_hosts(session, kind, run, items, fresh_days):
         row.seen_at = item["seen_at"]
         row.run_id = run.id
 
-    if kind == "dhcp":
+    if kind == "dhcp" and leases:
         # Аренды в файле больше нет – она не действует; когда адрес был занят, остаётся
         found = {item["ip"] for item in items if (item.get("source") or kind) == kind}
 

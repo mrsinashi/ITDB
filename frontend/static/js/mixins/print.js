@@ -272,7 +272,8 @@ export default {
             } else if (parts) {
                 html = parts.map(function (p) { return line(p.text, p.style); }).join("");
             } else {
-                const value = row[col.field];
+                // «Доступ» принтера (этап 45) – точками, как в таблице
+                const value = col.secret && row[col.field] ? this.secretDots : row[col.field];
                 if (value !== null && value !== undefined && value !== "") {
                     const st = this.printStyle(this.cellTextStyle(row, col), opt);
                     html = "<span class=\"" + (col.note ? "n" : "t") + "\"" + (st.css ? " style=\"" + st.css + "\"" : "") + ">" + esc(value) + "</span>";

@@ -114,11 +114,19 @@ export default {
         },
 
         onCardRowDblclick(event, r) {
-            // Двойной клик по самому значению – это два копирования, не правка
-            if (event.target.closest(".copy-val")) {
+            // Двойной клик по самому значению – это два копирования, не правка (по ссылке на
+            // принтер – два нажатия на неё)
+            if (event.target.closest(".copy-val, a.obj-link, .obj-tbl")) {
                 return;
             }
+            this.hideWebShown();
             if (!this.isCardEditable(r) || this.cardEditKey === r.key) {
+                return;
+            }
+            // Принтеры ПК – окошко с поиском и галочками (этап 45)
+            if (this.cardEditCol(r).links) {
+                const row = this.rows.find((item) => item.id === this.card.id) || this.card;
+                this.openLinkPick(row, this.cardEditCol(r), event.currentTarget.querySelector("td.ct-value"));
                 return;
             }
             const sel = window.getSelection && window.getSelection();
@@ -208,6 +216,9 @@ export default {
         // ---------- Карточка ----------
 
         async openCard(row) {
+            // Показанные логин и пароль принтера (этап 45) – прячутся
+            this.closeWebEdit();
+            this.hideWebShown();
             this.card = row;
             this.setHoverRow(null); // подсветка остаётся на строке карточки
             this.cardHistoryOpen = false;

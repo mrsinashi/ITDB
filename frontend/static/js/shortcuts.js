@@ -66,12 +66,10 @@ window.addEventListener("keydown", function (event) {
         }
         return;
     }
-    // Окно «Логин и пароль Web» (этап 44): Esc – закрыть
-    if (vm.webAuth && !vm.dialog) {
-        if (event.key === "Escape") {
-            event.preventDefault();
-            vm.closeWebAuth();
-        }
+    // Показанные логин и пароль принтера (этап 45): Esc прячет их – раньше всего остального
+    if (event.key === "Escape" && vm.webShown && !vm.webEdit && !vm.dialog) {
+        event.preventDefault();
+        vm.hideWebShown();
         return;
     }
     // Открыт диалог подтверждения: Esc – отмена, Enter – OK

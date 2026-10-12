@@ -139,6 +139,10 @@ export default {
         },
 
         setView(view) {
+            // Другая страница – показанные логин и пароль принтера прячутся (этап 45)
+            this.closeWebEdit();
+            this.hideWebShown();
+            this.closeLinkPick();
             // Таблица показывает ПК или принтеры (этап 44): её настройки – меняются местами
             this.switchTableKind(view === "printers" ? "printer" : "pc");
             this.view = view;

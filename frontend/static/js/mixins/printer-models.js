@@ -15,6 +15,10 @@ function boolText(value) {
     return value === true ? "true" : (value === false ? "false" : "");
 }
 
+// Подсказки у поля «Производитель» (этап 45): сначала – из справочника, за ними – эти
+const COMMON_MAKERS = ["HP", "Kyocera", "Canon", "Brother", "Xerox", "Ricoh", "Konica Minolta", "Epson", "Pantum",
+    "Samsung", "Lexmark", "OKI", "Sharp", "Toshiba", "Катюша"];
+
 export default {
     data() {
         return {
@@ -64,6 +68,53 @@ export default {
 
         modelYesNoText(value) {
             return value === null || value === undefined ? "" : YES_NO_LABELS[value];
+        },
+
+        // Производители для подсказки: из справочника (справа – число моделей), потом
+        // распространённые, которых там ещё нет
+        makerOptions() {
+            const found = new Map();
+            this.printerModels.forEach(function (m) {
+                const maker = String(m.maker || "").trim();
+                if (maker) {
+                    const was = found.get(maker.toLowerCase());
+                    found.set(maker.toLowerCase(), { value: was ? was.value : maker, n: (was ? was.n : 0) + 1 });
+                }
+            });
+            const list = Array.from(found.entries()).sort(function (a, b) {
+                return b[1].n - a[1].n || a[1].value.localeCompare(b[1].value, "ru");
+            }).map(function (e) {
+                return { key: e[0], value: e[1].value, count: e[1].n, countTitle: "Моделей в справочнике" };
+            });
+            COMMON_MAKERS.forEach(function (maker) {
+                if (!found.has(maker.toLowerCase())) {
+                    list.push({ key: maker.toLowerCase(), value: maker, count: "", countTitle: "" });
+                }
+            });
+            return list;
+        },
+
+        // Поле «Производитель» (новая модель, строка справочника): список под полем; выбрали –
+        // фокус в поле next
+        openMakerSuggest(el, form, next) {
+            this.openSuggestList(el, "maker", this.makerOptions(), (value) => {
+                form.maker = value;
+                this.$nextTick(() => this.focusRef(next));
+            });
+        },
+
+        // Список открыт: ↑↓ и Enter – в нём, Esc закрывает только его
+        onMakerKeydown(event) {
+            if (!this.suggest || this.suggest.field !== "maker") {
+                return;
+            }
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closeSuggest();
+                return;
+            }
+            this.suggestKeydown(event);
         },
 
         openNewModelRow() {

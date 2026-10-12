@@ -197,14 +197,16 @@ export default {
                 return;
             }
             this.closeNewPrinter();
+            this.hideWebShown();
             // Новый ПК появится среди рабочих – из архива уходим
             this.setArchiveView(false);
             this.actionBar = null;
             this.ensureTree();
             // По умолчанию – узел, выбранный фильтром из дерева
             const locationId = this.locationFilter ? this.locationFilter.id : null;
-            // autoName – имя по правилу в поле HOSTNAME (пока его не поменяли руками, этап 35)
-            this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "", autoName: "" };
+            // autoName – имя по правилу в поле HOSTNAME (пока его не поменяли руками, этап 35);
+            // many – после добавления строка не закрывается (кнопка «Один» / «Несколько», этап 45)
+            this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "", autoName: "", many: false };
             this.newComputerError = "";
             this.newRoom = null;
             if (locationId) {
@@ -495,12 +497,16 @@ export default {
                 (data.shifted || []).forEach((id) => this.flashCell(id, "seat_no"));
                 this.toast("Добавлен: " + (form.hostname.trim() || "компьютер без имени") +
                     (data.shifted && data.shifted.length ? ". № места был занят – следующие сдвинуты: " + data.shifted.length : ""), "success");
-                // Форма остаётся открытой: можно сразу добавить следующий в тот же узел
-                form.hostname = "";
-                form.ip = "";
-                form.seat_no = this.nextSeatNo(form.location_id);
-                this.refreshNewComputerName();
-                this.$nextTick(() => this.focusNewComputer("hostname"));
+                // Добавили – строка закрывается; «Несколько» – остаётся: следующий в тот же узел
+                if (!form.many) {
+                    this.closeNewComputer();
+                } else {
+                    form.hostname = "";
+                    form.ip = "";
+                    form.seat_no = this.nextSeatNo(form.location_id);
+                    this.refreshNewComputerName();
+                    this.$nextTick(() => this.focusNewComputer("hostname"));
+                }
             } catch (e) {
                 this.newComputerError = String(e.message || e);
             }
@@ -614,6 +620,7 @@ export default {
             this.closeMenus();
             this.closeNewComputer();
             this.cancelEdit();
+            this.hideWebShown();
             this.ensureTree();
             const ids = this.selectedInOrder();
             const bar = { kind: kind, ids: ids, error: "", saving: false, location_id: null, with_people: true };

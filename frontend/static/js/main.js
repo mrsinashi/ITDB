@@ -31,8 +31,10 @@
 //                        vacuum-online (кружок «в сети» у логинов VACUUM: быстрая проверка Jabber),
 //                        page-mark (полоска нажатой строки на «GLPI / GSIT», «Сети», «Vacuum»: Enter – VNC),
 //                        printers (страница «Принтеры»: та же Таблица с принтерами, ссылки ПК ↔ принтер),
-//                        printer-card (карточка принтера, логин и пароль Web),
-//                        printer-models (Справочники → «Модели принтеров»)
+//                        printer-card (карточка принтера),
+//                        printer-models (Справочники → «Модели принтеров»),
+//                        web-access («Доступ» принтера: логин и пароль Web по паролю – в ячейке),
+//                        link-picker (подключение принтеров к ПК: окошко с поиском и галочками)
 //   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   components/        – tree-node, tree-form, style-controls, location-picker, count-select
 //
@@ -77,6 +79,8 @@ import pageMark from "./mixins/page-mark.js";
 import printers from "./mixins/printers.js";
 import printerCard from "./mixins/printer-card.js";
 import printerModels from "./mixins/printer-models.js";
+import webAccess from "./mixins/web-access.js";
+import linkPicker from "./mixins/link-picker.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -85,7 +89,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker],
 
     // Дерево получает корень через inject, а не через window
     provide() {

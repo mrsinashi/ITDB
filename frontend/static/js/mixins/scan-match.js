@@ -17,6 +17,9 @@ const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net"];
 const NET_KINDS = ["dhcp", "net"];
 // Меню «Собрать» на «GLPI / GSIT» (этап 43): снятые галочки – в браузере
 const COLLECT_OFF_KEY = "itdb.collectOff.v1";
+// Меню «Сканировать» на «Сети» (этап 45): снятые части (net – сканер, leases, configs) – в
+// браузере; подсети – каждый раз все
+const NET_SCAN_OFF_KEY = "itdb.netScanOff.v1";
 // Что считает полоса сбора: «20 из 155 ПК»
 const PROGRESS_UNITS = { jabber: " пользователей", net: " адресов", dhcp: "" };
 const KEY_LABELS = { id: "ID", mac: "MAC", serial: "серийному" };
@@ -66,7 +69,9 @@ function durationText(run) {
 export default {
     data() {
         return {
-            collectOff: loadJson(COLLECT_OFF_KEY, [])   // меню «Собрать»: источники со снятой галочкой
+            collectOff: loadJson(COLLECT_OFF_KEY, []),  // меню «Собрать»: источники со снятой галочкой
+            netScanOff: loadJson(NET_SCAN_OFF_KEY, []), // меню «Сканировать»: части со снятой галочкой
+            netScanSubnetsOff: []                       // …и подсети (при каждом открытии – снова все)
         };
     },
 
@@ -129,6 +134,53 @@ export default {
 
         netProgress() {
             return this.sourcesProgress(this.netCollectSources);
+        },
+
+        // Меню «Сканировать» (этап 45): сканер (проход подсетей), аренды и привязки из файлов
+        // настроек DHCP; нельзя – серым, причина в подсказке
+        netScanOptions() {
+            const list = [];
+            const add = (key, label, s, extraBlock) => {
+                if (!s) {
+                    return;
+                }
+                const running = this.scanCollecting(s.kind);
+                const block = this.scanCollectBlock(s.kind) || extraBlock || "";
+                list.push({
+                    key: key,
+                    label: label,
+                    block: block,
+                    running: running,
+                    checked: !block && this.netScanOff.indexOf(key) === -1,
+                    title: block && !running ? block : this.scanCollectTitle(s.kind)
+                });
+            };
+            const dhcp = this.scanSource("dhcp");
+            add("net", "Сканер", this.scanSource("net"));
+            add("leases", "Leases", dhcp);
+            add("configs", "DHCP Config", dhcp, dhcp && !(dhcp.configs || []).length ? "Файлы настроек не указаны" : "");
+            return list;
+        },
+
+        netScanOn() {
+            const on = {};
+            this.netScanOptions.forEach(function (o) { on[o.key] = o.checked; });
+            return on;
+        },
+
+        // Подсети с «Сканировать: да»; галочки – при каждом открытии меню снова у всех
+        netScanSubnets() {
+            const purposes = this.scanPurposes || {};
+            return this.scanSubnets.filter(function (sn) { return sn.scan; }).map((sn) => ({
+                cidr: sn.cidr,
+                checked: this.netScanSubnetsOff.indexOf(sn.cidr) === -1,
+                title: [purposes[sn.purpose], "адресов: " + sn.size, sn.note].filter(Boolean).join(" · ")
+            }));
+        },
+
+        netScanReady() {
+            const on = this.netScanOn;
+            return !!(on.leases || on.configs || (on.net && this.netScanSubnets.some(function (sn) { return sn.checked; })));
         },
 
         scanNamesShown() {
@@ -372,18 +424,61 @@ export default {
             this.collectKinds(kinds);
         },
 
-        // «Сканировать» на «Сети»: DHCP и проход подсетей, какие включены
-        collectNet() {
-            this.collectKinds(NET_KINDS);
+        // «Сканировать» на «Сети» (этап 45) – меню: подсети при каждом открытии снова все
+        toggleNetScanMenu() {
+            if (this.openMenu !== "netScan") {
+                this.netScanSubnetsOff = [];
+                if (!this.scanSubnets.length) {
+                    this.loadScanSubnets();
+                }
+            }
+            this.toggleMenu("netScan");
+        },
+
+        toggleNetScanPart(key) {
+            const off = this.netScanOff;
+            this.netScanOff = off.indexOf(key) === -1 ? off.concat([key]) : off.filter(function (k) { return k !== key; });
+            saveJson(NET_SCAN_OFF_KEY, this.netScanOff);
+        },
+
+        toggleNetScanSubnet(cidr) {
+            const off = this.netScanSubnetsOff;
+            this.netScanSubnetsOff = off.indexOf(cidr) === -1 ? off.concat([cidr]) : off.filter(function (c) { return c !== cidr; });
+        },
+
+        // «только» у подсети – как в фильтре столбца
+        onlyNetScanSubnet(cidr) {
+            this.netScanSubnetsOff = this.netScanSubnets.map(function (sn) { return sn.cidr; }).filter(function (c) { return c !== cidr; });
+        },
+
+        // «Сканировать» в меню: отмеченное; у сканера – отмеченные подсети, у DHCP – аренды
+        // и / или привязки (всё – без уточнений)
+        collectNetChosen() {
+            const on = this.netScanOn;
+            const subnets = this.netScanSubnets.filter(function (sn) { return sn.checked; }).map(function (sn) { return sn.cidr; });
+            const jobs = [];
+            if (on.net && subnets.length) {
+                jobs.push({ kind: "net", only: subnets.length < this.netScanSubnets.length ? { subnets: subnets } : null });
+            }
+            if (on.leases || on.configs) {
+                jobs.push({ kind: "dhcp", only: on.leases && on.configs ? null : { leases: !!on.leases, configs: !!on.configs } });
+            }
+            this.closeMenus();
+            this.collectKinds(jobs);
         },
 
         // Собрать из источников по очереди запросов (сами сборы идут на сервере параллельно);
-        // выключенные и те, из которых уже собирается, пропускаются
+        // выключенные и те, из которых уже собирается, пропускаются. В списке – вид источника
+        // или { kind, only } (что собрать, этап 45)
         async collectKinds(list) {
-            const kinds = list.filter((kind) => !this.scanCollectBlock(kind));
-            for (const kind of kinds) {
+            const jobs = list.map(function (job) { return typeof job === "string" ? { kind: job, only: null } : job; })
+                .filter((job) => !this.scanCollectBlock(job.kind));
+            for (const job of jobs) {
+                const kind = job.kind;
                 try {
-                    const response = await apiFetch("/api/scan/sources/" + kind + "/collect", { method: "POST" });
+                    const response = await apiFetch("/api/scan/sources/" + kind + "/collect", job.only
+                        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(job.only) }
+                        : { method: "POST" });
                     if (!response.ok) {
                         throw new Error(await this.errorText(response));
                     }
@@ -433,6 +528,8 @@ export default {
             if (run.status === "ok" && run.source === "jabber") {
                 const st = run.stats;
                 this.toast(title + ": собрано – пользователей " + st.total + ", в сети " + st.online, "success");
+            } else if (run.status === "ok" && run.source === "dhcp" && run.stats.only && run.stats.only.leases === false) {
+                this.toast(title + ": собрано – привязок " + run.stats.fixed, "success");
             } else if (run.status === "ok" && run.source === "dhcp") {
                 this.toast(title + ": собрано – аренд " + (run.stats.total - run.stats.fixed) + ", действуют " + run.stats.active, "success");
             } else if (run.status === "ok" && run.source === "net") {
@@ -505,8 +602,13 @@ export default {
                 const groups = st.groups ? ", групп: " + st.groups : "";
                 return { text: "Пользователей: " + st.total + ", в сети: " + st.online + groups, note: run.message || "", bad: false, running: false };
             }
+            // Только часть (этап 45): привязки DHCP без аренд, часть подсетей
+            const only = st.only || {};
+            if (kind === "dhcp" && only.leases === false) {
+                return { text: "Только привязки: " + st.fixed, note: run.message || "", bad: false, running: false };
+            }
             if (kind === "dhcp") {
-                const parts = ["Аренд: " + (st.total - st.fixed), "действуют: " + st.active];
+                const parts = [(only.configs === false ? "Только аренды: " : "Аренд: ") + (st.total - st.fixed), "действуют: " + st.active];
                 if (st.fixed) {
                     parts.push("привязок: " + st.fixed);
                 }
@@ -517,7 +619,8 @@ export default {
             }
             if (kind === "net") {
                 return {
-                    text: "Адресов: " + st.total + ", ответили: " + st.alive + ", с MAC: " + st.mac + ", с именем: " + st.names,
+                    text: (only.subnets ? "Подсети: " + only.subnets.join(", ") + "\n" : "") +
+                        "Адресов: " + st.total + ", ответили: " + st.alive + ", с MAC: " + st.mac + ", с именем: " + st.names,
                     note: run.message || "", bad: false, running: false
                 };
             }

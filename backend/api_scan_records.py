@@ -1,7 +1,8 @@
 """Сбор из GLPI / GSIT (и Jabber – этап 26д) и сопоставление с ПК (этап 25).
 Только администратор.
 
-- POST /api/scan/sources/{kind}/collect – начать сбор (в фоне; glpi, gsit, jabber); ответ – запуск;
+- POST /api/scan/sources/{kind}/collect – начать сбор (в фоне; glpi, gsit, jabber, dhcp, net;
+  у сети и DHCP тело – что собрать, CollectOnly); ответ – запуск;
 - GET  /api/scan/runs/{id} – запуск (пока идёт – «сделано из»);
 - GET  /api/scan/runs?source=… – журнал запусков;
 - GET  /api/scan/records?source=… – записи последнего сбора GLPI / GSIT и их сопоставление
@@ -17,7 +18,7 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import scan_collect
@@ -52,12 +53,20 @@ def check_record_kind(kind):
 # ---------- Запуски ----------
 
 
+class CollectOnly(BaseModel):
+    """Что собрать (этап 45, «Сканировать» на «Сети»): у сети – часть подсетей, у DHCP –
+    аренды и / или привязки из файлов настроек. Без тела – всё."""
+    subnets: Optional[list[str]] = None
+    leases: Optional[bool] = None
+    configs: Optional[bool] = None
+
+
 @router.post("/sources/{kind}/collect", response_model=RunOut)
-def collect(kind: str, me=Depends(require_admin), session=Depends(get_db)):
+def collect(kind: str, payload: Optional[CollectOnly] = Body(None), me=Depends(require_admin), session=Depends(get_db)):
     check_collect_kind(kind)
 
     try:
-        run = scan_collect.start(session, kind, me["login"])
+        run = scan_collect.start(session, kind, me["login"], only=payload.model_dump(exclude_none=True) if payload else None)
     except scan_collect.CollectRefused as err:
         raise HTTPException(status_code=err.code, detail=str(err))
 

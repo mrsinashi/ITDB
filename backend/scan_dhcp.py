@@ -255,12 +255,23 @@ def check(params):
 
 
 def collect(params, fresh_days=None, progress=None):
+    """Аренды и привязки; params["only"] leases / configs = False (этап 45) – эту часть не
+    брать (файлы читаются все: ключ на сервере читает их одной командой)."""
     files, info = scan_ssh.read_files(params)
     items, stats = build(files, fresh_days or 30)
-    warnings = file_warnings(files, params, info)
+    only = params.get("only") or {}
+    leases, configs = only.get("leases", True), only.get("configs", True)
+    warnings = file_warnings(files, params, info) if configs else []
 
-    if not stats["total"]:
+    if leases and not stats["total"]:
         raise SourceError("Файл прочитан, но аренд в нём нет: это точно dhcpd.leases?")
+
+    items = [item for item in items if (configs if item.get("source") == CONF_SOURCE else leases)]
+
+    if not leases:
+        stats = {"total": stats["fixed"], "fresh": stats["fixed"], "active": 0, "stale": 0, "fixed": stats["fixed"], "no_mac": 0}
+    elif not configs:
+        stats = dict(stats, total=stats["total"] - stats["fixed"], fresh=stats["fresh"] - stats["fixed"], fixed=0)
 
     if info.get("auth") == "password":
         warnings.append("Вход по паролю: поставь ключ – тогда пароль можно не хранить.")

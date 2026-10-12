@@ -26,11 +26,14 @@ export default {
         // Для Справочников: оформление задаётся им, а не общему столбцу Таблицы
         baseColumns() {
             const self = this;
+            // Пока в ячейке поля правки или показанные логин и пароль, столбец шире (этап 45)
+            const widen = this.cellWiden;
             const base = this.tableBuiltinColumns.map(function (col) {
                 const manual = self.manualWidths[col.field];
                 const auto = self.autoWidths[col.field];
+                const width = manual !== undefined ? manual : (auto || 100);
                 return Object.assign({}, col, {
-                    width: manual !== undefined ? manual : (auto || 100)
+                    width: widen[col.field] ? Math.max(width, widen[col.field]) : width
                 });
             });
             const extra = self.tableUserDefs.map(function (fd) {
@@ -938,12 +941,25 @@ export default {
             return this.editingRowId === row.id && this.editingField === col.field;
         },
 
-        startEdit(row, col) {
+        // event – двойной клик по ячейке: под ней – окошки «Доступа» и подключений (этап 45)
+        startEdit(row, col, event) {
             // Двойной клик по ссылке на принтер / ПК (этап 44) – правка, а не переход
             this.cancelObjLink();
-            // Логин и пароль Web не заданы – окно, где их задать (заданные открывает клик)
-            if (col.secret && this.canEdit && !row.web_auth) {
-                this.openWebAuth(row, "edit");
+            const td = event && event.currentTarget && event.currentTarget.closest ? event.currentTarget.closest("td") : null;
+            // Логин и пароль Web: показать по паролю, задать, изменить показанные
+            if (col.secret) {
+                if (td && !this.isEditing(row, col)) {
+                    this.cancelEdit();
+                    this.openWebAccess(row, td, "cell");
+                }
+                return;
+            }
+            // Правка другой ячейки прячет показанные логин и пароль
+            this.hideWebShown();
+            // Принтеры ПК, ПК принтера – окошко с поиском и галочками
+            if (col.links) {
+                this.cancelEdit();
+                this.openLinkPick(row, col, td);
                 return;
             }
             if (!this.canEdit || !(col.editable || col.location)) {
@@ -1052,6 +1068,7 @@ export default {
                 checkSel: this.$refs.checkSelWrap,
                 checkFields: this.$refs.checkFieldsWrap,
                 collect: this.$refs.collectWrap,
+                netScan: this.$refs.netScanWrap,
                 namesHelp: this.$refs.namesHelpWrap,
                 namingHelp: this.$refs.namingHelpWrap,
                 historyFilter: this.$refs.historyFilterWrap,
@@ -1186,6 +1203,7 @@ export default {
 
         cancelEdit() {
             this.closeSuggest();
+            this.closeWebEdit();
             this.editingRowId = null;
             this.editingField = null;
         },
@@ -1244,8 +1262,9 @@ export default {
             }
         },
 
-        // Ответ – сохранилось ли (true / false). Строка принтера (этап 44) – в его таблицу
-        async saveCellValue(row, col, value) {
+        // Ответ – сохранилось ли (true / false). Строка принтера (этап 44) – в его таблицу.
+        // sendValue – на сервер другое, чем в ячейке до ответа (связи ПК – принтер номерами, этап 45)
+        async saveCellValue(row, col, value, sendValue) {
             const printer = !!row._printer;
             const pendingKey = this.rowKey(row) + ":" + col.field;
             this.pendingCells = Object.assign({}, this.pendingCells, { [pendingKey]: value });
@@ -1256,7 +1275,7 @@ export default {
             };
             try {
                 const payload = { _version: row.version };
-                payload[col.field] = value;
+                payload[col.field] = sendValue === undefined ? value : sendValue;
                 const response = await apiFetch((printer ? "/api/printers/" : "/api/computers/") + row.id, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
@@ -1475,9 +1494,6 @@ export default {
                         this.openCard(row);
                     }
                 }
-            } else if (col.secret && row.web_auth && !event.target.closest(".cell-edit")) {
-                // Логин и пароль Web (этап 44) – окно по паролю администратора
-                this.openWebAuth(row);
             }
         },
 
@@ -1642,14 +1658,28 @@ export default {
             if (!col || !row) {
                 return null;
             }
+            const tdBox = td.getBoundingClientRect();
+            // Блочок сканера и имени по правилу (этап 45): копируется предлагаемое значение –
+            // строка под курсором; «пусто» (сканер предлагает очистить) не копируется
+            const chip = el.closest("button.scan-chip");
+            if (chip) {
+                const d = col.virtual ? null : this.scanCellDiff(row, col);
+                return d && !d.proposed ? null : this.lineUnderPointer(chip, y, tdBox.right);
+            }
+            // «Доступ» (этап 45): только показанные логин и пароль, точки – нет
+            if (col.secret && !this.webShownFor(row)) {
+                return null;
+            }
             const value = row[col.field];
             if (value === null || value === undefined || String(value).trim() === "") {
                 return null;
             }
             const text = String(value);
-            const tdBox = td.getBoundingClientRect();
             // Значения отдельными строками (повторы, ссылки) – та, что под курсором
-            const parts = Array.from(td.querySelectorAll(".cell-line"));
+            const parts = Array.from(td.querySelectorAll(".cell-line")).filter(function (el) { return !el.classList.contains("cl-none"); });
+            if (col.secret && !parts.length) {
+                return null;
+            }
             if (parts.length) {
                 let near = null;
                 let nearDist = Infinity;
@@ -1705,6 +1735,40 @@ export default {
                 }
             });
             return best;
+        },
+
+        // Строка текста элемента (блочок сканера – многострочный) под курсором: { text, rect }
+        lineUnderPointer(el, y, cellRight) {
+            const node = el.firstChild;
+            const text = el.textContent;
+            const box = el.getBoundingClientRect();
+            const whole = { text: text.trim(), rect: { top: box.top, bottom: box.bottom, left: box.left, right: box.right, cellRight: cellRight } };
+            if (!text.trim()) {
+                return null;
+            }
+            if (!node || node.nodeType !== 3 || node.data !== text || text.indexOf("\n") === -1) {
+                return whole;
+            }
+            const range = document.createRange();
+            let best = null;
+            let bestDist = Infinity;
+            let offset = 0;
+            text.split("\n").forEach(function (line) {
+                const start = offset;
+                offset += line.length + 1;
+                if (!line.trim()) {
+                    return;
+                }
+                range.setStart(node, start);
+                range.setEnd(node, start + line.length);
+                const rect = range.getBoundingClientRect();
+                const dist = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+                if (rect.height && dist < bestDist) {
+                    bestDist = dist;
+                    best = { text: line.trim(), rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, cellRight: cellRight } };
+                }
+            });
+            return best || whole;
         },
 
         copyCellValue(event) {

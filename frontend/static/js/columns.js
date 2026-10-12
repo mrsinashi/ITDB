@@ -87,7 +87,8 @@ export function toColumnDef(c) {
         links: c.kind === "printers" ? "printer" : (c.kind === "computers" ? "pc" : null),
         // Подсказки при правке – свой список: модели справочника, «есть» / «нет»
         pick: c.kind === "pmodel" ? "model" : (c.kind === "flag" ? "flag" : null),
-        // Логин и пароль Web: в ячейке – только задан ли, нажатие – окно
+        // «Доступ» – логин и пароль Web: в ячейке точки, двойной клик – показать по паролю,
+        // задать, изменить (mixins/web-access.js)
         secret: c.kind === "secret",
         hiddenByDefault: c.hidden,
         dup: c.dup,

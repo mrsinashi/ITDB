@@ -297,6 +297,8 @@
                 <button class="btn btn-primary icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewComputer" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newComputerError" class="ab-error">{{ newComputerError }}</span>
+                <!-- Один / Несколько (этап 45): после добавления строка закрывается или остаётся (только на это открытие) -->
+                <button class="btn ab-many" :class="{ on: newComputer.many }" :title="newComputer.many ? 'После добавления – не закрывать' : 'После добавления – закрыть'" @click="newComputer.many = !newComputer.many">{{ newComputer.many ? "Несколько" : "Один" }}</button>
             </div>
             <!-- Новый кабинет (этап 36): «＋ кабинет» в списке расположений нового ПК -->
             <!-- Новый принтер (этап 44): строка под панелью, как «Новый компьютер» -->
@@ -313,6 +315,7 @@
                 <button class="btn btn-primary icon-only" :disabled="newPrinter.saving" @click="submitNewPrinter" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewPrinter" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newPrinter.error" class="ab-error">{{ newPrinter.error }}</span>
+                <button class="btn ab-many" :class="{ on: newPrinter.many }" :title="newPrinter.many ? 'После добавления – не закрывать' : 'После добавления – закрыть'" @click="newPrinter.many = !newPrinter.many">{{ newPrinter.many ? "Несколько" : "Один" }}</button>
             </div>
             <!-- Новая модель: «＋ новая модель» в списке моделей нового принтера -->
             <div v-if="newPrinter && newModel" class="add-bar room-bar" @keydown.enter="submitNewModel">
@@ -320,9 +323,11 @@
                 <select ref="nm-kind" class="input ab-kind" v-model="newModel.kind" title="Тип">
                     <option v-for="k in printerKinds" :key="k.key" :value="k.key">{{ k.label }}</option>
                 </select>
-                <input ref="nm-maker" class="input ab-maker" v-model="newModel.maker" placeholder="Производитель" spellcheck="false">
+                <input ref="nm-maker" class="input ab-maker" v-model="newModel.maker" placeholder="Производитель" spellcheck="false" autocomplete="off"
+                    @focus="openMakerSuggest($event.target, newModel, 'nm-model')" @click="!suggest && openMakerSuggest($event.target, newModel, 'nm-model')"
+                    @input="onSuggestInput($event.target.value)" @keydown="onMakerKeydown" @blur="closeSuggest()">
                 <input ref="nm-model" class="input ab-host" v-model="newModel.model" placeholder="Модель" spellcheck="false">
-                <label class="ab-check"><input type="checkbox" v-model="newModel.color">цветная</label>
+                <label class="ab-check"><input type="checkbox" v-model="newModel.color">цветной</label>
                 <label class="ab-check"><input type="checkbox" v-model="newModel.duplex">дуплекс</label>
                 <button class="btn btn-primary icon-only" :disabled="newModel.saving" @click="submitNewModel" title="Добавить модель (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewModel" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
@@ -407,13 +412,13 @@
                                 :style="cellTdStyle(row, col)"
                                 @mousedown="onCellMouseDown($event, row)"
                                 @click="onCellClick($event, row, col)"
-                                @dblclick="startEdit(row, col)"
+                                @dblclick="startEdit(row, col, $event)"
                                 @mouseenter="handleNoteEnter($event, row, col)"
                                 @mouseleave="hideNoteTooltip">
                                 <!-- «По правилу» (этап 36, кнопка «Имена по правилам»): имя по правилу у ПК, названного иначе -->
                                 <template v-if="col.virtual">
                                     <button v-if="nameChip(row)" type="button" class="scan-chip name-chip" :class="{ open: namePop && namePop.row.id === row.id }"
-                                        :title="nameChipTitle(row)" @mousedown.stop @dblclick.stop @click.stop="openNamePop(row, $event)">{{ nameChip(row) }}</button>
+                                        :title="nameChipTitle(row)" @mousedown.stop @dblclick.stop @click.stop="$event.altKey ? copyCellValue($event) : openNamePop(row, $event)">{{ nameChip(row) }}</button>
                                     <span v-else-if="nameKept(row)" class="name-kept" :title="'Своё имя · правило ' + nameChipTitle(row)">своё</span>
                                 </template>
                                 <!-- Антивирусы (этап 26д): строкой каждый, цвет – по состоянию (Справочники) -->
@@ -421,16 +426,20 @@
                                 <!-- Значения по строкам: повтор – блочком, логина нет в Jabber – красным, номер GLPI / GSIT – ссылкой -->
                                 <!-- Принтеры у ПК, ПК у принтера (этап 44): ссылки; при наведении – значок «показать в таблице» -->
                                 <span v-else-if="col.links && cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><span v-for="(p, pi) in cellParts(row, col)" :key="pi" class="cell-line obj-line"><a class="obj-link" :href="p.href" draggable="false" :title="p.title" @click.prevent="onObjLinkClick($event, p.obj)">{{ p.text }}</a><span class="obj-tbl" :title="p.obj.kind === 'pc' ? 'Показать в Таблице' : 'Показать в Принтерах'" @mousedown.stop @click.stop="showObjInTable(p.obj)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
-                                <!-- Логин и пароль Web: только «есть»; нажатие – окно -->
-                                <span v-else-if="col.secret && row.web_auth" class="secret-cell" title="Показать логин и пароль" :style="cellSpanStyle(row, col)">{{ row.web_auth }}</span>
+                                <!-- «Доступ» (этап 45): заданные логин и пароль – точками; показанные по паролю – строками, ✎ – изменить -->
+                                <span v-else-if="col.secret && webShownFor(row) && !isEditing(row, col)" class="secret-shown" :title="webAccessTitle(row)"><span class="cell-lines"><span class="cell-line" :class="{ 'cl-none': !webShown.login }">{{ webShown.login || "без логина" }}</span><span class="cell-line" :class="{ 'cl-none': !webShown.password }">{{ webShown.password || "без пароля" }}</span></span><span v-if="canEdit" class="secret-pen" title="Изменить" @mousedown.stop @dblclick.stop @click.stop="startWebEdit(row, 'cell')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span></span>
+                                <span v-else-if="col.secret && row.web_auth && !isEditing(row, col)" class="secret-dots" :title="webAccessTitle(row)">{{ secretDots }}</span>
+                                <template v-else-if="col.secret"></template>
                                 <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><a v-else-if="p.card" class="cell-line host-link" :class="p.cls" :style="p.style" :href="p.card" draggable="false" :title="p.title" @click.prevent>{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :style="p.style" :title="p.title" @dblclick="onCellValueDblclick($event, row, col)">{{ p.text }}</span></template></span>
                                 <span v-else :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)" @dblclick="onCellValueDblclick($event, row, col)">{{ cellText(row, col) }}</span>
                                 <button v-if="scanCellMark(row, col) && !isEditing(row, col)" type="button" class="scan-chip"
                                     :class="{ open: scanPop && scanPop.row.id === row.id && scanPop.col.field === col.field }"
                                     :style="scanChipStyle(scanCellMark(row, col))" :title="scanChipTitle(scanCellDiff(row, col))"
-                                    @mousedown.stop @dblclick.stop @click.stop="openScanPop(row, col, $event)">{{ scanChipText(scanCellDiff(row, col)) }}</button>
+                                    @mousedown.stop @dblclick.stop @click.stop="$event.altKey ? copyCellValue($event) : openScanPop(row, col, $event)">{{ scanChipText(scanCellDiff(row, col)) }}</button>
                                 <template v-if="isEditing(row, col)">
-                                    <location-picker v-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
+                                    <!-- «Доступ» (этап 45): логин виден, пароль – точками; ячейка на время правки шире и выше -->
+                                    <span v-if="col.secret && webEdit" class="secret-edit" @focusout="onWebEditFocusOut($event)"><input ref="webEditLogin" v-model="webEdit.login" class="cell-edit secret-input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="webEdit.password" class="cell-edit secret-input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></span>
+                                    <location-picker v-else-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
                                         placeholder="Расположение…" @pick="onCellLocationPick(row, $event)" @cancel="cancelEdit"></location-picker>
                                     <textarea v-else-if="col.multiline" v-model="editValue"
                                         @keydown="handleEditKeydown($event, row, col)"
@@ -885,7 +894,9 @@
                                             <td><select ref="mb-kind" class="input er-input" v-model="modelsBar.type" title="Тип">
                                                 <option v-for="k in printerKinds" :key="k.key" :value="k.key">{{ k.label }}</option>
                                             </select></td>
-                                            <td><input ref="mb-maker" class="input er-input" v-model="modelsBar.maker" placeholder="Производитель" spellcheck="false" autocomplete="off"></td>
+                                            <td><input ref="mb-maker" class="input er-input" v-model="modelsBar.maker" placeholder="Производитель" spellcheck="false" autocomplete="off"
+                                                @focus="openMakerSuggest($event.target, modelsBar, 'mb-model')" @click="!suggest && openMakerSuggest($event.target, modelsBar, 'mb-model')"
+                                                @input="onSuggestInput($event.target.value)" @keydown="onMakerKeydown" @blur="closeSuggest()"></td>
                                             <td><input ref="mb-model" class="input er-input" v-model="modelsBar.model" placeholder="Модель" spellcheck="false" autocomplete="off"></td>
                                             <td><select class="input er-input" v-model="modelsBar.color" title="Печать">
                                                 <option value="false">ч/б</option><option value="true">цветная</option><option value="">–</option>
@@ -1436,7 +1447,7 @@
                      когда собирали – в подсказке; идёт сбор – полоса -->
                 <div v-if="isAdmin || checkProgress" class="sm-actions">
                     <span v-if="isAdmin" class="dropdown-wrap" ref="collectWrap">
-                        <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'collect' }" @click="toggleMenu('collect')" :title="openMenu === 'collect' ? null : checkCollectTitle">{{ checkCollecting ? "Собираю…" : "Собрать" }}<span class="caret">▼</span></button>
+                        <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'collect' }" @click="toggleMenu('collect')" :title="openMenu === 'collect' ? null : checkCollectTitle">{{ checkCollecting ? "Собираю…" : "Собрать" }}</button>
                         <div v-if="openMenu === 'collect'" class="dropdown attached collect-menu">
                             <div class="dd-title">Что собрать</div>
                             <label v-for="o in collectOptions" :key="o.kind" :class="{ off: !!o.block }" :title="o.title">
@@ -1591,9 +1602,29 @@
             </div>
             <!-- Сеть (этап 28б): адреса из DHCP и прохода подсетей и какой ПК таблицы на каждом -->
             <div v-else-if="scanTab === 'net'" class="page scan-match-page net-page" :class="{ 'accent-head': accentHeaders.scan }">
-                <!-- «Сканировать» (этап 43) – своей строкой: DHCP и проход подсетей -->
+                <!-- «Сканировать» (этап 43) – своей строкой: DHCP и проход подсетей; с этапа 45 – меню, как «Собрать»:
+                     сканер, Leases, DHCP Config и подсети («только» – как в фильтре; при каждом открытии – все) -->
                 <div v-if="isAdmin || netProgress" class="sm-actions">
-                    <button v-if="isAdmin" class="btn ck-collect" :disabled="!!netCollectBlock" @click="collectNet" :title="netCollectTitle">{{ netCollecting ? "Сканирую…" : "Сканировать" }}</button>
+                    <span v-if="isAdmin" class="dropdown-wrap" ref="netScanWrap">
+                        <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'netScan' }" @click="toggleNetScanMenu" :title="openMenu === 'netScan' ? null : netCollectTitle">{{ netCollecting ? "Сканирую…" : "Сканировать" }}</button>
+                        <div v-if="openMenu === 'netScan'" class="dropdown attached collect-menu net-scan-menu">
+                            <div class="dd-title">Что сканировать</div>
+                            <label v-for="o in netScanOptions" :key="o.key" :class="{ off: !!o.block }" :title="o.title">
+                                <input type="checkbox" :checked="o.checked" :disabled="!!o.block" @change="toggleNetScanPart(o.key)"> {{ o.label }}<span v-if="o.running" class="dd-count">идёт</span>
+                            </label>
+                            <template v-if="netScanSubnets.length">
+                                <div class="dd-sep"></div>
+                                <div class="ns-list">
+                                    <label v-for="sn in netScanSubnets" :key="sn.cidr" class="ns-subnet" :class="{ off: !netScanOn.net }" :title="sn.title">
+                                        <input type="checkbox" :checked="sn.checked" :disabled="!netScanOn.net" @change="toggleNetScanSubnet(sn.cidr)"><span class="ns-cidr">{{ sn.cidr }}</span>
+                                        <span v-if="netScanOn.net && netScanSubnets.length > 1" class="ns-only" title="Только эту" @click.prevent.stop="onlyNetScanSubnet(sn.cidr)">только</span>
+                                    </label>
+                                </div>
+                            </template>
+                            <div class="dd-sep"></div>
+                            <button class="btn btn-primary cm-go" :disabled="!netScanReady" @click="collectNetChosen">Сканировать</button>
+                        </div>
+                    </span>
                     <span v-if="netProgress" class="scan-progress" :title="netProgress.title">
                         <span class="sp-bar"><span class="sp-fill" :style="{ width: netProgress.percent + '%' }"></span></span>
                         <span class="sp-text">{{ netProgress.text }}</span>
@@ -1965,6 +1996,39 @@
             </div>
         </teleport>
 
+        <!-- ================= «Доступ» принтера: пароль – окошком под ячейкой (этап 45) ================= -->
+        <teleport to="body">
+            <div v-if="webAsk" ref="webAsk" class="web-ask" :class="{ placed: webAsk.placed }" :style="{ left: webAsk.left + 'px', top: webAsk.top + 'px' }" @keydown="onWebAskKeydown">
+                <input v-if="!isAdmin" ref="webAskLogin" class="input" v-model="webAsk.login" placeholder="Логин администратора" spellcheck="false" autocomplete="off">
+                <span class="wa-row">
+                    <input ref="webAskPassword" class="input" type="password" v-model="webAsk.password" :placeholder="isAdmin ? 'Ваш пароль' : 'Пароль'" autocomplete="off">
+                    <button class="btn btn-primary icon-only" :disabled="webAsk.busy" title="Показать (Enter)" @click="submitWebAsk"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                </span>
+                <div v-if="webAsk.error" class="wa-error">{{ webAsk.error }}</div>
+            </div>
+        </teleport>
+
+        <!-- ================= Подключение принтеров к ПК: поиск и галочки под ячейкой (этап 45) ================= -->
+        <teleport to="body">
+            <div v-if="linkPick" ref="linkPick" class="link-pick" :class="{ placed: linkPick.placed, up: linkPick.up }" :style="{ left: linkPick.left + 'px', top: linkPick.top + 'px' }" @mousedown="$event.target.tagName !== 'INPUT' && $event.preventDefault()">
+                <input ref="linkPickInput" class="lp-search" v-model="linkPick.query" :placeholder="linkPick.kind === 'pc' ? 'Найти ПК: имя, IP, кабинет, пользователь' : 'Найти принтер: имя, IP, кабинет, модель'"
+                    spellcheck="false" autocomplete="off" @input="onLinkPickInput" @keydown="onLinkPickKeydown">
+                <div ref="linkPickList" class="lp-list">
+                    <div v-for="(o, i) in linkPickShown" :key="o.id" class="lp-item" :class="{ active: i === linkPick.active, on: o.linked }" :title="o.hint" @click="toggleLinkPick(o)">
+                        <input type="checkbox" :checked="o.linked" tabindex="-1">
+                        <span class="lp-title" :class="{ 'lp-untitled': o.untitled }">{{ o.title }}</span>
+                        <span class="lp-sub">{{ o.sub }}</span>
+                        <span class="lp-usb" :class="{ on: o.usb }" :title="o.usb ? 'По USB' : 'Подключить по USB'" @click.stop="toggleLinkUsb(o)">usb</span>
+                    </div>
+                    <div v-if="!linkPickShown.length" class="lp-none">Ничего не найдено</div>
+                </div>
+                <div class="lp-foot">
+                    <span class="lp-count">{{ linkPickCountText }}</span>
+                    <button class="btn btn-primary" title="Сохранить (Enter)" @click="saveLinkPick">Готово</button>
+                </div>
+            </div>
+        </teleport>
+
         <!-- ================= Карточка принтера (этап 44) – как карточка ПК ================= -->
         <div v-if="pcard" class="card-overlay" @click.self="onPrinterCardOverlayClick">
             <div class="card">
@@ -1988,11 +2052,14 @@
                                 @dblclick="onPcardRowDblclick($event, r)" :title="pcardRowTitle(r)">
                                 <td class="ct-label">{{ r.label }}</td>
                                 <td class="ct-value" :class="{ editing: pcardEditKey === r.key }">
-                                    <span v-if="r.auth" class="pc-auth">
-                                        <span v-if="r.value">{{ r.value }}</span><span v-else class="ct-empty">–</span>
-                                        <button v-if="r.value" class="btn pc-auth-btn" @click="openWebAuth(pcard, 'check')">Показать</button>
-                                        <button v-if="canEdit" class="btn pc-auth-btn" @click="openWebAuth(pcard, 'edit')">{{ r.value ? "Изменить" : "Задать" }}</button>
+                                    <!-- «Доступ» (этап 45): точки; двойной клик – пароль окошком под строкой; показанные – строками (клик – скопировать), ✎ – изменить -->
+                                    <span v-if="r.auth && webEditIn(pcard, 'card')" class="secret-edit card-secret" @focusout="onWebEditFocusOut($event)"><input ref="webEditLogin" v-model="webEdit.login" class="input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="webEdit.password" class="input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></span>
+                                    <span v-else-if="r.auth && webShownFor(pcard)" class="pc-auth-shown">
+                                        <span class="copy-line"><span v-if="webShown.login" class="copy-val" title="Скопировать" @click="copyText(webShown.login)">{{ webShown.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без логина</span></span>
+                                        <span class="copy-line"><span v-if="webShown.password" class="copy-val" title="Скопировать" @click="copyText(webShown.password)">{{ webShown.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без пароля</span></span>
+                                        <span v-if="canEdit" class="secret-pen" title="Изменить" @click.stop="startWebEdit(pcard, 'card')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
                                     </span>
+                                    <span v-else-if="r.auth && r.value" class="secret-dots">{{ secretDots }}</span>
                                     <span v-else-if="r.empty" class="ct-empty">–</span>
                                     <span v-else-if="r.link" class="copy-line"><a class="pr-web" :href="r.value" target="_blank" rel="noopener" :title="r.own ? 'Открыть' : 'По IP – открыть'">{{ r.value }}</a><span class="copy-val pc-copy" title="Скопировать" @click="copyText(r.value)"><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                                     <span v-else-if="r.links" class="pc-links"><span v-for="ref in (pcard.computer_refs || [])" :key="ref.id" class="obj-line"><a class="obj-link" :href="pageHref('table', { pc: ref.id })" draggable="false" title="Карточка ПК" @click.prevent="closePrinterCard(); openCardById(ref.id)">{{ ref.title }}{{ ref.usb ? " [usb]" : "" }}</a><span class="obj-tbl" title="Показать в Таблице" @click.stop="showObjInTable({ kind: 'pc', id: ref.id })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
@@ -2000,7 +2067,7 @@
                                         <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)">{{ line }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                                     </template>
                                     <span v-else class="ct-text">{{ r.value }}</span>
-                                    <template v-if="pcardEditKey === r.key">
+                                    <template v-if="pcardEditKey === r.key && !r.auth">
                                         <location-picker v-if="pcardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="pcard.location_id" :options="locationOptions"
                                             placeholder="Расположение…" @pick="onPcardLocationPick" @cancel="pcardEditKey = null"></location-picker>
                                         <textarea v-else-if="pcardEditCol(r).multiline" ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
@@ -2034,47 +2101,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= Логин и пароль Web принтера (этап 44) ================= -->
-        <div v-if="webAuth" class="dialog-overlay" @mousedown.self="closeWebAuth">
-            <div class="dialog wa-dialog" role="dialog" @keydown="onWebAuthKeydown">
-                <div class="vh-head">
-                    <span class="vh-title"><b>Вход в Web</b> · {{ webAuth.row.name || "принтер без имени" }}</span>
-                    <span class="vh-close" title="Закрыть (Esc)" @click="closeWebAuth">×</span>
-                </div>
-                <div class="wa-body">
-                    <template v-if="webAuth.mode === 'check'">
-                        <div class="wa-title">Логин и пароль администратора ITDB</div>
-                        <input ref="waLogin" class="input" v-model="webAuth.login" placeholder="Логин" spellcheck="false" autocomplete="off">
-                        <input class="input" type="password" v-model="webAuth.password" placeholder="Пароль" autocomplete="off">
-                    </template>
-                    <template v-else-if="webAuth.mode === 'show'">
-                        <table class="wa-shown">
-                            <tr><td class="wa-label">Логин</td><td><span v-if="webAuth.shown.login" class="copy-val" title="Скопировать" @click="copyText(webAuth.shown.login)">{{ webAuth.shown.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">–</span></td></tr>
-                            <tr><td class="wa-label">Пароль</td><td><span v-if="webAuth.shown.password" class="copy-val" title="Скопировать" @click="copyText(webAuth.shown.password)">{{ webAuth.shown.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">–</span></td></tr>
-                        </table>
-                    </template>
-                    <template v-else>
-                        <input ref="waNewLogin" class="input" v-model="webAuth.newLogin" :placeholder="webAuth.row.web_auth && !webAuth.shown ? 'Логин – сменить' : 'Логин'" spellcheck="false" autocomplete="off">
-                        <span class="wa-pass">
-                            <input class="input" :type="webAuth.show ? 'text' : 'password'" v-model="webAuth.newPassword" :placeholder="webAuth.row.web_auth && !webAuth.shown ? 'Пароль – сменить' : 'Пароль'" spellcheck="false" autocomplete="new-password">
-                            <span class="icon-btn" :class="{ on: webAuth.show }" @click="webAuth.show = !webAuth.show" :title="webAuth.show ? 'Скрыть пароль' : 'Показать пароль'">
-                                <svg v-if="webAuth.show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
-                                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
-                            </span>
-                        </span>
-                    </template>
-                    <div v-if="webAuth.error" class="wa-error">{{ webAuth.error }}</div>
-                </div>
-                <div class="dialog-buttons">
-                    <button v-if="webAuth.mode === 'edit' && webAuth.row.web_auth" class="btn wa-left danger-text" :disabled="webAuth.busy" @click="saveWebAuth(true)">Удалить</button>
-                    <button v-if="webAuth.mode === 'show' && canEdit" class="btn" @click="editWebAuth">Изменить</button>
-                    <button v-if="webAuth.mode === 'check'" class="btn btn-primary" :disabled="webAuth.busy" @click="showWebAuth">Показать</button>
-                    <button v-if="webAuth.mode === 'edit'" class="btn btn-primary" :disabled="webAuth.busy" @click="saveWebAuth(false)">Сохранить</button>
-                    <button class="btn" @click="closeWebAuth">{{ webAuth.mode === "show" ? "Закрыть" : "Отмена" }}</button>
                 </div>
             </div>
         </div>

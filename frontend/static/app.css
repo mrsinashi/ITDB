@@ -6353,7 +6353,7 @@ html.no-radius .vw-col input {
 
 /* ============================================================
    Этап 44: принтеры – ссылки ПК ↔ принтер, окошко принтера, карточка принтера,
-   окно «Логин и пароль Web», строка нового принтера, Справочники → «Модели принтеров»
+   строка нового принтера, Справочники → «Модели принтеров»
    ============================================================ */
 /* Принтер у ПК, ПК у принтера – ссылкой, как номер записи GLPI; справа при наведении на
    строку – значок таблицы (показать в другой таблице), в манере значка копирования */
@@ -6406,19 +6406,6 @@ a.obj-link:hover {
     padding: 1px 0;
 }
 
-/* «Вход» в таблице принтеров: задан – нажатие показывает окно */
-.data-table td .secret-cell {
-    cursor: pointer;
-}
-.data-table td .secret-cell:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-}
-.data-table.alt-copy td .secret-cell {
-    cursor: default;
-    text-decoration: none;
-}
-
 /* Окошко принтера – как карточка у блочка сканера */
 .scan-pop.pr-pop .sp-values td.sp-v {
     overflow-wrap: anywhere;
@@ -6432,73 +6419,12 @@ a.pr-web:hover {
     text-underline-offset: 2px;
 }
 
-/* Карточка принтера: логин и пароль – «есть» и кнопки рядом */
-.pc-auth {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-.btn.pc-auth-btn {
-    padding: 0 7px;
-    font-size: 12px;
-    line-height: 18px;
-}
+/* Карточка принтера: ссылка Web – значок копирования рядом */
 .copy-val.pc-copy .copy-ico {
     margin-left: 4px;
 }
 .copy-line:hover .pc-copy .copy-ico {
     opacity: 1;
-}
-
-/* Окно «Логин и пароль Web»: поля в столбик, ошибка – красным под ними */
-.dialog.wa-dialog {
-    width: 340px;
-}
-.wa-body {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 14px 16px;
-}
-.wa-body .input {
-    width: 100%;
-    box-sizing: border-box;
-}
-.wa-title {
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-.wa-pass {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-.wa-pass .icon-btn {
-    flex: none;
-}
-.wa-shown {
-    border-collapse: collapse;
-}
-.wa-shown td {
-    padding: 3px 0;
-    vertical-align: top;
-}
-.wa-shown td.wa-label {
-    width: 70px;
-    color: var(--text-secondary);
-}
-.wa-shown .copy-val {
-    overflow-wrap: anywhere;
-}
-.wa-error {
-    color: var(--danger);
-    font-size: 12px;
-}
-.dialog-buttons .btn.wa-left {
-    margin-right: auto;
-}
-.dialog-buttons .btn.danger-text {
-    color: var(--danger-strong);
 }
 
 /* Строка нового принтера: модель – список, как расположение, короче */
@@ -6546,4 +6472,289 @@ a.pr-web:hover {
     top: 50%;
     transform: translateY(-50%);
     white-space: nowrap;
+}
+
+/* ============================================================
+   Этап 45: «Доступ» принтера, подключение принтеров к ПК, «Один / Несколько»,
+   меню «Сканировать» на «Сети»
+   ============================================================ */
+/* «Доступ»: заданные логин и пароль – точками; показанные – строками, справа ✎ */
+.secret-dots {
+    letter-spacing: 1px;
+}
+.secret-shown {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    vertical-align: top;
+    text-align: left;
+}
+.secret-shown .cell-lines {
+    min-width: 0;
+}
+.cell-line.cl-none,
+.pc-auth-shown .ct-empty {
+    color: var(--text-muted);
+}
+.secret-pen {
+    display: inline-flex;
+    flex: none;
+    color: var(--copy-ico);
+    cursor: pointer;
+}
+.secret-pen svg {
+    width: 12px;
+    height: 12px;
+}
+.secret-pen:hover {
+    color: var(--text-strong);
+}
+.data-table.alt-copy .secret-pen {
+    visibility: hidden;
+}
+/* Правка: два поля одно под другим во всю ячейку – строка на это время выше */
+.secret-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.data-table td.editing .secret-edit {
+    margin: -2px -5px;
+}
+.cell-edit.secret-input {
+    position: static;
+    width: 100%;
+    height: 20px;
+    text-align: left;
+    white-space: nowrap;
+}
+.card-table .secret-edit .input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 2px 6px;
+    font-size: 13px;
+}
+/* В карточке: логин и пароль строками, ✎ – справа посередине */
+.pc-auth-shown {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: start;
+    column-gap: 8px;
+}
+.pc-auth-shown .secret-pen {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+}
+
+/* Окошко пароля под ячейкой «Доступ» – в манере выпадающего списка */
+.web-ask {
+    position: fixed;
+    z-index: 160;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 208px;
+    box-sizing: border-box;
+    padding: 5px;
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    font-size: 12px;
+    visibility: hidden;
+}
+.web-ask.placed {
+    visibility: visible;
+}
+.web-ask .input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 2px 6px;
+    font-size: 12px;
+}
+.web-ask .wa-row {
+    display: flex;
+    gap: 4px;
+}
+.web-ask .wa-row .input {
+    flex: 1;
+    min-width: 0;
+}
+.web-ask .btn.icon-only {
+    padding: 2px 6px;
+    line-height: 0;
+}
+.web-ask .btn .ico {
+    width: 14px;
+    height: 14px;
+}
+.web-ask .wa-error {
+    color: var(--danger);
+    font-size: 11px;
+}
+
+/* Подключение принтеров к ПК: окошко под ячейкой – поиск, список с галочками, «Готово» */
+.link-pick {
+    position: fixed;
+    z-index: 160;
+    display: flex;
+    flex-direction: column;
+    width: 380px;
+    box-sizing: border-box;
+    padding: 4px;
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    color: var(--menu-text);
+    font-size: 12px;
+    visibility: hidden;
+}
+.link-pick.up {
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+.link-pick.placed {
+    visibility: visible;
+}
+.link-pick .lp-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 7px;
+    margin-bottom: 3px;
+    border: 1px solid var(--tb-input-border);
+    border-radius: 2px;
+    font: inherit;
+    outline: none;
+}
+.link-pick .lp-search:focus {
+    border-color: var(--brand-focus);
+}
+.link-pick .lp-list {
+    max-height: 264px;
+    overflow-y: auto;
+}
+.link-pick .lp-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.link-pick .lp-item:hover,
+.link-pick .lp-item.active {
+    background: var(--menu-hover-bg);
+    color: var(--menu-hover-text);
+}
+.link-pick .lp-item input {
+    margin: 0;
+    flex: none;
+    pointer-events: none;
+    accent-color: var(--brand);
+}
+.link-pick .lp-title {
+    flex: none;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.link-pick .lp-item.on .lp-title {
+    font-weight: 600;
+}
+.link-pick .lp-title.lp-untitled {
+    color: var(--menu-muted);
+}
+.link-pick .lp-sub {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    color: var(--menu-muted);
+}
+/* «usb»: у подключённых – всегда (включённый – тёмным блочком), у остальных – под курсором */
+.link-pick .lp-usb {
+    flex: none;
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--menu-muted);
+    box-shadow: inset 0 0 0 1px var(--menu-border);
+    visibility: hidden;
+}
+.link-pick .lp-item.on .lp-usb,
+.link-pick .lp-item:hover .lp-usb {
+    visibility: visible;
+}
+.link-pick .lp-usb:hover {
+    color: var(--menu-hover-text);
+}
+.link-pick .lp-usb.on {
+    background: var(--text-secondary);
+    color: #fff;
+    box-shadow: none;
+}
+.link-pick .lp-none {
+    padding: 3px 7px;
+    color: var(--menu-muted);
+}
+.link-pick .lp-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 3px;
+    padding: 4px 3px 1px 7px;
+    border-top: 1px solid var(--menu-border);
+}
+.link-pick .lp-count {
+    color: var(--menu-muted);
+}
+.link-pick .lp-foot .btn {
+    padding: 2px 12px;
+    font-size: 12px;
+}
+
+/* «Один» / «Несколько» – справа в строке добавления; «Несколько» – включённая */
+.add-bar .btn.ab-many {
+    margin-left: auto;
+    min-width: 84px;
+}
+.add-bar .btn.ab-many.on {
+    background: var(--tb-ctrl-on-bg);
+    border-color: var(--tb-ctrl-on-border);
+    color: var(--tb-ctrl-on-text);
+}
+
+/* Меню «Сканировать» на «Сети»: части, подсети («только» – как в фильтре), кнопка */
+.dropdown.collect-menu.net-scan-menu {
+    width: 208px;
+}
+.net-scan-menu .ns-list {
+    max-height: 240px;
+    overflow-y: auto;
+}
+.dropdown.collect-menu .ns-subnet {
+    gap: 6px;
+}
+.net-scan-menu .ns-cidr {
+    font-variant-numeric: tabular-nums;
+}
+.net-scan-menu .ns-only {
+    margin-left: auto;
+    padding: 0 2px;
+    font-size: 11px;
+    color: var(--menu-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    visibility: hidden;
+}
+.net-scan-menu .ns-subnet:hover .ns-only {
+    visibility: visible;
+}
+.net-scan-menu .ns-only:hover {
+    color: var(--menu-hover-text);
 }

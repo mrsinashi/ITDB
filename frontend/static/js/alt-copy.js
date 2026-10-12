@@ -1,6 +1,6 @@
 // Alt + клик копирует значение под курсором во всех таблицах, кроме главной (у неё
 // своё копирование, по строкам значения – mixins/table.js) и карточки ПК (там
-// значение копирует обычный клик). Пока Alt зажат, значение затемнено, после
+// значение копирует обычный клик); блочки сканера – и там (этап 45). Пока Alt зажат, значение затемнено, после
 // клика – зелёное. Подсветка – один элемент в body, стиль пишется прямо в него:
 // данные Vue не трогаются, страница не перерисовывается.
 
@@ -10,6 +10,10 @@ const CELLS = "td, .node-row, .st-val";
 const NOT_IN = ".data-table, .card-table, .scan-form, .scan-marks-table, .st-colrow, .st-sub, .er-row, .cf-menu";
 // Кнопки, поля и то, что копируется обычным кликом
 const CONTROLS = "button, input, textarea, select, label, .icon-btn, .copy-val, .sc, .st-act, .st-n";
+// Блочки значений сканера и имён по правилу (этап 45) – копируются везде (и в карточке ПК,
+// и кнопкой), кроме главной таблицы (там – свои) и образцов в Справочниках и подсказке
+const CHIPS = ".scan-chip";
+const NOT_CHIPS = ".data-table, .scan-marks-table, .sl-row";
 
 let mouseX = null;
 let mouseY = null;
@@ -29,9 +33,46 @@ function caretAt(x, y) {
     return null;
 }
 
+// Блочок: его значение, в многострочном – строка под курсором; «пусто» (сканер
+// предлагает очистить) – нечего копировать
+function chipTarget(chip, y) {
+    const text = chip.textContent.trim();
+    if (!text || text === "пусто") {
+        return null;
+    }
+    let found = { text: text, rect: chip.getBoundingClientRect() };
+    const node = chip.firstChild;
+    if (node && node.nodeType === 3 && node.data.indexOf("\n") !== -1) {
+        const range = document.createRange();
+        let offset = 0;
+        let best = Infinity;
+        node.data.split("\n").forEach(function (line) {
+            const start = offset;
+            offset += line.length + 1;
+            if (!line.trim()) {
+                return;
+            }
+            range.setStart(node, start);
+            range.setEnd(node, start + line.length);
+            const rect = range.getBoundingClientRect();
+            const dist = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+            if (rect.height && dist < best) {
+                best = dist;
+                found = { text: line.trim(), rect: rect };
+            }
+        });
+    }
+    const r = found.rect;
+    return { text: found.text, rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right } };
+}
+
 // Что скопирует клик в точке (x, y): { text, rect } или null
 function targetAt(x, y) {
     const el = document.elementFromPoint(x, y);
+    const chip = el ? el.closest(CHIPS) : null;
+    if (chip) {
+        return chip.closest(NOT_CHIPS) ? null : chipTarget(chip, y);
+    }
     if (!el || el.closest(CONTROLS)) {
         return null;
     }
