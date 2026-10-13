@@ -52,8 +52,6 @@ IMPORTANT_FIELDS = (
 
 MAC_RE = re.compile(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
 
-HOSTNAME_RE = re.compile(r"^[0-9A-ZА-ЯЁ][0-9A-ZА-ЯЁ._-]*$", re.I)
-
 DRIVE_TYPED_RE = re.compile(
     r"(?P<type>SSD|HDD|NVME)\s*[-_]?\s*(?P<size>\d+)\s*(?P<unit>TB|GB|ТБ|ГБ|Т|Г)?",
     re.I,
@@ -186,16 +184,6 @@ def split_vacuum_logins(value):
             logins.append(login)
 
     return logins
-
-
-def looks_like_hostname(value):
-    if not value:
-        return False
-
-    if value.isdigit():
-        return False
-
-    return bool(HOSTNAME_RE.match(value))
 
 
 def parse_ips(value):

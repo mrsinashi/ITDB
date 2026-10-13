@@ -25,8 +25,8 @@ from sqlalchemy import func
 from api_columns import PRINTER_BULK_EXCLUDED, PRINTER_EDITABLE_KEYS
 from api_computer_actions import parse_ids
 from api_computers import (
-    LOCATION_PART_FIELDS, ChangeBatch, get_active_location, load_locations, location_parts, location_path,
-    normalize_ip, normalize_mac, normalize_multiline, normalize_single,
+    LOCATION_PART_FIELDS, ChangeBatch, get_active_location, load_locations, location_parts, location_path, lock_rows,
+    normalize_ip, normalize_mac, normalize_multiline, normalize_single, save_changes,
 )
 from auth import get_current_user, require_editor, verify_password
 from cartridges import cartridges_by_model, names_text, set_model_cartridges, set_printer_cartridges
@@ -450,15 +450,6 @@ def apply_printer_fields(session, printer, payload, batch):
     return changes
 
 
-def save_printer_changes(session, printer, changes, user_name):
-    if not changes:
-        return
-
-    printer.version = (printer.version or 1) + 1
-    printer.updated_at = datetime.now(timezone.utc)
-    session.add(History(entity="printers", entity_id=printer.id, user_name=user_name, changes=changes))
-
-
 def lock_printer(session, printer_id):
     printer = session.query(Printer).filter(Printer.id == printer_id).with_for_update().first()
 
@@ -468,14 +459,11 @@ def lock_printer(session, printer_id):
     return printer
 
 
+PRINTERS_MISSING = "Часть принтеров не найдена. Обнови таблицу."
+
+
 def lock_printers(session, ids):
-    printers = session.query(Printer).filter(Printer.id.in_(ids)).with_for_update().all()
-
-    if len(printers) != len(ids):
-        raise HTTPException(status_code=404, detail="Часть принтеров не найдена. Обнови таблицу.")
-
-    by_id = {printer.id: printer for printer in printers}
-    return [by_id[printer_id] for printer_id in ids]
+    return lock_rows(session, Printer, ids, PRINTERS_MISSING)
 
 
 @router.post("/printers")
@@ -553,7 +541,7 @@ def update_printer(printer_id: int, payload: dict = Body(...), user=Depends(requ
     changes = apply_printer_fields(session, printer, payload, batch)
 
     if changes:
-        save_printer_changes(session, printer, changes, user["login"])
+        save_changes(session, printer, changes, user["login"])
         batch.finish(session)
 
     if changes or model_changed:
@@ -588,7 +576,7 @@ def archive_printers(payload: dict = Body(...), user=Depends(require_editor), se
         if printer.archived == archived:
             continue
 
-        save_printer_changes(session, printer, {"archived": {"old": printer.archived, "new": archived}}, user["login"])
+        save_changes(session, printer, {"archived": {"old": printer.archived, "new": archived}}, user["login"])
         printer.archived = archived
         changed.append(printer.id)
 
@@ -612,7 +600,7 @@ def bulk_update_printers(payload: dict = Body(...), user=Depends(require_editor)
         changes = apply_printer_fields(session, printer, {field: payload.get("value")}, batch)
 
         if changes:
-            save_printer_changes(session, printer, changes, user["login"])
+            save_changes(session, printer, changes, user["login"])
             changed.append(printer.id)
 
     batch.finish(session)
@@ -652,7 +640,7 @@ def set_web_auth(printer_id: int, payload: WebAuthUpdate, user=Depends(require_e
 
     if changes:
         printer.web_secrets = secrets
-        save_printer_changes(session, printer, changes, user["login"])
+        save_changes(session, printer, changes, user["login"])
         session.commit()
 
     return {"ok": True, "updated": one_row(session, printer_id)}

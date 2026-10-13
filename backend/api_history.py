@@ -234,7 +234,7 @@ def cancel_history(payload: CancelRequest, user=Depends(require_editor), session
     ids = {item.id for item in payload.items}
     records = {
         record.id: record
-        for record in session.query(History).filter(History.id.in_(ids)).with_for_update().all()
+        for record in session.query(History).filter(History.id.in_(ids)).order_by(History.id).with_for_update().all()
     }
 
     if len(records) != len(ids):

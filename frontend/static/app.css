@@ -769,9 +769,6 @@ body.ui-light-toolbar .toolbar .tb-error {
     flex: 0 1 auto;
     min-width: 44px;
 }
-.toolbar .chip .chip-x {
-    flex: none;
-}
 .toolbar .chip.menu-open {
     background: var(--tb-ctrl-hover-bg);
     border-bottom-left-radius: 0;
@@ -800,6 +797,7 @@ body.ui-light-toolbar .toolbar .tb-error {
     text-overflow: ellipsis;
 }
 .toolbar .chip .chip-x {
+    flex: none;
     opacity: 0.7;
 }
 .toolbar .chip .chip-x:hover {
@@ -3811,10 +3809,6 @@ body.login-page {
     flex-direction: column;
     padding: 10px 12px 12px;
 }
-.sm-empty {
-    color: var(--text-secondary);
-    font-size: 12px;
-}
 .sm-filters {
     display: flex;
     flex-wrap: wrap;
@@ -3877,37 +3871,9 @@ body.login-page {
 .sm-table tbody tr:not(.sm-detail):not(.h-empty) {
     cursor: pointer;
 }
-.sm-table td.sm-id,
-.sm-table th.sm-id {
-    width: 1%;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-.sm-table td.sm-id a {
-    color: inherit;
-    text-decoration: none;
-}
-.sm-table td.sm-id a:hover {
-    text-decoration: underline;
-}
-.sm-table td.sm-name {
-    font-weight: 600;
-}
 .sm-table th.sm-c,
 .sm-table td.sm-c {
     text-align: center;
-}
-.sm-table td.sm-date,
-.sm-table td.sm-multi {
-    font-variant-numeric: tabular-nums;
-}
-.sm-table td.sm-multi {
-    white-space: pre;
-}
-.sm-table td.sm-pc {
-    max-width: 260px;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 /* Итог сопоставления: «привязать?» и «конфликт» – блочком, нет / дубль – серым */
 .sm-state.st-name,
@@ -4504,11 +4470,6 @@ button.scan-chip {
     align-items: center;
     gap: 4px;
     white-space: nowrap;
-}
-.scan-marks-table .smk-frame {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
 }
 .scan-marks-panel {
     width: fit-content;

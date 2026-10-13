@@ -620,71 +620,18 @@ export default {
             if (!c || c.ok) {
                 return;
             }
-            const chip = event.currentTarget.getBoundingClientRect();
             const entry = this.treeIndex[c.entry.node.id];
-            this.namePop = {
+            this.openAnchorPop("namePop", event.currentTarget, {
                 row: row,
                 check: c,
                 path: entry ? entry.path : "",
                 place: nodeTitle(entry),
-                anchor: { left: chip.left, right: chip.right, top: chip.top, bottom: chip.bottom },
-                left: chip.right + 6,
-                top: chip.top,
-                placed: false,
                 busy: false
-            };
-            this.$nextTick(() => this.placeNamePop());
-            if (!this._namePopKey) {
-                this._namePopKey = (e) => {
-                    if (e.key === "Escape" && this.namePop) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.closeNamePop();
-                    }
-                };
-                this._namePopDown = (e) => {
-                    const el = this.$refs.namePop;
-                    if (!this.namePop || (el && el.contains(e.target)) || (e.target.closest && e.target.closest("button.name-chip"))) {
-                        return;
-                    }
-                    this.closeNamePop();
-                };
-                window.addEventListener("keydown", this._namePopKey, true);
-                window.addEventListener("mousedown", this._namePopDown, true);
-            }
-        },
-
-        // Как карточка у блочка сканера: справа от блочка, не помещается – слева
-        placeNamePop() {
-            const pop = this.namePop;
-            const el = this.$refs.namePop;
-            if (!pop || !el) {
-                return;
-            }
-            const w = el.offsetWidth;
-            const h = el.offsetHeight;
-            const a = pop.anchor;
-            let left = a.right + 6;
-            if (left + w > window.innerWidth - 8) {
-                left = Math.max(8, a.left - w - 6);
-            }
-            let top = a.top - 4;
-            if (top + h > window.innerHeight - 8) {
-                top = Math.max(8, a.bottom + 4 - h);
-            }
-            pop.left = left;
-            pop.top = top;
-            pop.placed = true;
+            }, "button.name-chip");
         },
 
         closeNamePop() {
-            this.namePop = null;
-            if (this._namePopKey) {
-                window.removeEventListener("keydown", this._namePopKey, true);
-                window.removeEventListener("mousedown", this._namePopDown, true);
-                this._namePopKey = null;
-                this._namePopDown = null;
-            }
+            this.closePop("namePop");
         },
 
         async namePopRename() {

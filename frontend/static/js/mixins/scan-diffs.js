@@ -666,107 +666,18 @@ export default {
             if (!d) {
                 return;
             }
-            const chip = event.currentTarget.getBoundingClientRect();
-            this.scanPop = {
+            this.openAnchorPop("scanPop", event.currentTarget, {
                 d: d,
                 row: row,
                 col: col,
-                anchor: { left: chip.left, right: chip.right, top: chip.top, bottom: chip.bottom },
-                left: chip.right + 6,
-                top: chip.top,
-                placed: false,
                 own: row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]),
                 forAll: false,
                 busy: false
-            };
-            this.$nextTick(() => this.placeScanPop());
-            if (!this._scanPopKey) {
-                // Esc и клик мимо закрывают карточку (клик по другому блочку – откроет его)
-                this._scanPopKey = (e) => {
-                    if (e.key === "Escape" && this.scanPop) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.closeScanPop();
-                    }
-                };
-                this._scanPopDown = (e) => {
-                    const el = this.$refs.scanPop;
-                    if (!this.scanPop || (el && el.contains(e.target)) || (e.target.closest && e.target.closest("button.scan-chip"))) {
-                        return;
-                    }
-                    this.closeScanPop();
-                };
-                window.addEventListener("keydown", this._scanPopKey, true);
-                window.addEventListener("mousedown", this._scanPopDown, true);
-            }
-        },
-
-        // Справа от блочка, не помещается – слева; по верхнему краю блочка, внизу не
-        // помещается – по нижнему
-        placeScanPop() {
-            const pop = this.scanPop;
-            const el = this.$refs.scanPop;
-            if (!pop || !el) {
-                return;
-            }
-            const w = el.offsetWidth;
-            const h = el.offsetHeight;
-            const a = pop.anchor;
-            let left = a.right + 6;
-            if (left + w > window.innerWidth - 8) {
-                left = Math.max(8, a.left - w - 6);
-            }
-            let top = a.top - 4;
-            if (top + h > window.innerHeight - 8) {
-                top = Math.max(8, a.bottom + 4 - h);
-            }
-            pop.left = left;
-            pop.top = top;
-            pop.placed = true;
+            }, "button.scan-chip");
         },
 
         closeScanPop() {
-            this.scanPop = null;
-            if (this._scanPopKey) {
-                window.removeEventListener("keydown", this._scanPopKey, true);
-                window.removeEventListener("mousedown", this._scanPopDown, true);
-                this._scanPopKey = null;
-                this._scanPopDown = null;
-            }
-        },
-
-        // Перетаскивание за шапку
-        startScanPopDrag(event) {
-            const pop = this.scanPop;
-            if (!pop || event.button !== 0) {
-                return;
-            }
-            // Двигаем сам элемент, не данные Vue: иначе на каждое движение мыши
-            // перерисовывалась бы вся страница с таблицей – медленно и рывками.
-            // Итог записывается в данные один раз, при отпускании.
-            const el = this.$refs.scanPop;
-            const dx = event.clientX - pop.left;
-            const dy = event.clientY - pop.top;
-            let left = pop.left;
-            let top = pop.top;
-            const move = (e) => {
-                left = Math.min(Math.max(0, e.clientX - dx), window.innerWidth - 60);
-                top = Math.min(Math.max(0, e.clientY - dy), window.innerHeight - 30);
-                if (el) {
-                    el.style.left = left + "px";
-                    el.style.top = top + "px";
-                }
-            };
-            const up = () => {
-                window.removeEventListener("mousemove", move);
-                window.removeEventListener("mouseup", up);
-                if (this.scanPop === pop) {
-                    pop.left = left;
-                    pop.top = top;
-                }
-            };
-            window.addEventListener("mousemove", move);
-            window.addEventListener("mouseup", up);
+            this.closePop("scanPop");
         },
 
         // Пара «в таблице – у сканера» у других ПК (для «оставить у всех»)

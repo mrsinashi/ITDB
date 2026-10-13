@@ -414,98 +414,11 @@ export default {
                 this.toast("Этого принтера нет в таблице");
                 return;
             }
-            const r = el.getBoundingClientRect();
-            this.printerPop = {
-                row: row,
-                usb: usb,
-                anchor: { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
-                left: r.right + 6,
-                top: r.top,
-                placed: false
-            };
-            this.$nextTick(() => this.placePrinterPop());
-            if (!this._printerPopKey) {
-                this._printerPopKey = (e) => {
-                    if (e.key === "Escape" && this.printerPop) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.closePrinterPop();
-                    }
-                };
-                this._printerPopDown = (e) => {
-                    const pop = this.$refs.printerPop;
-                    if (!this.printerPop || (pop && pop.contains(e.target)) || (e.target.closest && e.target.closest("a.obj-link"))) {
-                        return;
-                    }
-                    this.closePrinterPop();
-                };
-                window.addEventListener("keydown", this._printerPopKey, true);
-                window.addEventListener("mousedown", this._printerPopDown, true);
-            }
-        },
-
-        // Как карточка у блочка сканера: справа от ссылки, не помещается – слева
-        placePrinterPop() {
-            const pop = this.printerPop;
-            const el = this.$refs.printerPop;
-            if (!pop || !el) {
-                return;
-            }
-            const w = el.offsetWidth;
-            const h = el.offsetHeight;
-            const a = pop.anchor;
-            let left = a.right + 6;
-            if (left + w > window.innerWidth - 8) {
-                left = Math.max(8, a.left - w - 6);
-            }
-            let top = a.top - 4;
-            if (top + h > window.innerHeight - 8) {
-                top = Math.max(8, a.bottom + 4 - h);
-            }
-            pop.left = left;
-            pop.top = top;
-            pop.placed = true;
+            this.openAnchorPop("printerPop", el, { row: row, usb: usb }, "a.obj-link");
         },
 
         closePrinterPop() {
-            this.printerPop = null;
-            if (this._printerPopKey) {
-                window.removeEventListener("keydown", this._printerPopKey, true);
-                window.removeEventListener("mousedown", this._printerPopDown, true);
-                this._printerPopKey = null;
-                this._printerPopDown = null;
-            }
-        },
-
-        // Тянуть за шапку: двигается сам элемент, в данные – итог (как карточка сканера)
-        startPrinterPopDrag(event) {
-            const pop = this.printerPop;
-            if (!pop || event.button !== 0) {
-                return;
-            }
-            const el = this.$refs.printerPop;
-            const dx = event.clientX - pop.left;
-            const dy = event.clientY - pop.top;
-            let left = pop.left;
-            let top = pop.top;
-            const move = (e) => {
-                left = Math.min(Math.max(0, e.clientX - dx), window.innerWidth - 60);
-                top = Math.min(Math.max(0, e.clientY - dy), window.innerHeight - 30);
-                if (el) {
-                    el.style.left = left + "px";
-                    el.style.top = top + "px";
-                }
-            };
-            const up = () => {
-                window.removeEventListener("mousemove", move);
-                window.removeEventListener("mouseup", up);
-                if (this.printerPop === pop) {
-                    pop.left = left;
-                    pop.top = top;
-                }
-            };
-            window.addEventListener("mousemove", move);
-            window.addEventListener("mouseup", up);
+            this.closePop("printerPop");
         },
 
         printerPopCard() {

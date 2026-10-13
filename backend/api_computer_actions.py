@@ -4,11 +4,13 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api_columns import BULK_EXCLUDED
 from api_computers import (
+    COMPUTERS_MISSING,
     ChangeBatch,
     apply_fields,
     get_active_location,
     load_locations,
     location_path,
+    lock_rows,
     parse_seat_no,
     replace_people,
     save_changes,
@@ -42,22 +44,12 @@ def parse_ids(value, count=None):
 
 def lock_computers(session, ids):
     """ПК в порядке ids, с блокировкой. Все должны быть и не в архиве."""
-    rows = (
-        session.query(Computer)
-        .filter(Computer.id.in_(ids))
-        .order_by(Computer.id)
-        .with_for_update()
-        .all()
-    )
-    by_id = {computer.id: computer for computer in rows}
-
-    if len(by_id) != len(ids):
-        raise HTTPException(status_code=404, detail="Часть компьютеров не найдена. Обнови таблицу.")
+    rows = lock_rows(session, Computer, ids, COMPUTERS_MISSING)
 
     if any(computer.archived for computer in rows):
         raise HTTPException(status_code=400, detail="Компьютер из архива сначала верни из архива.")
 
-    return [by_id[computer_id] for computer_id in ids]
+    return rows
 
 
 def set_location(batch, computer, location_id, locations_by_id):

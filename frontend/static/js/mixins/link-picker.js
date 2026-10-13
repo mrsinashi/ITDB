@@ -124,16 +124,17 @@ export default {
                     }
                 });
             });
-            this._linkPickDown = (e) => {
-                const box = this.$refs.linkPick;
-                if (this.linkPick && !(box && box.contains(e.target))) {
-                    this.saveLinkPick();
-                }
-            };
-            this._linkPickMove = () => this.placeLinkPick();
-            window.addEventListener("mousedown", this._linkPickDown, true);
-            window.addEventListener("scroll", this._linkPickMove, true);
-            window.addEventListener("resize", this._linkPickMove);
+            const move = () => this.placeLinkPick();
+            this.listenPop("linkPick", {
+                mousedown: (e) => {
+                    const box = this.$refs.linkPick;
+                    if (this.linkPick && !(box && box.contains(e.target))) {
+                        this.saveLinkPick();
+                    }
+                },
+                scroll: move,
+                resize: move
+            });
         },
 
         // Под ячейкой по её левому краю; снизу мало места – над ней
@@ -152,14 +153,7 @@ export default {
         },
 
         closeLinkPick() {
-            this.linkPick = null;
-            if (this._linkPickDown) {
-                window.removeEventListener("mousedown", this._linkPickDown, true);
-                window.removeEventListener("scroll", this._linkPickMove, true);
-                window.removeEventListener("resize", this._linkPickMove);
-                this._linkPickDown = null;
-                this._linkPickMove = null;
-            }
+            this.closePop("linkPick");
         },
 
         toggleLinkPick(o) {

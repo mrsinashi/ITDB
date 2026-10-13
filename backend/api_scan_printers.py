@@ -15,8 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import scan_collect
-from api_computers import ChangeBatch
-from api_printers import apply_printer_fields, lock_printer, save_printer_changes
+from api_computers import ChangeBatch, save_changes
+from api_printers import apply_printer_fields, lock_printer
 from api_scan_diffs import DiffSource, host_observations
 from auth import get_current_user, require_editor
 from db import get_db
@@ -149,7 +149,7 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
             change["scan"] = item.source or "сканер"
 
         if changes:
-            save_printer_changes(session, printer, changes, me["login"])
+            save_changes(session, printer, changes, me["login"])
             accepted += 1
 
     batch.finish(session)

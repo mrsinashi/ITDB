@@ -303,7 +303,6 @@
                 <!-- Один / Несколько (этап 45): после добавления строка закрывается или остаётся (только на это открытие) -->
                 <button class="btn ab-many" :class="{ on: newComputer.many }" :title="newComputer.many ? 'После добавления – не закрывать' : 'После добавления – закрыть'" @click="newComputer.many = !newComputer.many">{{ newComputer.many ? "Несколько" : "Один" }}</button>
             </div>
-            <!-- Новый кабинет (этап 36): «＋ кабинет» в списке расположений нового ПК -->
             <!-- Новый принтер (этап 44): строка под панелью, как «Новый компьютер» -->
             <div v-if="newPrinter" class="add-bar">
                 <span class="ab-title">Новый принтер:</span>
@@ -336,6 +335,7 @@
                 <button class="btn icon-only" @click="closeNewModel" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newModel.error" class="ab-error">{{ newModel.error }}</span>
             </div>
+            <!-- Новый кабинет (этап 36): «＋ кабинет» в списке расположений нового ПК -->
             <div v-if="(newComputer || newPrinter) && newRoom" class="add-bar room-bar">
                 <span class="ab-title" :title="newRoomAfterText()">Новый кабинет в:</span>
                 <location-picker ref="nr-parent" class="ab-loc ab-loc-short" input-class="input" :value="newRoom.parent_id" :options="roomParentOptions"
@@ -2004,7 +2004,7 @@
         <teleport to="body">
             <div v-if="scanPop" ref="scanPop" class="scan-pop" :class="{ placed: scanPop.placed, 'compare-pop': scanPop.d.compare.length }" :style="{ left: scanPop.left + 'px', top: scanPop.top + 'px' }"
 >
-                <div class="sp-head" @mousedown.prevent="startScanPopDrag">
+                <div class="sp-head" @mousedown.prevent="startPopDrag('scanPop', $event)">
                     <span class="sp-title">{{ scanPop.col.headerName }}<span class="sp-host">{{ (scanPop.row._printer ? scanPop.row.name : scanPop.row.hostname) || "" }}</span></span>
                     <span class="sp-close" title="Закрыть (Esc)" @mousedown.stop @click="closeScanPop">✕</span>
                 </div>
@@ -2074,7 +2074,7 @@
         <!-- ================= Принтер: окошко у ссылки (этап 44) ================= -->
         <teleport to="body">
             <div v-if="printerPop" ref="printerPop" class="scan-pop pr-pop" :class="{ placed: printerPop.placed }" :style="{ left: printerPop.left + 'px', top: printerPop.top + 'px' }">
-                <div class="sp-head" @mousedown.prevent="startPrinterPopDrag">
+                <div class="sp-head" @mousedown.prevent="startPopDrag('printerPop', $event)">
                     <span class="sp-title">{{ printerPop.row.kind || "Принтер" }}<span class="sp-host">{{ printerPop.row.name || "без имени" }}</span></span>
                     <span class="sp-close" title="Закрыть (Esc)" @mousedown.stop @click="closePrinterPop">✕</span>
                 </div>

@@ -29,7 +29,7 @@ from api_computers import ChangeBatch, apply_fields, save_changes, user_field_ke
 from auth import require_editor
 from db import get_db
 from history_log import log_change
-from api_printers import apply_printer_fields, lock_printers, save_printer_changes
+from api_printers import apply_printer_fields, lock_printers
 from models import AppSetting, Computer, History, Location, Printer
 
 router = APIRouter(prefix="/api/naming", tags=["naming"])
@@ -103,7 +103,7 @@ def update_nodes(payload: NodesUpdate, me=Depends(require_editor), session=Depen
     if len(set(ids)) != len(ids):
         raise HTTPException(status_code=400, detail="Узел указан дважды.")
 
-    locations = session.query(Location).filter(Location.id.in_(ids)).with_for_update().all()
+    locations = session.query(Location).filter(Location.id.in_(ids)).order_by(Location.id).with_for_update().all()
     by_id = {location.id: location for location in locations}
     changed = []
 
@@ -272,7 +272,7 @@ def rename_printers(session, ids, items, me):
         changes = apply_printer_fields(session, printer, {"name": item.hostname}, batch)
 
         if changes:
-            save_printer_changes(session, printer, changes, me["login"])
+            save_changes(session, printer, changes, me["login"])
             changed.append(printer.id)
 
     batch.finish(session)

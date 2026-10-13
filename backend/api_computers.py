@@ -358,24 +358,8 @@ class ChangeBatch:
                 changes[field]["new_id"] = new_id
 
     def finish(self, session):
-        now = datetime.now(timezone.utc)
-
-        for (entity, object_id), changes in self.changes.items():
-            if not changes:
-                continue
-
-            obj = self.objects[(entity, object_id)]
-            obj.version = (obj.version or 1) + 1
-            obj.updated_at = now
-
-            session.add(
-                History(
-                    entity=entity,
-                    entity_id=object_id,
-                    user_name=self.user_name,
-                    changes=changes,
-                )
-            )
+        for key, changes in self.changes.items():
+            save_changes(session, self.objects[key], changes, self.user_name)
 
     def changed_ids(self, entity="computers"):
         return sorted(key[1] for key, changes in self.changes.items() if changes and key[0] == entity)
@@ -890,38 +874,14 @@ def archive_computers(
             detail="ids должны быть числами.",
         )
 
-    computers = (
-        session.query(Computer)
-        .filter(Computer.id.in_(ids))
-        .with_for_update()
-        .all()
-    )
-
-    if len(computers) != len(ids):
-        raise HTTPException(
-            status_code=404,
-            detail="Часть компьютеров не найдена. Обнови таблицу.",
-        )
-
-    now = datetime.now(timezone.utc)
     changed = []
 
-    for computer in computers:
+    for computer in lock_rows(session, Computer, sorted(ids), COMPUTERS_MISSING):
         if computer.archived == archived:
             continue
 
-        session.add(
-            History(
-                entity="computers",
-                entity_id=computer.id,
-                user_name=user["login"],
-                changes={"archived": {"old": computer.archived, "new": archived}},
-            )
-        )
-
+        save_changes(session, computer, {"archived": {"old": computer.archived, "new": archived}}, user["login"])
         computer.archived = archived
-        computer.version = (computer.version or 1) + 1
-        computer.updated_at = now
         changed.append(computer.id)
 
     session.commit()
@@ -1087,21 +1047,30 @@ def apply_fields(session, computer, payload, user_field_keys, batch):
     return changes
 
 
-def save_changes(session, computer, changes, user_name):
+COMPUTERS_MISSING = "Часть компьютеров не найдена. Обнови таблицу."
+
+
+def save_changes(session, row, changes, user_name):
+    """ПК или принтер изменён: версия +1, время правки и запись истории."""
     if not changes:
         return
 
-    computer.version = (computer.version or 1) + 1
-    computer.updated_at = datetime.now(timezone.utc)
+    row.version = (row.version or 1) + 1
+    row.updated_at = datetime.now(timezone.utc)
+    session.add(History(entity=row.__tablename__, entity_id=row.id, user_name=user_name, changes=changes))
 
-    session.add(
-        History(
-            entity="computers",
-            entity_id=computer.id,
-            user_name=user_name,
-            changes=changes,
-        )
-    )
+
+def lock_rows(session, model, ids, missing):
+    """Строки model (ПК или принтеры) в порядке ids, с блокировкой. Блокируются
+    по возрастанию id – два запроса с одними строками не ждут друг друга вечно.
+    missing – текст ошибки, если какой-то строки нет."""
+    rows = session.query(model).filter(model.id.in_(ids)).order_by(model.id).with_for_update().all()
+    by_id = {row.id: row for row in rows}
+
+    if len(by_id) != len(ids):
+        raise HTTPException(status_code=404, detail=missing)
+
+    return [by_id[row_id] for row_id in ids]
 
 
 @router.patch("/computers/{computer_id}")

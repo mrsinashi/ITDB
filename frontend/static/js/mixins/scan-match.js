@@ -653,20 +653,6 @@ export default {
             return this.checkComputers[id] || null;
         },
 
-        // ПК ITDB у записи: сопоставленный или предлагаемые
-        scanRecordHosts(r) {
-            const ids = r.computer_id ? [r.computer_id] : r.candidates;
-            return ids.map((id) => this.scanComputer(id)).filter(Boolean);
-        },
-
-        // «ПК в ITDB»: сопоставленный или предлагаемый; при конфликте – все, на кого указывает
-        scanHostsText(r) {
-            if (r.state === "none" || r.state === "dup") {
-                return "";
-            }
-            return this.scanRecordHosts(r).map(function (c) { return c.hostname || "без имени"; }).join(", ");
-        },
-
         scanStateText(r) {
             if (r.state === "key") {
                 return "по " + r.by.map(function (k) { return k === "id" ? r.title + " ID" : KEY_LABELS[k]; }).join(", ");
