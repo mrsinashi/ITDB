@@ -68,10 +68,7 @@ export default {
         // Двойной клик по ячейке «Доступ» или строке карточки; el – под ним окошко пароля
         openWebAccess(row, el, where) {
             // Двойной клик выделил кусок точек – снять
-            const sel = window.getSelection && window.getSelection();
-            if (sel) {
-                sel.removeAllRanges();
-            }
+            this.clearTextSelection();
             if (this.webShownFor(row)) {
                 if (this.canEdit) {
                     this.startWebEdit(row, where);
@@ -355,7 +352,7 @@ export default {
                 }
                 this.hideWebShown();
                 this.flashCell("p" + row.id, "web_auth");
-                this.reloadPrinterCardHistory(row.id);
+                this.reloadCardHistory(row.id, true);
             } catch (e) {
                 ed.saving = false;
                 this.toastError("Не удалось сохранить: " + (e.message || e));

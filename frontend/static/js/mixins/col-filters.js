@@ -77,23 +77,26 @@ function valuesOf(row, col) {
     return result.length ? result : [{ key: EMPTY_KEY, value: EMPTY_LABEL }];
 }
 
-export function rowPasses(row, col, filter, set) {
+function rowPasses(row, col, filter, set) {
     return valuesOf(row, col).some(function (v) {
         return filter.exclude ? !set.has(v.key) : set.has(v.key);
     });
 }
 
+// Активные фильтры по порядку столбцов: [{ col, filter, set, states }] – у Таблицы и «Сети»
+export function activeFilters(columns, filters) {
+    return columns.filter(function (col) {
+        return !!filters[col.field];
+    }).map(function (col) {
+        const filter = filters[col.field];
+        return { col: col, filter: filter, set: new Set(filter.keys), states: filter.states || NO_STATES };
+    });
+}
+
 export default {
     computed: {
-        // Активные фильтры по порядку столбцов: [{ col, filter, set }]
         activeColFilters() {
-            const filters = this.colFilters;
-            return this.allColumns.filter(function (col) {
-                return !!filters[col.field];
-            }).map(function (col) {
-                const filter = filters[col.field];
-                return { col: col, filter: filter, set: new Set(filter.keys), states: filter.states || NO_STATES };
-            });
+            return activeFilters(this.allColumns, this.colFilters);
         },
 
         // Строки режима (рабочие / архив) с фильтром по дереву – основа для
@@ -294,9 +297,12 @@ export default {
             return list.find(function (c) { return c.field === menu.field; }) || null;
         },
 
-        // Строки, прошедшие фильтры по столбцам; except – поле, фильтр которого не учитывать
-        applyColFilters(rows, except) {
-            const active = this.activeColFilters.filter(function (f) { return f.col.field !== except; });
+        // Строки, прошедшие фильтры по столбцам; except – поле, фильтр которого не учитывать;
+        // target – чьи фильтры (net – «Сеть», по умолчанию – Таблица; у «Сети» нет
+        // антивирусов и выделений – там проверяются только значения)
+        applyColFilters(rows, except, target) {
+            const all = target === "net" ? this.netActiveColFilters : this.activeColFilters;
+            const active = all.filter(function (f) { return f.col.field !== except; });
             if (!active.length) {
                 return rows;
             }

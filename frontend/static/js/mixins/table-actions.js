@@ -95,15 +95,6 @@ export default {
             this.saveLocation(row, locationId);
         },
 
-        onCardLocationPick(locationId) {
-            this.cardEditKey = null;
-            if (!this.card) {
-                return;
-            }
-            const row = this.rows.find((item) => item.id === this.card.id) || this.card;
-            this.saveLocation(row, locationId);
-        },
-
         // Смена расположения: строка переезжает на своё место в порядке
         // дерева, поэтому таблица перечитывается целиком (ПК или принтеров)
         async saveLocation(row, locationId) {
@@ -135,44 +126,11 @@ export default {
                     return;
                 }
                 await reload();
-                if (printer) {
-                    this.reloadPrinterCardHistory(row.id);
-                } else {
-                    this.reloadCardHistory(row.id);
-                }
+                this.reloadCardHistory(row.id, printer);
                 LOCATION_FIELDS.concat(["location_id", "number"]).forEach((field) => this.flashCell(this.rowKey(row), field));
                 this.$nextTick(() => this.scrollToRow(row.id));
             } catch (e) {
                 this.toastError("Не удалось сохранить: " + e);
-            }
-        },
-
-        // Открыта карточка этого ПК – перечитать её историю после правки
-        async reloadCardHistory(id) {
-            if (!this.card || this.card.id !== id) {
-                return;
-            }
-            try {
-                const response = await apiFetch("/api/computers/" + id);
-                if (!response.ok || !this.card || this.card.id !== id) {
-                    return;
-                }
-                const data = await response.json();
-                this.cardHistory = data.history || [];
-            } catch (e) {
-                // не страшно: история обновится при следующем открытии
-            }
-        },
-
-        // После перечитывания таблицы карточка показывает новую строку
-        refreshCardRow() {
-            if (!this.card) {
-                return;
-            }
-            const id = this.card.id;
-            const row = this.rows.find((item) => item.id === id);
-            if (row) {
-                this.card = row;
             }
         },
 
@@ -584,7 +542,7 @@ export default {
                 await this.reloadTableRows();
                 if (printers) {
                     if (this.pcard && ids.indexOf(this.pcard.id) !== -1) {
-                        this.reloadPrinterCardHistory(this.pcard.id);
+                        this.reloadCardHistory(this.pcard.id, true);
                     }
                 } else if (this.card && ids.indexOf(this.card.id) !== -1) {
                     this.refreshCardRow();
@@ -825,7 +783,7 @@ export default {
                     this.reloadCardHistory(this.card.id);
                 }
                 if (this.pcard) {
-                    this.reloadPrinterCardHistory(this.pcard.id);
+                    this.reloadCardHistory(this.pcard.id, true);
                 }
                 (data.changed || []).forEach((id) => this.flashRow(id));
                 const first = (data.ids || [])[0];

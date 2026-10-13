@@ -429,15 +429,18 @@ export default {
             });
         },
 
-        sortBy(col) {
-            if (this.sortField !== col.field) {
-                this.sortField = col.field;
-                this.sortDir = "asc";
-            } else if (this.sortDir === "asc") {
-                this.sortDir = "desc";
+        // Клик по шапке: по возрастанию → по убыванию → без сортировки. state – чья
+        // сортировка: Таблицы (по умолчанию) или «Сети» (net)
+        sortBy(col, state) {
+            const s = state || this;
+            if (s.sortField !== col.field) {
+                s.sortField = col.field;
+                s.sortDir = "asc";
+            } else if (s.sortDir === "asc") {
+                s.sortDir = "desc";
             } else {
-                this.sortField = null;
-                this.sortDir = null;
+                s.sortField = null;
+                s.sortDir = null;
             }
         },
 
@@ -1835,15 +1838,6 @@ export default {
                 return; // то же значение – не сбрасывать зелёный «скопировано»
             }
             this.copyHint = hint;
-        },
-
-        // Второй щелчок двойного клика по HOSTNAME приходится уже на фон
-        // открывшейся карточки – он не должен её закрывать
-        onCardOverlayClick(event) {
-            if (event.detail > 1) {
-                return;
-            }
-            this.closeCard();
         },
     }
 };

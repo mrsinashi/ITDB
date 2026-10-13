@@ -1,5 +1,5 @@
-// Карточка принтера (этап 44) – как карточка ПК: слева, правка двойным кликом, история;
-// строки и группы – с сервера (printer_card_groups). Своё: ссылка Web (в таблице её нет),
+// Карточка принтера (этап 44) – как карточка ПК: слева, правка двойным кликом, история (общее –
+// в card.js); строки и группы – с сервера (printer_card_groups). Своё: ссылка Web (в таблице её нет),
 // «Доступ» – логин и пароль Web (как в ячейке таблицы, mixins/web-access.js), ПК, к
 // которым принтер подключён (ссылки, как в таблице; подключить – mixins/link-picker.js).
 
@@ -71,10 +71,7 @@ export default {
         },
 
         pcardHistoryShown() {
-            if (this.historyShowCancelled) {
-                return this.pcardHistory;
-            }
-            return this.pcardHistory.filter(function (item) { return !item.cancelled; });
+            return this.visibleHistory(this.pcardHistory);
         }
     },
 
@@ -133,43 +130,6 @@ export default {
             this.setHoverRow(null);
         },
 
-        onPrinterCardOverlayClick(event) {
-            if (event.detail > 1) {
-                return;
-            }
-            this.closePrinterCard();
-        },
-
-        // После перечитывания принтеров карточка показывает новую строку
-        refreshPrinterCard() {
-            if (!this.pcard) {
-                return;
-            }
-            const id = this.pcard.id;
-            const row = this.printerRows.find(function (r) { return r.id === id; });
-            if (row) {
-                this.pcard = row;
-            }
-        },
-
-        async reloadPrinterCardHistory(id) {
-            if (!this.pcard || this.pcard.id !== id) {
-                return;
-            }
-            try {
-                const response = await apiFetch("/api/printers/" + id);
-                if (response.ok && this.pcard && this.pcard.id === id) {
-                    this.pcardHistory = (await response.json()).history || [];
-                }
-            } catch (e) {
-                // история обновится при следующем открытии
-            }
-        },
-
-        togglePrinterCardHistory() {
-            this.pcardHistoryOpen = !this.pcardHistoryOpen;
-        },
-
         // ---------- Правка в карточке ----------
 
         pcardEditCol(r) {
@@ -223,10 +183,7 @@ export default {
                 this.openLinkPick(this.pcard, col, td);
                 return;
             }
-            const sel = window.getSelection && window.getSelection();
-            if (sel) {
-                sel.removeAllRanges();
-            }
+            this.clearTextSelection();
             this.pcardEditKey = r.key;
             if (col.location) {
                 this.ensureTree();
@@ -239,38 +196,12 @@ export default {
             if (col.cartridges) {
                 this.pcardEditValue = splitTokens(this.pcardEditValue).join(", ");
             }
-            this.$nextTick(() => {
-                const el = this.$refs.pcardEditor;
-                const input = Array.isArray(el) ? el[0] : el;
-                if (!input) {
-                    return;
-                }
-                this.growCardEditor(input);
-                input.focus({ preventScroll: true });
-                const len = input.value.length;
-                input.setSelectionRange(len, len);
-                if (!col.multiline || col.cartridges) {
-                    this.openSuggest(input, col, (value) => {
-                        this.pcardEditValue = value;
-                        this.savePcardEdit(r);
-                    });
-                }
+            this.focusCardEditor("pcardEditor", col.multiline && !col.cartridges ? null : (input) => {
+                this.openSuggest(input, col, (value) => {
+                    this.pcardEditValue = value;
+                    this.savePcardEdit(r);
+                });
             });
-        },
-
-        onPcardEditKeydown(event, r) {
-            if (this.suggestKeydown(event)) {
-                return;
-            }
-            if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                this.savePcardEdit(r);
-            } else if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-                this.closeSuggest();
-                this.pcardEditKey = null;
-            }
         },
 
         savePcardEdit(r) {
@@ -292,13 +223,6 @@ export default {
                 return;
             }
             this.saveCellValue(row, col, value);
-        },
-
-        onPcardLocationPick(locationId) {
-            this.pcardEditKey = null;
-            if (this.pcard) {
-                this.saveLocation(this.pcard, locationId);
-            }
         },
 
         isPcardFlash(r) {

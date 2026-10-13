@@ -1741,7 +1741,7 @@
                                     <!-- Этап 47: клик – сортировка, воронка и правый клик – фильтр (как в Таблице) -->
                                     <tr><th v-for="col in netColumns" :key="col.field" :data-field="col.field"
                                         :class="{ sorted: net.sortField === col.field, 'filter-open': openMenu === 'colFilter' && colFilterMenu && colFilterMenu.target === 'net' && colFilterMenu.field === col.field }"
-                                        @click="netSortBy(col)" @contextmenu.prevent="openColFilter(col, $event, 'net')">
+                                        @click="sortBy(col, net)" @contextmenu.prevent="openColFilter(col, $event, 'net')">
                                         <span class="th-in"><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="net.sortField === col.field">{{ net.sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
                                         <span class="th-filter" :class="{ on: isColFiltered(col.field, 'net') }" :title="isColFiltered(col.field, 'net') ? 'Изменить фильтр' : 'Фильтр'" @click.stop="openColFilter(col, $event, 'net')"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
                                     </th></tr>
@@ -2124,7 +2124,7 @@
         </teleport>
 
         <!-- ================= Карточка принтера (этап 44) – как карточка ПК ================= -->
-        <div v-if="pcard" class="card-overlay" @click.self="onPrinterCardOverlayClick">
+        <div v-if="pcard" class="card-overlay" @click.self="onCardOverlayClick($event, true)">
             <div class="card">
                 <div class="card-head">
                     <span v-if="!pcardNameEdit" class="card-hostname">
@@ -2163,17 +2163,17 @@
                                     <span v-else class="ct-text">{{ r.value }}</span>
                                     <template v-if="pcardEditKey === r.key && !r.auth">
                                         <location-picker v-if="pcardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="pcard.location_id" :options="locationOptions"
-                                            placeholder="Расположение…" @pick="onPcardLocationPick" @cancel="pcardEditKey = null"></location-picker>
+                                            placeholder="Расположение…" @pick="onCardLocationPick($event, true)" @cancel="pcardEditKey = null"></location-picker>
                                         <textarea v-else-if="pcardEditCol(r).multiline && !pcardEditCol(r).cartridges" ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
-                                            @keydown="onPcardEditKeydown($event, r)" @input="growCardEditor($event.target)" @blur="savePcardEdit(r)"></textarea>
+                                            @keydown="onCardEditKeydown($event, r, true)" @input="growCardEditor($event.target)" @blur="savePcardEdit(r)"></textarea>
                                         <input v-else ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
-                                            @keydown="onPcardEditKeydown($event, r)" @input="onSuggestInput($event.target.value)" @blur="savePcardEdit(r)">
+                                            @keydown="onCardEditKeydown($event, r, true)" @input="onSuggestInput($event.target.value)" @blur="savePcardEdit(r)">
                                     </template>
                                 </td>
                             </tr>
                         </template>
                     </table>
-                    <div class="card-section toggle-sec" :class="{ open: pcardHistoryOpen }" @click="togglePrinterCardHistory" :title="pcardHistoryOpen ? 'Свернуть' : 'Развернуть'">
+                    <div class="card-section toggle-sec" :class="{ open: pcardHistoryOpen }" @click="pcardHistoryOpen = !pcardHistoryOpen" :title="pcardHistoryOpen ? 'Свернуть' : 'Развернуть'">
                         <span>История</span><span v-if="!pcardLoading" class="sec-count" title="Изменений">{{ pcardHistoryShown.length }}</span>
                         <svg class="sec-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
                     </div>
@@ -2267,7 +2267,7 @@
                         <div v-if="!cardLoading && cardVacuum.length === 0" class="muted">–</div>
                         <span v-for="login in cardVacuum" :key="login" class="copy-line"><span v-if="vacuumLoginMark(login).online !== null" class="vac-dot" :class="{ on: vacuumLoginMark(login).online }"></span><span class="copy-val" :style="vacuumLoginMark(login).style" :title="vacuumLoginMark(login).title" @click="copyText(login)">{{ login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                     </div>
-                    <div class="card-section toggle-sec" :class="{ open: cardHistoryOpen }" @click="toggleCardHistory" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
+                    <div class="card-section toggle-sec" :class="{ open: cardHistoryOpen }" @click="cardHistoryOpen = !cardHistoryOpen" :title="cardHistoryOpen ? 'Свернуть' : 'Развернуть'">
                         <span>История</span><span v-if="!cardLoading" class="sec-count" title="Изменений">{{ cardHistoryShown.length }}</span>
                         <svg class="sec-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
                     </div>

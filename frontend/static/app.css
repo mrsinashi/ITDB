@@ -126,6 +126,72 @@
     --warn-text: #b35c00;           /* оранжевый: «нет ни в одной группе» (Vacuum) */
     --danger-strong: #c00;
     --success: #2e7d32;
+    /* Прочие цвета правил (этап 50) – значения прежние, по смыслу */
+    --on-accent: #fff;              /* текст и значки на цвете схемы и тёмных плашках */
+    --on-accent-hover: rgba(255, 255, 255, 0.18);   /* кнопка под курсором в акцентной шапке */
+    --on-accent-soft: rgba(255, 255, 255, 0.22);    /* линии и счётчики на цвете схемы */
+    --head-btn-hover: rgba(255, 255, 255, 0.14);    /* кнопки шапки карточки под курсором */
+    --dialog-close-hover: rgba(255, 255, 255, 0.15);    /* × в шапке «Истории значения» */
+    --mark-on-accent: rgba(255, 255, 255, 0.3);     /* найденное поиском в акцентной шапке */
+    --tag-on-accent: rgba(255, 255, 255, 0.4);      /* рамка блочка в акцентной шапке */
+    --hover-dark: rgba(0, 0, 0, 0.08);              /* кнопка-значок под курсором на светлом */
+    --hover-dark-strong: rgba(0, 0, 0, 0.12);
+    --input-hover: rgba(0, 0, 0, 0.06);             /* поле «Имён ПК» под курсором */
+    --card-overlay: rgba(0, 0, 0, 0.15);            /* затемнение под карточкой */
+    --dialog-overlay: rgba(0, 0, 0, 0.22);          /* затемнение под окном */
+    --menu-line: #e5e5e5;           /* линии в меню «Настройки» и «Собрать» */
+    --light-border: #cfcfcf;        /* рамки блочков-кнопок, окошек, панели строки */
+    --light-border-hover: #aaa;
+    --pop-border: #c4c4c4;          /* окошко значения сканера */
+    --sm-open-line: #c4c4c4;        /* линии раскрытой записи «GLPI / GSIT» */
+    --dot-off: #c4c4c4;             /* кружок «не в сети» */
+    --icon-hover-bg: #e6e6e6;
+    --count-bg: #e6e6e6;            /* число блочком: узел Структуры, кнопки-фильтры */
+    --sec-count-bg: #dedede;        /* число у раздела карточки */
+    --day-count-bg: #d6d6d6;        /* число у дня Истории */
+    --name-chip-hover: #dedede;
+    --pin-hover-bg: #e2e2e2;
+    --row-tools-sep: #e0e0e0;
+    --scan-chip-bg: #ececec;        /* блочок сканера без своего цвета */
+    --surface-sub: #f7f7f7;         /* форма Структуры, подстроки Справочников */
+    --add-row-bg: #fafafa;          /* строка добавления в Справочниках */
+    --sep-soft: #eee;
+    --text-dark: #444;
+    --unset-line: #bbb;             /* цвет не задан: штриховка и рамка образца */
+    --unset-text: #999;
+    --building-icon: #9b1c1c;       /* значок здания */
+    --mark-bg: #fbe3a8;             /* найденное поиском */
+    --tb-error: #ffd0d0;            /* ошибка на тёмной панели */
+    --toast-bg: #2b2b2b;
+    --toast-text: #f2f2f2;
+    --toast-error-bg: #8a2020;
+    --toast-ok: #8fd18f;
+    --login-bg: #f4f4f4;
+    --print-back: #8f8f8f;          /* фон вокруг листа печати */
+    --swatch-line: rgba(0, 0, 0, 0.25);     /* рамка образца цвета */
+    --swatch-frame: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+    --strike-line: rgba(0, 0, 0, 0.25);     /* зачёркнутое прежнее значение */
+    --strike-line-cancelled: rgba(0, 0, 0, 0.18);
+    --chip-open-frame: inset 0 0 0 1px rgba(0, 0, 0, 0.45);   /* блочок с открытым окошком */
+    /* Флажок без «Закруглений» – как у Chrome */
+    --cb-line: #767676;
+    --cb-line-hover: #4f4f4f;
+    --cb-line-press: #8d8d8d;
+    --cb-off-line: rgb(189 189 189 / 70%);
+    --cb-off-bg: rgb(245 245 245 / 68%);
+    --cb-off-checked: rgb(196 196 196 / 78%);
+    /* Тени */
+    --shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.25);
+    --shadow-nav-menu: 0 4px 10px rgba(0, 0, 0, 0.2), -1px 1px 0 rgba(0, 0, 0, 0.12);
+    --shadow-pop: 0 3px 12px rgba(0, 0, 0, 0.18);
+    --shadow-scan-pop: 0 4px 16px rgba(0, 0, 0, 0.2);
+    --shadow-table: 0 1px 8px rgba(0, 0, 0, 0.22);
+    --shadow-card: 2px 0 10px rgba(0, 0, 0, 0.2);
+    --shadow-editor: 0 2px 8px rgba(0, 0, 0, 0.12);
+    --shadow-row-tools: 0 1px 3px rgba(0, 0, 0, 0.12);
+    --shadow-dialog: 0 10px 30px rgba(0, 0, 0, 0.22);
+    --shadow-toast: 0 4px 14px rgba(0, 0, 0, 0.22);
+    --shadow-login: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 /* Цветовые схемы – тёмные спокойные оттенки. Выбор: шестерёнка в меню. */
@@ -361,12 +427,12 @@ body {
     /* ширина кратна 4px: при масштабе 125%/150% край ложится ровно в пиксель */
     width: 224px;
     box-sizing: border-box;
-    background: #fff;
+    background: var(--bg);
     /* Без рамки: при масштабе Windows 125%/150% линия рамки сглаживается
        внутрь, и меню казалось на пиксель уже кнопки. Край – фоном и тенью. */
     border: none;
     border-radius: 0 0 3px 3px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2), -1px 1px 0 rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-nav-menu);
     color: var(--text);
     font-size: 13px;
 }
@@ -389,7 +455,7 @@ body {
     height: 28px;
     border-radius: 3px;
     background: var(--brand);
-    color: #fff;
+    color: var(--on-accent);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -469,7 +535,7 @@ body {
 .settings-card .nc-title {
     padding: 3px 8px 5px;
     margin-bottom: 3px;
-    border-bottom: 1px solid #e5e5e5;
+    border-bottom: 1px solid var(--menu-line);
     font-size: 12px;
     color: var(--text-secondary);
 }
@@ -503,7 +569,7 @@ body {
 .settings-card .nc-sep {
     height: 1px;
     margin: 4px 4px;
-    background: #e5e5e5;
+    background: var(--menu-line);
 }
 .settings-card .nc-check {
     display: flex;
@@ -611,7 +677,7 @@ body {
     max-width: 360px;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #ffd0d0;
+    color: var(--tb-error);
 }
 body.ui-light-toolbar .toolbar .tb-error {
     color: var(--danger);
@@ -730,7 +796,7 @@ body.ui-light-toolbar .toolbar .tb-error {
     box-sizing: border-box;
     border-radius: 3px;
     background: var(--badge-bg);
-    color: #fff;
+    color: var(--on-accent);
     font-size: 10px;
     line-height: 14px;
     text-align: center;
@@ -833,7 +899,7 @@ body.ui-light-toolbar .toolbar .tb-error {
 .btn-primary {
     background: var(--brand);
     border-color: var(--brand-dark);
-    color: #fff;
+    color: var(--on-accent);
 }
 /* Недоступная кнопка (например, в окне «История значения», пока ничего не выбрано) */
 .btn:disabled,
@@ -850,7 +916,7 @@ body.ui-light-toolbar .toolbar .tb-error {
 .btn-danger {
     background: var(--danger-strong);
     border-color: var(--danger);
-    color: #fff;
+    color: var(--on-accent);
 }
 .btn-danger:hover {
     background: var(--danger);
@@ -863,7 +929,7 @@ body.ui-light-toolbar .toolbar .tb-error {
     line-height: 15px;
     border: 1px solid var(--border-strong);
     border-radius: 3px;
-    background: #fff;
+    background: var(--bg);
     color: var(--text);
 }
 .input:focus {
@@ -891,7 +957,7 @@ select.input {
     user-select: none;
 }
 .icon-btn:hover {
-    background: #e6e6e6;
+    background: var(--icon-hover-bg);
     color: var(--text-strong);
 }
 .icon-btn.danger:hover {
@@ -920,7 +986,7 @@ select.input {
     flex-direction: column;
     gap: 2px;
     z-index: 100;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-menu);
     min-width: 160px;
     color: var(--menu-text);
 }
@@ -1083,7 +1149,7 @@ select.input {
     background: var(--menu-bg);
     border: 1px solid var(--menu-border);
     border-radius: 0 0 var(--radius) var(--radius);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-menu);
     color: var(--menu-text);
     font-size: 12px;
 }
@@ -1152,7 +1218,7 @@ select.input {
     table-layout: fixed;
     font-size: 12px;
     background: var(--bg);
-    box-shadow: 0 0 0 var(--px) var(--frame), 0 1px 8px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 0 0 var(--px) var(--frame), var(--shadow-table);
     transform: translateZ(0);
 }
 
@@ -1247,7 +1313,7 @@ select.input {
 }
 .th-filter:hover {
     color: var(--text-strong);
-    box-shadow: inset 0 0 0 10px rgba(0, 0, 0, 0.08);
+    box-shadow: inset 0 0 0 10px var(--hover-dark);
 }
 .th-filter.on {
     color: var(--brand);
@@ -1270,7 +1336,7 @@ select.input {
     background: var(--menu-bg);
     border: 1px solid var(--menu-border);
     border-radius: 0 0 var(--radius) var(--radius);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-menu);
     color: var(--menu-text);
     font-size: 12px;
 }
@@ -1670,7 +1736,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     right: 0;
     bottom: 0;
     left: 0;
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--card-overlay);
     z-index: 50;
 }
 
@@ -1682,7 +1748,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     width: 440px;
     background: var(--bg);
     /* без светлой рамки справа: она резала тёмное меню сверху */
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-card);
     display: flex;
     flex-direction: column;
     font-size: 13px;
@@ -1705,7 +1771,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .card-hostname {
     font-size: 16px;
     font-weight: 700;
-    color: #fff;
+    color: var(--on-accent);
     overflow-wrap: anywhere;
 }
 .card-hostname .copy-ico {
@@ -1722,7 +1788,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 
 .card-hostname .card-edit:hover {
-    color: #fff;
+    color: var(--on-accent);
     opacity: 1;
 }
 
@@ -1773,7 +1839,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 
 .card-close:hover {
-    color: #fff;
+    color: var(--on-accent);
 }
 
 /* Показать / скрыть пустые поля – стрелка слева от «×», как «Развернуть всё» в Дереве */
@@ -1796,8 +1862,8 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     height: 14px;
 }
 .card-empty-toggle:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.14);
+    color: var(--on-accent);
+    background: var(--head-btn-hover);
 }
 
 /* Пустое поле в карточке (когда пустые показаны) */
@@ -1890,7 +1956,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     font-size: 13px;
     padding: 3px 9px;
     z-index: 5;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-editor);
 }
 
 .card-section {
@@ -1899,7 +1965,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     gap: 6px;
     padding: 8px 10px 4px;
     font-weight: 600;
-    color: #444;
+    color: var(--text-dark);
     border-top: 1px solid var(--border);
     margin-top: 0;
 }
@@ -1917,7 +1983,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     padding: 0 5px;
     box-sizing: border-box;
     border-radius: var(--radius);
-    background: #dedede;
+    background: var(--sec-count-bg);
     color: var(--text-strong);
     font-size: 11px;
     line-height: 16px;
@@ -1955,7 +2021,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 
 .card-history {
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--sep-soft);
     padding: 4px 0;
 }
 .card-history:first-child {
@@ -2106,10 +2172,10 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 .tg-head .tg-btn:hover {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--hover-dark);
 }
 .tree-grid.accent-head .tg-head .tg-btn:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: var(--on-accent-hover);
 }
 .tg-head .tg-count {
     flex: 0 0 46px;
@@ -2192,7 +2258,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 /* Значок адреса – всегда тёмно-красный, при любой схеме */
 .node-row.kind-building .node-icon {
-    color: #9b1c1c;
+    color: var(--building-icon);
 }
 
 .node-title {
@@ -2222,7 +2288,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     font-variant-numeric: tabular-nums;
 }
 .node-title mark {
-    background: #fbe3a8;
+    background: var(--mark-bg);
     color: inherit;
     border-radius: 2px;
 }
@@ -2240,7 +2306,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     padding: 0 4px;
     box-sizing: border-box;
     border-radius: var(--radius);
-    background: #e6e6e6;
+    background: var(--count-bg);
     color: var(--text-strong);
     font-size: 12px;
     line-height: 17px;
@@ -2280,16 +2346,16 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     align-items: center;
     gap: 1px;
     padding: 1px;
-    background: #fff;
-    border: 1px solid #cfcfcf;
+    background: var(--bg);
+    border: 1px solid var(--light-border);
     border-radius: var(--radius);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-row-tools);
 }
 .tree-actions .na-sep {
     width: 1px;
     height: 14px;
     margin: 0 2px;
-    background: #e0e0e0;
+    background: var(--row-tools-sep);
 }
 .tree-actions .icon-btn {
     min-width: 22px;
@@ -2332,7 +2398,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     align-items: center;
     gap: 5px;
     padding: 4px 8px 4px calc(6px + var(--lvl) * 18px + 17px);
-    background: #f7f7f7;
+    background: var(--surface-sub);
     border-bottom: 1px solid var(--grid-line);
     font-size: 12px;
 }
@@ -2521,7 +2587,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     padding: 0 5px;
     box-sizing: border-box;
     border-radius: var(--radius);
-    background: #d6d6d6;
+    background: var(--day-count-bg);
     color: var(--text-strong);
     font-size: 11px;
     font-weight: 600;
@@ -2581,7 +2647,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     color: var(--text-soft);
     white-space: pre-wrap;
     text-decoration: line-through;
-    text-decoration-color: rgba(0, 0, 0, 0.25);
+    text-decoration-color: var(--strike-line);
 }
 
 .arrow {
@@ -2629,11 +2695,11 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .history-table .h-tool:hover,
 .history-table .h-tool.on {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--hover-dark);
 }
 .history-table.accent-head .h-tool:hover,
 .history-table.accent-head .h-tool.on {
-    background: rgba(255, 255, 255, 0.18);
+    background: var(--on-accent-hover);
 }
 .history-table tr.h-empty td {
     color: var(--text-muted);
@@ -2665,7 +2731,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     color: var(--text-muted);
 }
 .ch-val.ch-cancelled .old {
-    text-decoration-color: rgba(0, 0, 0, 0.18);
+    text-decoration-color: var(--strike-line-cancelled);
 }
 /* Пометки «отменено», «возврат значения» – блочком, как «отключён» */
 .h-mark {
@@ -2693,7 +2759,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     height: 10px;
     margin-right: 4px;
     vertical-align: -1px;
-    border: 1px solid rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--swatch-line);
     border-radius: 2px;
 }
 .ch-cancelled .h-swatch {
@@ -2767,7 +2833,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     font-size: 13px;
 }
 .vh-head .vh-title b {
-    color: #fff;
+    color: var(--on-accent);
     font-weight: 600;
 }
 .vh-head .vh-now {
@@ -2775,7 +2841,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     font-size: 12px;
 }
 .vh-head .vh-now b {
-    color: #fff;
+    color: var(--on-accent);
     font-weight: 600;
     white-space: pre-wrap;
 }
@@ -2791,8 +2857,8 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     cursor: pointer;
 }
 .vh-head .vh-close:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.15);
+    color: var(--on-accent);
+    background: var(--dialog-close-hover);
 }
 .vh-body {
     flex: 1 1 auto;
@@ -3003,12 +3069,12 @@ select.er-input {
 }
 .st-title mark,
 .st-val mark {
-    background: #fbe3a8;
+    background: var(--mark-bg);
     color: inherit;
     border-radius: 2px;
 }
 .choices-page.accent-head .st-title mark {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--mark-on-accent);
 }
 /* Текущий найденный раздел (Enter – следующий) – обводка */
 .st-block.search-current {
@@ -3025,7 +3091,7 @@ select.er-input {
     gap: 10px;
 }
 .st-block {
-    background: #fff;
+    background: var(--bg);
     font-size: 12px;
 }
 .st-head {
@@ -3044,7 +3110,7 @@ select.er-input {
 }
 .st-tag {
     padding: 0 4px;
-    border: 1px solid #cfcfcf;
+    border: 1px solid var(--light-border);
     border-radius: var(--radius);
     color: var(--text-secondary);
     font-size: 11px;
@@ -3070,7 +3136,7 @@ select.er-input {
 }
 /* Первая строка – весь столбец: отделена линией потемнее */
 .st-colrow {
-    background: #f7f7f7;
+    background: var(--surface-sub);
     border-bottom-color: var(--gray-line);
 }
 .st-colrow .st-val span {
@@ -3139,7 +3205,7 @@ select.er-input {
     gap: 4px;
     padding: 4px 6px;
     border-top: 1px solid var(--grid-line);
-    background: #fafafa;
+    background: var(--add-row-bg);
 }
 .st-add .input {
     flex: 1;
@@ -3166,22 +3232,22 @@ select.er-input {
     height: 20px;
     box-sizing: border-box;
     padding: 0;
-    border: 1px solid #cfcfcf;
+    border: 1px solid var(--light-border);
     border-radius: var(--radius);
-    background: #fff;
-    color: #444;
+    background: var(--bg);
+    color: var(--text-dark);
     font-family: inherit;
     font-size: 11px;
     cursor: pointer;
     user-select: none;
 }
 .sc-btn:hover {
-    border-color: #aaa;
+    border-color: var(--light-border-hover);
 }
 .sc-btn.on {
     background: var(--brand);
     border-color: var(--brand-dark);
-    color: #fff;
+    color: var(--on-accent);
 }
 .sc-chip svg {
     width: 14px;
@@ -3214,19 +3280,19 @@ select.er-input {
 .sc-swatch {
     width: 12px;
     height: 12px;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--swatch-frame);
 }
 /* Цвет не задан – пунктир, а не чёрный/белый квадрат */
 .sc-color:not(.set) .sc-bar {
-    background: repeating-linear-gradient(90deg, #bbb 0 2px, transparent 2px 4px);
+    background: repeating-linear-gradient(90deg, var(--unset-line) 0 2px, transparent 2px 4px);
 }
 .sc-color:not(.set) .sc-letter {
-    color: #999;
+    color: var(--unset-text);
 }
 .sc-color:not(.set) .sc-swatch {
-    background: #fff;
+    background: var(--bg);
     box-shadow: none;
-    border: 1px dashed #bbb;
+    border: 1px dashed var(--unset-line);
     box-sizing: border-box;
 }
 
@@ -3315,7 +3381,7 @@ select.er-input {
     display: flex;
     gap: 4px;
     padding: 4px 6px;
-    background: #fafafa;
+    background: var(--add-row-bg);
 }
 .fd-add .input {
     padding: 2px 6px;
@@ -3343,18 +3409,18 @@ select.er-input {
 .choices-page.accent-head .fd-head,
 .scan-page.accent-head .st-head {
     background: var(--brand);
-    color: #fff;
+    color: var(--on-accent);
     --grid-head-line-h: var(--brand-dark);
     --grid-head-line-v: rgba(255, 255, 255, 0.22);
     border-bottom-color: var(--brand-dark);
 }
 .tree-grid.accent-head .tg-head .tg-count {
-    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.22);
+    box-shadow: inset 1px 0 0 var(--on-accent-soft);
 }
 .choices-page.accent-head .st-title,
 .choices-page.accent-head .fd-title,
 .scan-page.accent-head .st-title {
-    color: #fff;
+    color: var(--on-accent);
 }
 .scan-page.accent-head .scan-on {
     color: var(--nav-text);
@@ -3365,12 +3431,12 @@ select.er-input {
 }
 .choices-page.accent-head .st-tag,
 .scan-page.accent-head .st-tag {
-    border-color: rgba(255, 255, 255, 0.4);
+    border-color: var(--tag-on-accent);
     color: var(--nav-text);
 }
 .scan-page.accent-head .st-tag.bad {
-    border-color: #fff;
-    color: #fff;
+    border-color: var(--on-accent);
+    color: var(--on-accent);
     font-weight: 600;
 }
 
@@ -3392,7 +3458,7 @@ body.accent-borders .fd-panel {
 .dialog-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.22);
+    background: var(--dialog-overlay);
     z-index: 200;
     display: flex;
     align-items: flex-start;
@@ -3404,7 +3470,7 @@ body.accent-borders .fd-panel {
     max-width: calc(100vw - 32px);
     background: var(--bg);
     border-radius: var(--radius);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--shadow-dialog);
     overflow: hidden;
 }
 .dialog-body {
@@ -3418,7 +3484,7 @@ body.accent-borders .fd-panel {
     gap: 8px;
     padding: 10px 14px;
     background: var(--surface-head);
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--sep-soft);
 }
 
 .toasts {
@@ -3439,22 +3505,22 @@ body.accent-borders .fd-panel {
     max-width: 420px;
     padding: 8px 12px;
     border-radius: var(--radius);
-    background: #2b2b2b;
-    color: #f2f2f2;
+    background: var(--toast-bg);
+    color: var(--toast-text);
     font-size: 12px;
     line-height: 1.4;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--shadow-toast);
     pointer-events: auto;
     white-space: pre-line;
     animation: toast-in 0.18s ease-out;
 }
 .toast.error {
-    background: #8a2020;
-    color: #fff;
+    background: var(--toast-error-bg);
+    color: var(--on-accent);
 }
 .toast.success::before {
     content: "✓";
-    color: #8fd18f;
+    color: var(--toast-ok);
     font-weight: 700;
 }
 .toast .toast-x {
@@ -3475,7 +3541,7 @@ body.accent-borders .fd-panel {
    ============================================================ */
 
 body.login-page {
-    background: #f4f4f4;
+    background: var(--login-bg);
 }
 .login-wrap {
     flex: 1;
@@ -3488,12 +3554,12 @@ body.login-page {
     background: var(--bg);
     border-radius: var(--radius);
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-login);
 }
 .login-head {
     padding: 14px 20px;
     background: var(--nav-bg);
-    color: #fff;
+    color: var(--on-accent);
     font-weight: 700;
     font-size: 16px;
     letter-spacing: 0.02em;
@@ -3627,7 +3693,7 @@ body.login-page {
     background: var(--menu-hover-bg);
 }
 .sf-clear.on {
-    color: #fff;
+    color: var(--on-accent);
     background: var(--danger);
 }
 .scan-form .sf-check {
@@ -3678,7 +3744,7 @@ body.login-page {
     padding: 6px 10px;
     border: 1px solid var(--danger);
     border-radius: var(--radius);
-    background: #fff;
+    background: var(--bg);
     font-size: 12px;
     line-height: 18px;
 }
@@ -3825,7 +3891,7 @@ body.login-page {
     padding: 0 7px;
     border: 1px solid var(--gray-line);
     border-radius: var(--radius);
-    background: #fff;
+    background: var(--bg);
     color: var(--text);
     font: inherit;
     font-size: 12px;
@@ -3840,7 +3906,7 @@ body.login-page {
 .sm-chip .su-n {
     padding: 0 4px;
     border-radius: var(--radius);
-    background: #e6e6e6;
+    background: var(--count-bg);
     font-size: 11px;
     line-height: 15px;
     font-variant-numeric: tabular-nums;
@@ -3848,11 +3914,11 @@ body.login-page {
 .sm-chip.on {
     background: var(--brand);
     border-color: var(--brand-dark);
-    color: #fff;
+    color: var(--on-accent);
 }
 .sm-chip.on .su-n {
-    background: rgba(255, 255, 255, 0.22);
-    color: #fff;
+    background: var(--on-accent-soft);
+    color: var(--on-accent);
 }
 .sm-error {
     margin-bottom: 6px;
@@ -3880,7 +3946,7 @@ body.login-page {
 .sm-state.st-conflict {
     display: inline-block;
     padding: 0 4px;
-    border: 1px solid #cfcfcf;
+    border: 1px solid var(--light-border);
     border-radius: var(--radius);
     font-size: 11px;
     line-height: 15px;
@@ -3899,8 +3965,8 @@ body.login-page {
 .history-table.sm-table tbody tr.sm-open td,
 .history-table.sm-table tbody tr.sm-open:hover td {
     background: var(--sm-open-bg);
-    border-right-color: #c4c4c4;
-    border-bottom-color: #c4c4c4;
+    border-right-color: var(--sm-open-line);
+    border-bottom-color: var(--sm-open-line);
     box-shadow: inset 0 2px 0 var(--sm-detail-line);
 }
 .history-table.sm-table tbody:first-of-type tr.sm-open:first-child td {
@@ -3915,7 +3981,7 @@ body.login-page {
 .history-table.sm-table tbody tr.sm-detail:hover > td,
 .history-table.sm-table tbody:last-child tr.sm-detail:last-child > td {
     padding: 0;
-    background: #fff;
+    background: var(--bg);
     border-right-color: transparent;
     border-bottom: 2px solid var(--sm-detail-line);
     cursor: default;
@@ -3969,7 +4035,7 @@ body.login-page {
     border-right: 1px solid var(--grid-line);
     border-bottom: 1px solid var(--grid-line);
     box-shadow: none;
-    background: #fff;
+    background: var(--bg);
     vertical-align: top;
     text-align: left;
     white-space: pre-wrap;
@@ -4023,8 +4089,8 @@ body.login-page {
 .history-table.accent-head .sm-compare th,
 .history-table.sm-table.accent-head tbody tr.sm-detail .sm-compare th {
     background: var(--brand);
-    color: #fff;
-    border-right: 1px solid rgba(255, 255, 255, 0.22);
+    color: var(--on-accent);
+    border-right: 1px solid var(--on-accent-soft);
     border-bottom: 1px solid var(--brand-dark);
 }
 .history-table.sm-table.accent-head tbody tr.sm-detail .sm-compare th:last-child {
@@ -4033,7 +4099,7 @@ body.login-page {
 /* Подсветка строк большой таблицы под курсором и «у последней строки нет нижней
    линии» (.history-table tbody:last-child tr:last-child td) в табличку не попадают */
 .history-table.sm-table tbody tr.sm-detail .sm-compare td {
-    background: #fff;
+    background: var(--bg);
     border-right: 1px solid var(--grid-line);
     border-bottom: 1px solid var(--grid-line);
 }
@@ -4110,7 +4176,7 @@ body.login-page {
     padding: 0 5px;
     border: none;
     border-radius: var(--radius);
-    background: #ececec;
+    background: var(--scan-chip-bg);
     color: var(--text-strong);
     font: inherit;
     font-weight: 400;
@@ -4144,7 +4210,7 @@ button.scan-chip {
     filter: brightness(0.94);
 }
 .data-table td button.scan-chip.open {
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--chip-open-frame);
 }
 .scan-chip.off {
     opacity: 0.45;
@@ -4162,10 +4228,10 @@ button.scan-chip {
     z-index: 60;
     width: 330px;
     padding: 8px 10px 9px;
-    background: #fff;
-    border: 1px solid #cfcfcf;
+    background: var(--bg);
+    border: 1px solid var(--light-border);
     border-radius: var(--radius);
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-pop);
     color: var(--text);
     font-size: 12px;
     line-height: 17px;
@@ -4195,10 +4261,10 @@ button.scan-chip {
     position: fixed;
     z-index: 150;
     width: 330px;
-    background: #fff;
-    border: 1px solid #c4c4c4;
+    background: var(--bg);
+    border: 1px solid var(--pop-border);
     border-radius: var(--radius);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-scan-pop);
     font-size: 13px;
     color: var(--text);
     visibility: hidden;
@@ -4243,7 +4309,7 @@ button.scan-chip {
     cursor: pointer;
 }
 .scan-pop .sp-close:hover {
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--hover-dark);
     color: var(--text-strong);
 }
 .scan-pop .sp-values {
@@ -4398,7 +4464,7 @@ button.scan-chip {
     font: inherit;
     font-size: 12px;
     line-height: 1.4;
-    background: #fff;
+    background: var(--bg);
     resize: vertical;
 }
 /* Что предлагает сканер – под значением в карточке: блочок, источник серым и значки
@@ -4505,7 +4571,7 @@ button.scan-chip {
 }
 .sc-swatch.sc-frame {
     background: transparent;
-    border: 2px solid #ccc;
+    border: 2px solid var(--border-strong);
     box-sizing: border-box;
 }
 
@@ -4681,9 +4747,9 @@ button.scan-chip {
     display: block;
     width: 420px;
     padding: 8px 12px 6px;
-    background: #fff;
-    border-color: #cfcfcf;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+    background: var(--bg);
+    border-color: var(--light-border);
+    box-shadow: var(--shadow-pop);
     color: var(--text);
     font-size: 12px;
     line-height: 17px;
@@ -4760,7 +4826,7 @@ button.scan-chip {
     height: 8px;
     border: 1px solid var(--gray-line);
     border-radius: var(--radius);
-    background: #fff;
+    background: var(--bg);
     overflow: hidden;
 }
 .scan-progress .sp-fill {
@@ -4781,7 +4847,7 @@ button.scan-chip {
     height: 7px;
     margin-right: 6px;
     border-radius: 50%;
-    background: #c4c4c4;
+    background: var(--dot-off);
     vertical-align: 1px;
 }
 .vacuum-table td.vc-status.on .vc-dot {
@@ -4812,14 +4878,14 @@ button.scan-chip {
 /* Справочники: подзаголовки «Состояние» / «Названия», глаз – показывать или нет */
 .st-row.st-sub {
     height: 20px;
-    background: #f7f7f7;
+    background: var(--surface-sub);
     border-bottom-color: var(--gray-line);
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 600;
 }
 .st-row.st-sub:hover {
-    background: #f7f7f7;
+    background: var(--surface-sub);
 }
 .st-eye {
     display: inline-flex;
@@ -4940,7 +5006,7 @@ button.scan-chip {
     height: 7px;
     margin-top: -4px;
     border-radius: 50%;
-    background: var(--tint-line, #c4c4c4);
+    background: var(--tint-line, var(--dot-off));
 }
 .data-table td .cell-line.vac-dot.vac-on::before,
 .card-sec-body .vac-dot.on {
@@ -4952,7 +5018,7 @@ button.scan-chip {
     height: 7px;
     margin-right: 4px;
     border-radius: 50%;
-    background: var(--tint-line, #c4c4c4);
+    background: var(--tint-line, var(--dot-off));
     vertical-align: 1px;
 }
 .data-table td a.id-link:hover {
@@ -5077,19 +5143,19 @@ html.no-radius .card-sec-body .vac-dot {
 .sm-state.st-name,
 .st-row .sc-btn,
 .st-row .st-tag {
-    border-color: var(--tint-line, #cfcfcf);
+    border-color: var(--tint-line, var(--light-border));
 }
 .st-row .sc-color:not(.set) .sc-swatch {
-    border-color: var(--tint-line, #bbb);
+    border-color: var(--tint-line, var(--unset-line));
 }
 .st-row .sc-color:not(.set) .sc-letter {
     color: var(--text-muted);
 }
 .vacuum-table .vc-status:not(.on) .vc-dot {
-    background: var(--tint-line, #c4c4c4);
+    background: var(--tint-line, var(--dot-off));
 }
 .sm-chip:not(.on) .su-n {
-    background: var(--tint-chip, #e6e6e6);
+    background: var(--tint-chip, var(--count-bg));
 }
 
 /* ============================================================
@@ -5507,7 +5573,7 @@ html.no-radius .nr-table .nr-suf {
     color: inherit;
 }
 .net-table.accent-head th .th-filter:hover {
-    box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 0 0 10px var(--on-accent-hover);
 }
 
 /* ============================================================
@@ -5628,7 +5694,7 @@ html.no-radius .nr-table .nr-suf {
     min-height: 0;
     width: 100%;
     border: none;
-    background: #8f8f8f;
+    background: var(--print-back);
 }
 
 /* Масштаб таблицы по ширине окна (кнопка на панели): полоса прокрутки справа – только
@@ -5646,7 +5712,7 @@ html.no-radius .nr-table .nr-suf {
    (этап 41; в 38 был цвет выделения системы). Только в шапке */
 html.ctrl-down .data-table thead:hover th.sticky {
     background: var(--brand);
-    color: #fff;
+    color: var(--on-accent);
     --grid-head-line-v: rgba(255, 255, 255, 0.22);
     --grid-head-line-h: var(--brand-dark);
 }
@@ -5753,7 +5819,7 @@ html.col-dragging * {
     color: var(--text-strong);
 }
 .nr-table tr.nr-building .node-icon {
-    color: #9b1c1c;
+    color: var(--building-icon);
 }
 /* Выбранный узел (справа – его ПК) – как раскрытая строка «Проверки» */
 .nr-table tr.nr-sel td,
@@ -5791,7 +5857,7 @@ html.col-dragging * {
 }
 .nr-table .nr-pre.edit:hover,
 .nr-table .nr-suf.edit:hover {
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--hover-dark);
     color: var(--text-secondary);
 }
 .nr-table .nr-pre.off,
@@ -5816,11 +5882,11 @@ html.col-dragging * {
     vertical-align: baseline;
 }
 .nr-input:not([readonly]):hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--input-hover);
 }
 .nr-input:not([readonly]):focus {
     padding: 0 3px;
-    background: #fff;
+    background: var(--bg);
     box-shadow: inset 0 0 0 1px var(--brand);
 }
 .nr-input::placeholder {
@@ -5851,7 +5917,7 @@ html.col-dragging * {
     filter: brightness(0.94);
 }
 .nr-table button.nr-chip:hover {
-    background: #dedede;
+    background: var(--name-chip-hover);
 }
 .nr-table button.nr-chip:disabled {
     opacity: 0.5;
@@ -5905,7 +5971,7 @@ html.col-dragging * {
     filter: brightness(0.94);
 }
 .nr-pcs-table button.name-chip.open {
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--chip-open-frame);
 }
 /* Имя ПК – ссылкой на карточку, как в «Своём имени» */
 .nr-keep td.nr-host a,
@@ -5984,7 +6050,7 @@ html.col-dragging * {
     font-weight: 600;
 }
 .loc-list .ll-add:hover {
-    background: rgba(0, 0, 0, 0.12);
+    background: var(--hover-dark-strong);
 }
 
 /* ============================================================
@@ -6004,15 +6070,15 @@ html.no-radius input[type="checkbox"] {
     width: 13px;
     height: 13px;
     box-sizing: border-box;
-    border: 1px solid #767676;
-    background: #fff no-repeat 0 0 / 100% 100% border-box;
+    border: 1px solid var(--cb-line);
+    background: var(--bg) no-repeat 0 0 / 100% 100% border-box;
     vertical-align: -3px;
 }
 html.no-radius input[type="checkbox"]:enabled:hover {
-    border-color: #4f4f4f;
+    border-color: var(--cb-line-hover);
 }
 html.no-radius input[type="checkbox"]:enabled:active {
-    border-color: #8d8d8d;
+    border-color: var(--cb-line-press);
 }
 html.no-radius input[type="checkbox"]:checked,
 html.no-radius input[type="checkbox"]:indeterminate {
@@ -6036,13 +6102,13 @@ html.no-radius input[type="checkbox"]:indeterminate {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Crect x='2.5' y='5.5' width='8' height='2' rx='1' fill='%23fff'/%3E%3C/svg%3E");
 }
 html.no-radius input[type="checkbox"]:disabled {
-    border-color: rgb(189 189 189 / 70%);
-    background-color: rgb(245 245 245 / 68%);
+    border-color: var(--cb-off-line);
+    background-color: var(--cb-off-bg);
     background-clip: padding-box;
 }
 html.no-radius input[type="checkbox"]:checked:disabled,
 html.no-radius input[type="checkbox"]:indeterminate:disabled {
-    background-color: rgb(196 196 196 / 78%);
+    background-color: var(--cb-off-checked);
 }
 html.no-radius input[type="checkbox"]:checked:disabled {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Cpath d='M2.6 6.5 5.2 9.1 10.4 2.6' fill='none' stroke='%23fff' stroke-width='2.08' stroke-opacity='.6'/%3E%3C/svg%3E");
@@ -6095,12 +6161,12 @@ html.no-radius .pr-opts .pr-check input {
     gap: 0;
     border: none;
     border-radius: 0 3px 3px 3px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2), -1px 1px 0 rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-nav-menu);
 }
 .dropdown.collect-menu .dd-title {
     padding: 3px 8px 5px;
     margin-bottom: 3px;
-    border-bottom: 1px solid #e5e5e5;
+    border-bottom: 1px solid var(--menu-line);
     font-size: 12px;
     color: var(--text-secondary);
 }
@@ -6115,7 +6181,7 @@ html.no-radius .pr-opts .pr-check input {
 }
 .dropdown.collect-menu .dd-sep {
     margin: 4px;
-    background: #e5e5e5;
+    background: var(--menu-line);
 }
 .dropdown.collect-menu button.cm-go {
     justify-content: center;
@@ -6123,11 +6189,11 @@ html.no-radius .pr-opts .pr-check input {
     padding: 3px 10px;
     border: 1px solid var(--brand-dark);
     background: var(--brand);
-    color: #fff;
+    color: var(--on-accent);
 }
 .dropdown.collect-menu button.cm-go:not(:disabled):hover {
     background: var(--brand-dark);
-    color: #fff;
+    color: var(--on-accent);
 }
 .dropdown.collect-menu button.cm-go:disabled {
     background: var(--brand);
@@ -6151,7 +6217,7 @@ html.no-radius .pr-opts .pr-check input {
     height: 7px;
     margin-right: 5px;
     border-radius: 50%;
-    background: var(--tint-line, #c4c4c4);
+    background: var(--tint-line, var(--dot-off));
     vertical-align: 1px;
 }
 .cf-menu .cf-value .vac-dot.on {
@@ -6219,7 +6285,7 @@ html.no-radius .cf-menu .cf-value .vac-dot {
 }
 .vw-item.on {
     background: var(--brand);
-    color: #fff;
+    color: var(--on-accent);
     font-weight: 600;
 }
 .vw-item:disabled {
@@ -6337,7 +6403,7 @@ html.no-radius .vw-col input {
     visibility: visible;
 }
 .vw-pin:hover {
-    background: #e2e2e2;
+    background: var(--pin-hover-bg);
     color: var(--text-strong);
 }
 .vw-pin.on {
@@ -6610,7 +6676,7 @@ a.pr-web:hover {
     background: var(--menu-bg);
     border: 1px solid var(--menu-border);
     border-radius: 0 0 var(--radius) var(--radius);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-menu);
     font-size: 12px;
     visibility: hidden;
 }
@@ -6656,7 +6722,7 @@ a.pr-web:hover {
     background: var(--menu-bg);
     border: 1px solid var(--menu-border);
     border-radius: 0 0 var(--radius) var(--radius);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-menu);
     color: var(--menu-text);
     font-size: 12px;
     visibility: hidden;
@@ -6744,7 +6810,7 @@ a.pr-web:hover {
 }
 .link-pick .lp-usb.on {
     background: var(--text-secondary);
-    color: #fff;
+    color: var(--on-accent);
     box-shadow: none;
 }
 .link-pick .lp-none {

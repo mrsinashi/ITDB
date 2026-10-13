@@ -228,7 +228,7 @@ export default {
                 if (this.tableKind === "printer") {
                     this.recalcWidths();
                 }
-                this.refreshPrinterCard();
+                this.refreshCardRow(true);
             } catch (e) {
                 this.printersError = String(e.message || e);
             }
@@ -291,8 +291,8 @@ export default {
                 this.loadPrinterModels();
                 this.loadCartridges();
             }
-            this.refreshPrinterCard();
-            this.reloadPrinterCardHistory(row.id);
+            this.refreshCardRow(true);
+            this.reloadCardHistory(row.id, true);
         },
 
         // ---------- Ссылки: принтеры у ПК, ПК у принтера ----------

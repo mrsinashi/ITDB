@@ -12,7 +12,7 @@
 // подсети) и сортировка кликом по шапке; Shift+Enter – адрес строки в браузере.
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
-import { rowPasses } from "./col-filters.js";
+import { activeFilters } from "./col-filters.js";
 
 export const NET_FILTERS = [
     { key: "all", label: "Все" },
@@ -138,7 +138,7 @@ export default {
             const source = this.net.source;
             const filter = this.net.filter;
             const age = this.net.age;
-            const hosts = this.netColFiltered(this.netHosts, null);
+            const hosts = this.applyColFilters(this.netHosts, null, "net");
             NET_FILTERS.forEach((f) => {
                 counts[f.key] = hosts.filter(function (h) { return inNetFilter(h, f.key) && (!source || h[source]) && inNetAge(h, age); }).length;
             });
@@ -158,11 +158,7 @@ export default {
 
         // Активные фильтры по столбцам – плашками на панели, как в Таблице
         netActiveColFilters() {
-            const filters = this.net.colFilters;
-            return this.netColumns.filter(function (col) { return !!filters[col.field]; }).map(function (col) {
-                const filter = filters[col.field];
-                return { col: col, filter: filter, set: new Set(filter.keys), states: filter.states };
-            });
+            return activeFilters(this.netColumns, this.net.colFilters);
         },
 
         // Строки: кнопки-фильтры, поиск, фильтры по столбцам; сортировка – по шапке
@@ -191,17 +187,6 @@ export default {
     },
 
     methods: {
-        // Адреса, прошедшие фильтры по столбцам; except – поле, фильтр которого не учитывать
-        netColFiltered(hosts, except) {
-            const active = this.netActiveColFilters.filter(function (f) { return f.col.field !== except; });
-            if (!active.length) {
-                return hosts;
-            }
-            return hosts.filter(function (h) {
-                return active.every(function (f) { return rowPasses(h, f.col, f.filter, f.set); });
-            });
-        },
-
         // Строки для таблицы и для списка фильтра столбца except (как в Excel: по остальным
         // фильтрам и поиску)
         netFilterRows(except) {
@@ -211,21 +196,7 @@ export default {
             const hosts = this.netHosts.filter((h) => {
                 return inNetFilter(h, this.net.filter) && (!source || h[source]) && inNetAge(h, age) && (!words.length || matchesAllWords(h.search, words));
             });
-            return this.netColFiltered(hosts, except);
-        },
-
-        // Клик по шапке: по возрастанию → по убыванию → как с сервера (по IP)
-        netSortBy(col) {
-            const net = this.net;
-            if (net.sortField !== col.field) {
-                net.sortField = col.field;
-                net.sortDir = "asc";
-            } else if (net.sortDir === "asc") {
-                net.sortDir = "desc";
-            } else {
-                net.sortField = null;
-                net.sortDir = null;
-            }
+            return this.applyColFilters(hosts, except, "net");
         },
 
         async loadNet() {

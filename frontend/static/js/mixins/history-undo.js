@@ -65,12 +65,8 @@ export default {
             return !!(f.user || f.entity);
         },
 
-        // История карточки: отменённые целиком записи – только с глазом
         cardHistoryShown() {
-            if (this.historyShowCancelled) {
-                return this.cardHistory;
-            }
-            return this.cardHistory.filter(function (item) { return !item.cancelled; });
+            return this.visibleHistory(this.cardHistory);
         },
 
         // ---------- Окно «История значения» ----------
@@ -329,7 +325,7 @@ export default {
                 this.reloadCardHistory(cardId);
             }
             if (this.pcard) {
-                this.reloadPrinterCardHistory(this.pcard.id);
+                this.reloadCardHistory(this.pcard.id, true);
             }
         },
 
@@ -339,7 +335,7 @@ export default {
             if (!this.canOpenValue(entity, field)) {
                 return;
             }
-            window.getSelection && window.getSelection().removeAllRanges();
+            this.clearTextSelection();
             this.valueDialog = { entity: entity, entityId: entityId, entityKey: entityKey || null, field: field, data: null, selected: [], anchor: null, busy: false, error: "" };
             await this.loadValueHistory();
         },

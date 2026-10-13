@@ -1,4 +1,5 @@
-// Карточка ПК слева: открытие, правка двойным кликом, история.
+// Карточка ПК слева: открытие, правка двойным кликом, история. Здесь же – общее у карточек
+// ПК и принтера (этап 50): редактор строки, Enter / Esc, кабинет, фон, история (признак printer).
 
 import { UI_OPTIONS } from "../settings.js";
 import { apiFetch } from "../util.js";
@@ -129,19 +130,30 @@ export default {
                 this.openLinkPick(row, this.cardEditCol(r), event.currentTarget.querySelector("td.ct-value"));
                 return;
             }
-            const sel = window.getSelection && window.getSelection();
-            if (sel) {
-                sel.removeAllRanges();
-            }
+            this.clearTextSelection();
             this.cardEditKey = r.key;
-            if (this.cardEditCol(r).location) {
+            const col = this.cardEditCol(r);
+            if (col.location) {
                 this.ensureTree();
                 return;
             }
-            const value = this.card[this.cardEditCol(r).field];
+            const value = this.card[col.field];
             this.cardEditValue = value === null || value === undefined ? "" : String(value);
+            this.focusCardEditor("cardEditor", col.multiline ? null : (input) => {
+                this.openSuggest(input, col, (value) => {
+                    this.cardEditValue = value;
+                    this.saveCardEdit(r);
+                }, this.card.id, true);
+            });
+        },
+
+        // ---------- Общее у карточек ПК и принтера (printer – карточка принтера) ----------
+
+        // Редактор строки карточки: по высоте ячейки, фокус, курсор в конец;
+        // suggest(input) – открыть подсказки
+        focusCardEditor(refName, suggest) {
             this.$nextTick(() => {
-                const el = this.$refs.cardEditor;
+                const el = this.$refs[refName];
                 const input = Array.isArray(el) ? el[0] : el;
                 if (!input) {
                     return;
@@ -150,12 +162,8 @@ export default {
                 input.focus({ preventScroll: true });
                 const len = input.value.length;
                 input.setSelectionRange(len, len);
-                const col = this.cardEditCol(r);
-                if (col && !col.multiline) {
-                    this.openSuggest(input, col, (value) => {
-                        this.cardEditValue = value;
-                        this.saveCardEdit(r);
-                    }, this.card.id, true);
+                if (suggest) {
+                    suggest(input);
                 }
             });
         },
@@ -175,18 +183,105 @@ export default {
             }
         },
 
-        onCardEditKeydown(event, r) {
+        onCardEditKeydown(event, r, printer) {
             if (this.suggestKeydown(event)) {
                 return;
             }
             if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                this.saveCardEdit(r);
+                if (printer) {
+                    this.savePcardEdit(r);
+                } else {
+                    this.saveCardEdit(r);
+                }
             } else if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation(); // Esc отменяет правку, а не закрывает карточку
                 this.closeSuggest();
-                this.cardEditKey = null;
+                if (printer) {
+                    this.pcardEditKey = null;
+                } else {
+                    this.cardEditKey = null;
+                }
+            }
+        },
+
+        onCardLocationPick(locationId, printer) {
+            if (printer) {
+                this.pcardEditKey = null;
+                if (this.pcard) {
+                    this.saveLocation(this.pcard, locationId);
+                }
+                return;
+            }
+            this.cardEditKey = null;
+            if (!this.card) {
+                return;
+            }
+            const row = this.rows.find((item) => item.id === this.card.id) || this.card;
+            this.saveLocation(row, locationId);
+        },
+
+        // Второй щелчок двойного клика по HOSTNAME (имени принтера) приходится уже на фон
+        // открывшейся карточки – он не должен её закрывать
+        onCardOverlayClick(event, printer) {
+            if (event.detail > 1) {
+                return;
+            }
+            if (printer) {
+                this.closePrinterCard();
+            } else {
+                this.closeCard();
+            }
+        },
+
+        // История карточки: отменённые целиком записи – только с глазом
+        visibleHistory(list) {
+            if (this.historyShowCancelled) {
+                return list;
+            }
+            return list.filter(function (item) { return !item.cancelled; });
+        },
+
+        // Открыта карточка этого ПК (принтера) – перечитать её историю после правки
+        async reloadCardHistory(id, printer) {
+            const open = () => {
+                const card = printer ? this.pcard : this.card;
+                return !!card && card.id === id;
+            };
+            if (!open()) {
+                return;
+            }
+            try {
+                const response = await apiFetch((printer ? "/api/printers/" : "/api/computers/") + id);
+                if (!response.ok || !open()) {
+                    return;
+                }
+                const history = (await response.json()).history || [];
+                if (printer) {
+                    this.pcardHistory = history;
+                } else {
+                    this.cardHistory = history;
+                }
+            } catch (e) {
+                // не страшно: история обновится при следующем открытии
+            }
+        },
+
+        // После перечитывания таблицы (принтеров) карточка показывает новую строку
+        refreshCardRow(printer) {
+            const card = printer ? this.pcard : this.card;
+            if (!card) {
+                return;
+            }
+            const row = (printer ? this.printerRows : this.rows).find((item) => item.id === card.id);
+            if (!row) {
+                return;
+            }
+            if (printer) {
+                this.pcard = row;
+            } else {
+                this.card = row;
             }
         },
 

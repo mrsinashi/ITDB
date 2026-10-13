@@ -95,10 +95,7 @@ export default {
             }
             this.closeLinkPick();
             this.hideWebShown();
-            const sel = window.getSelection && window.getSelection();
-            if (sel) {
-                sel.removeAllRanges();
-            }
+            this.clearTextSelection();
             const refs =(col.links === "printer" ? owner.printer_refs : owner.computer_refs) || [];
             const items = refs.map(function (ref) { return { id: ref.id, usb: !!ref.usb }; });
             this.linkPick = {

@@ -132,6 +132,14 @@ export default {
             }, 700);
         },
 
+        // Снять выделение текста (двойной клик выделяет слово)
+        clearTextSelection() {
+            const sel = window.getSelection && window.getSelection();
+            if (sel) {
+                sel.removeAllRanges();
+            }
+        },
+
         // ---------- Сообщения и подтверждения ----------
 
         toast(text, type, ms) {
