@@ -204,6 +204,9 @@ def collect_into(session, run):
         run.stats = dict(run.stats or {}, progress={"done": done, "total": total})
         session.commit()
 
+    # Транзакцию не держать, пока идут сетевые запросы (этап 51): сбор DHCP или сети –
+    # минуты, а открытая транзакция занимает соединение и не даёт миграции изменить таблицы
+    session.commit()
     result = COLLECTORS[kind](params, fresh_days, progress)
     stats = dict(result["stats"], fresh_days=fresh_days, version=result.get("version"))
 

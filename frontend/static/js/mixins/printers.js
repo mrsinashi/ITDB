@@ -223,8 +223,9 @@ export default {
                     row.room = roomText(row);
                 });
                 this.printerRows = rows;
-                refreshDuplicates(rows, this.printerColumns, "printer");
-                this.dupVersion++;
+                if (refreshDuplicates(rows, this.printerColumns, "printer")) {
+                    this.dupVersion++;
+                }
                 if (this.tableKind === "printer") {
                     this.recalcWidths();
                 }
@@ -270,8 +271,9 @@ export default {
                 if (index !== -1 && data.updated) {
                     Object.assign(this.printerRows[index], data.updated, { _printer: true });
                     this.printerRows[index].room = roomText(this.printerRows[index]);
-                    refreshDuplicates(this.printerRows, this.printerColumns, "printer");
-                    this.dupVersion++;
+                    if (refreshDuplicates(this.printerRows, this.printerColumns, "printer")) {
+                        this.dupVersion++;
+                    }
                     if (this.tableKind === "printer") {
                         this.recalcWidths();
                     }

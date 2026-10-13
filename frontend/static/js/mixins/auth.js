@@ -48,9 +48,14 @@ export default {
     methods: {
         // ---------- Авторизация ----------
 
+        // Без входа apiFetch сам уводит на страницу входа; ошибка здесь – сервер не ответил
+        // (перезапуск при обновлении, сбой базы): на странице – «Сервер не отвечает»
         async checkAuth() {
             try {
                 const response = await apiFetch("/api/auth/me");
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
                 this.user = await response.json();
                 // Схема – личная: у пользователя без настройки – красная,
                 // даже если в этом браузере до него работал другой
@@ -67,6 +72,10 @@ export default {
             } catch (e) {
                 this.user = null;
             }
+        },
+
+        reloadPage() {
+            window.location.reload();
         },
 
         // Ширина кнопки пользователя – целое число пикселей экрана.

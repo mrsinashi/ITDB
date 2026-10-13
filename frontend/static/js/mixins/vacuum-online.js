@@ -64,8 +64,10 @@ export default {
                 }
                 const data = await response.json();
                 const online = Array.isArray(data.online) ? data.online : null;
+                // Первая проверка после перезапуска сервера ещё идёт (этап 51) – прежние кружки остаются
+                const firstPending = data.enabled && !data.checked_at && this.vacuumOnline.enabled;
                 // Тот же итог – данные не трогать (иначе перерисуется вся страница)
-                if (this.vacuumOnline.enabled !== data.enabled || String(this.vacuumOnline.online) !== String(online)) {
+                if (!firstPending && (this.vacuumOnline.enabled !== data.enabled || String(this.vacuumOnline.online) !== String(online))) {
                     this.vacuumOnline = { enabled: data.enabled, online: online };
                 }
                 nextIn = data.enabled ? data.next_in : 0;

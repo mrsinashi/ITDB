@@ -42,6 +42,9 @@ CLICK_SECONDS = 5
 # Последняя быстрая проверка: when – time.monotonic(), key – настройки подключения на тот момент
 _online = {"when": None, "at": None, "logins": None, "error": None, "key": None}
 _online_lock = threading.Lock()
+# У ejabberd спрашивает один запрос, остальные в это время сразу получают прошлый итог
+# (этап 51): зависший ejabberd не держит потоки сервера, ждущие одного замка
+_check_lock = threading.Lock()
 
 
 class HostOut(BaseModel):
@@ -236,23 +239,47 @@ def jabber_online(click: bool = Query(False), me=Depends(get_current_user), sess
     session.rollback()
     limit = CLICK_SECONDS if click else minutes * 60
 
+    def due():
+        return _online["key"] != key or _online["when"] is None or time.monotonic() - _online["when"] >= limit
+
     with _online_lock:
-        state = _online
+        need = due()
 
-        if state["key"] != key or state["when"] is None or time.monotonic() - state["when"] >= limit:
-            try:
-                if params is None:
-                    raise SourceError(failed)
-                state["logins"] = sorted(scan_jabber.online_now(params))
-                state["error"] = None
-            except SourceError as err:
-                state["logins"] = None
-                state["error"] = str(err)
+    # Этот запрос хотел проверить, а проверяет другой – ответ прошлый, спросить снова чуть позже
+    pending = need
 
-            state.update(when=time.monotonic(), at=datetime.now(timezone.utc), key=key)
+    if need and _check_lock.acquire(blocking=False):
+        pending = False
 
-        age = time.monotonic() - state["when"]
-        return OnlineOut(
-            enabled=True, minutes=minutes, checked_at=state["at"], next_in=max(0, math.ceil(minutes * 60 - age)),
-            online=state["logins"], error=state["error"],
-        )
+        try:
+            with _online_lock:
+                need = due()    # пока брали замок, мог проверить другой запрос
+
+            if need:
+                try:
+                    if params is None:
+                        raise SourceError(failed)
+                    logins, error = sorted(scan_jabber.online_now(params)), None
+                except SourceError as err:
+                    logins, error = None, str(err)
+
+                with _online_lock:
+                    _online.update(
+                        logins=logins, error=error, when=time.monotonic(), at=datetime.now(timezone.utc), key=key,
+                    )
+        finally:
+            _check_lock.release()
+
+    with _online_lock:
+        state = dict(_online)
+
+    # Первая проверка ещё идёт в другом запросе – спросить снова чуть позже
+    if state["when"] is None:
+        return OnlineOut(enabled=True, minutes=minutes, next_in=CLICK_SECONDS)
+
+    age = time.monotonic() - state["when"]
+    next_in = CLICK_SECONDS if pending else max(0, math.ceil(minutes * 60 - age))
+    return OnlineOut(
+        enabled=True, minutes=minutes, checked_at=state["at"], next_in=next_in,
+        online=state["logins"], error=state["error"],
+    )

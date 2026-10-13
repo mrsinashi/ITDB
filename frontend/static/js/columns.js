@@ -46,9 +46,18 @@ export function isDuplicateLine(line, field, kind) {
     return !!set && set.has(normalizeKey(line));
 }
 
-// Пересчитать дубли (после загрузки и правки строк); columns – встроенные столбцы
+// Пересчитать дубли (после загрузки и правки строк); columns – встроенные столбцы.
+// Ответ – изменились ли (только тогда таблице нужен dupVersion++: он перерисует все строки)
 export function refreshDuplicates(rows, columns, kind) {
-    duplicateSets[kind || "pc"] = buildDuplicateSets(rows, columns);
+    const old = duplicateSets[kind || "pc"];
+    const sets = buildDuplicateSets(rows, columns);
+    duplicateSets[kind || "pc"] = sets;
+    const fields = Object.keys(sets);
+    return fields.length !== Object.keys(old).length || fields.some(function (field) {
+        const a = old[field];
+        const b = sets[field];
+        return !a || a.size !== b.size || Array.from(b).some(function (value) { return !a.has(value); });
+    });
 }
 
 export const kindLabels = {

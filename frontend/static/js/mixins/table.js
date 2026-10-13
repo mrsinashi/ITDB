@@ -4,7 +4,7 @@
 
 import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, wrapLine } from "../util.js";
 import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
-import { CHIP_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
+import { CHIP_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths, sameWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 import { splitTokens } from "./cartridges.js";
 
@@ -195,36 +195,7 @@ export default {
             return new Set(this.selectedRows);
         },
 
-        // Заливка ячеек (фон из Справочников) – для линий сетки:
-        // Map id строки → { поле: цвет }. Строки без заливки в карту не входят.
-        cellFills() {
-            const map = new Map();
-            const cols = this.viewColumns;
-            this.displayRows.forEach((row) => {
-                let fills = null;
-                cols.forEach((col) => {
-                    const f = this.cellFillOf(row, col);
-                    if (f) {
-                        (fills || (fills = {}))[col.field] = f;
-                    }
-                });
-                if (fills) {
-                    map.set(row.id, fills);
-                }
-            });
-            return map;
-        },
-
-        // Соседи ячейки: следующая строка и следующий столбец
-        nextRowId() {
-            const next = {};
-            const rows = this.displayRows;
-            for (let i = 0; i + 1 < rows.length; i++) {
-                next[rows[i].id] = rows[i + 1].id;
-            }
-            return next;
-        },
-
+        // Сосед ячейки справа: следующий столбец (соседа снизу строка получает свойством below)
         nextColField() {
             const next = {};
             const cols = this.viewColumns;
@@ -367,8 +338,9 @@ export default {
                 // «Кабинет»: номер и название одной строкой
                 this.rows.forEach(function (row) { row.room = roomText(row); });
                 this.applyAntivirus();
-                refreshDuplicates(this.rows, this.builtinColumns, "pc");
-                this.dupVersion++;
+                if (refreshDuplicates(this.rows, this.builtinColumns, "pc")) {
+                    this.dupVersion++;
+                }
                 this.recalcWidths();
             } catch (e) {
                 this.tableError = String(e.message || e);
@@ -539,13 +511,18 @@ export default {
                 const dot = dots && col.field === "vacuum" && !row.archived && line.trim() ? ONLINE_DOT : 0;
                 return ms || chip || dot ? { pad: ((ms && ms.backgroundColor) || chip ? CHIP_PAD : 0) + dot, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» – запас не мешает
             };
-            this.autoWidths = computeAutoWidths(this.tableRows, this.widthColumns, this.tableUserDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
+            const widths = computeAutoWidths(this.tableRows, this.widthColumns, this.tableUserDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
+            // Те же ширины – данные не трогать: новый объект перерисовал бы все строки (этап 52)
+            if (!sameWidths(this.autoWidths, widths)) {
+                this.autoWidths = widths;
+            }
             this.$nextTick(() => {
                 this.updateStickyShadow();
             });
         },
 
-        cellClass(row, col) {
+        // editing – ячейка сейчас правится (у строки-компонента – из свойства editField, этап 52)
+        cellClass(row, col, editing) {
             const cls = {
                 center: col.center,
                 link: col.link,
@@ -563,7 +540,7 @@ export default {
             if (col.field === this.stuckEdgeRight) {
                 cls["sticky-edge-r"] = true;
             }
-            if (this.isEditing(row, col)) {
+            if (editing) {
                 cls["editing"] = true;
             }
             if (this.savedFlash[this.rowKey(row) + ":" + col.field]) {
@@ -823,6 +800,19 @@ export default {
             return look && !look.chip ? look.bg_color : null;
         },
 
+        // Заливка ячеек строки – для линий сетки: { поле: цвет }; без заливки – null.
+        // Строка-компонент считает её для себя и для строки ниже (этап 52)
+        rowFills(row) {
+            let fills = null;
+            this.viewColumns.forEach((col) => {
+                const f = this.cellFillOf(row, col);
+                if (f) {
+                    (fills || (fills = {}))[col.field] = f;
+                }
+            });
+            return fills;
+        },
+
         // Фон выделения (повтор, проверен…), у которого выбрано «на всю ячейку»:
         // по первому такому значению ячейки; нет – null
         markFillOf(row, col) {
@@ -847,7 +837,8 @@ export default {
             return null;
         },
 
-        cellTdStyle(row, col) {
+        // fills, belowFills – заливка этой строки и строки ниже (rowFills)
+        cellTdStyle(row, col, fills, belowFills) {
             const style = {};
             // Оформление столбца и поверх – значения (фон блочком – у строк, cellParts)
             const look = this.cellLook(row, col);
@@ -867,10 +858,9 @@ export default {
             // и верхний), иначе – своей заливки. Серая линия у залитых не видна.
             // Синий слой выбранной строки подмешивается к цвету линии
             // (--self-a – своя строка, --below-a – строка ниже).
-            const fills = this.cellFills;
-            const own = (fills.get(row.id) || {})[col.field];
-            const right = (fills.get(row.id) || {})[this.nextColField[col.field]];
-            const below = (fills.get(this.nextRowId[row.id]) || {})[col.field];
+            const own = (fills || {})[col.field];
+            const right = (fills || {})[this.nextColField[col.field]];
+            const below = (belowFills || {})[col.field];
             if (own) {
                 style.backgroundColor = own;
             }
@@ -899,27 +889,29 @@ export default {
         },
 
         // Пока значение сохраняется, в ячейке уже новое (приглушённое),
-        // а не старое – без мигания «старое → новое».
+        // а не старое – без мигания «старое → новое». pendingCells – по ключу через in:
+        // строка следит только за своими ключами (этап 52)
         cellText(row, col) {
             const key = this.rowKey(row) + ":" + col.field;
-            if (Object.prototype.hasOwnProperty.call(this.pendingCells, key)) {
+            if (key in this.pendingCells) {
                 return this.pendingCells[key];
             }
             return row[col.field];
         },
 
         isPending(row, col) {
-            return Object.prototype.hasOwnProperty.call(this.pendingCells, this.rowKey(row) + ":" + col.field);
+            return (this.rowKey(row) + ":" + col.field) in this.pendingCells;
         },
 
-        cellSpanStyle(row, col) {
+        // editing – ячейка сейчас правится
+        cellSpanStyle(row, col, editing) {
             let base = this.cellTextStyle(row, col) || {};
             // Рядом блочок сканера и у ситуации «зачёркивать значение таблицы»
             const mark = this.scanCellMark(row, col);
-            if (mark && mark.strike && !this.isEditing(row, col)) {
+            if (mark && mark.strike && !editing) {
                 base = Object.assign({}, base, { textDecoration: (base.textDecoration === "underline" ? "underline " : "") + "line-through" });
             }
-            if (this.isEditing(row, col)) {
+            if (editing) {
                 return Object.assign({}, base, { visibility: "hidden" });
             }
             return base;
@@ -1007,8 +999,9 @@ export default {
                 this.editValue = splitTokens(this.editValue).join(", ");
             }
             this.$nextTick(() => {
-                const ref = this.$refs["edit-" + row.id + "-" + col.field];
-                const el = Array.isArray(ref) ? ref[0] : ref;
+                // Поле правки – в строке-компоненте, её ref корню не виден
+                const tr = this.$refs.table && this.$refs.table.querySelector('tbody tr[data-id="' + row.id + '"]');
+                const el = tr && tr.querySelector("td.editing .cell-edit");
                 if (!el) {
                     return;
                 }
@@ -1296,11 +1289,10 @@ export default {
         async saveCellValue(row, col, value, sendValue) {
             const printer = !!row._printer;
             const pendingKey = this.rowKey(row) + ":" + col.field;
-            this.pendingCells = Object.assign({}, this.pendingCells, { [pendingKey]: value });
+            // По ключу, а не новым объектом: иначе перерисуются все строки таблицы (этап 52)
+            this.pendingCells[pendingKey] = value;
             const clearPending = () => {
-                const next = Object.assign({}, this.pendingCells);
-                delete next[pendingKey];
-                this.pendingCells = next;
+                delete this.pendingCells[pendingKey];
             };
             try {
                 const payload = { _version: row.version };
@@ -1347,8 +1339,9 @@ export default {
                 }
                 if (index !== -1) {
                     Object.assign(this.rows[index], updated);
-                    refreshDuplicates(this.rows, this.builtinColumns, "pc");
-                this.dupVersion++;
+                    if (refreshDuplicates(this.rows, this.builtinColumns, "pc")) {
+                        this.dupVersion++;
+                    }
                     this.recalcWidths();
                     this.flashCell(row.id, col.field);
                 }

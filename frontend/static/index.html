@@ -117,7 +117,7 @@
         </nav>
 
         <div v-if="authChecked && !user" class="toolbar">
-            <span class="tb-left">Нет доступа.&nbsp;<a href="/login.html">Войти</a></span>
+            <span class="tb-left">Сервер не отвечает.&nbsp;<a href="/" @click.prevent="reloadPage">Обновить</a></span>
         </div>
 
         <!-- ================= Таблица (с этапа 44 – и «Принтеры»: та же таблица, tableKind) ================= -->
@@ -409,56 +409,10 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in displayRows" :key="row.id" :data-id="row.id" :class="{ 'row-selected': selectedSet.has(row.id) }">
-                            <td v-for="col in viewColumns" :key="col.field"
-                                :class="cellClass(row, col)"
-                                :style="cellTdStyle(row, col)"
-                                @mousedown="onCellMouseDown($event, row)"
-                                @click="onCellClick($event, row, col)"
-                                @dblclick="startEdit(row, col, $event)"
-                                @mouseenter="handleNoteEnter($event, row, col)"
-                                @mouseleave="hideNoteTooltip">
-                                <!-- «По правилу» (этап 36, кнопка «Имена по правилам»): имя по правилу у ПК, названного иначе -->
-                                <template v-if="col.virtual">
-                                    <button v-if="nameChip(row)" type="button" class="scan-chip name-chip" :class="{ open: namePop && namePop.row.id === row.id }"
-                                        :title="nameChipTitle(row)" @mousedown.stop @dblclick.stop @click.stop="$event.altKey ? copyCellValue($event) : openNamePop(row, $event)">{{ nameChip(row) }}</button>
-                                    <span v-else-if="nameKept(row)" class="name-kept" :title="'Своё имя · правило ' + nameChipTitle(row)">своё</span>
-                                </template>
-                                <!-- Антивирусы (этап 26д): строкой каждый, цвет – по состоянию (Справочники) -->
-                                <span v-else-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avCellStyle(a) || {}).backgroundColor }" :style="avCellStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
-                                <!-- Значения по строкам: повтор – блочком, логина нет в Jabber – красным, номер GLPI / GSIT – ссылкой -->
-                                <!-- Принтеры у ПК, ПК у принтера (этап 44): ссылки; при наведении – значок «показать в таблице» -->
-                                <span v-else-if="col.links && cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><span v-for="(p, pi) in cellParts(row, col)" :key="pi" class="cell-line obj-line"><a class="obj-link" :href="p.href" draggable="false" :title="p.title" @click.prevent="onObjLinkClick($event, p.obj)">{{ p.text }}</a><span class="obj-tbl" :title="p.obj.kind === 'pc' ? 'Показать в Компьютерах' : 'Показать в Принтерах'" @mousedown.stop @click.stop="showObjInTable(p.obj)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
-                                <!-- «Доступ» (этап 45): заданные логин и пароль – точками; показанные по паролю – строками, ✎ – изменить -->
-                                <span v-else-if="col.secret && webShownFor(row) && !isEditing(row, col)" class="secret-shown" :title="webAccessTitle(row)"><span class="cell-lines"><span class="cell-line" :class="{ 'cl-none': !webShown.login }">{{ webShown.login || "без логина" }}</span><span class="cell-line" :class="{ 'cl-none': !webShown.password }">{{ webShown.password || "без пароля" }}</span></span><span v-if="canEdit" class="secret-pen" title="Изменить" @mousedown.stop @dblclick.stop @click.stop="startWebEdit(row, 'cell')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span></span>
-                                <span v-else-if="col.secret && row.web_auth && !isEditing(row, col)" class="secret-dots" :title="webAccessTitle(row)">{{ secretDots }}</span>
-                                <template v-else-if="col.secret"></template>
-                                <span v-else-if="cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><template v-for="(p, pi) in cellParts(row, col)" :key="pi"><a v-if="p.href" class="cell-line id-link" :class="p.cls" :href="p.href" target="_blank" rel="noopener" :title="p.title" @click="onIdLinkClick($event)">{{ p.text }}</a><a v-else-if="p.card" class="cell-line host-link" :class="p.cls" :style="p.style" :href="p.card" draggable="false" :title="p.title" @click.prevent>{{ p.text }}</a><span v-else class="cell-line" :class="p.cls" :style="p.style" :title="p.title" @dblclick="onCellValueDblclick($event, row, col)">{{ p.text }}</span></template></span>
-                                <span v-else :class="{ 'note-text': col.note, pending: isPending(row, col) }" :style="cellSpanStyle(row, col)" @dblclick="onCellValueDblclick($event, row, col)">{{ cellText(row, col) }}</span>
-                                <button v-if="scanCellMark(row, col) && !isEditing(row, col)" type="button" class="scan-chip"
-                                    :class="{ open: scanPop && scanPop.row.id === row.id && scanPop.col.field === col.field }"
-                                    :style="scanChipStyle(scanCellMark(row, col))" :title="scanChipTitle(scanCellDiff(row, col))"
-                                    @mousedown.stop @dblclick.stop @click.stop="$event.altKey ? copyCellValue($event) : openScanPop(row, col, $event)">{{ scanChipText(scanCellDiff(row, col)) }}</button>
-                                <template v-if="isEditing(row, col)">
-                                    <!-- «Доступ» (этап 45): логин виден, пароль – точками; ячейка на время правки шире и выше -->
-                                    <span v-if="col.secret && webEdit" class="secret-edit" @focusout="onWebEditFocusOut($event)"><input ref="webEditLogin" v-model="webEdit.login" class="cell-edit secret-input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="webEdit.password" class="cell-edit secret-input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></span>
-                                    <location-picker v-else-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
-                                        placeholder="Расположение…" @pick="onCellLocationPick(row, $event)" @cancel="cancelEdit"></location-picker>
-                                    <textarea v-else-if="col.multiline && !col.cartridges" v-model="editValue"
-                                        @keydown="handleEditKeydown($event, row, col)"
-                                        @input="col.field === 'ip' && onIpInput($event, null, 'editValue'); onEditInput($event, col)"
-                                        @blur="saveEdit(row, col)"
-                                        :ref="'edit-' + row.id + '-' + col.field"
-                                        class="cell-edit cell-edit-multi"></textarea>
-                                    <input v-else v-model="editValue"
-                                        @keydown="handleEditKeydown($event, row, col)"
-                                        @input="onEditInput($event, col); onSuggestInput($event.target.value)"
-                                        @blur="saveEdit(row, col)"
-                                        :ref="'edit-' + row.id + '-' + col.field"
-                                        class="cell-edit">
-                                </template>
-                            </td>
-                        </tr>
+                        <!-- Строка – компонент table-row (js/components/table-row.js, этап 52): перерисовывается,
+                             только когда меняется то, что в ней видно -->
+                        <tr is="vue:table-row" v-for="(row, i) in displayRows" :key="row.id" :row="row" :below="displayRows[i + 1] || null"
+                            :selected="selectedSet.has(row.id)" :edit-field="editingRowId === row.id ? editingField : null"></tr>
                     </tbody>
                 </table>
             </div>

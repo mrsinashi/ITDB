@@ -93,17 +93,27 @@ export default {
             this.pcardError = "";
             this.pcardLoading = true;
             this.startLoading();
+            // Пока ждали ответа, карточку закрыли или открыли заново – ответ уже не для неё (этап 51)
+            const seq = this._pcardSeq = (this._pcardSeq || 0) + 1;
+            const open = () => this._pcardSeq === seq && !!this.pcard && this.pcard.id === row.id;
             try {
                 const response = await apiFetch("/api/printers/" + row.id);
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.pcardHistory = (await response.json()).history || [];
+                const history = (await response.json()).history || [];
+                if (open()) {
+                    this.pcardHistory = history;
+                }
             } catch (e) {
-                this.pcardError = String(e.message || e);
+                if (open()) {
+                    this.pcardError = String(e.message || e);
+                }
             }
             this.finishLoading();
-            this.pcardLoading = false;
+            if (!this.pcard || open()) {
+                this.pcardLoading = false;
+            }
         },
 
         openPrinterCardById(id) {

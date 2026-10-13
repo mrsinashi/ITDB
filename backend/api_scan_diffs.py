@@ -839,7 +839,8 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
         check_field(item.field)
         by_computer.setdefault(item.computer_id, []).append(item)
 
-    for computer_id, items in by_computer.items():
+    # ПК блокируются по возрастанию id – два «Записать» с одними ПК не ждут друг друга вечно
+    for computer_id, items in sorted(by_computer.items()):
         computer = session.query(Computer).filter(Computer.id == computer_id).with_for_update().first()
 
         if computer is None or computer.archived:

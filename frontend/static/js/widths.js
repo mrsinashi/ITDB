@@ -40,10 +40,21 @@ export function syncProbeFont() {
     widthProbe.style.letterSpacing = style.letterSpacing;
 }
 
+// Замеры запоминаются (шрифт пробника, масштаб экрана, текст): автоширина меряет все строки
+// после каждого сохранения – на 600 ПК без запоминания 0,25 с (этап 52)
+const widthCache = new Map();
+
 export function measureTextWidth(text) {
     const probe = ensureWidthProbe();
-    probe.textContent = text || "";
-    return probe.getBoundingClientRect().width;
+    const s = probe.style;
+    const key = [s.fontWeight, s.fontSize, s.fontStyle, s.letterSpacing, s.fontFamily, window.devicePixelRatio, text || ""].join("|");
+    let width = widthCache.get(key);
+    if (width === undefined) {
+        probe.textContent = text || "";
+        width = probe.getBoundingClientRect().width;
+        widthCache.set(key, width);
+    }
+    return width;
 }
 
 export function cellOverhead() {
@@ -134,6 +145,12 @@ export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMa
         widths[col.field] = width;
     });
     return widths;
+}
+
+// Ширины те же (поле → ширина)
+export function sameWidths(a, b) {
+    const keys = Object.keys(b);
+    return keys.length === Object.keys(a).length && keys.every(function (k) { return a[k] === b[k]; });
 }
 
 // key – у таблицы принтеров свой (этап 44)

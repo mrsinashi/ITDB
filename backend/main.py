@@ -208,9 +208,21 @@ def health():
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / "static"
 
+
+class FreshStaticFiles(StaticFiles):
+    """Файлы интерфейса браузер не берёт из кеша без спроса (этап 51): каждый раз
+    спрашивает, не изменился ли файл (если нет – короткий ответ 304). Без этого после
+    обновления браузер мог часами брать старые JS / CSS вперемешку с новыми."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if STATIC_DIR.exists():
     app.mount(
         "/",
-        StaticFiles(directory=str(STATIC_DIR), html=True),
+        FreshStaticFiles(directory=str(STATIC_DIR), html=True),
         name="static",
     )

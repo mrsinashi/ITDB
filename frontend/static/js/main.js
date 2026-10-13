@@ -39,7 +39,8 @@
 //                        pop (всплывающие окошки у ссылки и блочка: место, Esc и клик мимо, перетаскивание)
 //   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   toolbar-fit.js     – панель под меню: левой части тесно – поиск сдвигается и сужается (v-tb-fit)
-//   components/        – tree-node, tree-form, style-controls, location-picker, count-select
+//   components/        – tree-node, tree-form, style-controls, location-picker, count-select,
+//                        table-row (строка главной таблицы)
 //
 // Шаблоны разметки – в index.html.
 
@@ -93,6 +94,7 @@ import styleControls from "./components/style-controls.js";
 import treeForm from "./components/tree-form.js";
 import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
+import tableRow from "./components/table-row.js";
 
 const app = Vue.createApp({
     mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker, cartridges, pop],
@@ -381,6 +383,7 @@ app.component("style-controls", styleControls);
 app.component("tree-form", treeForm);
 app.component("location-picker", locationPicker);
 app.component("count-select", countSelect);
+app.component("table-row", tableRow);
 app.directive("tb-fit", toolbarFit);
 
 app.mount("#app");

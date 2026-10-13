@@ -256,13 +256,19 @@ export default {
                 this.pcardEditKey = "web_auth";
             }
             this.$nextTick(() => {
-                const ref = this.$refs.webEditLogin;
-                const input = Array.isArray(ref) ? ref[0] : ref;
+                const input = this.webEditLoginInput();
                 if (input) {
                     input.focus({ preventScroll: true });
                     input.setSelectionRange(input.value.length, input.value.length);
                 }
             });
+        },
+
+        // Поле логина открытой правки: в карточке – ref, в ячейке – внутри строки таблицы
+        // (компонент table-row, этап 52: её ref корню не виден)
+        webEditLoginInput() {
+            const ref = this.$refs.webEditLogin;
+            return (Array.isArray(ref) ? ref[0] : ref) || document.querySelector(".data-table .secret-edit input");
         },
 
         closeWebEdit() {
@@ -324,8 +330,7 @@ export default {
                 if (!yes) {
                     ed.saving = false;
                     this.$nextTick(() => {
-                        const ref = this.$refs.webEditLogin;
-                        const input = Array.isArray(ref) ? ref[0] : ref;
+                        const input = this.webEditLoginInput();
                         if (input) {
                             input.focus();
                         }

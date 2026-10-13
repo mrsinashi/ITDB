@@ -29,7 +29,12 @@ def verify_password(password, password_hash):
 
 def create_session(session, user_id):
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=SESSION_DAYS)
+
+    # Истёкшие входы всех пользователей (этап 51): с такой кукой больше не приходят –
+    # без этого строка оставалась бы навсегда
+    session.query(UserSession).filter(UserSession.expires_at < now).delete(synchronize_session=False)
 
     session.add(
         UserSession(

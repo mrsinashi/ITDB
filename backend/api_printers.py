@@ -163,7 +163,7 @@ def same_group(session, location_id, kind, exclude_ids=(), lock=False):
         query = query.filter(Printer.id.notin_(list(exclude_ids)))
 
     if lock:
-        query = query.with_for_update(of=Printer)
+        query = query.order_by(Printer.id).with_for_update(of=Printer)
 
     return query.all()
 

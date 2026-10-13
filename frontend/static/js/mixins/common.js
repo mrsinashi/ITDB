@@ -188,17 +188,16 @@ export default {
         },
 
         // Зелёная вспышка после сохранения. Повторное сохранение той же
-        // ячейки во время вспышки перезапускает её с начала.
+        // ячейки во время вспышки перезапускает её с начала. savedFlash – по ключу, а не
+        // новым объектом: строка таблицы следит только за своими ключами (этап 52)
         flashCell(rowId, field) {
             const key = rowId + ":" + field;
             this._flashTimers = this._flashTimers || {};
             const drop = () => {
-                const next = Object.assign({}, this.savedFlash);
-                delete next[key];
-                this.savedFlash = next;
+                delete this.savedFlash[key];
             };
             const start = () => {
-                this.savedFlash = Object.assign({}, this.savedFlash, { [key]: true });
+                this.savedFlash[key] = true;
                 clearTimeout(this._flashTimers[key]);
                 this._flashTimers[key] = setTimeout(drop, 1500);
             };

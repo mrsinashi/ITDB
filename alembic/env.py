@@ -43,10 +43,14 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    # lock_timeout (этап 51): если таблицу держит работающая программа, миграция не ждёт
+    # вечно (а с ней – и все запросы к этой таблице), а через 10 с останавливается с ошибкой;
+    # все миграции идут одной транзакцией – база остаётся как была
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"options": "-c lock_timeout=10s"},
     )
 
     with connectable.connect() as connection:

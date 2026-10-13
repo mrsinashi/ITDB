@@ -501,23 +501,33 @@ export default {
 
         async pollScanRuns() {
             this.scanPollTimer = null;
-            const running = Object.values(this.scanRuns).filter(function (r) { return r.status === "running"; });
-            for (const old of running) {
-                try {
-                    const response = await apiFetch("/api/scan/runs/" + old.id);
-                    if (!response.ok) {
-                        continue;
-                    }
-                    const run = await response.json();
-                    this.scanRuns = Object.assign({}, this.scanRuns, { [run.source]: run });
-                    if (run.status !== "running") {
-                        this.onScanRunDone(run);
-                    }
-                } catch (e) {
-                    // сеть моргнула – спросим в следующий раз
-                }
+            // Один опрос за раз (этап 51): новый сбор, начатый, пока ждали ответа, заводит свой
+            // таймер – его проход ничего не делает, идущий спросит и про новый сбор
+            if (this._scanPolling) {
+                return;
             }
-            if (Object.values(this.scanRuns).some(function (r) { return r.status === "running"; })) {
+            this._scanPolling = true;
+            try {
+                const running = Object.values(this.scanRuns).filter(function (r) { return r.status === "running"; });
+                for (const old of running) {
+                    try {
+                        const response = await apiFetch("/api/scan/runs/" + old.id);
+                        if (!response.ok) {
+                            continue;
+                        }
+                        const run = await response.json();
+                        this.scanRuns = Object.assign({}, this.scanRuns, { [run.source]: run });
+                        if (run.status !== "running") {
+                            this.onScanRunDone(run);
+                        }
+                    } catch (e) {
+                        // сеть моргнула – спросим в следующий раз
+                    }
+                }
+            } finally {
+                this._scanPolling = false;
+            }
+            if (!this.scanPollTimer && Object.values(this.scanRuns).some(function (r) { return r.status === "running"; })) {
                 this.scanPollTimer = setTimeout(() => this.pollScanRuns(), POLL_MS);
             }
         },

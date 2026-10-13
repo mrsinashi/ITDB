@@ -383,7 +383,7 @@ def shift_seats(session, batch, location_id, seat_no, exclude_ids=()):
 
     by_seat = defaultdict(list)
 
-    for computer in query.with_for_update().all():
+    for computer in query.order_by(Computer.id).with_for_update().all():
         by_seat[computer.seat_no].append(computer)
 
     number = seat_no

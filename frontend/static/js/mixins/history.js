@@ -257,8 +257,9 @@ export default {
                 if (index >= 0) {
                     const updatedRow = Object.assign({}, this.rows[index], updated);
                     this.rows[index] = updatedRow;
-                    refreshDuplicates(this.rows, this.builtinColumns);
-                this.dupVersion++;
+                    if (refreshDuplicates(this.rows, this.builtinColumns)) {
+                        this.dupVersion++;
+                    }
                     this.recalcWidths();
                     this.card = updatedRow;
                     this.toast("Имя сохранено", "success");

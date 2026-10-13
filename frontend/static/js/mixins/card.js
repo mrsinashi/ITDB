@@ -327,17 +327,29 @@ export default {
             this.cardPeople = [];
             this.cardVacuum = [];
             this.cardHistory = [];
+            // Пока ждали ответа, карточку закрыли или открыли заново – ответ уже не для неё (этап 51)
+            const seq = this._cardSeq = (this._cardSeq || 0) + 1;
+            const open = () => this._cardSeq === seq && !!this.card && this.card.id === row.id;
             try {
                 const response = await apiFetch("/api/computers/" + row.id);
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
                 const data = await response.json();
-                this.cardPeople = data.people || [];
-                this.cardVacuum = data.vacuum || [];
-                this.cardHistory = data.history || [];
+                if (open()) {
+                    this.cardPeople = data.people || [];
+                    this.cardVacuum = data.vacuum || [];
+                    this.cardHistory = data.history || [];
+                }
             } catch (e) {
-                this.cardError = String(e);
+                if (open()) {
+                    this.cardError = String(e.message || e);
+                }
             }
             this.finishLoading();
-            this.cardLoading = false;
+            if (!this.card || open()) {
+                this.cardLoading = false;
+            }
         },
     }
 };

@@ -12,7 +12,9 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("Не задан DATABASE_URL: добавь его в файл .env в корне проекта (см. README).")
 
-engine = create_engine(DATABASE_URL)
+# pool_pre_ping: соединение из пула проверяется перед выдачей – после перезапуска
+# PostgreSQL первый запрос не падает с ошибкой на оборванном соединении
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(
     bind=engine,
