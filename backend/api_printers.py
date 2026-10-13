@@ -25,7 +25,7 @@ from api_columns import PRINTER_BULK_EXCLUDED, PRINTER_EDITABLE_KEYS
 from api_computer_actions import parse_ids
 from api_computers import (
     LOCATION_PART_FIELDS, ChangeBatch, get_active_location, load_locations, location_parts, location_path,
-    normalize_ip, normalize_multiline, normalize_single,
+    normalize_ip, normalize_mac, normalize_multiline, normalize_single,
 )
 from auth import get_current_user, require_editor, verify_password
 from db import get_db
@@ -230,6 +230,7 @@ def printer_row(printer, parts, model, links):
             "computers": links_text(links, computer_title),
             "computer_refs": links_refs(links, computer_title),
             "ip": printer.ip,
+            "mac": printer.mac,
             "kind": KINDS.get(model.kind) if model else None,
             "kind_key": model.kind if model else None,
             "maker": model.maker if model else None,
@@ -407,6 +408,8 @@ def apply_printer_fields(session, printer, payload, batch):
             number_given = new_value != printer.number
         elif field == "ip":
             new_value = normalize_ip(value)
+        elif field == "mac":
+            new_value = normalize_mac(value)
         elif field == "note":
             new_value = normalize_multiline(value)
         elif field == "web_url":

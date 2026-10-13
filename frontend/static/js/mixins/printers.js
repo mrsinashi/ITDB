@@ -525,6 +525,7 @@ export default {
             add("Печать", [row.color, row.duplex ? "дуплекс " + row.duplex : ""].filter(Boolean).join(", "));
             add("Где", [row.department, row.room].filter(Boolean).join(", ") + (row.number ? ", № " + row.number : ""));
             add("IP", (row.ip || "").split("\n").join(", "));
+            add("MAC", (row.mac || "").split("\n").join(", "));
             add("Компьютеры", (row.computers || "").split("\n").join(", "));
             add("Примечание", row.note);
             return list;

@@ -158,8 +158,8 @@ PRINTER_COLUMNS = [
     col("room_name", "Кабинет", kind="location", export_width=18),
     col("number", "№", "№ в кабинете", kind="seat", center=True, values="no", bulk=False, export_width=6, card_always=True),
     col("name", "Имя", link=True, sticky=True, values="no", card_copy=True, dup=True, bulk=False, export_width=22),
-    col("computers", "Компьютеры", kind="computers", multiline=True, values="no", bulk=False, export_width=24, card_always=True),
     col("ip", "IP", "IP адрес", kind="ip", sticky=True, multiline=True, values="subnet", card_copy=True, dup=True, bulk=False, export_width=16, card_always=True),
+    col("computers", "Компьютеры", kind="computers", multiline=True, values="no", bulk=False, export_width=24, card_always=True),
     col("kind", "Тип", kind="pattr", center=True, export_width=9, card_always=True),
     col("maker", "Производитель", kind="pattr", center=True, export_width=14, card_always=True),
     col("model", "Модель", kind="pmodel", center=True, card_copy=True, suggest=True, export_width=20, card_always=True),
@@ -167,6 +167,7 @@ PRINTER_COLUMNS = [
     col("duplex", "Дуплекс", kind="pattr", center=True, export_width=9),
     col("web", "Web", "Веб-страница", kind="flag", center=True, suggest=True, export_width=6),
     col("web_auth", "Доступ", "Доступ (логин и пароль Web)", kind="secret", center=True, values="no", bulk=False, export_width=8),
+    col("mac", "MAC", "MAC адрес", kind="mac", multiline=True, values="no", card_copy=True, dup=True, bulk=False, export_width=20),
     col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=16),
     col("note", "Примечание", kind="multiline", multiline=True, note=True, max_width=200, values="no", export_width=30, card_always=True),
@@ -178,7 +179,7 @@ PRINTER_COLUMNS_BY_KEY = {column.key: column for column in PRINTER_COLUMNS}
 # своими строками (в таблице ссылки нет)
 PRINTER_CARD_GROUPS = [
     ("Размещение", ["building", "department", "floor", "room_code", "number"]),
-    ("Сеть", ["ip", "web", "web_url", "web_auth", "computers"]),
+    ("Сеть", ["ip", "mac", "web", "web_url", "web_auth", "computers"]),
     ("Модель", ["kind", "maker", "model", "color", "duplex"]),
     ("Учёт", ["inv_no", "serial"]),
     ("Прочее", ["note"]),

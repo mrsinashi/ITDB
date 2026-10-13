@@ -1684,7 +1684,9 @@ export default {
                 let near = null;
                 let nearDist = Infinity;
                 parts.forEach(function (el) {
-                    const rect = el.getBoundingClientRect();
+                    // Ссылка на ПК / принтер – по самой ссылке, без места под значок таблицы:
+                    // так же, как подсветка под курсором (этап 46)
+                    const rect = (el.querySelector("a.obj-link") || el).getBoundingClientRect();
                     const dist = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
                     if (el.textContent.trim() && dist < nearDist) {
                         nearDist = dist;

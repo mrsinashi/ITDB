@@ -269,5 +269,5 @@ def test_columns_info(reader):
     # «Принтеры» у ПК – после VNC
     assert keys[keys.index("vnc") + 1] == "printers"
     printer_keys = [c["key"] for c in info["printer_columns"]]
-    assert printer_keys[:9] == ["building", "department", "floor", "room_code", "room_name", "number", "name", "computers", "ip"]
-    assert {"kind", "maker", "model", "color", "duplex", "web", "web_auth", "inv_no", "serial", "note"} <= set(printer_keys)
+    assert printer_keys[:9] == ["building", "department", "floor", "room_code", "room_name", "number", "name", "ip", "computers"]
+    assert {"kind", "maker", "model", "color", "duplex", "web", "web_auth", "mac", "inv_no", "serial", "note"} <= set(printer_keys)

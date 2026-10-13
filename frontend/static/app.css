@@ -5394,7 +5394,8 @@ html.no-radius .sm-chip .su-n,
 html.no-radius .card-hostname .card-archived,
 html.no-radius .top-menu .brand-label,
 html.no-radius .nr-table a.nr-bad,
-html.no-radius .copy-hint {
+html.no-radius .copy-hint,
+html.no-radius a.obj-link:hover::after {
     border-radius: var(--radius) !important;
 }
 html.no-radius .st-title mark,
@@ -6355,8 +6356,8 @@ html.no-radius .vw-col input {
    Этап 44: принтеры – ссылки ПК ↔ принтер, окошко принтера, карточка принтера,
    строка нового принтера, Справочники → «Модели принтеров»
    ============================================================ */
-/* Принтер у ПК, ПК у принтера – ссылкой, как номер записи GLPI; справа при наведении на
-   строку – значок таблицы (показать в другой таблице), в манере значка копирования */
+/* Принтер у ПК, ПК у принтера – ссылкой; справа при наведении на строку – значок таблицы
+   (показать в другой таблице), в манере значка копирования */
 .obj-line {
     display: block;
     width: fit-content;
@@ -6368,17 +6369,26 @@ html.no-radius .vw-col input {
     margin-right: auto;
 }
 a.obj-link {
+    position: relative;
     color: inherit;
     text-decoration: none;
     cursor: pointer;
 }
-a.obj-link:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
+/* Под курсором – затемнено, как значение при зажатом Alt (этап 46, вместо подчёркивания):
+   слой поверх текста, по бокам на 3px, сверху и снизу на 1px шире (как .copy-hint) */
+a.obj-link:hover::after {
+    content: "";
+    position: absolute;
+    inset: -1px -3px;
+    border-radius: 3px;
+    background: var(--copy-hint-bg);
+    pointer-events: none;
 }
 .data-table.alt-copy td a.obj-link {
     cursor: default;
-    text-decoration: none;
+}
+.data-table.alt-copy td a.obj-link:hover::after {
+    display: none;
 }
 .obj-tbl {
     display: inline-flex;
@@ -6406,7 +6416,16 @@ a.obj-link:hover {
     padding: 1px 0;
 }
 
-/* Окошко принтера – как карточка у блочка сканера */
+/* Окошко принтера – как карточка у блочка сканера; строки – табличкой с простой серой
+   сеткой, как сравнение у номера записи GLPI / GSIT (этап 46) */
+.scan-pop.pr-pop .sp-values {
+    width: calc(100% - 20px);
+    margin: 8px 10px;
+}
+.scan-pop.pr-pop .sp-values td {
+    padding: 2px 6px;
+    border: 1px solid var(--gray-line);
+}
 .scan-pop.pr-pop .sp-values td.sp-v {
     overflow-wrap: anywhere;
 }

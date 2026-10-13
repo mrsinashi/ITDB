@@ -25,7 +25,7 @@ const ENTITY_FILTERS = {
     scan_schedule: "Сканер: расписание",
     scan_marks: "Пометки сканера",
     scan_antivirus: "Антивирусы (вид столбца)",
-    table_marks: "Выделения в Таблице",
+    table_marks: "Выделения в таблице",
     app_settings: "Настройки",
     naming: "Имена: своё имя",
     printer_models: "Модели принтеров"

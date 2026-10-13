@@ -11,10 +11,11 @@
     <div id="app" v-cloak>
         <nav class="top-menu" v-if="user">
             <span class="brand">ITDB<span v-if="user.label" class="brand-label" title="ITDB_LABEL из .env">{{ user.label }}</span></span>
-            <a href="#table" @click="navClick($event, () => setView('table'))" :class="{ active: view === 'table' }">Таблица</a>
-            <a href="#tree" @click="navClick($event, () => setView('tree'))" :class="{ active: view === 'tree' }">Дерево</a>
-            <a v-if="canEdit" href="#vacuum" @click="navClick($event, () => setView('vacuum'))" :class="{ active: view === 'vacuum' }">Vacuum</a>
+            <!-- Вкладки (этап 46): «Компьютеры» – бывшая «Таблица», «Структура» – бывшее «Дерево» -->
+            <a href="#table" @click="navClick($event, () => setView('table'))" :class="{ active: view === 'table' }">Компьютеры</a>
             <a href="#printers" @click="navClick($event, () => setView('printers'))" :class="{ active: view === 'printers' }">Принтеры</a>
+            <a href="#tree" @click="navClick($event, () => setView('tree'))" :class="{ active: view === 'tree' }">Структура</a>
+            <a v-if="canEdit" href="#vacuum" @click="navClick($event, () => setView('vacuum'))" :class="{ active: view === 'vacuum' }">Vacuum</a>
             <a v-if="canEdit" href="#scan" @click="navClick($event, () => setView('scan'))" :class="{ active: view === 'scan' }">Сканер</a>
             <span class="menu-right">
                 <!-- Значки справа: Справочники, История, Пользователи, Настройки -->
@@ -425,7 +426,7 @@
                                 <span v-else-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avCellStyle(a) || {}).backgroundColor }" :style="avCellStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
                                 <!-- Значения по строкам: повтор – блочком, логина нет в Jabber – красным, номер GLPI / GSIT – ссылкой -->
                                 <!-- Принтеры у ПК, ПК у принтера (этап 44): ссылки; при наведении – значок «показать в таблице» -->
-                                <span v-else-if="col.links && cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><span v-for="(p, pi) in cellParts(row, col)" :key="pi" class="cell-line obj-line"><a class="obj-link" :href="p.href" draggable="false" :title="p.title" @click.prevent="onObjLinkClick($event, p.obj)">{{ p.text }}</a><span class="obj-tbl" :title="p.obj.kind === 'pc' ? 'Показать в Таблице' : 'Показать в Принтерах'" @mousedown.stop @click.stop="showObjInTable(p.obj)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
+                                <span v-else-if="col.links && cellParts(row, col)" class="cell-lines" :style="cellSpanStyle(row, col)"><span v-for="(p, pi) in cellParts(row, col)" :key="pi" class="cell-line obj-line"><a class="obj-link" :href="p.href" draggable="false" :title="p.title" @click.prevent="onObjLinkClick($event, p.obj)">{{ p.text }}</a><span class="obj-tbl" :title="p.obj.kind === 'pc' ? 'Показать в Компьютерах' : 'Показать в Принтерах'" @mousedown.stop @click.stop="showObjInTable(p.obj)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
                                 <!-- «Доступ» (этап 45): заданные логин и пароль – точками; показанные по паролю – строками, ✎ – изменить -->
                                 <span v-else-if="col.secret && webShownFor(row) && !isEditing(row, col)" class="secret-shown" :title="webAccessTitle(row)"><span class="cell-lines"><span class="cell-line" :class="{ 'cl-none': !webShown.login }">{{ webShown.login || "без логина" }}</span><span class="cell-line" :class="{ 'cl-none': !webShown.password }">{{ webShown.password || "без пароля" }}</span></span><span v-if="canEdit" class="secret-pen" title="Изменить" @mousedown.stop @dblclick.stop @click.stop="startWebEdit(row, 'cell')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span></span>
                                 <span v-else-if="col.secret && row.web_auth && !isEditing(row, col)" class="secret-dots" :title="webAccessTitle(row)">{{ secretDots }}</span>
@@ -730,7 +731,7 @@
                 <!-- Выделения значений в Таблице (этап 26к): повтор, имя на ПК другое, логины VACUUM, срок -->
                 <div class="fd-panel scan-marks-panel table-marks-panel">
                     <div class="fd-head">
-                        <span class="fd-title">Выделения в Таблице</span>
+                        <span class="fd-title">Выделения в таблице</span>
                     </div>
                     <div class="scan-marks-body">
                         <table class="scan-marks-table">
@@ -750,7 +751,7 @@
                 <div v-if="scanMarks.length" class="fd-panel scan-marks-panel">
                     <div class="fd-head">
                         <span class="fd-title">Значения сканера</span>
-                        <span class="fd-sub">блочки в ячейках Таблицы</span>
+                        <span class="fd-sub">блочки в ячейках таблицы</span>
                     </div>
                     <div class="scan-marks-body">
                         <table class="scan-marks-table">
@@ -1345,7 +1346,7 @@
                                 <!-- Jabber: кружки «в сети» у VACUUM в Таблице – быстрая проверка (этап 41) -->
                                 <tr v-if="s.form === 'jabber'">
                                     <td class="sf-label">В сети</td>
-                                    <td><label class="sf-check" title="Кружки у VACUUM в Таблице: кто в сети сейчас"><input type="checkbox" v-model="scanForms[s.kind].online_watch"> проверять раз в
+                                    <td><label class="sf-check" title="Кружки у VACUUM в таблице: кто в сети сейчас"><input type="checkbox" v-model="scanForms[s.kind].online_watch"> проверять раз в
                                         <input class="input sf-days" type="number" min="1" max="60" v-model.number="scanForms[s.kind].online_minutes" :disabled="!scanForms[s.kind].online_watch"> мин.</label></td>
                                 </tr>
                                 <tr v-if="s.fresh_days !== null">
@@ -2062,7 +2063,7 @@
                                     <span v-else-if="r.auth && r.value" class="secret-dots">{{ secretDots }}</span>
                                     <span v-else-if="r.empty" class="ct-empty">–</span>
                                     <span v-else-if="r.link" class="copy-line"><a class="pr-web" :href="r.value" target="_blank" rel="noopener" :title="r.own ? 'Открыть' : 'По IP – открыть'">{{ r.value }}</a><span class="copy-val pc-copy" title="Скопировать" @click="copyText(r.value)"><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
-                                    <span v-else-if="r.links" class="pc-links"><span v-for="ref in (pcard.computer_refs || [])" :key="ref.id" class="obj-line"><a class="obj-link" :href="pageHref('table', { pc: ref.id })" draggable="false" title="Карточка ПК" @click.prevent="closePrinterCard(); openCardById(ref.id)">{{ ref.title }}{{ ref.usb ? " [usb]" : "" }}</a><span class="obj-tbl" title="Показать в Таблице" @click.stop="showObjInTable({ kind: 'pc', id: ref.id })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
+                                    <span v-else-if="r.links" class="pc-links"><span v-for="ref in (pcard.computer_refs || [])" :key="ref.id" class="obj-line"><a class="obj-link" :href="pageHref('table', { pc: ref.id })" draggable="false" title="Карточка ПК" @click.prevent="closePrinterCard(); openCardById(ref.id)">{{ ref.title }}{{ ref.usb ? " [usb]" : "" }}</a><span class="obj-tbl" title="Показать в Компьютерах" @click.stop="showObjInTable({ kind: 'pc', id: ref.id })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
                                     <template v-else-if="r.copy">
                                         <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)">{{ line }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span></span>
                                     </template>

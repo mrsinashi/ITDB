@@ -188,6 +188,7 @@ class Printer(Base):
     number = Column(Integer, nullable=True)
     name = Column(Text, nullable=True)
     ip = Column(Text, nullable=True)
+    mac = Column(Text, nullable=True)  # этап 46: строками, прописными – как у ПК
     model_id = Column(Integer, ForeignKey("printer_models.id"), nullable=True)
 
     web = Column(Boolean, nullable=True)
