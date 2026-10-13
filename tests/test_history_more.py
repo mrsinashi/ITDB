@@ -1,7 +1,7 @@
 """История справочников, польз. полей, оформления столбцов, пользователей (этап 19б)."""
 import itertools
 
-from conftest import https_client, ok
+from conftest import choice, https_client, ok
 
 _numbers = itertools.count(1)
 
@@ -15,10 +15,6 @@ def value_of(client, entity, entity_id, field, entity_key=None):
     if entity_key:
         params["entity_key"] = entity_key
     return ok(client.get("/api/history/value", params=params))
-
-
-def choice(client, choice_id):
-    return next(c for c in ok(client.get("/api/choices"))["items"] if c["id"] == choice_id)
 
 
 def test_choice_history_and_undo(editor):

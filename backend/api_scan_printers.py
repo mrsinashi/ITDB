@@ -17,7 +17,7 @@ from pydantic import BaseModel
 import scan_collect
 from api_computers import ChangeBatch, save_changes
 from api_printers import apply_printer_fields, lock_printer
-from api_scan_diffs import DiffSource, host_observations
+from api_scan_diffs import DiffSource, drop_rejects, host_observations, save_rejects
 from auth import get_current_user, require_editor
 from db import get_db
 from models import Printer, ScanReject
@@ -160,26 +160,7 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
 @router.post("/reject")
 def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
     """Не предлагать этот MAC этому принтеру, пока сеть видит тот же."""
-    added = 0
-
-    for item in payload.items:
-        check_field(item.field)
-        key = key_of(item.raw)
-        exists = (
-            session.query(ScanReject)
-            .filter(ScanReject.printer_id == item.printer_id, ScanReject.field == item.field, ScanReject.value_key == key)
-            .first()
-        )
-
-        if exists or session.get(Printer, item.printer_id) is None:
-            continue
-
-        session.add(ScanReject(
-            printer_id=item.printer_id, field=item.field, value=item.raw, value_key=key, user_name=me["login"],
-        ))
-        session.flush()
-        added += 1
-
+    added = save_rejects(session, Printer, "printer_id", payload.items, check_field, me["login"])
     session.commit()
     return {"rejected": added}
 
@@ -187,17 +168,6 @@ def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db
 @router.post("/unreject")
 def unreject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
     """Вернуть отклонённое: снова предлагать."""
-    removed = 0
-
-    for item in payload.items:
-        removed += (
-            session.query(ScanReject)
-            .filter(
-                ScanReject.printer_id == item.printer_id, ScanReject.field == item.field,
-                ScanReject.value_key == key_of(item.raw),
-            )
-            .delete()
-        )
-
+    removed = drop_rejects(session, "printer_id", payload.items)
     session.commit()
     return {"returned": removed}

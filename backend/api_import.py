@@ -310,71 +310,34 @@ def pack_duplicates(counter):
     return result
 
 
-@router.post("/preview")
-async def preview(file: UploadFile = File(...)):
-    name = (file.filename or "").lower()
+# Поля строки файла, которые импорт кладёт в польз. поля ПК: ключ в extra → поле строки
+EXTRA_FIELDS = (("GSIT", "gsit"), ("Сост.", "state"), ("Метка", "label"))
+# Справочники из файла (поле строки = поле ПК); диски – отдельно (их в ячейке несколько)
+CHOICE_FIELDS = ("os", "type", "model", "cpu", "gpu")
 
-    if not name.endswith((".xlsx", ".xlsm")):
+
+def check_file_name(file):
+    if not (file.filename or "").lower().endswith((".xlsx", ".xlsm")):
         raise HTTPException(
             status_code=400,
             detail="Нужен файл .xlsx или .xlsm. Если файл .xls – пересохрани его в .xlsx через Excel.",
         )
 
-    data = await file.read()
 
+def open_workbook(data):
     try:
-        wb = load_workbook(BytesIO(data), read_only=True, data_only=True)
+        return load_workbook(BytesIO(data), read_only=True, data_only=True)
     except Exception as e:
         raise HTTPException(
             status_code=400,
             detail=f"Не удалось открыть файл: {e}",
         )
 
-    sheets = []
 
-    for ws in wb.worksheets:
-        rows = []
-
-        for i, row in enumerate(ws.iter_rows(values_only=True)):
-            if i >= 20:
-                break
-
-            rows.append([cell_to_text(v) for v in row])
-
-        sheets.append(
-            {
-                "name": ws.title,
-                "rows": rows,
-            }
-        )
-
-    wb.close()
-
-    return {
-        "filename": file.filename,
-        "sheets": sheets,
-    }
-
-
-@router.post("/analyze")
-async def analyze(file: UploadFile = File(...)):
-    name = (file.filename or "").lower()
-
-    if not name.endswith((".xlsx", ".xlsm")):
-        raise HTTPException(
-            status_code=400,
-            detail="Нужен файл .xlsx или .xlsm. Если файл .xls – пересохрани его в .xlsx через Excel.",
-        )
-
-    data = await file.read()
-
-    try:
-        wb = load_workbook(BytesIO(data), read_only=True, data_only=True)
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Не удалось открыть файл: {e}",
-        )
+def read_sheet(data):
+    """Лист с данными (list, иначе первый не «@») → (строки, номер строки заголовков,
+    {номер столбца: поле}, неизвестные столбцы, название листа)."""
+    wb = open_workbook(data)
 
     ws = None
 
@@ -425,87 +388,130 @@ async def analyze(file: UploadFile = File(...)):
         else:
             col_map[index] = mapped
 
-    anomalies = []
+    return rows, header_index, col_map, unknown_columns, sheet_title
 
-    total_rows = 0
-    skipped_empty_rows = 0
 
-    dup_ip = defaultdict(list)
-    dup_mac = defaultdict(list)
-    dup_hostname = defaultdict(list)
-    dup_inv = defaultdict(list)
-    dup_vacuum = defaultdict(list)
-
-    locations = {}
-    users = set()
-    vacuum_logins = set()
-
-    choices = {
-        "os": set(),
-        "type": set(),
-        "model": set(),
-        "cpu": set(),
-        "gpu": set(),
-        "drive": set(),
-    }
-
-    extra_fields = {
-        "GSIT": set(),
-        "Сост.": set(),
-        "Метка": set(),
-    }
-
-    printer_values = set()
-    pr_values = set()
-
-    def add_anomaly(row_label, field, value, message):
-        anomalies.append(
-            {
-                "row": row_label,
-                "field": field,
-                "value": value,
-                "message": message,
-            }
-        )
-
+def sheet_records(rows, header_index, col_map):
+    """Строки данных: (номер строки в Excel, {поле: значение}); у строки без единого
+    важного поля вместо словаря – None. Совсем пустые строки пропускаются."""
     for data_index, row in enumerate(rows[header_index + 1 :]):
         if all(v is None for v in row):
             continue
 
-        rec = {}
-
-        for index, key in col_map.items():
-            rec[key] = row[index] if index < len(row) else None
+        rec = {key: row[index] if index < len(row) else None for index, key in col_map.items()}
+        excel_row = header_index + data_index + 2
 
         if all(cell_to_text(rec.get(field)) is None for field in IMPORTANT_FIELDS):
-            skipped_empty_rows += 1
-            continue
-
-        total_rows += 1
-
-        excel_row = header_index + data_index + 2
-        row_num_text = cell_to_text(rec.get("row_num"))
-
-        if row_num_text:
-            row_label = f"строка {excel_row}, #{row_num_text}"
+            yield excel_row, None
         else:
-            row_label = f"строка {excel_row}"
+            yield excel_row, rec
 
-        address = clean_text(rec.get("address"))
-        department = clean_text(rec.get("department"))
 
-        floor_raw = clean_text(rec.get("floor"))
-        floor = None
+def row_label_of(rec, excel_row):
+    """«строка 12, #10» – как строку называть в замечаниях."""
+    row_num_text = cell_to_text(rec.get("row_num"))
 
-        if floor_raw:
-            floor_int, floor_ok = parse_int(floor_raw)
-            if floor_ok and floor_int is not None:
-                floor = str(floor_int)
-            else:
-                floor = floor_raw
+    if row_num_text:
+        return f"строка {excel_row}, #{row_num_text}"
 
-        room_code = clean_text(rec.get("room_code"))
-        room_name = clean_text(rec.get("room_name"))
+    return f"строка {excel_row}"
+
+
+def place_of(rec):
+    """Расположение из строки: (адрес, отделение, этаж, код кабинета, название кабинета);
+    этаж-число – без дробной части."""
+    floor_raw = clean_text(rec.get("floor"))
+    floor = None
+
+    if floor_raw:
+        floor_int, floor_ok = parse_int(floor_raw)
+
+        if floor_ok and floor_int is not None:
+            floor = str(floor_int)
+        else:
+            floor = floor_raw
+
+    return (
+        clean_text(rec.get("address")),
+        clean_text(rec.get("department")),
+        floor,
+        clean_text(rec.get("room_code")),
+        clean_text(rec.get("room_name")),
+    )
+
+
+class Anomalies:
+    """Замечания к строкам файла: считаются все, хранятся первые limit (None – все)."""
+
+    def __init__(self, limit=None):
+        self.items = []
+        self.count = 0
+        self.limit = limit
+
+    def add(self, row_label, field, value, message):
+        self.count += 1
+
+        if self.limit is None or len(self.items) < self.limit:
+            self.items.append(
+                {
+                    "row": row_label,
+                    "field": field,
+                    "value": value,
+                    "message": message,
+                }
+            )
+
+
+@router.post("/preview")
+async def preview(file: UploadFile = File(...)):
+    check_file_name(file)
+    wb = open_workbook(await file.read())
+
+    sheets = []
+
+    for ws in wb.worksheets:
+        rows = []
+
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            if i >= 20:
+                break
+
+            rows.append([cell_to_text(v) for v in row])
+
+        sheets.append(
+            {
+                "name": ws.title,
+                "rows": rows,
+            }
+        )
+
+    wb.close()
+
+    return {
+        "filename": file.filename,
+        "sheets": sheets,
+    }
+
+
+class Analysis:
+    """Что импорт сделает с файлом (analyze): копится по строкам (add), итог – report."""
+
+    def __init__(self):
+        self.anomalies = Anomalies()
+        self.total_rows = 0
+        self.skipped_empty_rows = 0
+        self.duplicates = {key: defaultdict(list) for key in ("ip", "mac", "hostname", "inv_no", "vacuum")}
+        self.locations = {}
+        self.users = set()
+        self.vacuum_logins = set()
+        self.choices = {field: set() for field in CHOICE_FIELDS + ("drive",)}
+        self.extra_fields = {key: set() for key, _ in EXTRA_FIELDS}
+        self.printer_values = set()
+        self.pr_values = set()
+
+    def add(self, rec, row_label):
+        add_anomaly = self.anomalies.add
+        address, department, floor, room_code, room_name = place_of(rec)
 
         if not address:
             add_anomaly(row_label, "Адрес", address, "Пустой адрес")
@@ -522,13 +528,13 @@ async def analyze(file: UploadFile = File(...)):
 
         if path_parts:
             path = " / ".join(path_parts)
-            locations[path] = locations.get(path, 0) + 1
+            self.locations[path] = self.locations.get(path, 0) + 1
 
         person = clean_text(rec.get("person"))
         if person:
-            users.add(person)
+            self.users.add(person)
 
-        seat_no, seat_ok = parse_int(rec.get("seat_no"))
+        _, seat_ok = parse_int(rec.get("seat_no"))
         if not seat_ok:
             add_anomaly(
                 row_label,
@@ -540,34 +546,26 @@ async def analyze(file: UploadFile = File(...)):
         ips, ip_issues = parse_ips(rec.get("ip"))
 
         for ip in ips:
-            dup_ip[ip].append(row_label)
+            self.duplicates["ip"][ip].append(row_label)
 
         for bad_ip, message in ip_issues:
             add_anomaly(row_label, "IP", bad_ip, message)
 
         hostname = clean_text(rec.get("hostname"))
         if hostname:
-            dup_hostname[hostname.lower()].append(row_label)
+            self.duplicates["hostname"][hostname.lower()].append(row_label)
 
         for login in split_vacuum_logins(rec.get("vacuum")):
-            vacuum_logins.add(login)
-            dup_vacuum[login].append(row_label)
+            self.vacuum_logins.add(login)
+            self.duplicates["vacuum"][login].append(row_label)
 
-        for source_key, target_key in (
-            ("os", "os"),
-            ("type", "type"),
-            ("model", "model"),
-            ("cpu", "cpu"),
-            ("gpu", "gpu"),
-        ):
-            value = clean_text(rec.get(source_key))
+        for field in CHOICE_FIELDS:
+            value = clean_text(rec.get(field))
             if value:
-                choices[target_key].add(value)
+                self.choices[field].add(value)
 
         drive_values, drive_issues = parse_drive_text(rec.get("drive"))
-
-        for drive_value in drive_values:
-            choices["drive"].add(drive_value)
+        self.choices["drive"].update(drive_values)
 
         for message in drive_issues:
             add_anomaly(
@@ -580,30 +578,23 @@ async def analyze(file: UploadFile = File(...)):
         macs, mac_issues = parse_macs(rec.get("mac"))
 
         for mac in macs:
-            dup_mac[mac].append(row_label)
+            self.duplicates["mac"][mac].append(row_label)
 
         for bad_mac, message in mac_issues:
             add_anomaly(row_label, "MAC", bad_mac, message)
 
         inv_no = clean_text(rec.get("inv_no"))
         if inv_no:
-            dup_inv[inv_no].append(row_label)
+            self.duplicates["inv_no"][inv_no].append(row_label)
 
-        gsit = clean_text(rec.get("gsit"))
-        if gsit:
-            extra_fields["GSIT"].add(gsit)
-
-        state = clean_text(rec.get("state"))
-        if state:
-            extra_fields["Сост."].add(state)
-
-        label = clean_text(rec.get("label"))
-        if label:
-            extra_fields["Метка"].add(label)
+        for key, field in EXTRA_FIELDS:
+            value = clean_text(rec.get(field))
+            if value:
+                self.extra_fields[key].add(value)
 
         printer = clean_text(rec.get("printer_skip"))
         if printer:
-            printer_values.add(printer)
+            self.printer_values.add(printer)
             add_anomaly(
                 row_label,
                 "Принтер",
@@ -613,50 +604,62 @@ async def analyze(file: UploadFile = File(...)):
 
         pr = clean_text(rec.get("pr_skip"))
         if pr:
-            pr_values.add(pr)
+            self.pr_values.add(pr)
 
-    duplicates = {
-        "ip": pack_duplicates(dup_ip),
-        "mac": pack_duplicates(dup_mac),
-        "hostname": pack_duplicates(dup_hostname),
-        "inv_no": pack_duplicates(dup_inv),
-        "vacuum": pack_duplicates(dup_vacuum),
-    }
+    def report(self):
+        locations_preview = [
+            {"path": path, "count": count}
+            for path, count in sorted(self.locations.items(), key=lambda item: item[0].lower())[:200]
+        ]
 
-    locations_preview = [
-        {"path": path, "count": count}
-        for path, count in sorted(locations.items(), key=lambda item: item[0].lower())[:200]
-    ]
+        return {
+            "summary": {
+                "users": len(self.users),
+                "vacuum_logins": len(self.vacuum_logins),
+                "locations": len(self.locations),
+            },
+            "locations_preview": locations_preview,
+            "users_preview": sorted(self.users, key=str.lower)[:200],
+            "vacuum_preview": sorted(self.vacuum_logins, key=str.lower)[:200],
+            "choices": {
+                key: sorted(values, key=str.lower)
+                for key, values in self.choices.items()
+            },
+            "extra_fields": {
+                key: sorted(values, key=str.lower)
+                for key, values in self.extra_fields.items()
+            },
+            "skipped_values": {
+                "пр": sorted(self.pr_values, key=str.lower),
+                "принтер": sorted(self.printer_values, key=str.lower),
+            },
+            "duplicates": {key: pack_duplicates(rows) for key, rows in self.duplicates.items()},
+            "anomalies_count": self.anomalies.count,
+            "anomalies": self.anomalies.items[:200],
+        }
+
+
+@router.post("/analyze")
+async def analyze(file: UploadFile = File(...)):
+    check_file_name(file)
+    rows, header_index, col_map, unknown_columns, sheet_title = read_sheet(await file.read())
+    analysis = Analysis()
+
+    for excel_row, rec in sheet_records(rows, header_index, col_map):
+        if rec is None:
+            analysis.skipped_empty_rows += 1
+            continue
+
+        analysis.total_rows += 1
+        analysis.add(rec, row_label_of(rec, excel_row))
 
     return {
         "filename": file.filename,
         "sheet": sheet_title,
         "header_row": header_index + 1,
-        "headers": [cell_to_text(v) for v in header_row],
-        "total_rows": total_rows,
-        "skipped_empty_rows": skipped_empty_rows,
+        "headers": [cell_to_text(v) for v in rows[header_index]],
+        "total_rows": analysis.total_rows,
+        "skipped_empty_rows": analysis.skipped_empty_rows,
         "unknown_columns": unknown_columns,
-        "summary": {
-            "users": len(users),
-            "vacuum_logins": len(vacuum_logins),
-            "locations": len(locations),
-        },
-        "locations_preview": locations_preview,
-        "users_preview": sorted(users, key=str.lower)[:200],
-        "vacuum_preview": sorted(vacuum_logins, key=str.lower)[:200],
-        "choices": {
-            key: sorted(values, key=str.lower)
-            for key, values in choices.items()
-        },
-        "extra_fields": {
-            key: sorted(values, key=str.lower)
-            for key, values in extra_fields.items()
-        },
-        "skipped_values": {
-            "пр": sorted(pr_values, key=str.lower),
-            "принтер": sorted(printer_values, key=str.lower),
-        },
-        "duplicates": duplicates,
-        "anomalies_count": len(anomalies),
-        "anomalies": anomalies[:200],
+        **analysis.report(),
     }

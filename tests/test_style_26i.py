@@ -1,9 +1,5 @@
 """Этап 26и: оформление значений и столбцов – подчёркнутый, зачёркнутый, фон блочком."""
-from conftest import ok
-
-
-def choice(client, choice_id):
-    return next(c for c in ok(client.get("/api/choices"))["items"] if c["id"] == choice_id)
+from conftest import choice, ok
 
 
 def test_choice_underline_strike_chip(editor):

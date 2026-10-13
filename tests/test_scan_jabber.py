@@ -8,19 +8,12 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-from cryptography.fernet import Fernet
 
 import scan_jabber as sj
 from conftest import add_computer, get_row, ok
 
-KEY = Fernet.generate_key().decode()
 DOMAIN = "jabber.test"
 AUTH = "Basic " + base64.b64encode(f"admin@{DOMAIN}:pw".encode()).decode()
-
-
-@pytest.fixture(autouse=True)
-def secret_key(monkeypatch):
-    monkeypatch.setenv("ITDB_SECRET_KEY", KEY)
 
 
 class Ejabberd:

@@ -2,12 +2,12 @@
 «проверен одним способом» – по актуальным данным."""
 from datetime import datetime, timedelta, timezone
 
-from conftest import get_row, ok
+from conftest import diffs_of, get_row, ok
 from db import SessionLocal
 from models import ScanRecord
 from scan_match import match_all
 from test_28b import obs, save_hosts
-from test_scan_collect import ETH, Glpi, add_pc, collect, diffs_of, glpi_url, pc, records, secret_key, setup_source  # noqa: F401
+from test_scan_collect import ETH, Glpi, add_pc, collect, glpi_url, pc, records, setup_source  # noqa: F401
 
 
 def rec(source_id, name, ip, macs=(), serial=None):

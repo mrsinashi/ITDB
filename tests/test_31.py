@@ -3,12 +3,11 @@
 только дополнить, но и заменить теми, кто сейчас с адреса ПК."""
 from datetime import datetime, timedelta, timezone
 
-from conftest import get_row, ok
+from conftest import ago, diffs_data, get_row, ok, set_vacuum
 from db import SessionLocal
 from models import ScanJabberUser
 from test_28b import obs, save_hosts
-from test_scan_26zh import ago, diffs_data, set_vacuum
-from test_scan_collect import add_pc, secret_key  # noqa: F401
+from test_scan_collect import add_pc
 from test_scan_jabber import DOMAIN, Ejabberd, jabber_url, reset_jabber, setup_jabber, users_of  # noqa: F401
 from test_scan_jabber import collect as jabber_collect
 

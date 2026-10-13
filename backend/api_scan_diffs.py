@@ -459,47 +459,46 @@ def link_note(item, compare):
     return item["note"] or "Совпадает только имя"
 
 
-def compute(session, with_rejected=False):
-    """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
-    которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
-    подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью, ПК,
-    проверенные одним из них, группы Jabber логинов VACUUM) по всем включённым источникам. Одно поле ПК – одна строка;
-    если источники предлагают разное – «неточно»."""
-    kinds = enabled_kinds(session)
-    computers = scan_collect.active_values(session)
-    names = scan_collect.load_names(session, computers)
-    rejects = {}
+class RecordRows:
+    """Что записи GLPI / GSIT говорят о ПК (record_rows)."""
 
-    for r in session.query(ScanReject).filter(ScanReject.computer_id.isnot(None)):
-        rejects[(r.computer_id, r.field, r.value_key)] = r
+    def __init__(self):
+        self.rows = {}          # (ПК, поле) → {rows: [строки из compare], sources: [...], compare?, unsure?}
+        self.offers = []        # «привязать?»: (kind, source_id, итог сопоставления, запись)
+        self.antivirus = {}     # ПК → {источник: [антивирусы]}
+        self.fresh = {}         # ПК → источники актуальных записей, уверенно сопоставленных с ним
+        self.ips = defaultdict(set)   # IP → ПК, с которыми сопоставлены записи с этим IP
 
-    rows = {}   # (ПК, поле) → {row из compare, sources: [...]}
-    antivirus = {}
-    fresh_records = {}  # ПК → источники актуальных записей, уверенно сопоставленных с ним
-    moment = datetime.now(timezone.utc)
-    fresh_since = {kind: moment - timedelta(days=fresh_days_of(load_source(session, kind), kind)) for kind in kinds}
-    offers = []         # «привязать?»: (kind, source_id, итог сопоставления, запись)
-    record_ips = defaultdict(set)   # IP → ПК, с которыми сопоставлены записи с этим IP
-    numbers = {     # номера записей GLPI / GSIT, записанные в таблице
+
+def table_numbers(session):
+    """Номера записей GLPI / GSIT, записанные в таблице: {ПК: {столбец: номер}}."""
+    return {
         row[0]: dict(zip(ID_FIELDS.values(), row[1:]))
         for row in session.query(Computer.id, *(getattr(Computer, field) for field in ID_FIELDS.values()))
     }
 
+
+def record_rows(session, kinds, computers, names, numbers):
+    """Записи включённых источников, сопоставленные с ПК (и «привязать?») → RecordRows."""
+    found = RecordRows()
+    moment = datetime.now(timezone.utc)
+    fresh_since = {kind: moment - timedelta(days=fresh_days_of(load_source(session, kind), kind)) for kind in kinds}
+
     for kind, source_id, item, record in matched_records(session, kinds, computers, ("key", "link", "name")):
         if item["state"] == "name":
-            offers.append((kind, source_id, item, record))
+            found.offers.append((kind, source_id, item, record))
             continue
 
         computer_id = item["computer_id"]
         values = (record.data or {}).get("values") or {}
 
         if record.checked_at and record.checked_at >= fresh_since[kind]:
-            found = fresh_records.setdefault(computer_id, [])
+            titles = found.fresh.setdefault(computer_id, [])
 
-            if SOURCES[kind]["title"] not in found:
-                found.append(SOURCES[kind]["title"])
+            if SOURCES[kind]["title"] not in titles:
+                titles.append(SOURCES[kind]["title"])
 
-        antivirus.setdefault(computer_id, {}).setdefault(kind, []).extend(av_entries(kind, record))
+        found.antivirus.setdefault(computer_id, {}).setdefault(kind, []).extend(av_entries(kind, record))
         source = {
             "source": kind, "title": SOURCES[kind]["title"], "source_id": source_id,
             "checked_at": record.checked_at, "state": item["state"], "by": item["by"],
@@ -510,25 +509,29 @@ def compute(session, with_rejected=False):
         compared = scan_collect.compare_record(names, values, computers[computer_id])
 
         if number != str(source_id):
-            rows[(computer_id, ID_FIELDS[kind])] = {
+            found.rows[(computer_id, ID_FIELDS[kind])] = {
                 "rows": [{"itdb": number, "source": str(source_id), "raw": str(source_id), "mark": "≠" if number else ""}],
                 "sources": [dict(source, value=str(source_id))],
                 "compare": compare_rows(compared),
             }
 
         for ip in ipv4_set(values.get("ip")):
-            record_ips[ip].add(computer_id)
+            found.ips[ip].add(computer_id)
 
         for row in compared:
             if not row["raw"]:
                 continue
 
-            entry = rows.setdefault((computer_id, row["field"]), {"rows": [], "sources": []})
+            entry = found.rows.setdefault((computer_id, row["field"]), {"rows": [], "sources": []})
             entry["rows"].append(row)
             entry["sources"].append(dict(source, value=row["source"]))
 
-    # «Привязать?» (этап 38): номер записи – в столбец GLPI / GSIT, к нему – сравнение
-    # записи с ПК, чтобы было видно, тот ли это ПК
+    return found
+
+
+def link_offers(offers, computers, names, numbers):
+    """«Привязать?» (этап 38): номер записи – в столбец GLPI / GSIT, к нему – сравнение
+    записи с ПК, чтобы было видно, тот ли это ПК. {(ПК, столбец): предложение}."""
     offered = {}
 
     for kind, source_id, item, record in offers:
@@ -546,44 +549,50 @@ def compute(session, with_rejected=False):
             "compare": compare,
         }
 
-    # Сеть (этап 28): MAC, IP и имя – там, где записи GLPI / GSIT об этом поле молчат
-    hosts, host_kinds = host_observations(session)
-    net_seen = {}
-    net_found = {}
+    return offered
 
-    if hosts:
-        proposals, net_seen = host_rows(computers, hosts)
-        net_found = confirmed(computers, hosts)
 
-        for proposal in proposals:
-            computer_id, field = proposal["computer_id"], proposal["field"]
+def add_net_rows(rows, computers, names, hosts):
+    """Сеть (этап 28): MAC, IP и имя – в rows там, где записи GLPI / GSIT об этом поле
+    молчат. Ответ – (что видно в сети у ПК, ПК, которых сеть видит наверняка)."""
+    if not hosts:
+        return {}, {}
 
-            if (computer_id, field) in rows:
-                continue
+    proposals, net_seen = host_rows(computers, hosts)
 
-            table = computers[computer_id].get(field)
-            row = names.compare(field, proposal["value"], table)
+    for proposal in proposals:
+        computer_id, field = proposal["computer_id"], proposal["field"]
 
-            # MAC из сети дописывается к записанным, а не заменяет их
-            if field == "mac" and lines_of(table):
-                row["source"] = "\n".join(lines_of(table) + [proposal["value"]])
-                row["mark"] = "≠"
+        if (computer_id, field) in rows:
+            continue
 
-            # IP: в таблице часть адресов, где ПК виден, – дописать недостающие (этап 40);
-            # это предложение, а не «в таблице часть»
-            if field == "ip" and row["mark"] == "≈":
-                row["mark"] = "≠"
+        table = computers[computer_id].get(field)
+        row = names.compare(field, proposal["value"], table)
 
-            if row["mark"] in ("=", "≈"):
-                continue
+        # MAC из сети дописывается к записанным, а не заменяет их
+        if field == "mac" and lines_of(table):
+            row["source"] = "\n".join(lines_of(table) + [proposal["value"]])
+            row["mark"] = "≠"
 
-            row.update(field=field, itdb=table or "")
-            rows[(computer_id, field)] = {
-                "rows": [row], "sources": [dict(proposal["source"], value=row["source"])], "unsure": proposal["unsure"],
-            }
+        # IP: в таблице часть адресов, где ПК виден, – дописать недостающие (этап 40);
+        # это предложение, а не «в таблице часть»
+        if field == "ip" and row["mark"] == "≈":
+            row["mark"] = "≠"
 
-    # Проверен и записью GLPI / GSIT, и сетью (этап 28б) или одним из них (этап 38) –
-    # по актуальным данным
+        if row["mark"] in ("=", "≈"):
+            continue
+
+        row.update(field=field, itdb=table or "")
+        rows[(computer_id, field)] = {
+            "rows": [row], "sources": [dict(proposal["source"], value=row["source"])], "unsure": proposal["unsure"],
+        }
+
+    return net_seen, confirmed(computers, hosts)
+
+
+def checked_by(fresh_records, net_found):
+    """Проверен и записью GLPI / GSIT, и сетью (этап 28б) или одним из них (этап 38) –
+    по актуальным данным: (verified, checked), {ПК: чем}."""
     verified, checked = {}, {}
 
     for computer_id in set(fresh_records) | set(net_found):
@@ -591,20 +600,56 @@ def compute(session, with_rejected=False):
         both = computer_id in fresh_records and computer_id in net_found
         (verified if both else checked)[computer_id] = titles
 
-    items = []
-    rejected = 0
+    return verified, checked
 
-    def add(computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note="", replace="", compare=None):
-        nonlocal rejected
-        reject = rejects.get((computer_id, field, key_of(raw)))
+
+def row_kind(field, entry):
+    """Вид расхождения по строкам источников одного поля ПК: (вид, почему неточно);
+    вид None – не расхождение (у всех источников то же, что в таблице)."""
+    proposals = {key_of(r["source"]) for r in entry["rows"]}
+    row = entry["rows"][0]
+    marks = {r["mark"] for r in entry["rows"]}
+    unsure = entry.get("unsure", "")
+
+    if len(proposals) > 1:
+        unsure = "источники предлагают разное: " + "; ".join(f"{s['title']} – {s['value']}" for s in entry["sources"])
+    elif field == "vnc" and len(row["source"].splitlines()) > 1:
+        unsure = "установлено несколько VNC – какой из них сервер, по программам не понять"
+
+    if "≠" in marks or (unsure and not row["itdb"]):
+        return ("unsure" if unsure else "diff"), unsure
+
+    if not row["itdb"] and "" in marks:
+        return ("unsure" if unsure else "fill"), unsure
+
+    if "≈" in marks:
+        return "partial", unsure
+
+    return None, unsure
+
+
+class DiffItems:
+    """Расхождения по мере подсчёта; отклонённые считаются, а без with_rejected – пропускаются."""
+
+    def __init__(self, session, with_rejected):
+        self.rejects = {
+            (r.computer_id, r.field, r.value_key): r
+            for r in session.query(ScanReject).filter(ScanReject.computer_id.isnot(None))
+        }
+        self.with_rejected = with_rejected
+        self.items = []
+        self.rejected = 0
+
+    def add(self, computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note="", replace="", compare=None):
+        reject = self.rejects.get((computer_id, field, key_of(raw)))
 
         if reject is not None and diff_kind != "partial":
-            rejected += 1
+            self.rejected += 1
 
-            if not with_rejected:
+            if not self.with_rejected:
                 return
 
-        items.append({
+        self.items.append({
             "id": f"{computer_id}:{field}", "computer_id": computer_id, "field": field,
             "table": table or "", "proposed": proposed, "raw": raw,
             "kind": diff_kind, "unsure": unsure, "note": note, "replace": replace, "name_field": field in NAME_FIELDS,
@@ -615,56 +660,27 @@ def compute(session, with_rejected=False):
             "compare": compare or [],
         })
 
-    for (computer_id, field), entry in rows.items():
-        proposals = {key_of(r["source"]) for r in entry["rows"]}
-        row = entry["rows"][0]
-        marks = {r["mark"] for r in entry["rows"]}
-        unsure = entry.get("unsure", "")
 
-        if len(proposals) > 1:
-            unsure = "источники предлагают разное: " + "; ".join(f"{s['title']} – {s['value']}" for s in entry["sources"])
-        elif field == "vnc" and len(row["source"].splitlines()) > 1:
-            unsure = "установлено несколько VNC – какой из них сервер, по программам не понять"
+def add_jabber_items(session, items, computers, record_ips):
+    """VACUUM из Jabber – в items. Ответ – (логины VACUUM, которых нет в Jabber, кого
+    Jabber видит с адресов ПК, давно не подключавшиеся, группы); Jabber выключен – None."""
+    if not jabber_enabled(session):
+        return None
 
-        if "≠" in marks or (unsure and not row["itdb"]):
-            diff_kind = "unsure" if unsure else "diff"
-        elif not row["itdb"] and "" in marks:
-            diff_kind = "unsure" if unsure else "fill"
-        elif "≈" in marks:
-            diff_kind = "partial"
-        else:
-            continue
+    state = jabber_state(session)
+    vacuum = computer_vacuum(session, computers)
+    jabber, seen_at = jabber_rows(computers, record_ips, state, vacuum)
 
-        add(computer_id, field, row["itdb"], row["source"], row["raw"], diff_kind, unsure, entry["sources"],
-            compare=entry.get("compare"))
+    for computer_id, table, proposed, diff_kind, unsure, note, src in jabber:
+        replace = src.pop("replace", "")
+        # Ключ отклонения – что предлагается: изменится состав – предложит снова
+        items.add(computer_id, "vacuum", table, proposed, proposed or "–", diff_kind, unsure, [src], note, replace)
 
-    for (computer_id, field), offer in offered.items():
-        add(computer_id, field, offer["table"], offer["value"], offer["value"], "link", "", [offer["source"]],
-            offer["note"], compare=offer["compare"])
+    return vacuum_missing(state, vacuum), seen_at, vacuum_stale(state, vacuum), vacuum_groups(state, vacuum)
 
-    missing = []
-    seen_at = {}
-    stale = {}
-    groups = {}
 
-    if jabber_enabled(session):
-        state = jabber_state(session)
-        vacuum = computer_vacuum(session, computers)
-        missing = vacuum_missing(state, vacuum)
-        stale = vacuum_stale(state, vacuum)
-        groups = vacuum_groups(state, vacuum)
-
-        jabber, seen_at = jabber_rows(computers, record_ips, state, vacuum)
-
-        for computer_id, table, proposed, diff_kind, unsure, note, src in jabber:
-            replace = src.pop("replace", "")
-            # Ключ отклонения – что предлагается: изменится состав – предложит снова
-            add(computer_id, "vacuum", table, proposed, proposed or "–", diff_kind, unsure, [src], note, replace)
-
-        kinds = kinds + ["jabber"]
-
-    kinds = kinds + host_kinds
-
+def placed_items(session, items):
+    """Расхождения → DiffOut с именем и местом ПК и «ещё у N ПК», по имени ПК и порядку полей."""
     # «Ещё у N ПК»: та же пара «в таблице – у сканера» в том же поле
     pairs = {}
 
@@ -690,7 +706,54 @@ def compute(session, with_rejected=False):
         result.append(DiffOut(**entry, hostname=hostname, place=place, same_pair=pairs[pair] - 1))
 
     result.sort(key=lambda d: ((d.hostname or "").lower(), d.computer_id, order.get(d.field, 99)))
-    return result[:MAX_ITEMS], rejected, kinds, pick_antivirus(antivirus), missing, seen_at, stale, net_seen, verified, checked, groups
+    return result
+
+
+def compute(session, with_rejected=False):
+    """(расхождения, число отклонённых, источники, антивирусы ПК, логины VACUUM,
+    которых нет в Jabber, кого Jabber видит с адресов ПК, логины VACUUM, давно не
+    подключавшиеся, что видно в сети у ПК, ПК, проверенные и записью, и сетью, ПК,
+    проверенные одним из них, группы Jabber логинов VACUUM) по всем включённым источникам. Одно поле ПК – одна строка;
+    если источники предлагают разное – «неточно»."""
+    kinds = enabled_kinds(session)
+    computers = scan_collect.active_values(session)
+    names = scan_collect.load_names(session, computers)
+    numbers = table_numbers(session)
+    items = DiffItems(session, with_rejected)
+
+    found = record_rows(session, kinds, computers, names, numbers)
+    offered = link_offers(found.offers, computers, names, numbers)
+    hosts, host_kinds = host_observations(session)
+    net_seen, net_found = add_net_rows(found.rows, computers, names, hosts)
+    verified, checked = checked_by(found.fresh, net_found)
+
+    for (computer_id, field), entry in found.rows.items():
+        diff_kind, unsure = row_kind(field, entry)
+
+        if diff_kind is None:
+            continue
+
+        row = entry["rows"][0]
+        items.add(computer_id, field, row["itdb"], row["source"], row["raw"], diff_kind, unsure, entry["sources"],
+                  compare=entry.get("compare"))
+
+    for (computer_id, field), offer in offered.items():
+        items.add(computer_id, field, offer["table"], offer["value"], offer["value"], "link", "", [offer["source"]],
+                  offer["note"], compare=offer["compare"])
+
+    missing, seen_at, stale, groups = [], {}, {}, {}
+    jabber = add_jabber_items(session, items, computers, found.ips)
+
+    if jabber is not None:
+        missing, seen_at, stale, groups = jabber
+        kinds = kinds + ["jabber"]
+
+    kinds = kinds + host_kinds
+    result = placed_items(session, items.items)
+    return (
+        result[:MAX_ITEMS], items.rejected, kinds, pick_antivirus(found.antivirus), missing, seen_at, stale, net_seen,
+        verified, checked, groups,
+    )
 
 
 def record_links(session):
@@ -898,29 +961,53 @@ def to_board(payload: BoardIn, me=Depends(require_editor), session=Depends(get_d
     return {"ok": True}
 
 
-@router.post("/reject")
-def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
-    """Не предлагать это значение этому ПК, пока источник отдаёт то же."""
+def save_rejects(session, model, owner, items, check, login):
+    """Отклонить значения сканера у ПК или принтеров (owner – "computer_id" / "printer_id",
+    model – Computer / Printer): этой строке это значение больше не предлагать, пока
+    источник отдаёт то же. Уже отклонённое и несуществующая строка пропускаются.
+    Ответ – сколько добавлено."""
+    column = getattr(ScanReject, owner)
     added = 0
 
-    for item in payload.items:
-        check_field(item.field)
+    for item in items:
+        check(item.field)
+        row_id = getattr(item, owner)
         key = key_of(item.raw)
         exists = (
             session.query(ScanReject)
-            .filter(ScanReject.computer_id == item.computer_id, ScanReject.field == item.field, ScanReject.value_key == key)
+            .filter(column == row_id, ScanReject.field == item.field, ScanReject.value_key == key)
             .first()
         )
 
-        if exists or session.get(Computer, item.computer_id) is None:
+        if exists or session.get(model, row_id) is None:
             continue
 
-        session.add(ScanReject(
-            computer_id=item.computer_id, field=item.field, value=item.raw, value_key=key, user_name=me["login"],
-        ))
+        session.add(ScanReject(**{owner: row_id}, field=item.field, value=item.raw, value_key=key, user_name=login))
         session.flush()
         added += 1
 
+    return added
+
+
+def drop_rejects(session, owner, items):
+    """Вернуть отклонённое (save_rejects): снова предлагать. Ответ – сколько убрано."""
+    column = getattr(ScanReject, owner)
+    removed = 0
+
+    for item in items:
+        removed += (
+            session.query(ScanReject)
+            .filter(column == getattr(item, owner), ScanReject.field == item.field, ScanReject.value_key == key_of(item.raw))
+            .delete()
+        )
+
+    return removed
+
+
+@router.post("/reject")
+def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
+    """Не предлагать это значение этому ПК, пока источник отдаёт то же."""
+    added = save_rejects(session, Computer, "computer_id", payload.items, check_field, me["login"])
     session.commit()
     return {"rejected": added}
 
@@ -928,18 +1015,7 @@ def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db
 @router.post("/unreject")
 def unreject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
     """Вернуть отклонённое: снова предлагать."""
-    removed = 0
-
-    for item in payload.items:
-        removed += (
-            session.query(ScanReject)
-            .filter(
-                ScanReject.computer_id == item.computer_id, ScanReject.field == item.field,
-                ScanReject.value_key == key_of(item.raw),
-            )
-            .delete()
-        )
-
+    removed = drop_rejects(session, "computer_id", payload.items)
     session.commit()
     return {"returned": removed}
 

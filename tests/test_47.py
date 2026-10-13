@@ -4,12 +4,12 @@
 from datetime import datetime, timedelta, timezone
 
 import api_scan_jabber
-from conftest import add_computer, get_row, ok
+from conftest import add_computer, get_row, history, ok
 from db import SessionLocal
 from models import History, ScanJabberUser, ScanSource
 from scan_hostmatch import printer_rows
 from test_28b import obs, save_hosts
-from test_printers import add_model, add_printer, history, models, patch, printer  # noqa: F401
+from test_printers import add_model, add_printer, models, patch, printer  # noqa: F401
 
 
 def age_history(minutes):

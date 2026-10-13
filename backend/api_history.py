@@ -33,6 +33,74 @@ def valid_time_zone(session, tz):
     return "UTC"
 
 
+def history_filters(me, user, entity, entity_id, entity_key, cancelled):
+    """Условия отбора записей Истории (см. history)."""
+    filters = []
+
+    if me["role"] != "admin":
+        filters.append(History.entity.notin_(ADMIN_ENTITIES))
+
+    if user:
+        filters.append(History.user_name == user)
+
+    if entity:
+        filters.append(History.entity == entity)
+
+        if entity_id is not None:
+            filters.append(History.entity_id == entity_id)
+
+        if entity_key is not None:
+            filters.append(History.entity_key == entity_key)
+
+    if not cancelled:
+        filters.append(History.cancelled == False)  # noqa: E712
+
+    return filters
+
+
+# Объекты, у которых в Истории – имя сейчас: таблица → (модель, имя). Принтер без
+# имени (этап 44) – «#N» (вид объекта «Принтер» пишет фронт)
+NAMED_ENTITIES = {
+    "computers": (Computer, lambda computer: computer.hostname),
+    "locations": (Location, lambda location: location.name),
+    "printers": (Printer, lambda printer: printer.name or f"#{printer.id}"),
+}
+
+
+def entry_titles(session, items):
+    """Название объекта у записей Истории → функция «запись → название». ПК, узлы,
+    принтеры – имя сейчас; справочники, поля, оформление, пользователи – название
+    сейчас, а если объекта уже нет (удалённое значение) – каким оно было при записи;
+    настройки сканирования – на момент записи."""
+    names = {}
+
+    for entity, (model, name_of) in NAMED_ENTITIES.items():
+        ids = {item.entity_id for item in items if item.entity == entity}
+        names[entity] = {
+            row.id: name_of(row) for row in (session.query(model).filter(model.id.in_(ids)).all() if ids else [])
+        }
+
+    simple_titles = {}
+
+    for item in items:
+        ref = Ref(item.entity, item.entity_id, item.entity_key)
+
+        if item.entity in SIMPLE and ref not in simple_titles:
+            obj = find_object(session, ref, lock=False)
+            simple_titles[ref] = object_title(session, obj, ref) if obj is not None else None
+
+    def title_of(item):
+        if item.entity in names:
+            return names[item.entity].get(item.entity_id)
+
+        if item.entity in SIMPLE:
+            return simple_titles.get(Ref(item.entity, item.entity_id, item.entity_key)) or item.title
+
+        return item.title
+
+    return title_of
+
+
 @router.get("/history")
 def history(
     limit: int = 200,
@@ -56,26 +124,7 @@ def history(
     users – все, кто что-либо менял (для фильтра)."""
     limit = min(max(limit, 1), HISTORY_PAGE_MAX)
     offset = max(offset, 0)
-
-    filters = []
-
-    if me["role"] != "admin":
-        filters.append(History.entity.notin_(ADMIN_ENTITIES))
-
-    if user:
-        filters.append(History.user_name == user)
-
-    if entity:
-        filters.append(History.entity == entity)
-
-        if entity_id is not None:
-            filters.append(History.entity_id == entity_id)
-
-        if entity_key is not None:
-            filters.append(History.entity_key == entity_key)
-
-    if not cancelled:
-        filters.append(History.cancelled == False)
+    filters = history_filters(me, user, entity, entity_id, entity_key, cancelled)
 
     total = session.query(func.count(History.id)).filter(*filters).scalar()
 
@@ -106,89 +155,21 @@ def history(
         .all()
     ]
 
-    computer_ids = set()
-    location_ids = set()
-    printer_ids = set()
-
-    for item in items:
-        if item.entity == "computers":
-            computer_ids.add(item.entity_id)
-        elif item.entity == "locations":
-            location_ids.add(item.entity_id)
-        elif item.entity == "printers":
-            printer_ids.add(item.entity_id)
-
-    # Принтеры (этап 44): имя сейчас, без имени – «#N» (вид объекта «Принтер» пишет фронт)
-    printer_name_by_id = {
-        printer.id: printer.name or f"#{printer.id}"
-        for printer in (session.query(Printer).filter(Printer.id.in_(printer_ids)).all() if printer_ids else [])
-    }
-
-    hostname_by_id = {}
-
-    if computer_ids:
-        computers = (
-            session.query(Computer)
-            .filter(Computer.id.in_(computer_ids))
-            .all()
-        )
-
-        for computer in computers:
-            hostname_by_id[computer.id] = computer.hostname
-
-    location_name_by_id = {}
-
-    if location_ids:
-        locations = (
-            session.query(Location)
-            .filter(Location.id.in_(location_ids))
-            .all()
-        )
-
-        for location in locations:
-            location_name_by_id[location.id] = location.name
-
-    # Справочники, поля, оформление, пользователи – название сейчас, а если
-    # объекта уже нет (удалённое значение) – каким оно было при записи
-    simple_titles = {}
-
-    for item in items:
-        ref = Ref(item.entity, item.entity_id, item.entity_key)
-
-        if item.entity in SIMPLE and ref not in simple_titles:
-            obj = find_object(session, ref, lock=False)
-            simple_titles[ref] = object_title(session, obj, ref) if obj is not None else None
-
-    result = []
-
-    for item in items:
-        title = None
-
-        if item.entity == "computers":
-            title = hostname_by_id.get(item.entity_id)
-        elif item.entity == "locations":
-            title = location_name_by_id.get(item.entity_id)
-        elif item.entity == "printers":
-            title = printer_name_by_id.get(item.entity_id)
-        elif item.entity in SIMPLE:
-            title = simple_titles.get(Ref(item.entity, item.entity_id, item.entity_key)) or item.title
-        else:
-            # Настройки сканирования: название на момент записи
-            title = item.title
-
-        result.append(
-            {
-                "id": item.id,
-                "entity": item.entity,
-                "entity_id": item.entity_id,
-                "entity_key": item.entity_key,
-                "user_name": item.user_name,
-                "at": item.at,
-                "title": title,
-                "changes": item.changes,
-                "cancelled": item.cancelled,
-            }
-        )
+    title_of = entry_titles(session, items)
+    result = [
+        {
+            "id": item.id,
+            "entity": item.entity,
+            "entity_id": item.entity_id,
+            "entity_key": item.entity_key,
+            "user_name": item.user_name,
+            "at": item.at,
+            "title": title_of(item),
+            "changes": item.changes,
+            "cancelled": item.cancelled,
+        }
+        for item in items
+    ]
 
     return {
         "items": result,

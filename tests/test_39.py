@@ -3,7 +3,8 @@
 import re
 from pathlib import Path
 
-from test_scan_collect import ETH, Glpi, add_pc, collect, diffs_of, glpi_url, pc, secret_key, setup_source  # noqa: F401
+from conftest import diffs_of
+from test_scan_collect import ETH, Glpi, add_pc, collect, glpi_url, pc, setup_source  # noqa: F401
 
 STATIC = Path(__file__).resolve().parent.parent / "frontend" / "static"
 

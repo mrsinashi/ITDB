@@ -16,12 +16,12 @@ import scan_dhcp
 import scan_net
 import scan_schedule
 import scan_ssh
-from conftest import ok
+from conftest import diffs_data, ok
 from db import SessionLocal
 from models import ScanHost
 from scan_hostmatch import confirmed, host_rows, same_name
 from scan_http import SourceError
-from test_scan_collect import add_pc, collect, secret_key  # noqa: F401
+from test_scan_collect import add_pc, collect
 
 UTC = timezone.utc
 NOW = datetime.now(UTC)
@@ -287,11 +287,6 @@ def all_hosts():
         session.close()
 
 
-def diffs_of(client):
-    data = ok(client.get("/api/scan/diffs"))
-    return data, {(d["computer_id"], d["field"]): d for d in data["items"]}
-
-
 # ---------- DHCP: подключение, ключ, сбор ----------
 
 
@@ -370,7 +365,7 @@ def test_dhcp_key_install_and_collect(admin, editor, room, ssh_port):
     saved = hosts("dhcp")
     assert saved["10.0.5.11"].mac == "D8:CB:8A:00:00:11" and saved["10.0.5.11"].name == "pc-1.corp.lan"
 
-    data, diffs = diffs_of(editor)
+    data, diffs = diffs_data(editor)
     assert "dhcp" in data["sources"]
     diff = diffs[(first, "mac")]
     assert diff["kind"] == "fill" and diff["proposed"] == "D8:CB:8A:00:00:11"
@@ -380,13 +375,13 @@ def test_dhcp_key_install_and_collect(admin, editor, room, ssh_port):
     ok(editor.post("/api/scan/diffs/accept", json={"items": [
         {"computer_id": first, "field": "mac", "value": diff["proposed"], "table": "", "source": "DHCP"},
     ]}))
-    _, diffs = diffs_of(editor)
+    _, diffs = diffs_data(editor)
     assert (first, "mac") not in diffs
 
     # Давняя аренда сохранена, но в предложения не идёт; в «Сети» она помечена
     assert set(saved) == {"10.0.5.11", "10.0.5.12", "10.0.5.13"}
     second = add_pc(editor, room["room"], "pc-2", ip="10.0.5.12")
-    _, diffs = diffs_of(editor)
+    _, diffs = diffs_data(editor)
     assert (second, "mac") not in diffs
     page = {h["ip"]: h for h in ok(editor.get("/api/scan/hosts"))["hosts"]}
     assert page["10.0.5.12"]["stale"] and page["10.0.5.12"]["dhcp"]["stale"] and page["10.0.5.12"]["mac"][0]["stale"]
@@ -502,7 +497,7 @@ def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
     assert collect(admin, "dhcp")["status"] == "ok"
 
     # Привязка адреса ПК к другому MAC в настройках (host printer-1) – не повод менять MAC
-    _, diffs = diffs_of(editor)
+    _, diffs = diffs_data(editor)
     assert (second, "mac") not in diffs
 
     # host в файле настроек называется как ПК – MAC привязки предлагается дописать
@@ -515,7 +510,7 @@ def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
     rows = {(row.source, row.ip): row for row in all_hosts()}
     assert rows[("dhcp_conf", "10.0.5.200")].data == {"fixed": True, "host": "pc-7", "file": conf}
 
-    _, diffs = diffs_of(editor)
+    _, diffs = diffs_data(editor)
     diff = diffs[(second, "mac")]
     assert diff["kind"] == "diff" and diff["proposed"] == "D8:CB:8A:00:00:07\n00:1B:A9:00:00:77" and diff["raw"] == "00:1B:A9:00:00:77"
     assert diff["sources"][0]["by"] == ["ip", "reserve"]
@@ -524,7 +519,7 @@ def test_net_proposals_in_diffs(admin, editor, room, ssh_port):
 
     # Источник выключен – предложений нет
     ok(admin.patch("/api/scan/sources/dhcp", json={"enabled": False}))
-    data, diffs = diffs_of(editor)
+    data, diffs = diffs_data(editor)
     assert not diffs and "dhcp" not in data["sources"]
 
 
@@ -630,7 +625,7 @@ def test_net_collect(admin, editor, room, monkeypatch):
     assert set(saved) == {"10.0.7.1", "10.0.7.2"}
     assert saved["10.0.7.2"].mac == "D8:CB:8A:00:07:02" and saved["10.0.7.2"].data["mac_from"] == "arp"
 
-    _, diffs = diffs_of(editor)
+    _, diffs = diffs_data(editor)
     assert diffs[(first, "mac")]["kind"] == "fill" and diffs[(first, "mac")]["sources"][0]["title"] == "Сеть"
     assert diffs[(second, "mac")]["kind"] == "unsure"
 
@@ -649,7 +644,7 @@ def test_net_collect(admin, editor, room, monkeypatch):
     page = {h["ip"]: h for h in ok(editor.get("/api/scan/hosts"))["hosts"]}
     assert page["10.0.7.2"]["stale"] and page["10.0.7.2"]["net"]["stale"] and not page["10.0.7.1"]["stale"]
     assert [c["computer_id"] for c in page["10.0.7.2"]["computers"]] == [second]
-    _, diffs = diffs_of(editor)
+    _, diffs = diffs_data(editor)
     assert (second, "mac") not in diffs and (first, "mac") in diffs
 
 

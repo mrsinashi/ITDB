@@ -11,15 +11,8 @@ import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import text
 
-from conftest import add_computer, add_location, ok
+from conftest import KEY, add_computer, add_location, history, ok
 from db import engine
-
-KEY = Fernet.generate_key().decode()
-
-
-@pytest.fixture(autouse=True)
-def secret_key(monkeypatch):
-    monkeypatch.setenv("ITDB_SECRET_KEY", KEY)
 
 
 def basic(login, password):
@@ -94,11 +87,6 @@ def fake():
     server.shutdown()
 
 
-def history_of(admin, entity):
-    items = ok(admin.get("/api/history", params={"entity": entity}))["items"]
-    return items
-
-
 # ---------- Доступ ----------
 
 
@@ -147,7 +135,7 @@ def test_save_password_encrypted(admin, editor):
     assert Fernet(KEY.encode()).decrypt(token.encode()).decode() == "s3cret-Пароль"
 
     # История: пароль – «задан новый», сам пароль нигде
-    items = history_of(admin, "scan_sources")
+    items = history(admin, "scan_sources")
     assert items[0]["title"] == "GLPI"
     changes = items[0]["changes"]
     assert changes["password"]["new"] == "задан новый"
@@ -169,7 +157,7 @@ def test_keep_and_clear_secret(admin):
     cleared = ok(admin.patch("/api/scan/sources/gsit", json={"app_token": ""}))
     assert cleared["secrets"]["app_token"] is False
     assert cleared["secrets"]["password"] is True
-    assert history_of(admin, "scan_sources")[0]["changes"] == {"app_token": {"old": None, "new": "удалён"}}
+    assert history(admin, "scan_sources")[0]["changes"] == {"app_token": {"old": None, "new": "удалён"}}
 
 
 def test_no_key(admin, monkeypatch):
@@ -304,7 +292,7 @@ def test_subnets(admin, editor):
     ok(admin.delete(f"/api/scan/subnets/{printers['id']}"))
     assert admin.delete(f"/api/scan/subnets/{printers['id']}").status_code == 404
 
-    items = history_of(admin, "scan_subnets")
+    items = history(admin, "scan_subnets")
     assert items[0]["changes"] == {"deleted": {"old": "192.168.89.192/26", "new": None}}
     assert items[0]["title"] == "192.168.89.192/26"
     assert items[1]["changes"] == {"building": {"old": "ул. Ленина, 1", "new": None}}

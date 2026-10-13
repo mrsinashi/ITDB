@@ -4,26 +4,12 @@ import json
 import threading
 import time
 import urllib.parse
-from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-from cryptography.fernet import Fernet
 
 import scan_normalize as sn
-from conftest import add_computer, get_row, ok
-
-KEY = Fernet.generate_key().decode()
-NOW = datetime.now()
-
-
-def ago(days):
-    return (NOW - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-
-
-@pytest.fixture(autouse=True)
-def secret_key(monkeypatch):
-    monkeypatch.setenv("ITDB_SECRET_KEY", KEY)
+from conftest import add_computer, ago, diffs_of, get_row, ok
 
 
 def pc(name, days=0, serial=None, uuid=None, ports=(), cpu="Intel(R) Core(TM) i5-10400 CPU @ 2.90GHz",
@@ -521,10 +507,6 @@ def test_names_api(admin, editor, reader, room, glpi_url):
 
 
 # ---------- Расхождения (этап 26) ----------
-
-
-def diffs_of(client, rejected=False):
-    return ok(client.get("/api/scan/diffs", params={"rejected": rejected}))
 
 
 def test_keep_is_not_same():

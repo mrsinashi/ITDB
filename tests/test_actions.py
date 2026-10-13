@@ -11,7 +11,7 @@ def seats(client, location_id):
     return [(row["hostname"], row["seat_no"]) for row in rows if row["location_id"] == location_id]
 
 
-def history(client, computer_id):
+def card_history(client, computer_id):
     return ok(client.get(f"/api/computers/{computer_id}"))["history"]
 
 
@@ -31,7 +31,7 @@ def test_create_on_taken_seat_shifts(editor, room, five):
     assert seats(editor, room["room"]) == [
         ("pc1", 1), ("pc2", 2), ("new", 3), ("pc3", 4), ("pc4", 5), ("pc5", 6),
     ]
-    assert history(editor, five[2])[0]["changes"] == {"seat_no": {"old": 3, "new": 4}}
+    assert card_history(editor, five[2])[0]["changes"] == {"seat_no": {"old": 3, "new": 4}}
 
 
 def test_shift_stops_at_gap(editor, room):
@@ -78,7 +78,7 @@ def test_move_block_with_numbers(editor, room, five):
     assert seats(editor, other) == [("o1", 1), ("pc4", 2), ("pc1", 3), ("o2", 4)]
     assert get_row(editor, first)["seat_no"] == 1
 
-    changes = history(editor, five[3])[0]["changes"]
+    changes = card_history(editor, five[3])[0]["changes"]
     assert changes["location_id"]["new"] == "ул. Ленина, 1 / Терапия / 202 Процедурная"
     assert changes["seat_no"] == {"old": 4, "new": 2}
 
@@ -103,7 +103,7 @@ def test_move_with_and_without_people(editor, room, five):
     ok(editor.post("/api/computers/move", json={"ids": [five[1]], "location_id": store, "with_people": False}))
     row = get_row(editor, five[1])
     assert (row["user"], row["vacuum"]) == (None, None)
-    changes = history(editor, five[1])[0]["changes"]
+    changes = card_history(editor, five[1])[0]["changes"]
     assert changes["user"] == {"old": "Петрова", "new": None}
     assert changes["vacuum"] == {"old": "user2", "new": None}
 
@@ -161,7 +161,7 @@ def test_replace(editor, room, five):
     assert (old["location_id"], old["seat_no"], old["status"]) == (store, None, "склад")
     assert (old["user"], old["vacuum"]) == (None, None)
 
-    changes = history(editor, spare)[0]["changes"]
+    changes = card_history(editor, spare)[0]["changes"]
     assert changes["replaced"] == {"old": None, "new": "pc3"}
     assert changes["user"] == {"old": "Старый хозяин", "new": "Иванов"}
 

@@ -6,9 +6,11 @@
 адреса совпадают или в имени тестовой базы нет «test».
 """
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
@@ -202,3 +204,47 @@ def add_computer(client, location_id, **fields):
 def get_row(client, computer_id, archived="all"):
     rows = ok(client.get("/api/computers", params={"archived": archived}))["rows"]
     return next((row for row in rows if row["id"] == computer_id), None)
+
+
+def set_vacuum(client, computer_id, logins):
+    ok(client.patch(f"/api/computers/{computer_id}", json={"vacuum": logins, "_version": get_row(client, computer_id)["version"]}))
+
+
+def history(client, entity, entity_id=None):
+    """Записи Истории объекта (или всей таблицы entity), новые сверху."""
+    params = {"entity": entity}
+    if entity_id is not None:
+        params["entity_id"] = entity_id
+    return ok(client.get("/api/history", params=params))["items"]
+
+
+def choice(client, choice_id):
+    return next(c for c in ok(client.get("/api/choices"))["items"] if c["id"] == choice_id)
+
+
+# ---------- Сканер ----------
+
+# Ключ шифрования паролей подключений – свой на прогон, у каждого теста
+KEY = Fernet.generate_key().decode()
+NOW = datetime.now()
+
+
+@pytest.fixture(autouse=True)
+def secret_key(monkeypatch):
+    monkeypatch.setenv("ITDB_SECRET_KEY", KEY)
+
+
+def ago(days):
+    """Время days дней назад – как его отдают источники («2026-10-01 12:00:00»)."""
+    return (NOW - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def diffs_of(client, rejected=False):
+    """Ответ /api/scan/diffs (предложения сканера у ПК)."""
+    return ok(client.get("/api/scan/diffs", params={"rejected": rejected}))
+
+
+def diffs_data(client, rejected=False):
+    """diffs_of и предложения по ключу (ПК, поле)."""
+    data = diffs_of(client, rejected)
+    return data, {(d["computer_id"], d["field"]): d for d in data["items"]}

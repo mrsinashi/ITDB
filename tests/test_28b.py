@@ -7,7 +7,7 @@ from conftest import get_row, ok
 from db import SessionLocal
 from models import ScanHost
 from scan_hostmatch import confirmed
-from test_scan_collect import ETH, Glpi, add_pc, collect, glpi_url, pc, secret_key, setup_source  # noqa: F401
+from test_scan_collect import ETH, Glpi, add_pc, collect, glpi_url, pc, setup_source  # noqa: F401
 
 NOW = datetime.now(timezone.utc)
 

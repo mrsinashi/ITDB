@@ -7,7 +7,7 @@ import pytest
 
 import api_scan_jabber
 from conftest import add_computer, get_row, ok
-from test_scan_jabber import DOMAIN, Ejabberd, collect, jabber_url, reset_jabber, secret_key, setup_jabber  # noqa: F401
+from test_scan_jabber import DOMAIN, Ejabberd, collect, jabber_url, reset_jabber, setup_jabber  # noqa: F401
 
 
 @pytest.fixture(autouse=True)

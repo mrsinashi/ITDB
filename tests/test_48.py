@@ -5,9 +5,9 @@ from contextlib import contextmanager
 
 from sqlalchemy import event
 
-from conftest import add_computer, get_row, ok
+from conftest import add_computer, get_row, history, ok
 from db import engine
-from test_printers import add_printer, history, printer
+from test_printers import add_printer, printer
 
 
 @contextmanager

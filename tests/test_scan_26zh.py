@@ -1,30 +1,13 @@
 """Этап 26ж: список пользователей Jabber (кто удалён, кто давно не подключался),
 VACUUM только по IP, номера записей в столбцы GLPI / GSIT, «это материнская
 плата», столбцы «Агент», «GSIT», «Мат. плата»."""
-from datetime import datetime, timedelta
-
 import scan_jabber as sj
-from conftest import get_row, ok
+from conftest import ago, diffs_data, get_row, ok, set_vacuum
 from scan_values import Names, route_values
-from test_scan_collect import ETH, Glpi, add_pc, glpi_url, pc, reset_glpi, secret_key, setup_source  # noqa: F401
+from test_scan_collect import ETH, Glpi, add_pc, glpi_url, pc, reset_glpi, setup_source  # noqa: F401
 from test_scan_collect import collect as glpi_collect
 from test_scan_jabber import DOMAIN, Ejabberd, jabber_url, reset_jabber, setup_jabber, users_of  # noqa: F401
 from test_scan_jabber import collect as jabber_collect
-
-NOW = datetime.now()
-
-
-def ago(days):
-    return (NOW - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def diffs_data(client):
-    data = ok(client.get("/api/scan/diffs"))
-    return data, {(d["computer_id"], d["field"]): d for d in data["items"]}
-
-
-def set_vacuum(client, computer_id, logins):
-    ok(client.patch(f"/api/computers/{computer_id}", json={"vacuum": logins, "_version": get_row(client, computer_id)["version"]}))
 
 
 # ---------- Список пользователей ejabberd ----------

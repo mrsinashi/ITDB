@@ -4,18 +4,14 @@
 from io import BytesIO
 
 import pytest
-from cryptography.fernet import Fernet
 from openpyxl import load_workbook
 
 import api_printers
-from conftest import PASSWORDS, add_computer, add_location, get_row, ok
-
-KEY = Fernet.generate_key().decode()
+from conftest import PASSWORDS, add_computer, add_location, get_row, history, ok
 
 
 @pytest.fixture(autouse=True)
-def secret_key(monkeypatch):
-    monkeypatch.setenv("ITDB_SECRET_KEY", KEY)
+def forget_show_attempts():
     api_printers.show_attempts.clear()
 
 
@@ -40,10 +36,6 @@ def printer(client, printer_id):
 def patch(client, printer_id, status=200, **fields):
     fields["_version"] = printer(client, printer_id)["version"]
     return ok(client.patch(f"/api/printers/{printer_id}", json=fields), status)
-
-
-def history(client, entity, entity_id):
-    return ok(client.get("/api/history", params={"entity": entity, "entity_id": entity_id}))["items"]
 
 
 @pytest.fixture

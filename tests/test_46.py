@@ -4,8 +4,8 @@ from io import BytesIO
 
 from openpyxl import load_workbook
 
-from conftest import ok
-from test_printers import add_printer, history, patch, printer
+from conftest import history, ok
+from test_printers import add_printer, patch, printer
 
 
 def test_printer_columns_order(reader):

@@ -1,6 +1,6 @@
 """Этап 35: правила имён ПК – часть имени и галочки у узлов дерева, «своё имя» у
 ПК, переименование нескольких ПК по правилу одним действием."""
-from conftest import add_computer, add_location, get_row, ok
+from conftest import add_computer, add_location, get_row, history, ok
 
 
 def tree_nodes(client):
@@ -13,13 +13,6 @@ def tree_nodes(client):
 
     walk(ok(client.get("/api/locations/tree"))["roots"])
     return nodes
-
-
-def history(client, entity, entity_id=None):
-    params = {"entity": entity}
-    if entity_id is not None:
-        params["entity_id"] = entity_id
-    return ok(client.get("/api/history", params=params))["items"]
 
 
 def test_node_rules(editor, reader, room):

@@ -5,9 +5,9 @@ from io import BytesIO
 from openpyxl import load_workbook
 
 import scan_normalize as sn
-from conftest import get_row, ok
+from conftest import diffs_data, get_row, ok, set_vacuum
 from scan_values import Names
-from test_scan_collect import ETH, Glpi, add_pc, glpi_url, pc, reset_glpi, secret_key, setup_source  # noqa: F401
+from test_scan_collect import ETH, Glpi, add_pc, glpi_url, pc, reset_glpi, setup_source  # noqa: F401
 from test_scan_collect import collect as glpi_collect
 from test_scan_jabber import DOMAIN, Ejabberd, jabber_url, reset_jabber, setup_jabber  # noqa: F401
 from test_scan_jabber import collect as jabber_collect
@@ -17,10 +17,6 @@ GB = 1e9 / (1024 * 1024)   # 1 ГБ «с наклейки» в двоичных 
 
 def mib(gb):
     return int(gb * GB)
-
-
-def diffs_of(client):
-    return {(d["computer_id"], d["field"]): d for d in ok(client.get("/api/scan/diffs"))["items"]}
 
 
 # ---------- Диски ----------
@@ -119,7 +115,7 @@ def test_hostname_only_reported(admin, editor, room, glpi_url):
     setup_source(admin, glpi_url)
     assert glpi_collect(admin)["status"] == "ok"
 
-    diffs = diffs_of(editor)
+    diffs = diffs_data(editor)[1]
     d = diffs[(named, "hostname")]
     assert (d["kind"], d["proposed"], d["can_take"]) == ("diff", "DESKTOP-AB12CD", False)
     assert diffs[(empty, "hostname")]["can_take"] is True
@@ -136,14 +132,10 @@ def test_hostname_only_reported(admin, editor, room, glpi_url):
 
     # «Не показывать» – как отклонение
     ok(editor.post("/api/scan/diffs/reject", json={"items": [{"computer_id": named, "field": "hostname", "raw": "DESKTOP-AB12CD"}]}))
-    assert (named, "hostname") not in diffs_of(editor)
+    assert (named, "hostname") not in diffs_data(editor)[1]
 
 
 # ---------- VACUUM и IP из Jabber ----------
-
-
-def set_vacuum(client, computer_id, logins):
-    ok(client.patch(f"/api/computers/{computer_id}", json={"vacuum": logins, "_version": get_row(client, computer_id)["version"]}))
 
 
 def test_jabber_vacuum(admin, editor, room, glpi_url, jabber_url):
@@ -214,11 +206,11 @@ def test_jabber_vacuum(admin, editor, room, glpi_url, jabber_url):
 
     # Отклонить VACUUM – больше не предлагается
     ok(editor.post("/api/scan/diffs/reject", json={"items": [{"computer_id": empty_vac, "field": "vacuum", "raw": "ivanov"}]}))
-    assert (empty_vac, "vacuum") not in diffs_of(editor)
+    assert (empty_vac, "vacuum") not in diffs_data(editor)[1]
 
     # Jabber выключен – не предлагает
     ok(admin.patch("/api/scan/sources/jabber", json={"enabled": False}))
-    diffs = diffs_of(editor)
+    diffs = diffs_data(editor)[1]
     assert not any(d["sources"][0]["source"] == "jabber" for d in diffs.values())
 
 

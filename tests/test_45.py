@@ -11,7 +11,6 @@ import scan_net
 from conftest import PASSWORDS, add_computer, get_row, ok
 from test_printers import add_printer
 from test_scan_28 import Ssh, hosts, reset_ssh, setup_dhcp, ssh_port  # noqa: F401
-from test_scan_collect import secret_key  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
