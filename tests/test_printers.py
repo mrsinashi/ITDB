@@ -141,9 +141,9 @@ def test_links_with_computers(editor, reader, room, models):
     assert data["updated"]["computers"] == "ter-ord-1\nter-ord-2 [usb]"
     assert data["updated"]["computer_refs"] == [
         {"id": pc1, "title": "ter-ord-1", "usb": False}, {"id": pc2, "title": "ter-ord-2", "usb": True}]
-    # У ПК – «Принтеры»
-    assert get_row(reader, pc2)["printers"] == "ter-ord-printer-1 [usb]"
-    assert get_row(reader, pc2)["printer_refs"] == [{"id": pid, "title": "ter-ord-printer-1", "usb": True}]
+    # У ПК – «Принтеры»: производитель и модель, имя – для подсказки (этап 47)
+    assert get_row(reader, pc2)["printers"] == "HP LaserJet M404 [usb]"
+    assert get_row(reader, pc2)["printer_refs"] == [{"id": pid, "title": "HP LaserJet M404", "name": "ter-ord-printer-1", "usb": True}]
     # В Истории – текстом и номерами записей (отмена – по номерам)
     assert history(reader, "printers", pid)[0]["changes"]["computers"] == {
         "old": None, "new": "ter-ord-1\nter-ord-2 [usb]", "old_ids": [], "new_ids": [[pc1, False], [pc2, True]]}
@@ -151,7 +151,7 @@ def test_links_with_computers(editor, reader, room, models):
     # Правка у ПК: по сети вместо USB; в Истории ПК
     version = get_row(reader, pc2)["version"]
     data = ok(editor.patch(f"/api/computers/{pc2}", json={"printers": "ter-ord-printer-1", "_version": version}))
-    assert data["updated"]["printers"] == "ter-ord-printer-1"
+    assert data["updated"]["printers"] == "HP LaserJet M404"
     assert printer(reader, pid)["computers"] == "ter-ord-1\nter-ord-2"
     change = history(reader, "computers", pc2)[0]["changes"]["printers"]
     assert (change["old"], change["new"], change["new_ids"]) == ("ter-ord-printer-1 [usb]", "ter-ord-printer-1", [[pid, False]])

@@ -9,7 +9,7 @@ from sqlalchemy import func
 from api_columns import COLUMNS, COLUMNS_BY_KEY, EDITABLE_KEYS, EXTRA_FIELDS, keys_of
 from api_import import split_vacuum_logins
 from auth import require_editor
-from printer_links import links_refs, links_text, printer_title, printers_by_computer, set_computer_printers
+from printer_links import model_titles, printer_cell, printers_by_computer, set_computer_printers
 
 from db import get_db
 from models import (
@@ -610,10 +610,11 @@ def set_vacuum_logins(session, computer, value):
     return vacuum_text(old_logins), vacuum_text(new_logins)
 
 
-def column_values(computer, parts, user_name, vacuum, printers=()):
+def column_values(computer, parts, user_name, vacuum, printers=(), models=None):
     """Значения встроенных столбцов ПК (по описанию в api_columns). printers –
     подключённые принтеры [(принтер, usb)]: в столбце – текст, ссылкам –
-    printer_refs (этап 44)."""
+    printer_refs (этап 44); models – названия моделей (model_titles): у ПК принтер
+    назван производителем и моделью (этап 47)."""
     extra = computer.extra or {}
     values = {}
 
@@ -627,8 +628,7 @@ def column_values(computer, parts, user_name, vacuum, printers=()):
         elif column.kind == "vacuum":
             values[column.key] = vacuum
         elif column.kind == "printers":
-            values[column.key] = links_text(printers, printer_title)
-            values["printer_refs"] = links_refs(printers, printer_title)
+            values[column.key], values["printer_refs"] = printer_cell(printers, models or {})
         elif column.kind == "date":
             values[column.key] = format_date(getattr(computer, column.key))
         elif column.kind == "scan":
@@ -733,6 +733,7 @@ def computer_rows(session, archived="no"):
         vacuum_by_computer[computer_id].append(login)
 
     printers_by_id = printers_by_computer(session)
+    models = model_titles(session)
 
     rows = []
 
@@ -757,6 +758,7 @@ def computer_rows(session, archived="no"):
                 main_user_by_computer.get(computer.id),
                 vacuum_text(vacuum_logins),
                 printers_by_id.get(computer.id, []),
+                models,
             )
         )
         row.update(
@@ -1162,6 +1164,7 @@ def update_computer(
         main_person_name(session, computer),
         vacuum_text(get_vacuum_logins(session, computer.id)),
         printers_by_computer(session, [computer.id]).get(computer.id, []),
+        model_titles(session),
     )
 
     for key in user_field_keys:

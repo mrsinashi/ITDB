@@ -176,6 +176,27 @@ class PrinterModel(Base):
     duplex = Column(Boolean, nullable=True)
 
 
+class Cartridge(Base):
+    """Картридж из справочника (этап 47). Пополняется сам: картридж, вписанный
+    модели (в таблице принтеров или в справочнике моделей), появляется здесь."""
+    __tablename__ = "cartridges"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
+
+
+class PrinterModelCartridge(Base):
+    """Картридж подходит модели принтера (этап 47); порядок – как вписали (id)."""
+    __tablename__ = "printer_model_cartridges"
+    __table_args__ = (
+        UniqueConstraint("model_id", "cartridge_id", name="uq_printer_model_cartridges"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    model_id = Column(Integer, ForeignKey("printer_models.id"), nullable=False)
+    cartridge_id = Column(Integer, ForeignKey("cartridges.id"), nullable=False)
+
+
 class Printer(Base):
     """Принтер или МФУ (этап 44). number – № в кабинете, у МФУ и принтеров свой
     счёт; web – есть ли веб-страница (None – не указано), web_url – её адрес
@@ -421,14 +442,17 @@ class ScanAlias(Base):
 class ScanReject(Base):
     """Отклонённое значение сканера (этап 26): этому ПК в этом поле значение
     value не предлагать, пока источник отдаёт то же самое (value_key – ключ
-    значения как в источнике; изменилось – снова расхождение)."""
+    значения как в источнике; изменилось – снова расхождение). Этап 47: и принтеру
+    (printer_id; тогда computer_id пуст) – MAC из сети по IP."""
     __tablename__ = "scan_rejects"
     __table_args__ = (
         UniqueConstraint("computer_id", "field", "value_key", name="uq_scan_rejects"),
+        UniqueConstraint("printer_id", "field", "value_key", name="uq_scan_rejects_printer"),
     )
 
     id = Column(Integer, primary_key=True)
-    computer_id = Column(Integer, ForeignKey("computers.id"), nullable=False)
+    computer_id = Column(Integer, ForeignKey("computers.id"), nullable=True)
+    printer_id = Column(Integer, ForeignKey("printers.id"), nullable=True)
     field = Column(Text, nullable=False)
     value = Column(Text, nullable=False)
     value_key = Column(Text, nullable=False)

@@ -39,6 +39,10 @@
 // сканер предлагает остальное) и «Не этот ПК» (/not-this). Разом («Принять
 // изменения…») не привязывается. Другое имя ПК (HOSTNAME в таблице есть) блочком не
 // показывается: имя выделено, что на ПК – в подсказке.
+//
+// Этап 47: у принтеров – MAC из сети по IP (/api/scan/printer-diffs, printerDiffs): на
+// странице «Принтеры» та же кнопка и те же блочки (tableDiffs); у предложения принтера
+// computer_id – id принтера, printer – true, решения – своими запросами.
 
 import { decoration } from "../columns.js";
 import { apiFetch } from "../util.js";
@@ -84,11 +88,16 @@ export default {
             return !!this.avSettings && this.avSettings.statuses.some(function (st) { return !!st.bg_color && st.chip === false; });
         },
 
+        // Предложения таблицы на экране: ПК или принтеров (этап 47)
+        tableDiffs() {
+            return this.tableKind === "printer" ? this.printerDiffs : this.diffs;
+        },
+
         scanChipVersion() {
-            return Array.from(this.scanShownKinds).sort().join(",") + "|" +
+            return this.tableKind + "|" + Array.from(this.scanShownKinds).sort().join(",") + "|" +
                 (this.diffs.vacuumMissing || []).join(",") + "|" + Object.keys(this.diffs.vacuumStale || {}).join(",") + "|" +
                 Object.keys(this.diffs.verified || {}).join(",") + "|" + Object.keys(this.diffs.checked || {}).join(",") + "|" +
-                this.diffs.items.map(function (d) { return d.id + (d.rejected_by ? "-" : ":") + d.proposed; }).join("|");
+                this.tableDiffs.items.map(function (d) { return d.id + (d.rejected_by ? "-" : ":") + d.proposed; }).join("|");
         },
 
         // Скрытые столбцы, где виден блочок сканера у строк Таблицы (фильтр по дереву и
@@ -101,7 +110,7 @@ export default {
                 return fields;
             }
             const kinds = this.scanShownKinds;
-            const found = this.diffs.items.filter((d) => {
+            const found = this.tableDiffs.items.filter((d) => {
                 return !d.rejected_by && hidden.indexOf(d.field) !== -1 && kinds.has(d.kind) && !this.scanChipHidden(d);
             });
             if (!found.length) {
@@ -200,12 +209,12 @@ export default {
         },
 
         diffCountBadge() {
-            return this.diffs.count > 99 ? "99" : String(this.diffs.count);
+            return this.tableDiffs.count > 99 ? "99" : String(this.tableDiffs.count);
         },
 
         // Подсказка кнопки «Значения сканера»: сколько их всего (на кнопке – не больше 99)
         scanButtonTitle() {
-            return "Значения сканера: " + (this.diffs.count || "нет");
+            return "Значения сканера: " + (this.tableDiffs.count || "нет");
         },
 
         scanMarkByKind() {
@@ -214,24 +223,19 @@ export default {
             return map;
         },
 
-        // Все расхождения по ПК: id ПК → { поле → расхождение } (без отклонённых). На
-        // странице «Принтеры» (этап 44) – пусто: id принтеров – не id ПК
+        // Расхождения таблицы на экране: id строки → { поле → расхождение } (без отклонённых).
+        // На странице «Принтеры» – предложения принтеров (этап 47; до него – пусто)
         diffIndex() {
-            const map = new Map();
-            if (this.tableKind === "printer") {
-                return map;
-            }
-            this.diffs.items.forEach(function (d) {
-                if (d.rejected_by) {
-                    return;
-                }
-                let entry = map.get(d.computer_id);
-                if (!entry) {
-                    map.set(d.computer_id, entry = {});
-                }
-                entry[d.field] = d;
-            });
-            return map;
+            return this.tableKind === "printer" ? this.printerDiffIndex : this.pcDiffIndex;
+        },
+
+        // Только ПК – карточка ПК, имя ПК (она открывается и со страницы «Принтеры»)
+        pcDiffIndex() {
+            return this.diffMap(this.diffs.items);
+        },
+
+        printerDiffIndex() {
+            return this.diffMap(this.printerDiffs.items);
         },
 
         // Какие пометки видны сейчас: ситуация включена и (кнопка нажата или «без кнопки»)
@@ -353,6 +357,44 @@ export default {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
                 this.diffs.loading = false;
+            }
+        },
+
+        // id строки → { поле → расхождение }, без отклонённых
+        diffMap(items) {
+            const map = new Map();
+            items.forEach(function (d) {
+                if (d.rejected_by) {
+                    return;
+                }
+                let entry = map.get(d.computer_id);
+                if (!entry) {
+                    map.set(d.computer_id, entry = {});
+                }
+                entry[d.field] = d;
+            });
+            return map;
+        },
+
+        // Предложения принтеров (этап 47): в общем виде – computer_id = id принтера
+        async loadPrinterDiffs() {
+            if (!this.user) {
+                return;
+            }
+            try {
+                const response = await apiFetch("/api/scan/printer-diffs?rejected=true");
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                const data = await response.json();
+                const items = data.items.map(function (d) { return Object.assign(d, { computer_id: d.printer_id, printer: true }); });
+                this.printerDiffs = {
+                    items: items,
+                    count: items.filter(function (d) { return !d.rejected_by; }).length,
+                    rejected: data.rejected
+                };
+            } catch (e) {
+                // без предложений таблица принтеров работает как раньше
             }
         },
 
@@ -532,7 +574,11 @@ export default {
             }
             this.closeScanPop();
             if (this.scanOverlay) {
-                this.loadDiffs();
+                if (this.tableKind === "printer") {
+                    this.loadPrinterDiffs();
+                } else {
+                    this.loadDiffs();
+                }
             }
         },
 
@@ -765,6 +811,15 @@ export default {
             const d = pop.d;
             const own = pop.own.trim();
             try {
+                if (d.printer) {
+                    // Принтер (этап 47): своё – правка ячейки, MAC из сети этому принтеру не предлагать
+                    if (own !== String(pop.row[d.field] || "") && !(await this.saveCellValue(pop.row, pop.col, own))) {
+                        return;
+                    }
+                    this.closeScanPop();
+                    await this.rejectDiffs([d]);
+                    return;
+                }
                 if ((await this.saveComputerValue(d.computer_id, d.field, own)) === null) {
                     return;   // не сохранилось – ошибку уже показала правка ячейки
                 }
@@ -842,8 +897,8 @@ export default {
         },
 
         // Подсказка при правке ячейки / строки карточки: значение сканера первым
-        scanSuggestFor(rowId, field) {
-            const entry = this.diffIndex.get(rowId);
+        scanSuggestFor(rowId, field, pcOnly) {
+            const entry = (pcOnly ? this.pcDiffIndex : this.diffIndex).get(rowId);
             const d = entry ? entry[field] : null;
             if (!d || d.kind === "partial" || d.kind === "link" || !d.can_take || !d.proposed || d.proposed.includes("\n")) {
                 return [];
@@ -856,7 +911,7 @@ export default {
             if (!this.card || !r.field) {
                 return null;
             }
-            const entry = this.diffIndex.get(this.card.id);
+            const entry = this.pcDiffIndex.get(this.card.id);
             const d = entry ? entry[r.field] : null;
             // Как в Таблице: только когда значения сканера показаны (кнопка или «Без кнопки»)
             return d && d.kind !== "partial" && this.scanShownKinds.has(d.kind) ? d : null;
@@ -883,7 +938,7 @@ export default {
                 parts.push({ text: "ПК привязан вручную" });
             }
             if (by.size && d.kind !== "link") {
-                parts.push({ text: "ПК по " + KEY_ORDER.filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
+                parts.push({ text: (d.printer ? "принтер по " : "ПК по ") + KEY_ORDER.filter(function (k) { return by.has(k); }).map(function (k) { return KEY_TEXT[k]; }).join(" и ") });
             }
             if (d.sources.length > 1) {
                 parts.push(d.kind === "unsure" && d.unsure.startsWith("источники")
@@ -939,6 +994,10 @@ export default {
         // replace – взять второй вариант (VACUUM: заменить, а не дописать). Привязка
         // записи (этап 38) – своим запросом
         async acceptDiffs(list, replace) {
+            if (list.length && list[0].printer) {
+                await this.acceptPrinterDiffs(list);
+                return;
+            }
             const links = list.filter(function (d) { return d.kind === "link"; });
             list = list.filter(function (d) { return d.kind !== "link" && d.can_take && (!replace || d.replace); });
             if (links.length) {
@@ -993,6 +1052,10 @@ export default {
         },
 
         async rejectDiffs(list, back) {
+            if (list.length && list[0].printer) {
+                await this.rejectPrinterDiffs(list, back);
+                return;
+            }
             const links = list.filter(function (d) { return d.kind === "link"; });
             if (links.length) {
                 try {
@@ -1014,6 +1077,37 @@ export default {
                 });
                 this.toast(back ? "Возвращено: " + result.returned : "Отклонено: " + result.rejected, "success");
                 await this.loadDiffs();
+            } catch (e) {
+                this.toastError(e.message || e);
+            }
+        },
+
+        // Принтеры (этап 47): взять MAC из сети – обычная правка принтера
+        async acceptPrinterDiffs(list) {
+            try {
+                const result = await this.diffPost("/api/scan/printer-diffs/accept", {
+                    items: list.filter(function (d) { return d.can_take; }).map((d) => ({
+                        printer_id: d.printer_id, field: d.field, value: d.proposed, table: d.table, source: this.diffSourceShort(d)
+                    }))
+                });
+                let text = "Принято: " + result.accepted;
+                if (result.skipped.length) {
+                    text += ", пропущено: " + result.skipped.length;
+                }
+                this.toast(text, result.skipped.length ? undefined : "success");
+                await Promise.all([this.loadPrinterDiffs(), this.loadPrinters()]);
+            } catch (e) {
+                this.toastError(e.message || e);
+            }
+        },
+
+        async rejectPrinterDiffs(list, back) {
+            try {
+                const result = await this.diffPost("/api/scan/printer-diffs/" + (back ? "unreject" : "reject"), {
+                    items: list.map(function (d) { return { printer_id: d.printer_id, field: d.field, raw: d.raw }; })
+                });
+                this.toast(back ? "Возвращено: " + result.returned : "Отклонено: " + result.rejected, "success");
+                await this.loadPrinterDiffs();
             } catch (e) {
                 this.toastError(e.message || e);
             }

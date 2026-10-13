@@ -71,7 +71,7 @@ def test_links_by_ids(editor, reader, room):
 
     version = get_row(reader, pc1)["version"]
     data = ok(editor.patch(f"/api/computers/{pc1}", json={"printers": [[pid, False]], "_version": version}))
-    assert data["updated"]["printer_refs"] == [{"id": pid, "title": "pr-1", "usb": False}]
+    assert data["updated"]["printer_refs"] == [{"id": pid, "title": "pr-1", "name": "pr-1", "usb": False}]
     refs = next(r for r in ok(reader.get("/api/printers"))["rows"] if r["id"] == pid)["computer_refs"]
     assert sorted((r["id"], r["usb"]) for r in refs) == sorted([(pc1, False), (pc2, True)])
 

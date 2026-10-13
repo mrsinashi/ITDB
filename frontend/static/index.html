@@ -123,7 +123,7 @@
         <!-- ================= Таблица (с этапа 44 – и «Принтеры»: та же таблица, tableKind) ================= -->
         <section v-if="user" v-show="view === 'table' || view === 'printers'" class="view">
 
-            <div class="toolbar">
+            <div class="toolbar tb-with-refresh" v-tb-fit>
                 <div class="tb-left">
                     <span class="tb-count">{{ countText }}</span>
                     <!-- Фильтры: по дереву и по столбцам. Не помещаются – сжимаются, полный текст в подсказке -->
@@ -186,6 +186,8 @@
                     </span>
                 </div>
                 <span class="tb-search">
+                    <!-- Обновить (этап 47): изменения, значения сканера; у ПК – и кто в сети из VACUUM -->
+                    <button class="btn icon-only tb-refresh" :disabled="tableRefreshing" @click="refreshTablePage" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <input id="quickFilter" v-model="quickFilter" :placeholder="tableKind === 'printer' ? 'Поиск по принтерам' : 'Поиск по базе'" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'quickFilter')">
                     <span v-if="quickFilter" class="clear" title="Очистить (Esc)" @click="quickFilter = ''">×</span>
@@ -232,10 +234,10 @@
                     <span class="tb-divider"></span>
                     <!-- Значения сканера (этапы 26б, 26в): кнопка дописывает в ячейки блочки с тем,
                          что предлагают GLPI / GSIT; у включённой при наведении – что значат цвета -->
-                    <span v-if="tableKind === 'pc'" class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
-                    <button class="btn icon-only" :class="{ active: scanOverlay, 'has-badge': diffs.count > 0 }" @click="toggleScanOverlay"
+                    <span class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
+                    <button class="btn icon-only" :class="{ active: scanOverlay, 'has-badge': tableDiffs.count > 0 }" @click="toggleScanOverlay"
                         :title="scanOverlay ? null : scanButtonTitle">
-                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg><span v-if="diffs.count > 0 && buttonCounts" class="btn-badge">{{ diffCountBadge }}</span>
+                        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg><span v-if="tableDiffs.count > 0 && buttonCounts" class="btn-badge">{{ diffCountBadge }}</span>
                     </button>
                     <div v-if="scanLegend && scanOverlay" class="scan-legend">
                         <div class="sl-title">{{ scanButtonTitle }}</div>
@@ -442,7 +444,7 @@
                                     <span v-if="col.secret && webEdit" class="secret-edit" @focusout="onWebEditFocusOut($event)"><input ref="webEditLogin" v-model="webEdit.login" class="cell-edit secret-input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="webEdit.password" class="cell-edit secret-input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></span>
                                     <location-picker v-else-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="locationOptions"
                                         placeholder="Расположение…" @pick="onCellLocationPick(row, $event)" @cancel="cancelEdit"></location-picker>
-                                    <textarea v-else-if="col.multiline" v-model="editValue"
+                                    <textarea v-else-if="col.multiline && !col.cartridges" v-model="editValue"
                                         @keydown="handleEditKeydown($event, row, col)"
                                         @input="col.field === 'ip' && onIpInput($event, null, 'editValue'); onEditInput($event, col)"
                                         @blur="saveEdit(row, col)"
@@ -468,7 +470,7 @@
 
         <!-- ================= Дерево ================= -->
         <section v-if="user && view === 'tree'" class="view">
-            <div class="toolbar">
+            <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
                     <span class="tb-count">Без расположения: {{ unlocated }}</span>
                     <span v-if="treeError" class="tb-error" :title="treeError">{{ treeError }}</span>
@@ -553,18 +555,20 @@
         <!-- Строка на каждый столбец таблицы, в том же порядке: оформление
              столбца целиком и значения (клик по значению – его оформление). -->
         <section v-if="user && view === 'choices'" class="view">
-            <div class="toolbar">
+            <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
                     <!-- Вкладки (этап 35): оформление таблицы и правила имён ПК; модели принтеров (этап 44) -->
                     <nav class="tb-tabs">
                         <a href="#choices" :class="{ active: choicesTab === 'styles' }" @click="navClick($event, () => setChoicesTab('styles'))" title="Оформление столбцов и значений">Оформление</a>
                         <a href="#choices/names" :class="{ active: choicesTab === 'names' }" @click="navClick($event, () => setChoicesTab('names'))" title="Правила имён компьютеров и принтеров">Имена ПК</a>
                         <a href="#choices/models" :class="{ active: choicesTab === 'models' }" @click="navClick($event, () => setChoicesTab('models'))" title="Модели принтеров и МФУ">Модели принтеров</a>
+                        <a href="#choices/cartridges" :class="{ active: choicesTab === 'cartridges' }" @click="navClick($event, () => setChoicesTab('cartridges'))" title="Картриджи и модели, которым они подходят">Картриджи</a>
                     </nav>
                     <template v-if="choicesTab === 'styles'">
                         <span v-if="choicesQuery.trim()" class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter – следующий)</template></span>
                     </template>
                     <span v-else-if="choicesTab === 'names'" class="tb-count">{{ namesCountText }}</span>
+                    <span v-else-if="choicesTab === 'cartridges'" class="tb-count">{{ cartridgesCountText }}</span>
                     <span v-else class="tb-count">{{ modelsCountText }}</span>
                 </div>
                 <span v-if="choicesTab === 'styles'" class="tb-search">
@@ -577,6 +581,11 @@
                         @keydown.esc.prevent="onSearchEsc($event, 'namesQuery')">
                     <span v-if="namesQuery" class="clear" title="Очистить (Esc)" @click="namesQuery = ''">×</span>
                 </span>
+                <span v-else-if="choicesTab === 'cartridges'" class="tb-search">
+                    <input v-model="cartridgesQuery" placeholder="Поиск: картридж, модель" autocomplete="off"
+                        @keydown.esc.prevent="onSearchEsc($event, 'cartridgesQuery')">
+                    <span v-if="cartridgesQuery" class="clear" title="Очистить (Esc)" @click="cartridgesQuery = ''">×</span>
+                </span>
                 <span v-else class="tb-search">
                     <input v-model="modelsQuery" placeholder="Поиск: тип, производитель, модель" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'modelsQuery')">
@@ -585,6 +594,10 @@
                 <div class="tb-right">
                     <template v-if="choicesTab === 'models' && canEdit">
                         <button class="btn icon-only" :class="{ active: modelsBar && modelsBar.kind === 'new' }" @click="openNewModelRow" title="Новая модель"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                        <span class="tb-divider"></span>
+                    </template>
+                    <template v-if="choicesTab === 'cartridges' && canEdit">
+                        <button class="btn icon-only" :class="{ active: cartridgesBar && cartridgesBar.kind === 'new' }" @click="openNewCartridgeRow" title="Новый картридж"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
                         <span class="tb-divider"></span>
                     </template>
                     <template v-if="choicesTab === 'names'">
@@ -879,15 +892,15 @@
 
             <!-- Модели принтеров (этап 44): тип, производитель, печать, дуплекс – у принтера из модели.
                  Новая и правка – строкой прямо в таблице, ✓ ✕ – плашкой справа (как «Пользователи») -->
-            <div v-else class="history-page">
+            <div v-else-if="choicesTab === 'models'" class="history-page">
                 <div class="users-wrap pm-wrap" @mouseleave="modelsHover = null">
                     <div class="history-frame" :class="{ empty: !modelsView.length, 'accent-head': accentHeaders.choices }">
                         <div class="history-scroll" @scroll="modelsHover = null; placeEditPlate('modelsBar')">
                             <div v-if="!modelsView.length" class="empty-note">{{ modelsQuery.trim() ? "Ничего не найдено." : "Моделей пока нет." }}</div>
                             <table v-else class="history-table users-table pm-table" :class="{ 'accent-head': accentHeaders.choices }">
-                                <colgroup><col class="pm-kind"><col class="pm-maker"><col class="pm-model"><col class="pm-color"><col class="pm-duplex"><col class="pm-count"></colgroup>
+                                <colgroup><col class="pm-kind"><col class="pm-maker"><col class="pm-model"><col class="pm-color"><col class="pm-duplex"><col class="pm-carts"><col class="pm-count"></colgroup>
                                 <thead>
-                                    <tr><th>Тип</th><th>Производитель</th><th>Модель</th><th>Печать</th><th>Дуплекс</th><th class="pm-n" title="Принтеров этой модели (и в архиве)">Принтеров</th></tr>
+                                    <tr><th>Тип</th><th>Производитель</th><th>Модель</th><th>Печать</th><th>Дуплекс</th><th>Картриджи</th><th class="pm-n" title="Принтеров этой модели (и в архиве)">Принтеров</th></tr>
                                 </thead>
                                 <tbody>
                                     <template v-for="item in modelsView" :key="item.key">
@@ -905,6 +918,9 @@
                                             <td><select class="input er-input" v-model="modelsBar.duplex" title="Дуплекс">
                                                 <option value="true">есть</option><option value="false">нет</option><option value="">–</option>
                                             </select></td>
+                                            <td><input ref="mb-carts" class="input er-input" v-model="modelsBar.cartridges" placeholder="Картриджи через запятую" spellcheck="false" autocomplete="off"
+                                                @focus="openTokenSuggest($event.target, 'cartridges', cartridgeOptions())" @click="!suggest && openTokenSuggest($event.target, 'cartridges', cartridgeOptions())"
+                                                @input="onSuggestInput($event.target.value)" @keydown="onTokenKeydown" @blur="closeSuggest()"></td>
                                             <td class="pm-n">{{ item.model ? item.model.printers : "" }}<span v-if="modelsBar.error" class="er-error pm-error">{{ modelsBar.error }}</span></td>
                                         </tr>
                                         <tr v-else :class="{ 'is-hover': modelsHover && modelsHover.id === item.model.id }"
@@ -914,6 +930,7 @@
                                             <td class="pm-name" :title="item.model.model">{{ item.model.model }}</td>
                                             <td>{{ modelColorText(item.model.color) }}</td>
                                             <td>{{ modelYesNoText(item.model.duplex) }}</td>
+                                            <td class="pm-carts-cell" :title="(item.model.cartridges || []).join(', ') || null">{{ (item.model.cartridges || []).join(", ") }}</td>
                                             <td class="pm-n"><a v-if="item.model.printers" class="pm-show" href="#printers" title="Показать в Принтерах" @click.prevent="showModelPrinters(item.model)">{{ item.model.printers }}</a></td>
                                         </tr>
                                     </template>
@@ -941,11 +958,63 @@
                 </div>
             </div>
 
+            <!-- Картриджи (этап 47): справочник пополняется сам – из картриджей моделей. Новый и правка –
+                 строкой прямо в таблице (название, модели через запятую подсказками), как «Модели принтеров» -->
+            <div v-else class="history-page">
+                <div class="users-wrap crt-wrap" @mouseleave="cartridgesHover = null">
+                    <div class="history-frame" :class="{ empty: !cartridgesView.length, 'accent-head': accentHeaders.choices }">
+                        <div class="history-scroll" @scroll="cartridgesHover = null; placeEditPlate('cartridgesBar')">
+                            <div v-if="!cartridgesView.length" class="empty-note">{{ cartridgesQuery.trim() ? "Ничего не найдено." : "Картриджей пока нет." }}</div>
+                            <table v-else class="history-table users-table pm-table crt-table" :class="{ 'accent-head': accentHeaders.choices }">
+                                <colgroup><col class="crt-name"><col class="crt-models"><col class="crt-count"></colgroup>
+                                <thead>
+                                    <tr><th>Картридж</th><th>Модели</th><th class="pm-n" title="Рабочих принтеров этих моделей">Принтеров</th></tr>
+                                </thead>
+                                <tbody>
+                                    <template v-for="item in cartridgesView" :key="item.key">
+                                        <tr v-if="item.edit" class="er-row" @mouseenter="cartridgesHover = null" @keydown.enter="submitCartridgesBar" @keydown.esc.stop="closeCartridgesBar">
+                                            <td><input ref="cb-name" class="input er-input" v-model="cartridgesBar.name" placeholder="Картридж" spellcheck="false" autocomplete="off"></td>
+                                            <td><input ref="cb-models" class="input er-input" v-model="cartridgesBar.models" placeholder="Модели через запятую" spellcheck="false" autocomplete="off"
+                                                @focus="openTokenSuggest($event.target, 'pmodels', modelTitleOptions())" @click="!suggest && openTokenSuggest($event.target, 'pmodels', modelTitleOptions())"
+                                                @input="onSuggestInput($event.target.value)" @keydown="onTokenKeydown" @blur="closeSuggest()"></td>
+                                            <td class="pm-n">{{ item.cart ? item.cart.printers : "" }}<span v-if="cartridgesBar.error" class="er-error pm-error">{{ cartridgesBar.error }}</span></td>
+                                        </tr>
+                                        <tr v-else :class="{ 'is-hover': cartridgesHover && cartridgesHover.id === item.cart.id }"
+                                            @mouseenter="setCartridgesHover(item.cart, $event.currentTarget)" @dblclick="openEditCartridge(item.cart)">
+                                            <td class="pm-name" :title="item.cart.name">{{ item.cart.name }}</td>
+                                            <td class="crt-models-cell" :title="cartridgeModelsText(item.cart) || null">{{ cartridgeModelsText(item.cart) }}</td>
+                                            <td class="pm-n"><a v-if="item.cart.printers" class="pm-show" href="#printers" title="Показать в Принтерах" @click.prevent="showCartridgePrinters(item.cart)">{{ item.cart.printers }}</a></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="cartridgesHover" class="tree-actions" :style="{ top: cartridgesHover.top + 'px', height: cartridgesHover.height + 'px' }">
+                        <span class="na-box">
+                            <span class="icon-btn" title="Изменить" @click="openEditCartridge(cartridgesHover.cart)">✎</span>
+                            <span class="na-sep"></span>
+                            <span class="icon-btn danger" :class="{ off: cartridgesHover.cart.models.length }" :title="cartridgesHover.cart.models.length ? 'Подходит моделям – не удалить' : 'Удалить'" @click="deleteCartridge(cartridgesHover.cart)">✕</span>
+                        </span>
+                    </div>
+                    <div v-if="cartridgesBar && cartridgesBar.plate" class="tree-actions er-plate" :style="{ top: cartridgesBar.plate.top + 'px', height: cartridgesBar.plate.height + 'px' }">
+                        <span class="na-box">
+                            <span class="icon-btn er-ok" :class="{ off: cartridgesBar.saving }" :title="cartridgesBar.kind === 'new' ? 'Добавить (Enter)' : 'Сохранить (Enter)'" @click="submitCartridgesBar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                            <span class="na-sep"></span>
+                            <span class="icon-btn" title="Закрыть (Esc)" @click="closeCartridgesBar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                        </span>
+                    </div>
+                    <div v-if="canEdit" class="side-add">
+                        <button class="btn icon-only" :class="{ active: cartridgesBar && cartridgesBar.kind === 'new' }" @click="openNewCartridgeRow" title="Новый картридж"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                    </div>
+                </div>
+            </div>
+
         </section>
 
         <!-- ================= История ================= -->
         <section v-if="user && view === 'history'" class="view">
-            <div class="toolbar">
+            <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
                     <span class="tb-count">{{ historyCountText }}</span>
                     <button v-if="historyFilter.user" class="chip" @click="setHistoryUser(null)" title="Показаны только изменения этого пользователя. Нажми, чтобы показать все">
@@ -1057,7 +1126,7 @@
 
         <!-- ================= Пользователи (только администратор) ================= -->
         <section v-if="user && isAdmin && view === 'users'" class="view">
-            <div class="toolbar">
+            <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
                     <span class="tb-count">{{ usersCountText }}</span>
                     <span v-if="usersError" class="tb-error" :title="usersError">{{ usersError }}</span>
@@ -1163,7 +1232,7 @@
 
         <!-- ================= Сканер (этап 24; редактору – только «Проверка», этап 26г) ================= -->
         <section v-if="user && canEdit && view === 'scan'" class="view">
-            <div class="toolbar">
+            <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
                     <nav class="tb-tabs">
                         <a href="#scan/check" :class="{ active: scanTab === 'check' }" @click="navClick($event, () => setScanTab('check'))" title="Что сканер предлагает изменить">GLPI / GSIT</a>
@@ -1176,6 +1245,24 @@
                     </nav>
                     <!-- С выделением на «Проверке» вместо счётчика – «Выбрано: N ▾» (места на панели мало) -->
                     <span v-if="!(scanTab === 'check' && check.selected.length)" class="tb-count">{{ scanTopCountText() }}</span>
+                    <!-- «Сеть» (этап 47): фильтры по столбцам – плашками, как в Таблице; с трёх – одной кнопкой -->
+                    <span v-if="scanTab === 'net' && netActiveColFilters.length && netActiveColFilters.length < 3" class="tb-chips">
+                        <button v-for="item in netActiveColFilters" :key="'ncf-' + item.col.field" class="chip" @click="clearColFilter(item.col.field, 'net')" :title="colFilterChipTitle(item)">
+                            <span class="chip-text">{{ colFilterChipText(item) }}</span><span class="chip-x">✕</span>
+                        </button>
+                    </span>
+                    <span v-if="scanTab === 'net' && netActiveColFilters.length >= 3" class="dropdown-wrap" ref="netFilterListWrap">
+                        <button class="chip" :class="{ 'menu-open': openMenu === 'netFilterList' }" @click="toggleMenu('netFilterList')" title="Фильтры по столбцам">
+                            <span class="chip-text">Фильтры: {{ netActiveColFilters.length }}</span>
+                        </button>
+                        <div v-if="openMenu === 'netFilterList'" class="dropdown attached cf-list-menu">
+                            <button v-for="item in netActiveColFilters" :key="'ncfl-' + item.col.field" @click="clearColFilter(item.col.field, 'net')" :title="colFilterChipTitle(item)">
+                                <span class="cfl-text">{{ colFilterChipText(item) }}</span><span class="cfl-x">✕</span>
+                            </button>
+                            <div class="dd-sep"></div>
+                            <button @click="clearAllColFilters('net')">Сбросить все</button>
+                        </div>
+                    </span>
                     <!-- Выделенные строки «Проверки» – действия над ними, как в Таблице -->
                     <span v-if="scanTab === 'check' && check.selected.length" class="dropdown-wrap" ref="checkSelWrap">
                         <button class="btn" :class="{ 'menu-open': openMenu === 'checkSel' }" @click="toggleMenu('checkSel')" title="Действия с выбранными">
@@ -1651,7 +1738,13 @@
                         <div class="history-scroll">
                             <table class="history-table users-table net-table" :class="{ 'accent-head': accentHeaders.scan }">
                                 <thead>
-                                    <tr><th>IP</th><th>MAC</th><th>Имя</th><th>DHCP</th><th>Сеть</th><th>Порты</th><th>Когда</th><th>ПК в таблице</th></tr>
+                                    <!-- Этап 47: клик – сортировка, воронка и правый клик – фильтр (как в Таблице) -->
+                                    <tr><th v-for="col in netColumns" :key="col.field" :data-field="col.field"
+                                        :class="{ sorted: net.sortField === col.field, 'filter-open': openMenu === 'colFilter' && colFilterMenu && colFilterMenu.target === 'net' && colFilterMenu.field === col.field }"
+                                        @click="netSortBy(col)" @contextmenu.prevent="openColFilter(col, $event, 'net')">
+                                        <span class="th-in"><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="net.sortField === col.field">{{ net.sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
+                                        <span class="th-filter" :class="{ on: isColFiltered(col.field, 'net') }" :title="isColFiltered(col.field, 'net') ? 'Изменить фильтр' : 'Фильтр'" @click.stop="openColFilter(col, $event, 'net')"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
+                                    </th></tr>
                                 </thead>
                                 <tbody>
                                     <tr v-if="!netShown.length" class="h-empty"><td colspan="8">{{ netEmptyText() }}</td></tr>
@@ -1786,7 +1879,7 @@
 
         <!-- ================= Vacuum (этап 26д; с 26ж – вкладка меню): пользователи Jabber ================= -->
         <section v-if="user && canEdit && view === 'vacuum'" class="view">
-            <div class="toolbar">
+            <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
                     <span class="tb-count">{{ vacuumCountText }}</span>
                     <span v-if="vacuum.error" class="tb-error" :title="vacuum.error">{{ vacuum.error }}</span>
@@ -1797,7 +1890,7 @@
                     <span v-if="vacuumQuery" class="clear" title="Очистить (Esc)" @click="vacuumQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
-                    <button class="btn icon-only" @click="loadVacuum()" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+                    <button class="btn icon-only" @click="refreshVacuumPage()" title="Обновить: кто в сети"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <span class="tb-divider"></span>
                     <span class="dropdown-wrap" ref="pageSetWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'page' }" @click="toggleMenu('page')" title="Настройки страницы"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -1882,12 +1975,12 @@
                         <input type="checkbox" :checked="isColFilterChecked(o.key)" @change="toggleColFilterValue(o)">
                         <span class="cf-value" :class="{ 'val-chip': !!(colFilterItemStyle(o) || {}).backgroundColor, 'cf-empty': o.empty }" :style="colFilterItemStyle(o)">{{ o.value }}</span>
                         <span class="cf-only" title="Показать только это значение" @click.prevent.stop="onlyColFilterValues([o])">только</span>
-                        <span class="cf-count" title="ПК с этим значением">{{ o.count }}</span>
+                        <span class="cf-count" :title="colFilterMenu.target === 'net' ? 'Адресов с этим значением' : 'ПК с этим значением'">{{ o.count }}</span>
                     </label>
                     <div v-if="!colFilterShown.length" class="cf-none">Ничего не найдено</div>
                 </div>
                 <div class="cf-foot">
-                    <button class="btn" :disabled="!isColFiltered(colFilterMenu.field)" @click="clearColFilter(colFilterMenu.field)">Сбросить</button>
+                    <button class="btn" :disabled="!isColFiltered(colFilterMenu.field, colFilterMenu.target)" @click="clearColFilter(colFilterMenu.field, colFilterMenu.target)">Сбросить</button>
                     <button class="btn" @click="closeMenus">Закрыть</button>
                 </div>
             </div>
@@ -1912,7 +2005,7 @@
             <div v-if="scanPop" ref="scanPop" class="scan-pop" :class="{ placed: scanPop.placed, 'compare-pop': scanPop.d.compare.length }" :style="{ left: scanPop.left + 'px', top: scanPop.top + 'px' }"
 >
                 <div class="sp-head" @mousedown.prevent="startScanPopDrag">
-                    <span class="sp-title">{{ scanPop.col.headerName }}<span class="sp-host">{{ scanPop.row.hostname || "" }}</span></span>
+                    <span class="sp-title">{{ scanPop.col.headerName }}<span class="sp-host">{{ (scanPop.row._printer ? scanPop.row.name : scanPop.row.hostname) || "" }}</span></span>
                     <span class="sp-close" title="Закрыть (Esc)" @mousedown.stop @click="closeScanPop">✕</span>
                 </div>
                 <table class="sp-values">
@@ -2071,7 +2164,7 @@
                                     <template v-if="pcardEditKey === r.key && !r.auth">
                                         <location-picker v-if="pcardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="pcard.location_id" :options="locationOptions"
                                             placeholder="Расположение…" @pick="onPcardLocationPick" @cancel="pcardEditKey = null"></location-picker>
-                                        <textarea v-else-if="pcardEditCol(r).multiline" ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
+                                        <textarea v-else-if="pcardEditCol(r).multiline && !pcardEditCol(r).cartridges" ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onPcardEditKeydown($event, r)" @input="growCardEditor($event.target)" @blur="savePcardEdit(r)"></textarea>
                                         <input v-else ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onPcardEditKeydown($event, r)" @input="onSuggestInput($event.target.value)" @blur="savePcardEdit(r)">
@@ -2135,7 +2228,7 @@
                                     </template>
                                     <span v-else-if="r.empty" class="ct-empty">–</span>
                                     <!-- Принтеры ПК (этап 44): ссылки – окошко принтера; значок – показать в Принтерах -->
-                                    <span v-else-if="r.key === 'printers'" class="pc-links"><span v-for="ref in (card.printer_refs || [])" :key="ref.id" class="obj-line"><a class="obj-link" :href="pageHref('printers', { pr: ref.id })" draggable="false" title="Принтер" @click.prevent="onObjLinkClick($event, { kind: 'printer', id: ref.id, usb: ref.usb })">{{ ref.title }}{{ ref.usb ? " [usb]" : "" }}</a><span class="obj-tbl" title="Показать в Принтерах" @click.stop="showObjInTable({ kind: 'printer', id: ref.id })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
+                                    <span v-else-if="r.key === 'printers'" class="pc-links"><span v-for="ref in (card.printer_refs || [])" :key="ref.id" class="obj-line"><a class="obj-link" :href="pageHref('printers', { pr: ref.id })" draggable="false" :title="ref.name || 'Принтер без имени'" @click.prevent="onObjLinkClick($event, { kind: 'printer', id: ref.id, usb: ref.usb })">{{ ref.title }}{{ ref.usb ? " [usb]" : "" }}</a><span class="obj-tbl" title="Показать в Принтерах" @click.stop="showObjInTable({ kind: 'printer', id: ref.id })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
                                     <span v-else-if="r.key === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(card)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avStyle(a) || {}).backgroundColor }" :style="avStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
                                     <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)" @dblclick="onCardValueDblclick($event, r, r.value)">{{ r.value }}</span>
                                     <template v-if="cardEditKey === r.key">

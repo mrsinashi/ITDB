@@ -145,7 +145,9 @@ export default {
             }
             const box = wrap.getBoundingClientRect();
             const right = box.left + wrap.clientWidth;   // без полосы прокрутки
-            const headBox = head.getBoundingClientRect();
+            // Шапка липкая у ячеек, а не у thead: прокрутили вниз – thead уехал вверх,
+            // а ячейки шапки стоят на месте. Высота и верх – по ячейке
+            const headBox = drag.th.getBoundingClientRect();
             const tableBox = table.getBoundingClientRect();
             const top = headBox.top;
             const height = Math.min(box.top + wrap.clientHeight, tableBox.bottom) - top;

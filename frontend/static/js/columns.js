@@ -90,6 +90,9 @@ export function toColumnDef(c) {
         // «Доступ» – логин и пароль Web: в ячейке точки, двойной клик – показать по паролю,
         // задать, изменить (mixins/web-access.js)
         secret: c.kind === "secret",
+        // Картриджи модели принтера (этап 47): в ячейке строками, правка – через запятую
+        // с подсказками из справочника картриджей
+        cartridges: c.kind === "cartridges",
         hiddenByDefault: c.hidden,
         dup: c.dup,
         bulk: c.bulk,
@@ -173,7 +176,8 @@ export const ENTITY_LABELS = {
     app_settings: "Настройка",
     naming: "Своё имя",
     printers: "Принтер",
-    printer_models: "Модель принтера"
+    printer_models: "Модель принтера",
+    cartridges: "Картридж"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -241,7 +245,8 @@ export const SIMPLE_FIELD_LABELS = {
     kind: "Тип",
     maker: "Производитель",
     model: "Модель",
-    duplex: "Дуплекс"
+    duplex: "Дуплекс",
+    cartridges: "Картриджи"   // этап 47
 };
 // Не отменяются и не открывают «Историю значения» (логин и пароль Web – этап 44)
 export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password", "web_login", "web_password"];

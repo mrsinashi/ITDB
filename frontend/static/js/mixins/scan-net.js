@@ -7,9 +7,12 @@
 // подсказке – «Источник: …»; то, что видели давно (старше срока «Актуальны»), не
 // удаляется, а показывается серым. Данные – /api/scan/hosts; собирает сервер
 // («Сканировать» над фильтрами, «Собрать» на «GLPI / GSIT», расписание). Этап 43: фильтр
-// по давности – «Актуальные» / «Неактуальные» (серые строки).
+// по давности – «Актуальные» / «Неактуальные» (серые строки). Этап 47: фильтры по столбцам
+// (воронка и правый клик по шапке – то же меню, что в Таблице, col-filters.js; у IP –
+// подсети) и сортировка кликом по шапке; Shift+Enter – адрес строки в браузере.
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
+import { rowPasses } from "./col-filters.js";
 
 export const NET_FILTERS = [
     { key: "all", label: "Все" },
@@ -57,6 +60,45 @@ function fromText(sources) {
     return "Источник: " + sources.join(", ");
 }
 
+function ipNumber(ip) {
+    const parts = String(ip || "").split(".");
+    return parts.length === 4 && parts.every(function (p) { return /^\d+$/.test(p); })
+        ? parts.reduce(function (n, p) { return n * 256 + Number(p); }, 0) : null;
+}
+
+const textOf = function (list) { return list.map(function (v) { return v.value; }); };
+
+// Столбцы таблицы «Сети» (этап 47): lines – значения ячейки для фильтра (строками;
+// у IP фильтр – по подсетям /24), sort – ключ сортировки (null – пусто, внизу)
+function netColumns(vm) {
+    return [
+        { field: "ip", headerName: "IP", values: "subnet", lines: (h) => [h.ip], sort: (h) => ipNumber(h.ip) },
+        { field: "mac", headerName: "MAC", lines: (h) => textOf(h.mac), sort: (h) => textOf(h.mac)[0] || null },
+        { field: "name", headerName: "Имя", lines: (h) => textOf(h.name), sort: (h) => textOf(h.name)[0] || null },
+        { field: "dhcp", headerName: "DHCP", lines: (h) => [h.dhcp, h.conf].filter(Boolean).map((s) => s.text), sort: (h) => vm.netDhcpText(h) || null },
+        { field: "net", headerName: "Сеть", lines: (h) => (h.net ? [h.net.text] : []), sort: (h) => (h.net ? h.net.text : null) },
+        {
+            field: "ports", headerName: "Порты",
+            lines: (h) => (h.ports ? (h.ports.length ? h.ports.map(String) : ["–"]) : []),
+            sort: (h) => (h.ports && h.ports.length ? h.ports[0] : null)
+        },
+        // Когда: фильтр – по дням, сортировка – по времени
+        { field: "when", headerName: "Когда", date: true, lines: (h) => (h.seen_at ? [vm.formatDate(h.seen_at)] : []), sort: (h) => h.seen_at || null },
+        {
+            field: "pc", headerName: "ПК в таблице", fullName: "ПК в таблице",
+            lines: (h) => h.computers.map((c) => c.hostname || "без имени"),
+            sort: (h) => (h.computers.length ? h.computers[0].hostname || "" : null)
+        }
+    ];
+}
+
+function compareKeys(a, b) {
+    if (typeof a === "number" && typeof b === "number") {
+        return a - b;
+    }
+    return String(a).localeCompare(String(b), "ru", { numeric: true, sensitivity: "base" });
+}
+
 export default {
     computed: {
         netFilters() {
@@ -89,31 +131,56 @@ export default {
             return NET_AGES;
         },
 
-        // Числа на кнопках: у каждой группы – с учётом того, что выбрано в остальных
+        // Числа на кнопках: у каждой группы – с учётом того, что выбрано в остальных (и фильтров
+        // по столбцам)
         netCounts() {
             const counts = {};
             const source = this.net.source;
             const filter = this.net.filter;
             const age = this.net.age;
+            const hosts = this.netColFiltered(this.netHosts, null);
             NET_FILTERS.forEach((f) => {
-                counts[f.key] = this.netHosts.filter(function (h) { return inNetFilter(h, f.key) && (!source || h[source]) && inNetAge(h, age); }).length;
+                counts[f.key] = hosts.filter(function (h) { return inNetFilter(h, f.key) && (!source || h[source]) && inNetAge(h, age); }).length;
             });
             NET_SOURCES.forEach((s) => {
-                counts[s.key] = this.netHosts.filter(function (h) { return inNetFilter(h, filter) && h[s.key] && inNetAge(h, age); }).length;
+                counts[s.key] = hosts.filter(function (h) { return inNetFilter(h, filter) && h[s.key] && inNetAge(h, age); }).length;
             });
             NET_AGES.forEach((a) => {
-                counts[a.key] = this.netHosts.filter(function (h) { return inNetFilter(h, filter) && (!source || h[source]) && inNetAge(h, a.key); }).length;
+                counts[a.key] = hosts.filter(function (h) { return inNetFilter(h, filter) && (!source || h[source]) && inNetAge(h, a.key); }).length;
             });
             return counts;
         },
 
-        netShown() {
-            const words = searchWordsIn(this.scanMatchQuery, this.netHosts.map(function (h) { return h.search; }));
-            const source = this.net.source;
-            const age = this.net.age;
-            return this.netHosts.filter((h) => {
-                return inNetFilter(h, this.net.filter) && (!source || h[source]) && inNetAge(h, age) && (!words.length || matchesAllWords(h.search, words));
+        // Столбцы таблицы (этап 47) – для фильтров и сортировки
+        netColumns() {
+            return netColumns(this);
+        },
+
+        // Активные фильтры по столбцам – плашками на панели, как в Таблице
+        netActiveColFilters() {
+            const filters = this.net.colFilters;
+            return this.netColumns.filter(function (col) { return !!filters[col.field]; }).map(function (col) {
+                const filter = filters[col.field];
+                return { col: col, filter: filter, set: new Set(filter.keys), states: filter.states };
             });
+        },
+
+        // Строки: кнопки-фильтры, поиск, фильтры по столбцам; сортировка – по шапке
+        netShown() {
+            const rows = this.netFilterRows(null);
+            const col = this.net.sortField && this.netColumns.find((c) => c.field === this.net.sortField);
+            if (!col) {
+                return rows;
+            }
+            const dir = this.net.sortDir === "desc" ? -1 : 1;
+            return rows.map(function (h) { return { h: h, key: col.sort(h) }; }).sort(function (a, b) {
+                const ea = a.key === null || a.key === "";
+                const eb = b.key === null || b.key === "";
+                if (ea !== eb) {
+                    return ea ? 1 : -1;   // пустые – внизу при любом порядке
+                }
+                return ea ? 0 : compareKeys(a.key, b.key) * dir;
+            }).map(function (x) { return x.h; });
         },
 
         netCountText() {
@@ -124,6 +191,43 @@ export default {
     },
 
     methods: {
+        // Адреса, прошедшие фильтры по столбцам; except – поле, фильтр которого не учитывать
+        netColFiltered(hosts, except) {
+            const active = this.netActiveColFilters.filter(function (f) { return f.col.field !== except; });
+            if (!active.length) {
+                return hosts;
+            }
+            return hosts.filter(function (h) {
+                return active.every(function (f) { return rowPasses(h, f.col, f.filter, f.set); });
+            });
+        },
+
+        // Строки для таблицы и для списка фильтра столбца except (как в Excel: по остальным
+        // фильтрам и поиску)
+        netFilterRows(except) {
+            const words = searchWordsIn(this.scanMatchQuery, this.netHosts.map(function (h) { return h.search; }));
+            const source = this.net.source;
+            const age = this.net.age;
+            const hosts = this.netHosts.filter((h) => {
+                return inNetFilter(h, this.net.filter) && (!source || h[source]) && inNetAge(h, age) && (!words.length || matchesAllWords(h.search, words));
+            });
+            return this.netColFiltered(hosts, except);
+        },
+
+        // Клик по шапке: по возрастанию → по убыванию → как с сервера (по IP)
+        netSortBy(col) {
+            const net = this.net;
+            if (net.sortField !== col.field) {
+                net.sortField = col.field;
+                net.sortDir = "asc";
+            } else if (net.sortDir === "asc") {
+                net.sortDir = "desc";
+            } else {
+                net.sortField = null;
+                net.sortDir = null;
+            }
+        },
+
         async loadNet() {
             this.net.loading = true;
             this.net.error = "";

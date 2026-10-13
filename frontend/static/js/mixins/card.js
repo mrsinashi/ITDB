@@ -62,7 +62,7 @@ export default {
             // кнопкой в шапке карточки; пустое показывается серым «–»
             const showEmpty = this.cardShowEmpty;
             // Сканер предлагает значение для пустого поля – строку показать (этап 26б)
-            const scanFields = this.diffIndex.get(c.id) || {};
+            const scanFields = this.pcDiffIndex.get(c.id) || {};
             const shownKinds = this.scanShownKinds;
             function filled(list) {
                 return list.filter(function (r) {
@@ -155,7 +155,7 @@ export default {
                     this.openSuggest(input, col, (value) => {
                         this.cardEditValue = value;
                         this.saveCardEdit(r);
-                    }, this.card.id);
+                    }, this.card.id, true);
                 }
             });
         },

@@ -22,6 +22,10 @@
 // ПК виден, если у значения есть отмеченное выделение (и значение отмечено ниже).
 // У VACUUM (этап 43) первыми – «В сети» / «Не в сети» (кружок у логина): это отдельная
 // группа – ПК виден, если подходит и по ней, и по выделениям.
+//
+// Этап 47: то же меню – у таблицы «Сети» «Сканера» (colFilterMenu.target = "net"): свои
+// столбцы (netColumns, значения ячейки – col.lines), строки (netFilterRows) и фильтры
+// (net.colFilters); у IP – подсети. Выделений значений там нет.
 
 import { matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
 import { columnTitle, dateKey, ipSubnetKey, isOverdue } from "../columns.js";
@@ -52,13 +56,19 @@ function isOnlineState(kind) {
     return ONLINE_STATES.indexOf(kind) !== -1;
 }
 
-// Значения ячейки для фильтра: [{ key, value }]; пустая – [{ key: "" }]
+// Значения ячейки для фильтра: [{ key, value }]; пустая – [{ key: "" }]. У столбцов
+// «Сети» (этап 47) строки ячейки даёт col.lines(row)
 function valuesOf(row, col) {
-    const raw = row[col.field];
-    if (raw === null || raw === undefined || String(raw).trim() === "") {
-        return [{ key: EMPTY_KEY, value: EMPTY_LABEL }];
+    let lines;
+    if (col.lines) {
+        lines = col.lines(row).map(function (line) { return String(line).trim(); }).filter(Boolean);
+    } else {
+        const raw = row[col.field];
+        if (raw === null || raw === undefined || String(raw).trim() === "") {
+            return [{ key: EMPTY_KEY, value: EMPTY_LABEL }];
+        }
+        lines = col.multiline && !col.note ? splitMulti(raw) : [String(raw).trim()];
     }
-    const lines = col.multiline && !col.note ? splitMulti(raw) : [String(raw).trim()];
     const result = [];
     lines.forEach(function (line) {
         const subnet = col.values === "subnet" ? ipSubnetKey(line) : null;
@@ -67,7 +77,7 @@ function valuesOf(row, col) {
     return result.length ? result : [{ key: EMPTY_KEY, value: EMPTY_LABEL }];
 }
 
-function rowPasses(row, col, filter, set) {
+export function rowPasses(row, col, filter, set) {
     return valuesOf(row, col).some(function (v) {
         return filter.exclude ? !set.has(v.key) : set.has(v.key);
     });
@@ -104,11 +114,12 @@ export default {
         // остальные по возрастанию, «(пусто)» – в конце. [{ key, value, count }]
         colFilterOptions() {
             const menu = this.colFilterMenu;
-            const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
+            const col = menu && this.cfColumn(menu);
             if (!col) {
                 return [];
             }
-            const rows = this.searchRows(this.applyColFilters(this.locationRows, col.field));
+            const net = menu.target === "net";
+            const rows = net ? this.netFilterRows(col.field) : this.searchRows(this.applyColFilters(this.locationRows, col.field));
             const map = new Map();
             rows.forEach(function (row) {
                 const seen = new Set();
@@ -127,7 +138,7 @@ export default {
             });
             // Отмеченные в фильтре «только эти», которых сейчас нет в строках, –
             // тоже в списке (с нулём), чтобы галочку можно было снять
-            const filter = this.colFilters[col.field];
+            const filter = this.cfStore(menu.target)[col.field];
             if (filter && !filter.exclude) {
                 filter.keys.forEach(function (key) {
                     if (!map.has(key)) {
@@ -136,7 +147,7 @@ export default {
                 });
             }
             const order = new Map();
-            (this.choicesByField[col.field] || []).forEach(function (ch, i) {
+            (net ? [] : this.choicesByField[col.field] || []).forEach(function (ch, i) {
                 const key = col.values === "subnet" ? (ipSubnetKey(ch.value) || ch.value.trim().toLowerCase()) : ch.value.trim().toLowerCase();
                 if (!order.has(key)) {
                     order.set(key, i);
@@ -201,7 +212,7 @@ export default {
         // «Обычные»; выделений нет – списка нет. [{ kind, label, count, checked, style, chip }]
         colFilterStates() {
             const menu = this.colFilterMenu;
-            const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
+            const col = menu && menu.target !== "net" && this.allColumns.find(function (c) { return c.field === menu.field; });
             if (!col || (col.scanOnly && !this.avSettings)) {
                 return [];
             }
@@ -248,7 +259,7 @@ export default {
 
         colFilterMenuTitle() {
             const menu = this.colFilterMenu;
-            const col = menu && this.allColumns.find(function (c) { return c.field === menu.field; });
+            const col = menu && this.cfColumn(menu);
             return col ? columnTitle(col) : "";
         },
     },
@@ -264,6 +275,25 @@ export default {
     },
 
     methods: {
+        // Чьи фильтры (этап 47): table – Таблица (Компьютеры, Принтеры), net – «Сеть»
+        cfStore(target) {
+            return target === "net" ? this.net.colFilters : this.colFilters;
+        },
+
+        cfSave(target, filters) {
+            if (target === "net") {
+                this.net.colFilters = filters;
+            } else {
+                this.colFilters = filters;
+            }
+        },
+
+        // Столбец открытого списка
+        cfColumn(menu) {
+            const list = menu.target === "net" ? this.netColumns : this.allColumns;
+            return list.find(function (c) { return c.field === menu.field; }) || null;
+        },
+
         // Строки, прошедшие фильтры по столбцам; except – поле, фильтр которого не учитывать
         applyColFilters(rows, except) {
             const active = this.activeColFilters.filter(function (f) { return f.col.field !== except; });
@@ -352,18 +382,20 @@ export default {
             });
         },
 
-        isColFiltered(field) {
-            return !!this.colFilters[field];
+        isColFiltered(field, target) {
+            return !!this.cfStore(target)[field];
         },
 
         // Открыть список значений под шапкой столбца (воронка или правый клик).
-        // Повторный клик по той же воронке – закрыть.
-        openColFilter(col, event) {
+        // Повторный клик по той же воронке – закрыть. target – чья таблица (net – «Сеть»)
+        openColFilter(col, event, target) {
             if (col.virtual) {
                 return;
             }
+            target = target || "table";
             const th = event.currentTarget.closest("th");
-            if (this.openMenu === "colFilter" && this.colFilterMenu && this.colFilterMenu.field === col.field && event.type === "click") {
+            const menu = this.colFilterMenu;
+            if (this.openMenu === "colFilter" && menu && menu.field === col.field && menu.target === target && event.type === "click") {
                 this.closeMenus();
                 return;
             }
@@ -371,7 +403,7 @@ export default {
             if (this.openMenu && !already) {
                 this.closeMenus();
             }
-            this.colFilterMenu = { field: col.field, query: "", pos: null, th: th };
+            this.colFilterMenu = { field: col.field, query: "", pos: null, th: th, target: target };
             this.openMenu = "colFilter";
             if (!already) {
                 this.$nextTick(() => {
@@ -407,7 +439,7 @@ export default {
             }
             let th = menu.th;
             if (!th || !th.isConnected) {
-                th = document.querySelector('.data-table th[data-field="' + menu.field + '"]');
+                th = document.querySelector((menu.target === "net" ? ".net-table" : ".data-table") + ' th[data-field="' + menu.field + '"]');
                 menu.th = th;
             }
             if (!th) {
@@ -424,7 +456,8 @@ export default {
         },
 
         isColFilterChecked(key) {
-            const filter = this.colFilters[this.colFilterMenu ? this.colFilterMenu.field : ""];
+            const menu = this.colFilterMenu;
+            const filter = menu ? this.cfStore(menu.target)[menu.field] : null;
             if (!filter) {
                 return true;
             }
@@ -445,9 +478,10 @@ export default {
         },
 
         // Записать фильтр столбца; «все отмечены» – фильтра нет.
-        // states – отметки состояний ({ only } / { off }, остаются при смене значений)
-        setColFilter(field, filter, states) {
-            const next = Object.assign({}, this.colFilters);
+        // states – отметки состояний ({ only } / { off }, остаются при смене значений);
+        // target – чья таблица (net – «Сеть», этап 47; по умолчанию – Таблица)
+        setColFilter(field, filter, states, target) {
+            const next = Object.assign({}, this.cfStore(target));
             states = statesActive(states) ? { only: states.only || null, off: states.only ? [] : states.off } : null;
             if (!filter && states) {
                 filter = { exclude: true, keys: [], labels: {} };
@@ -457,24 +491,25 @@ export default {
             } else {
                 next[field] = Object.assign({}, filter, { states: states || NO_STATES });
             }
-            this.colFilters = next;
+            this.cfSave(target, next);
         },
 
-        colFilterStatesOf(field) {
-            return (this.colFilters[field] || {}).states || null;
+        colFilterStatesOf(field, target) {
+            return (this.cfStore(target)[field] || {}).states || null;
         },
 
         // Отметки состояний открытого столбца: { only: [виды] } / { off: [виды] }; null – без фильтра
         setColStates(states) {
-            const field = this.colFilterMenu.field;
-            const old = this.colFilters[field];
-            this.setColFilter(field, old ? { exclude: old.exclude, keys: old.keys, labels: old.labels } : null, states);
+            const menu = this.colFilterMenu;
+            const old = this.cfStore(menu.target)[menu.field];
+            this.setColFilter(menu.field, old ? { exclude: old.exclude, keys: old.keys, labels: old.labels } : null, states, menu.target);
         },
 
         // Галочка у состояния: после «только» – дописать / убрать из «только этих» (отмечены
         // все из списка – фильтра нет), иначе – из снятых
         toggleColState(kind) {
-            const states = this.colFilterStatesOf(this.colFilterMenu.field) || NO_STATES;
+            const menu = this.colFilterMenu;
+            const states = this.colFilterStatesOf(menu.field, menu.target) || NO_STATES;
             const flip = function (list) {
                 return list.indexOf(kind) === -1 ? list.concat([kind]) : list.filter(function (k) { return k !== kind; });
             };
@@ -489,8 +524,9 @@ export default {
 
         // Отметить / снять значения открытого столбца
         setColFilterChecked(options, checked) {
-            const field = this.colFilterMenu.field;
-            const old = this.colFilters[field] || { exclude: true, keys: [], labels: {} };
+            const menu = this.colFilterMenu;
+            const field = menu.field;
+            const old = this.cfStore(menu.target)[field] || { exclude: true, keys: [], labels: {} };
             const keys = new Set(old.keys);
             const labels = Object.assign({}, old.labels);
             options.forEach(function (o) {
@@ -504,13 +540,13 @@ export default {
                 }
             });
             const filter = { exclude: old.exclude, keys: Array.from(keys), labels: labels };
-            const states = this.colFilterStatesOf(field);
+            const states = this.colFilterStatesOf(field, menu.target);
             // «Только эти», а отмечено всё, что есть в столбце, – фильтра нет
             if (!filter.exclude && this.colFilterOptions.every(function (o) { return keys.has(o.key); })) {
-                this.setColFilter(field, null, states);
+                this.setColFilter(field, null, states, menu.target);
                 return;
             }
-            this.setColFilter(field, filter, states);
+            this.setColFilter(field, filter, states, menu.target);
         },
 
         toggleColFilterValue(option) {
@@ -522,7 +558,7 @@ export default {
             const menu = this.colFilterMenu;
             const checked = this.colFilterAllState !== true;
             if (!searchWords(menu.query).length) {
-                this.setColFilter(menu.field, checked ? null : { exclude: false, keys: [], labels: {} }, this.colFilterStatesOf(menu.field));
+                this.setColFilter(menu.field, checked ? null : { exclude: false, keys: [], labels: {} }, this.colFilterStatesOf(menu.field, menu.target), menu.target);
                 return;
             }
             this.setColFilterChecked(this.colFilterShown, checked);
@@ -530,13 +566,14 @@ export default {
 
         // Показать только эти значения
         onlyColFilterValues(options) {
+            const menu = this.colFilterMenu;
             const labels = {};
             options.forEach(function (o) { labels[o.key] = o.value; });
-            this.setColFilter(this.colFilterMenu.field, {
+            this.setColFilter(menu.field, {
                 exclude: false,
                 keys: options.map(function (o) { return o.key; }),
                 labels: labels
-            }, this.colFilterStatesOf(this.colFilterMenu.field));
+            }, this.colFilterStatesOf(menu.field, menu.target), menu.target);
         },
 
         // Enter в поиске по значениям: только найденные, меню закрывается
@@ -548,17 +585,19 @@ export default {
             this.closeMenus();
         },
 
-        clearColFilter(field) {
-            this.setColFilter(field, null);
+        clearColFilter(field, target) {
+            this.setColFilter(field, null, null, target);
             // В списке «Фильтры: N» осталось меньше трёх – снова плашки, меню не нужно
-            if (this.openMenu === "colFilterList" && this.activeColFilters.length < 3) {
+            const net = target === "net";
+            const left = net ? this.netActiveColFilters : this.activeColFilters;
+            if (this.openMenu === (net ? "netFilterList" : "colFilterList") && left.length < 3) {
                 this.closeMenus();
             }
         },
 
-        clearAllColFilters() {
-            this.colFilters = {};
-            if (this.openMenu === "colFilter" || this.openMenu === "colFilterList") {
+        clearAllColFilters(target) {
+            this.cfSave(target, {});
+            if (["colFilter", "colFilterList", "netFilterList"].indexOf(this.openMenu) !== -1) {
                 this.closeMenus();
             }
         },
@@ -621,7 +660,7 @@ export default {
         // Значение в списке – в оформлении из Справочников (цвет, фон, Ж, К)
         colFilterItemStyle(option) {
             const menu = this.colFilterMenu;
-            if (!menu || option.empty) {
+            if (!menu || option.empty || menu.target === "net") {
                 return null;
             }
             const choice = (this.choiceStyleMap[menu.field] || {})[option.key] || null;

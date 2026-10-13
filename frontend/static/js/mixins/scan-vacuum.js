@@ -141,6 +141,13 @@ export default {
             }
         },
 
+        // «Обновить» (этап 47): только кто в сети – быстрая проверка Jabber, как у ПК; сервер
+        // показывает её итог, пока он свежее сбора
+        async refreshVacuumPage() {
+            await this.loadVacuumOnline(true);
+            await this.loadVacuum();
+        },
+
         // «Сканировать»: собрать из Jabber заново (admin)
         refreshVacuum() {
             if (this.isAdmin && !this.scanCollectBlock("jabber")) {

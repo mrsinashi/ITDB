@@ -15,18 +15,29 @@ import { matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util
 
 export default {
     computed: {
-        // Что показывать: пока не печатали – все значения, потом – по словам
+        // Что показывать: пока не печатали – все значения, потом – по словам. По частям через
+        // запятую (картриджи, этап 47) – по набираемой части, без уже вписанных
         suggestShown() {
             const s = this.suggest;
             if (!s) {
                 return [];
             }
-            if (!s.filtering || !searchWords(s.query).length) {
-                return s.options;
+            let options = s.options;
+            let query = s.query;
+            if (s.tokens) {
+                const parts = String(s.query).split(/[,;\n]/);
+                query = parts.pop();
+                const used = new Set(parts.map(function (part) { return part.trim().toLowerCase(); }).filter(Boolean));
+                options = options.filter(function (o) { return !used.has(String(o.value).toLowerCase()); });
+            } else if (!s.filtering) {
+                return options;
             }
-            const texts = s.options.map(function (o) { return searchNorm(o.value); });
-            const words = searchWordsIn(s.query, texts);
-            return s.options.filter(function (o, i) {
+            if (!searchWords(query).length) {
+                return options;
+            }
+            const texts = options.map(function (o) { return searchNorm(o.value); });
+            const words = searchWordsIn(query, texts);
+            return options.filter(function (o, i) {
                 return matchesAllWords(texts[i], words);
             });
         },
@@ -52,8 +63,9 @@ export default {
     },
 
     methods: {
-        // rowId – ПК, чьё поле правится: значение сканера (этап 26б) – первым вариантом
-        openSuggest(el, col, onPick, rowId) {
+        // rowId – ПК (принтер), чьё поле правится: значение сканера (этап 26б) – первым
+        // вариантом; pcOnly – это ПК, а не строка таблицы на экране (карточка ПК, этап 47)
+        openSuggest(el, col, onPick, rowId, pcOnly) {
             this.closeSuggest();
             if (!el || !col) {
                 return;
@@ -63,7 +75,12 @@ export default {
                 this.openSuggestList(el, col.field, this.pickOptions(col), onPick);
                 return;
             }
-            const scan = rowId ? this.scanSuggestFor(rowId, col.field) : [];
+            // Картриджи (этап 47): по частям через запятую, выбор не сохраняет – дописывает
+            if (col.cartridges) {
+                this.openTokenSuggest(el, col.field, this.cartridgeOptions());
+                return;
+            }
+            const scan = rowId ? this.scanSuggestFor(rowId, col.field, pcOnly) : [];
             if (!col.suggest && !scan.length) {
                 return;
             }
@@ -74,13 +91,14 @@ export default {
         },
 
         // Тот же список со своими вариантами [{ key, value, count }] (например, подсети,
-        // которых нет в списке, – при добавлении подсети, этап 26д)
-        openSuggestList(el, field, options, onPick) {
+        // которых нет в списке, – при добавлении подсети, этап 26д). tokens – значение
+        // по частям через запятую (этап 47): список – к набираемой части
+        openSuggestList(el, field, options, onPick, tokens) {
             this.closeSuggest();
             if (!el || !options.length) {
                 return;
             }
-            const current = String(el.value || "").trim().toLowerCase();
+            const current = tokens ? "" : String(el.value || "").trim().toLowerCase();
             this.suggest = {
                 el: el,
                 field: field,
@@ -88,6 +106,7 @@ export default {
                 current: current,
                 query: el.value || "",
                 filtering: false,
+                tokens: !!tokens,
                 active: -1,
                 pos: null,
                 onPick: onPick

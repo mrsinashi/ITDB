@@ -6,6 +6,7 @@ import { apiFetch, isTypingTarget, loadJson, saveJson, searchNorm, searchWords, 
 import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 import { CHIP_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths } from "../widths.js";
 import { pageLink } from "../route.js";
+import { splitTokens } from "./cartridges.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE – антивирусов нет
 const AV_RANK = { on: 0, old: 1, off: 2 };
@@ -376,6 +377,25 @@ export default {
             this.tableLoading = false;
         },
 
+        // «Обновить» слева от поиска (этап 47): изменения таблицы и значения сканера; у ПК –
+        // ещё и кто в сети из VACUUM (быстрая проверка Jabber сейчас)
+        async refreshTablePage() {
+            if (this.tableRefreshing) {
+                return;
+            }
+            this.tableRefreshing = true;
+            try {
+                if (this.tableKind === "printer") {
+                    await Promise.all([this.loadPrinters(), this.loadPrinterDiffs()]);
+                } else {
+                    await Promise.all([this.loadTable(), this.loadDiffs(), this.loadVacuumOnline(true), this.loadPrinters()]);
+                    this.refreshCardRow();
+                }
+            } finally {
+                this.tableRefreshing = false;
+            }
+        },
+
         // Клик по шапке – сортировка, с Ctrl – закрепить столбец / снять закрепление.
         // Столбец только что перетаскивали – это не клик
         onHeadClick(event, col) {
@@ -702,7 +722,7 @@ export default {
         // Имя этого ПК по сканеру другое (и «оставить как есть» не нажато) – это имя и откуда
         // («pc-7 · GLPI №12»); иначе null
         wrongHostname(computerId) {
-            const d = (this.diffIndex.get(computerId) || {}).hostname;
+            const d = (this.pcDiffIndex.get(computerId) || {}).hostname;
             return d && d.can_take === false ? String(d.proposed || "").split("\n")[0] + " · " + this.diffSourceShort(d) : null;
         },
 
@@ -979,6 +999,10 @@ export default {
             this.editingRowId = row.id;
             this.editingField = col.field;
             this.editValue = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
+            // Картриджи (этап 47): в поле – через запятую
+            if (col.cartridges) {
+                this.editValue = splitTokens(this.editValue).join(", ");
+            }
             this.$nextTick(() => {
                 const ref = this.$refs["edit-" + row.id + "-" + col.field];
                 const el = Array.isArray(ref) ? ref[0] : ref;
@@ -996,7 +1020,7 @@ export default {
                     const len = el.value.length;
                     el.setSelectionRange(len, len);
                 }
-                if (!col.multiline) {
+                if (!col.multiline || col.cartridges) {
                     this.openSuggest(el, col, (value) => {
                         this.editValue = value;
                         this.saveEdit(row, col);
@@ -1023,7 +1047,8 @@ export default {
                 return;
             }
             const oldValue = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
-            const newValue = this.editValue;
+            // Картриджи (этап 47): в поле – через запятую, в ячейке – строками
+            const newValue = col.cartridges ? splitTokens(this.editValue).join("\n") : this.editValue;
             this.editingRowId = null;
             this.editingField = null;
             this.closeSuggest();
@@ -1073,7 +1098,8 @@ export default {
                 namingHelp: this.$refs.namingHelpWrap,
                 historyFilter: this.$refs.historyFilterWrap,
                 colFilter: this.$refs.colFilterPanel,
-                colFilterList: this.$refs.colFilterListWrap
+                colFilterList: this.$refs.colFilterListWrap,
+                netFilterList: this.$refs.netFilterListWrap
             };
             // Клик по воронке в шапке решает сам: та же – закрыть, другая – открыть её
             if (this.openMenu === "colFilter" && event.target.closest(".th-filter")) {

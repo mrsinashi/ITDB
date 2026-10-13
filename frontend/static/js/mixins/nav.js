@@ -7,6 +7,8 @@ import { pageLink, parseHash } from "../route.js";
 // Вкладки «Сканера»: какие есть у редактора (остальные – только администратор)
 const SCAN_TABS = ["check", "net", "names", "schedule", "settings"];
 const EDITOR_SCAN_TABS = ["check", "net"];
+// Ctrl+Y возвращает отменённое Ctrl+Z только столько после отмены (этап 47)
+const REDO_WINDOW_MS = 60 * 1000;
 
 export default {
     methods: {
@@ -71,7 +73,7 @@ export default {
                 this.setScanTab(route.tab);
             }
             if (route.view === "choices") {
-                this.setChoicesTab(route.tab === "names" || route.tab === "models" ? route.tab : "styles");
+                this.setChoicesTab(["names", "models", "cartridges"].indexOf(route.tab) !== -1 ? route.tab : "styles");
             }
             if (params.pc) {
                 this.openCardById(Number(params.pc));
@@ -111,25 +113,48 @@ export default {
         async reloadAfterUndo() {
             await this.afterHistoryAction();
             this.loadDiffs();
+            this.loadPrinterDiffs();
             if (this.view === "scan" && this.scanTab === "check") {
                 this.loadCheck();
             }
         },
 
-        // Ctrl+Z: отменить своё последнее действие (как «Отменить изменения» в Истории)
+        // Ctrl+Z: отменить своё последнее действие (как «Отменить изменения» в Истории).
+        // Этап 47: только за 5 минут; сделанное больше минуты назад – с подтверждением
         async undoLast() {
             if (!this.canEdit || this.undoBusy) {
                 return;
             }
             this.undoBusy = true;
             try {
-                const response = await apiFetch("/api/history/undo-last", { method: "POST" });
+                const post = (body) => apiFetch("/api/history/undo-last", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                let response = await post({});
                 if (!response.ok) {
                     this.toast(await this.errorText(response), response.status === 404 ? "info" : "error");
                     return;
                 }
-                const data = await response.json();
-                this.undone.push(data.items);
+                let data = await response.json();
+                if (data.confirm) {
+                    const minutes = Math.floor(data.age / 60);
+                    if (!(await this.confirmDialog("Изменение сделано " + minutes + " мин. назад: " + data.text + ". Отменить?", { okText: "Отменить изменение" }))) {
+                        return;
+                    }
+                    response = await post({ confirm_id: data.last_id });
+                    if (!response.ok) {
+                        this.toast(await this.errorText(response), response.status === 404 ? "info" : "error");
+                        return;
+                    }
+                    data = await response.json();
+                    if (data.confirm) {
+                        this.toast("Последнее изменение уже другое – нажми Ctrl+Z ещё раз.", "info");
+                        return;
+                    }
+                }
+                this.undone.push({ items: data.items, at: Date.now() });
                 await this.reloadAfterUndo();
                 this.toast("Отменено: " + data.text, "success");
             } catch (e) {
@@ -139,18 +164,24 @@ export default {
             }
         },
 
-        // Ctrl+Y (Ctrl+Shift+Z): вернуть то, что отменил Ctrl+Z
+        // Ctrl+Y (Ctrl+Shift+Z): вернуть то, что отменил Ctrl+Z, – в течение минуты после отмены
         async redoLast() {
             if (!this.canEdit || this.undoBusy) {
                 return;
             }
-            if (!this.undone.length) {
+            const last = this.undone[this.undone.length - 1];
+            if (last && Date.now() - last.at > REDO_WINDOW_MS) {
+                this.undone = [];
+                this.toast("Ctrl+Y возвращает только в течение минуты – остальное в Истории.");
+                return;
+            }
+            if (!last) {
                 this.toast("Возвращать нечего.");
                 return;
             }
             this.undoBusy = true;
             try {
-                const items = this.undone[this.undone.length - 1];
+                const items = last.items;
                 const response = await apiFetch("/api/history/cancel", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

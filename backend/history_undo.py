@@ -46,8 +46,9 @@ from api_printers import (
     renumber_after_kind_change,
 )
 from api_users import ROLES, check_login_free, clean_login, clean_text, end_sessions
+from cartridges import check_name as check_cartridge_name, model_cartridges_text, set_model_cartridges
 from history_log import choice_title, column_label
-from models import Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, Printer, PrinterModel, User
+from models import Cartridge, Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, Printer, PrinterModel, User
 from printer_links import computer_title, links_ids, links_text, printer_title, printers_by_computer
 
 # Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ – столбец)
@@ -73,8 +74,10 @@ SIMPLE = {
     "field_defs": {"model": FieldDef, "fields": {"label", "archived"}},
     "column_styles": {"model": ColumnStyle, "fields": {"color", "bg_color"} | STYLE_FLAGS},
     "users": {"model": User, "fields": {"login", "full_name", "position", "role", "archived"}, "admin": True},
-    # Модели принтеров (этап 44): правка модели меняет все её принтеры
-    "printer_models": {"model": PrinterModel, "fields": {"kind", "maker", "model", "color", "duplex"}},
+    # Модели принтеров (этап 44): правка модели меняет все её принтеры; с этапа 47 – и картриджи
+    "printer_models": {"model": PrinterModel, "fields": {"kind", "maker", "model", "color", "duplex", "cartridges"}},
+    # Справочник картриджей (этап 47): переименование
+    "cartridges": {"model": Cartridge, "fields": {"name"}},
 }
 SIMPLE_LABELS = {
     "value": "Значение", "color": "Цвет текста", "bg_color": "Фон", "bold": "Жирный",
@@ -83,6 +86,7 @@ SIMPLE_LABELS = {
     "password": "Пароль", "created": "Создано", "deleted": "Удалено",
     "login": "Логин", "full_name": "ФИО", "position": "Должность",
     "kind": "Тип", "maker": "Производитель", "model": "Модель", "duplex": "Дуплекс",
+    "cartridges": "Картриджи", "name": "Название",
 }
 # У модели принтера color – не «Цвет текста», а «Печать»
 MODEL_LABELS = {"color": "Печать"}
@@ -214,6 +218,9 @@ def object_title(session, obj, ref):
     if entity == "printer_models":
         return model_title(obj)
 
+    if entity == "cartridges":
+        return obj.name
+
     if entity == "locations":
         return obj.name or obj.code or f"#{obj.id}"
 
@@ -298,6 +305,10 @@ class Values:
         return change.get(side)
 
     def current(self, entity, obj, field):
+        # Картриджи модели (этап 47) – связи, в Истории – текстом
+        if entity == "printer_models" and field == "cartridges":
+            return model_cartridges_text(self.session, obj.id)
+
         if entity == "locations" or entity in SIMPLE:
             return getattr(obj, field)
 
@@ -508,10 +519,19 @@ def set_printer_value(session, printer, field, value, batch):
 def set_simple_value(session, entity, obj, field, value, user, batch=None):
     """Справочник, польз. поле, оформление столбца, пользователь системы, модель
     принтера – с теми же проверками, что и при обычной правке."""
+    if entity == "printer_models" and field == "cartridges":
+        change = set_model_cartridges(session, obj, value, user["login"])
+        return {field: change} if change else {}
+
     old = getattr(obj, field)
 
     if same(field, old, value):
         return {}
+
+    if entity == "cartridges":
+        value = check_cartridge_name(session, value, obj.id)
+        setattr(obj, field, value)
+        return {field: {"old": old, "new": value}}
 
     if entity == "printer_models":
         setattr(obj, field, clean_model_value(field, value))

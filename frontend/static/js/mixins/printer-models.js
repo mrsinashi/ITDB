@@ -1,7 +1,8 @@
 // Справочники → «Модели принтеров» (этап 44): модели, из которых у принтера берутся тип,
 // производитель, печать и дуплекс. Таблица в манере «Пользователей»: новая модель и правка –
 // строкой прямо в таблице, ✓ ✕ – плашкой справа; удалить – модель без принтеров.
-// Правка модели меняет все её принтеры.
+// Правка модели меняет все её принтеры. Этап 47: и картриджи модели (через запятую, подсказками
+// из справочника картриджей; новые попадают в него сами).
 
 import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
 import { COLOR_LABELS, PRINTER_KINDS, YES_NO_LABELS } from "../columns.js";
@@ -122,7 +123,8 @@ export default {
                 this.closeModelsBar();
                 return;
             }
-            this.modelsBar = { kind: "new", type: "printer", maker: "", model: "", color: "false", duplex: "", error: "", saving: false, plate: null };
+            this.modelsBar = { kind: "new", type: "printer", maker: "", model: "", color: "false", duplex: "", cartridges: "", error: "", saving: false, plate: null };
+            this.loadCartridges();
             this.showEditRow("modelsBar", "mb-maker");
         },
 
@@ -133,8 +135,10 @@ export default {
             this.modelsHover = null;
             this.modelsBar = {
                 kind: "edit", id: m.id, type: m.kind, maker: m.maker || "", model: m.model,
-                color: boolText(m.color), duplex: boolText(m.duplex), error: "", saving: false, plate: null
+                color: boolText(m.color), duplex: boolText(m.duplex), cartridges: (m.cartridges || []).join(", "),
+                error: "", saving: false, plate: null
             };
+            this.loadCartridges();
             this.showEditRow("modelsBar", "mb-model");
         },
 
@@ -158,16 +162,20 @@ export default {
                 const response = await apiFetch(bar.kind === "new" ? "/api/printer-models" : "/api/printer-models/" + bar.id, {
                     method: bar.kind === "new" ? "POST" : "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ kind: bar.type, maker: bar.maker, model: bar.model, color: boolOf(bar.color), duplex: boolOf(bar.duplex) })
+                    body: JSON.stringify({
+                        kind: bar.type, maker: bar.maker, model: bar.model, color: boolOf(bar.color), duplex: boolOf(bar.duplex),
+                        cartridges: bar.cartridges
+                    })
                 });
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
                 const saved = await response.json();
-                await this.loadPrinterModels();
-                // Значения модели видны в таблице принтеров
+                await Promise.all([this.loadPrinterModels(), this.loadCartridges()]);
+                // Значения модели видны в таблице принтеров, название – и у ПК (этап 47)
                 if (bar.kind === "edit" && saved.printers) {
                     this.loadPrinters();
+                    this.loadTable();
                 }
                 this.modelsBar = null;
                 this.toast((bar.kind === "new" ? "Модель добавлена: " : "Сохранено: ") + saved.title, "success");

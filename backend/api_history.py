@@ -260,15 +260,23 @@ def cancel_history(payload: CancelRequest, user=Depends(require_editor), session
     return {"ok": True, "count": count, "shifted": batch.changed_ids()}
 
 
-# Ctrl+Z (этап 28б): отменяется последнее своё действие не старше этого срока
-UNDO_WINDOW = timedelta(hours=12)
+# Ctrl+Z (этап 28б): отменяется последнее своё действие не старше этого срока (этап 47 –
+# 5 минут, просьба пользователя); старше UNDO_CONFIRM – только после подтверждения
+UNDO_WINDOW = timedelta(minutes=5)
+UNDO_CONFIRM = timedelta(minutes=1)
+
+
+class UndoLastIn(BaseModel):
+    confirm_id: Optional[int] = None   # действие старше минуты: его запись, отмену подтвердили
 
 
 @router.post("/history/undo-last")
-def undo_last(user=Depends(require_editor), session=Depends(get_db)):
+def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor), session=Depends(get_db)):
     """Отменить своё последнее действие (Ctrl+Z): все его записи истории – одной
     отменой, как «Отменить изменения» в Истории. Действие – записи одного
-    сохранения (у них одно время). items – что отменено (для возврата Ctrl+Y)."""
+    сохранения (у них одно время). items – что отменено (для возврата Ctrl+Y).
+    Действие старше минуты не отменяется сразу: ответ confirm (что, сколько секунд
+    назад, last_id) – отменить его можно, прислав confirm_id = last_id."""
     allowed = [
         entity for entity in ENTITIES
         if user["role"] == "admin" or not SIMPLE.get(entity, {}).get("admin")
@@ -276,12 +284,16 @@ def undo_last(user=Depends(require_editor), session=Depends(get_db)):
     mine = [
         History.user_name == user["login"],
         History.cancelled == False,  # noqa: E712
-        History.at >= datetime.now(timezone.utc) - UNDO_WINDOW,
     ]
     last = session.query(History).filter(*mine).order_by(desc(History.id)).first()
 
     if last is None:
         raise HTTPException(status_code=404, detail="Отменять нечего.")
+
+    age = datetime.now(timezone.utc) - last.at
+
+    if age > UNDO_WINDOW:
+        raise HTTPException(status_code=404, detail="Ctrl+Z отменяет только за 5 минут – остальное в Истории.")
 
     records = session.query(History).filter(*mine, History.at == last.at).order_by(History.id).with_for_update().all()
 
@@ -318,6 +330,11 @@ def undo_last(user=Depends(require_editor), session=Depends(get_db)):
         text = f"{title} – {', '.join(labels)}" if title else ", ".join(labels)
     else:
         text = f"изменений: {len(pairs)}, объектов: {len(objects)}"
+
+    # Сделано больше минуты назад – сначала спросить (этап 47)
+    if age > UNDO_CONFIRM and (payload is None or payload.confirm_id != last.id):
+        session.rollback()
+        return {"ok": False, "confirm": True, "text": text, "age": int(age.total_seconds()), "last_id": last.id}
 
     batch = ChangeBatch(user["login"])
     count = cancel_changes(session, pairs, True, user, batch)

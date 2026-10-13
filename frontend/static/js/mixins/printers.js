@@ -278,8 +278,18 @@ export default {
                 }
             }
             this.flashCell("p" + row.id, col.field);
-            if (changes.name || changes.computers) {
+            // У ПК принтер назван моделью (этап 47), имя – в подсказке
+            if (changes.name || changes.computers || changes.model) {
                 this.loadTable();
+            }
+            // IP или MAC – другие предложения MAC из сети; картриджи – у модели, у всех её принтеров
+            if (changes.ip || changes.mac) {
+                this.loadPrinterDiffs();
+            }
+            if (data.model_changed) {
+                this.loadPrinters();
+                this.loadPrinterModels();
+                this.loadCartridges();
             }
             this.refreshPrinterCard();
             this.reloadPrinterCardHistory(row.id);
@@ -299,7 +309,8 @@ export default {
                     text: ref.title + (ref.usb ? " [usb]" : ""),
                     obj: { kind: col.links, id: ref.id, usb: ref.usb },
                     href: pc ? pageLink("table", { pc: ref.id }) : pageLink("printers", { pr: ref.id }),
-                    title: pc ? "Карточка ПК" : "Принтер",
+                    // У ПК принтер назван моделью (этап 47) – имя в подсказке
+                    title: pc ? "Карточка ПК" : ref.name || "Принтер без имени",
                     cls: {},
                     style: null
                 };
@@ -523,6 +534,7 @@ export default {
             };
             add("Модель", [row.kind, row.model_title].filter(Boolean).join(" "));
             add("Печать", [row.color, row.duplex ? "дуплекс " + row.duplex : ""].filter(Boolean).join(", "));
+            add("Картриджи", (row.cartridges || "").split("\n").join(", "));
             add("Где", [row.department, row.room].filter(Boolean).join(", ") + (row.number ? ", № " + row.number : ""));
             add("IP", (row.ip || "").split("\n").join(", "));
             add("MAC", (row.mac || "").split("\n").join(", "));

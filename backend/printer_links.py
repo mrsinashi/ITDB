@@ -10,7 +10,7 @@ import re
 from fastapi import HTTPException
 from sqlalchemy import func
 
-from models import Computer, Printer, PrinterComputer
+from models import Computer, Printer, PrinterComputer, PrinterModel
 
 USB_MARK = " [usb]"
 USB_RE = re.compile(r"\s*[\[(]\s*usb\s*[\])]\s*$", re.IGNORECASE)
@@ -23,6 +23,30 @@ def computer_title(computer):
 
 def printer_title(printer):
     return printer.name or f"#{printer.id}"
+
+
+def model_titles(session):
+    """id модели → «Производитель Модель» (как модель названа в списке выбора)."""
+    return {
+        model.id: " ".join(part for part in (model.maker, model.model) if part)
+        for model in session.query(PrinterModel).all()
+    }
+
+
+def printer_label(printer, models):
+    """Как принтер назван у ПК (этап 47): производитель и модель (имя – в подсказке);
+    без модели – имя."""
+    return models.get(printer.model_id) or printer_title(printer)
+
+
+def printer_cell(items, models):
+    """Столбец «Принтеры» у ПК: (текст, ссылки [{id, title, name, usb}]) – по модели."""
+    items = sorted(items, key=lambda item: (sort_key(printer_label(item[0], models)), sort_key(printer_title(item[0]))))
+    refs = [
+        {"id": printer.id, "title": printer_label(printer, models), "name": printer.name, "usb": bool(usb)}
+        for printer, usb in items
+    ]
+    return links_text(items, lambda printer: printer_label(printer, models)), refs
 
 
 def link_text(title, usb):

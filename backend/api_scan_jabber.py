@@ -14,7 +14,8 @@ GET /api/scan/jabber – пользователи из последних сбо
 GET /api/scan/jabber/online (этап 41) – кто в сети сейчас, для кружков у VACUUM в
 Таблице: одна страница online-users/ ejabberd, не чаще раза в N минут (настройка
 подключения), по клику по строке ПК (click=1) – не чаще раза в CLICK_SECONDS. Итог –
-в памяти процесса (служба – один процесс), в базу не пишется. Смотреть – все.
+в памяти процесса (служба – один процесс), в базу не пишется. Смотреть – все. Этап 47:
+итог свежее последнего сбора – и на странице «Vacuum» в сети ли – по нему («Обновить»).
 """
 import ipaddress
 import math
@@ -116,11 +117,33 @@ def address_index(session):
     return computers, by_ip, records
 
 
+def live_online(session, source):
+    """Кто в сети по быстрой проверке (GET /online), если она включена и свежее
+    последнего сбора Jabber: логины строчными; иначе None – в сети ли, говорит сбор.
+    Так «Обновить» на странице «Vacuum» обновляет только то, кто в сети (этап 47)."""
+    if not (source and source.enabled and online_settings(source)[0]):
+        return None
+
+    with _online_lock:
+        logins, at = _online["logins"], _online["at"]
+
+    if logins is None or at is None:
+        return None
+
+    run = last_run_of(session, "jabber")
+
+    if run is not None and (run.status == "running" or (run.finished_at or run.started_at) >= at):
+        return None
+
+    return set(logins)
+
+
 @router.get("", response_model=JabberOut)
 def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
     source = load_source(session, "jabber")
     computers, by_ip, records = address_index(session)
     rows = session.query(ScanJabberUser).order_by(ScanJabberUser.login).all()
+    live = live_online(session, source)
     listed = any(row.registered is not None for row in rows)
     since = datetime.now(timezone.utc) - timedelta(days=fresh_days_of(source, "jabber"))
     users = []
@@ -147,7 +170,9 @@ def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
         if row.registered is False and not groups:
             continue
 
-        if row.online and row.resources:
+        online = row.online if live is None else row.login.lower() in live
+
+        if online and row.online and row.resources:
             addresses = [
                 AddressOut(ip=r.get("ip"), client=r.get("client"), hosts=hosts_of(r.get("ip")))
                 for r in row.resources
@@ -162,14 +187,14 @@ def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
         users.append(JabberUserOut(
             login=row.login,
             groups=groups,
-            online=row.online,
+            online=online,
             addresses=addresses,
             last_seen_at=row.last_seen_at,
             last_login_at=row.last_login_at,
             gone=row.registered is False,
             no_group=bool(listed and row.registered and not groups),
-            stale=bool(not row.online and row.registered is not False and last is not None and last < since),
-            ip_stale=bool(not row.online and row.last_ip and (row.last_seen_at is None or row.last_seen_at < since)),
+            stale=bool(not online and row.registered is not False and last is not None and last < since),
+            ip_stale=bool(not online and row.last_ip and (row.last_seen_at is None or row.last_seen_at < since)),
         ))
 
     return JabberOut(

@@ -152,6 +152,8 @@ export default {
             } else if (view === "printers") {
                 this.loadPrinters();
                 this.loadPrinterModels();
+                this.loadPrinterDiffs();
+                this.loadCartridges();
             } else if (view === "tree") {
                 this.loadTree();
             } else if (view === "history") {

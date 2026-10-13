@@ -5,7 +5,8 @@
   ним и следующими подряд сдвигаются на +1, как № места у ПК; переехал принтер или
   сменился тип, а № там занят – следующий свободный.
 - Модель – ссылка на справочник (printer_models): тип, производитель, печать и
-  дуплекс берутся из модели; правка модели меняет все её принтеры.
+  дуплекс берутся из модели; правка модели меняет все её принтеры. Картриджи (этап 47) –
+  тоже у модели (cartridges.py): правка ячейки «Картриджи» принтера меняет модель.
 - Веб-страница: есть / нет и адрес (пусто – http://IP); логин и пароль от неё –
   зашифрованными (secret_box.py). Показать их можно только по логину и паролю
   администратора ITDB – кто бы ни смотрел; сам администратор вводит свой пароль.
@@ -28,9 +29,10 @@ from api_computers import (
     normalize_ip, normalize_mac, normalize_multiline, normalize_single,
 )
 from auth import get_current_user, require_editor, verify_password
+from cartridges import cartridges_by_model, names_text, set_model_cartridges, set_printer_cartridges
 from db import get_db
 from history_log import PASSWORD_SET, log_change
-from models import History, Location, Printer, PrinterModel, User
+from models import History, Location, Printer, PrinterModel, PrinterModelCartridge, User
 from printer_links import computer_title, computers_by_printer, links_ids, links_refs, links_text, set_printer_computers
 from secret_box import decrypt, encrypt
 
@@ -219,7 +221,7 @@ def location_sort_keys(locations):
     return keys
 
 
-def printer_row(printer, parts, model, links):
+def printer_row(printer, parts, model, links, cartridges=None):
     row = {field: parts[field] for field in LOCATION_PART_FIELDS}
     row.update(
         {
@@ -239,6 +241,8 @@ def printer_row(printer, parts, model, links):
             "model_title": model_title(model),
             "color": COLOR.get(model.color) if model else None,
             "duplex": YES_NO.get(model.duplex) if model else None,
+            # Картриджи (этап 47) – модели
+            "cartridges": names_text((cartridges or {}).get(printer.model_id, [])) if model else None,
             "web": YES_NO.get(printer.web),
             "web_url": printer.web_url,
             "web_auth": YES_NO[True] if any(printer.web_secrets.get(key) for key in SECRET_FIELDS) else None,
@@ -270,6 +274,7 @@ def printer_rows(session, archived="no", ids=None):
     by_id = {location.id: location for location in locations}
     sort_keys = location_sort_keys(locations)
     models = {model.id: model for model in session.query(PrinterModel).all()}
+    cartridges = cartridges_by_model(session)
     links = computers_by_printer(session, [p.id for p in printers] if ids is not None else None)
     parts_cache = {}
     rows = []
@@ -278,7 +283,9 @@ def printer_rows(session, archived="no", ids=None):
         if printer.location_id not in parts_cache:
             parts_cache[printer.location_id] = location_parts(printer.location_id, by_id)
 
-        rows.append(printer_row(printer, parts_cache[printer.location_id], models.get(printer.model_id), links.get(printer.id, [])))
+        rows.append(printer_row(
+            printer, parts_cache[printer.location_id], models.get(printer.model_id), links.get(printer.id, []), cartridges,
+        ))
 
     def sort_key(row):
         return (
@@ -363,6 +370,10 @@ def apply_printer_fields(session, printer, payload, batch):
                 moved = True
 
             continue
+
+        # Картриджи – у модели (update_printer, cartridges.py), не у принтера
+        if field == "cartridges":
+            raise HTTPException(status_code=400, detail="Картриджи пишутся модели принтера.")
 
         if field == "computers":
             result = set_printer_computers(session, printer, value)
@@ -532,12 +543,20 @@ def update_printer(printer_id: int, payload: dict = Body(...), user=Depends(requ
                 detail="Этот принтер уже изменил другой пользователь. Таблица будет обновлена – проверь значение и повтори правку.",
             )
 
+    # Картриджи (этап 47) – у модели: меняются у всех её принтеров, История – у модели
+    model_changed = False
+
+    if "cartridges" in payload:
+        model_changed = set_printer_cartridges(session, printer, payload.pop("cartridges"), user["login"])
+
     batch = ChangeBatch(user["login"])
     changes = apply_printer_fields(session, printer, payload, batch)
 
     if changes:
         save_printer_changes(session, printer, changes, user["login"])
         batch.finish(session)
+
+    if changes or model_changed:
         session.commit()
     else:
         session.rollback()
@@ -549,6 +568,8 @@ def update_printer(printer_id: int, payload: dict = Body(...), user=Depends(requ
         "updated": one_row(session, printer_id),
         # Соседи, которым сдвинули №: таблицу надо перечитать
         "shifted": batch.changed_ids("printers"),
+        # Поменялась модель в справочнике (картриджи) – перечитать все принтеры
+        "model_changed": model_changed,
     }
 
 
@@ -700,12 +721,13 @@ class ModelIn(BaseModel):
     model: Optional[str] = None
     color: Optional[bool] = None
     duplex: Optional[bool] = None
+    cartridges: Optional[str] = None   # этап 47: названия через запятую или строками
 
 
 MODEL_FIELDS = ("kind", "maker", "model", "color", "duplex")
 
 
-def model_out(model, count):
+def model_out(model, count, cartridges=()):
     return {
         "id": model.id,
         "kind": model.kind,
@@ -714,6 +736,7 @@ def model_out(model, count):
         "title": model_title(model),
         "color": model.color,
         "duplex": model.duplex,
+        "cartridges": list(cartridges),
         "printers": count,
     }
 
@@ -769,9 +792,14 @@ def renumber_after_kind_change(session, model, batch):
 @router.get("/printer-models")
 def list_models(session=Depends(get_db)):
     counts = model_counts(session)
+    cartridges = cartridges_by_model(session)
     models = session.query(PrinterModel).all()
     models.sort(key=lambda m: (KIND_ORDER.get(m.kind, 2), title_key(model_title(m))))
-    return {"items": [model_out(model, counts.get(model.id, 0)) for model in models]}
+    return {"items": [model_out(model, counts.get(model.id, 0), cartridges.get(model.id, [])) for model in models]}
+
+
+def model_cartridges(session, model):
+    return cartridges_by_model(session, [model.id]).get(model.id, [])
 
 
 @router.post("/printer-models")
@@ -786,10 +814,18 @@ def create_model(payload: ModelIn, user=Depends(require_editor), session=Depends
     check_model(session, model)
     session.add(model)
     session.flush()
-    log_change(session, "printer_models", model.id, user["login"],
-               {"created": {"old": None, "new": model_title(model)}}, title=model_title(model))
+    changes = {"created": {"old": None, "new": model_title(model)}}
+
+    # Картриджи (этап 47): новые – в справочник картриджей
+    if payload.cartridges:
+        change = set_model_cartridges(session, model, payload.cartridges, user["login"])
+
+        if change:
+            changes["cartridges"] = change
+
+    log_change(session, "printer_models", model.id, user["login"], changes, title=model_title(model))
     session.commit()
-    return model_out(model, 0)
+    return model_out(model, 0, model_cartridges(session, model))
 
 
 @router.patch("/printer-models/{model_id}")
@@ -802,7 +838,7 @@ def update_model(model_id: int, payload: ModelIn, user=Depends(require_editor), 
 
     before = {field: getattr(model, field) for field in MODEL_FIELDS}
 
-    for field in payload.model_fields_set:
+    for field in payload.model_fields_set & set(MODEL_FIELDS):
         setattr(model, field, clean_model_value(field, getattr(payload, field)))
 
     check_model(session, model)
@@ -811,11 +847,19 @@ def update_model(model_id: int, payload: ModelIn, user=Depends(require_editor), 
     if model.kind != before["kind"]:
         renumber_after_kind_change(session, model, batch)
 
-    log_change(session, "printer_models", model.id, user["login"],
-               {field: {"old": before[field], "new": getattr(model, field)} for field in MODEL_FIELDS}, title=model_title(model))
+    changes = {field: {"old": before[field], "new": getattr(model, field)} for field in MODEL_FIELDS}
+
+    # Картриджи (этап 47): новые – в справочник картриджей
+    if "cartridges" in payload.model_fields_set:
+        change = set_model_cartridges(session, model, payload.cartridges, user["login"])
+
+        if change:
+            changes["cartridges"] = change
+
+    log_change(session, "printer_models", model.id, user["login"], changes, title=model_title(model))
     batch.finish(session)
     session.commit()
-    return model_out(model, model_counts(session).get(model.id, 0))
+    return model_out(model, model_counts(session).get(model.id, 0), model_cartridges(session, model))
 
 
 @router.delete("/printer-models/{model_id}")
@@ -833,6 +877,8 @@ def delete_model(model_id: int, user=Depends(require_editor), session=Depends(ge
 
     log_change(session, "printer_models", model.id, user["login"],
                {"deleted": {"old": model_title(model), "new": None}}, title=model_title(model))
+    # Картриджи модели (этап 47) остаются в справочнике, связь с ней – нет
+    session.query(PrinterModelCartridge).filter(PrinterModelCartridge.model_id == model.id).delete()
     session.delete(model)
     session.commit()
     return {"ok": True}

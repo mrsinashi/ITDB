@@ -21,6 +21,7 @@
 - IP по привязке предлагается только ПК без IP в таблице, всегда «неточно»;
 - имя и «проверен сетью» по привязкам не считаются.
 Случайные («локально назначенные») и виртуальные MAC не участвуют.
+Этап 47: принтерам – MAC по IP (printer_rows).
 """
 from collections import defaultdict
 
@@ -296,3 +297,64 @@ def host_rows(computers, hosts):
         })
 
     return proposals, {computer_id: dict(fields) for computer_id, fields in seen.items()}
+
+
+def printer_rows(printers, computers, hosts):
+    """MAC принтеров по IP (этап 47): printers – {id: {"ip", "mac"}} рабочих принтеров,
+    computers – так же ПК (чужие адреса и MAC), hosts – свежие наблюдения.
+
+    Принтер в сети себя ПК-именем не называет, поэтому его узнают только по адресу:
+    адрес записан у одного принтера и ни у одного ПК – MAC, который на нём видно (самый
+    свежий), предлагается принтеру. Не видно никакого – MAC привязки из настроек DHCP,
+    если этот MAC не виден на другом адресе. MAC уже записан у принтера, принадлежит
+    ПК или другому принтеру таблицы – ничего не предлагается.
+
+    Ответ: [{"printer_id", "field": "mac", "value", "unsure", "source"}]."""
+    _, _, pc_ip_owner, pc_mac_owner = table_owners(computers)
+    _, pr_macs, pr_ip_owner, pr_mac_owner = table_owners(printers)
+
+    by_ip = defaultdict(list)
+    fixed_by_ip = {}
+    seen_at_ips = defaultdict(set)   # MAC → адреса, где его видно на самом деле
+
+    for obs in hosts:
+        if is_fixed(obs):
+            fixed_by_ip[obs["ip"]] = obs
+            continue
+
+        by_ip[obs["ip"]].append(obs)
+
+        if obs.get("mac"):
+            seen_at_ips[obs["mac"]].add(obs["ip"])
+
+    proposals = []
+
+    for ip, owners in sorted(pr_ip_owner.items(), key=lambda item: ip_order(item[0])):
+        if len(owners) != 1 or pc_ip_owner.get(ip):
+            continue   # адрес у двух принтеров или у ПК – чей на нём MAC, не понять
+
+        printer_id = next(iter(owners))
+        real = [
+            obs for obs in sorted(by_ip.get(ip, []), key=lambda o: o["seen_at"], reverse=True)
+            if obs.get("mac") and not is_virtual_mac(obs["mac"])
+        ]
+
+        if real:
+            obs, by = real[0], ["ip"]
+        else:
+            obs, by = fixed_by_ip.get(ip), ["ip", "reserve"]
+
+            if obs is None or not obs.get("mac") or is_virtual_mac(obs["mac"]) or seen_at_ips.get(obs["mac"], set()) - {ip}:
+                continue
+
+        mac = obs["mac"]
+
+        if mac in pr_macs[printer_id] or pc_mac_owner.get(mac) or pr_mac_owner.get(mac, set()) - {printer_id}:
+            continue
+
+        proposals.append({
+            "printer_id": printer_id, "field": "mac", "value": mac, "unsure": "",
+            "source": source_of(obs, by, mac),
+        })
+
+    return proposals

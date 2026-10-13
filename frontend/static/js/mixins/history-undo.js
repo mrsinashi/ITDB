@@ -28,7 +28,8 @@ const ENTITY_FILTERS = {
     table_marks: "Выделения в таблице",
     app_settings: "Настройки",
     naming: "Имена: своё имя",
-    printer_models: "Модели принтеров"
+    printer_models: "Модели принтеров",
+    cartridges: "Картриджи"
 };
 // Только администратор видит эти записи; отмены у них нет (только просмотр)
 const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule"];

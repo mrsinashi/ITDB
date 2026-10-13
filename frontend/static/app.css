@@ -558,11 +558,14 @@ body {
    ============================================================ */
 
 /* Три колонки: слева счётчик, по центру поиск, справа кнопки.
-   Поиск стоит по центру, пока хватает места; если кнопок справа
-   становится много, он сужается/сдвигается, но не наезжает на них. */
+   Поиск стоит по центру, пока хватает места; тесно слева или справа – он
+   сдвигается, потом сужается, но не наезжает на них. Сколько места нужно
+   левой части (плашки сжимаются последними), считает js/toolbar-fit.js –
+   её min-width (этап 47). */
 .toolbar {
+    --search-min: 120px;
     display: grid;
-    grid-template-columns: 1fr minmax(180px, 420px) 1fr;
+    grid-template-columns: 1fr minmax(var(--search-min), 420px) 1fr;
     align-items: center;
     column-gap: 12px;
     min-height: 25px;
@@ -619,10 +622,12 @@ body.ui-light-toolbar .toolbar .tb-error {
     grid-column: 2;
     position: relative;
     display: flex;
+    min-width: 0;
 }
 
 .toolbar .tb-search input {
     width: 100%;
+    min-width: 0;
     box-sizing: border-box;
     height: 25px;
     padding: 3px 24px 3px 8px;
@@ -659,6 +664,16 @@ body.ui-light-toolbar .toolbar .tb-error {
 }
 .toolbar .tb-search .clear:hover {
     color: var(--tb-input-text);
+}
+/* «Обновить» слева от поиска (Компьютеры, Принтеры – этап 47): едет вместе с поиском;
+   колонка поиска шире на кнопку – поле той же ширины, что на других страницах */
+.toolbar .tb-search .tb-refresh {
+    flex: none;
+    margin-right: 6px;
+}
+.toolbar.tb-with-refresh {
+    --search-min: 156px;
+    grid-template-columns: 1fr minmax(var(--search-min), 456px) 1fr;
 }
 
 /* Кнопки на панели */
@@ -5498,6 +5513,41 @@ html.no-radius .nr-table .nr-suf {
     text-decoration: underline;
     text-underline-offset: 2px;
 }
+/* Этап 47: сортировка кликом по шапке, фильтр – воронкой у правого края (как в Таблице);
+   место под воронку есть всегда */
+.net-table th {
+    cursor: pointer;
+    user-select: none;
+}
+.net-table th .th-in {
+    display: flex;
+    align-items: baseline;
+}
+.net-table th .th-pad-r {
+    flex: 1 1 0;
+    min-width: 14px;
+}
+.net-table th:hover .th-filter,
+.net-table th.filter-open .th-filter {
+    visibility: visible;
+}
+.net-table th.sorted,
+.net-table th.filter-open {
+    background: var(--grid-head-sorted-bg);
+}
+/* Акцентная шапка: стрелка и воронка – белым, отсортированный – темнее */
+.net-table.accent-head th.sorted,
+.net-table.accent-head th.filter-open {
+    background: var(--brand-dark);
+}
+.net-table.accent-head th .sort-arrow,
+.net-table.accent-head th .th-filter,
+.net-table.accent-head th .th-filter.on {
+    color: inherit;
+}
+.net-table.accent-head th .th-filter:hover {
+    box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.18);
+}
 
 /* ============================================================
    Этапы 31, 36, 40: последняя нажатая строка Таблицы (Enter – VNC, Alt+P – ping,
@@ -6464,7 +6514,26 @@ a.pr-web:hover {
 .pm-table col.pm-model { width: 260px; }
 .pm-table col.pm-color { width: 96px; }
 .pm-table col.pm-duplex { width: 84px; }
+.pm-table col.pm-carts { width: 220px; }
 .pm-table col.pm-count { width: 84px; }
+/* Картриджи (этап 47): у модели – через запятую, длинное – «…», полное в подсказке;
+   столбцы постоянной ширины – длинный список не раздвигает таблицу */
+.pm-table {
+    table-layout: fixed;
+    width: 1000px;
+}
+.pm-table td:not(.pm-n) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Справочники → «Картриджи»: та же таблица, свои столбцы */
+.pm-table.crt-table {
+    width: 724px;
+}
+.crt-table col.crt-name { width: 200px; }
+.crt-table col.crt-models { width: 440px; }
+.crt-table col.crt-count { width: 84px; }
 .pm-table td.pm-name {
     font-weight: 600;
 }

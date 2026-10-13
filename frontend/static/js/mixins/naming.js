@@ -302,6 +302,11 @@ export default {
                 // Модели принтеров (этап 44): число принтеров у модели – с сервера
                 this.modelsBar = null;
                 this.loadPrinterModels();
+            } else if (tab === "cartridges") {
+                // Картриджи (этап 47): модели – для подсказок в строке правки
+                this.cartridgesBar = null;
+                this.loadCartridges();
+                this.loadPrinterModels();
             }
             this.syncHash();
         },

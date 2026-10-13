@@ -5,6 +5,7 @@
 
 import { apiFetch } from "../util.js";
 import { LOCATION_EDIT, roomText } from "../columns.js";
+import { splitTokens } from "./cartridges.js";
 
 // Ссылка Web – не столбец таблицы: правится только в карточке
 const WEB_URL_COL = { field: "web_url", headerName: "Ссылка Web", editable: true };
@@ -234,6 +235,10 @@ export default {
             // Ссылка Web: пустая – правится предлагаемая по IP, а не пустое поле (этап 45)
             const value = r.key === "web_url" ? this.printerWebUrl(this.pcard) : this.pcard[col.field];
             this.pcardEditValue = value === null || value === undefined ? "" : String(value);
+            // Картриджи (этап 47): в поле – через запятую
+            if (col.cartridges) {
+                this.pcardEditValue = splitTokens(this.pcardEditValue).join(", ");
+            }
             this.$nextTick(() => {
                 const el = this.$refs.pcardEditor;
                 const input = Array.isArray(el) ? el[0] : el;
@@ -244,7 +249,7 @@ export default {
                 input.focus({ preventScroll: true });
                 const len = input.value.length;
                 input.setSelectionRange(len, len);
-                if (!col.multiline) {
+                if (!col.multiline || col.cartridges) {
                     this.openSuggest(input, col, (value) => {
                         this.pcardEditValue = value;
                         this.savePcardEdit(r);
@@ -281,10 +286,12 @@ export default {
             const row = this.pcard;
             const shown = r.key === "web_url" ? this.printerWebUrl(row) : row[col.field];
             const old = shown === null || shown === undefined ? "" : String(shown);
-            if (this.pcardEditValue === old) {
+            // Картриджи (этап 47): в поле – через запятую, в таблице – строками
+            const value = col.cartridges ? splitTokens(this.pcardEditValue).join("\n") : this.pcardEditValue;
+            if (value === old) {
                 return;
             }
-            this.saveCellValue(row, col, this.pcardEditValue);
+            this.saveCellValue(row, col, value);
         },
 
         onPcardLocationPick(locationId) {

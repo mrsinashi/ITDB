@@ -34,8 +34,10 @@
 //                        printer-card (карточка принтера),
 //                        printer-models (Справочники → «Модели принтеров»),
 //                        web-access («Доступ» принтера: логин и пароль Web по паролю – в ячейке),
-//                        link-picker (подключение принтеров к ПК: окошко с поиском и галочками)
+//                        link-picker (подключение принтеров к ПК: окошко с поиском и галочками),
+//                        cartridges (Справочники → «Картриджи», подсказки по частям через запятую)
 //   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
+//   toolbar-fit.js     – панель под меню: левой части тесно – поиск сдвигается и сужается (v-tb-fit)
 //   components/        – tree-node, tree-form, style-controls, location-picker, count-select
 //
 // Шаблоны разметки – в index.html.
@@ -46,6 +48,7 @@ import { COLUMN_ORDER_KEY, HIDDEN_COLUMNS_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
 import "./alt-copy.js";
+import toolbarFit from "./toolbar-fit.js";
 
 import common from "./mixins/common.js";
 import auth from "./mixins/auth.js";
@@ -81,6 +84,7 @@ import printerCard from "./mixins/printer-card.js";
 import printerModels from "./mixins/printer-models.js";
 import webAccess from "./mixins/web-access.js";
 import linkPicker from "./mixins/link-picker.js";
+import cartridges from "./mixins/cartridges.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -89,7 +93,7 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker],
+    mixins: [common, auth, table, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker, cartridges],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -111,6 +115,7 @@ const app = Vue.createApp({
 
             // Таблица
             tableLoading: true,
+            tableRefreshing: false,   // «Обновить» слева от поиска (этап 47)
             tableError: "",
             quickFilter: "",
             // Таблица показывает архив (кнопка «Архив» на панели)
@@ -253,7 +258,8 @@ const app = Vue.createApp({
             // Страница «Vacuum» – пользователи Jabber (/api/scan/jabber)
             vacuum: { data: null, loading: false, error: "", filter: "all" },
             // Вкладка «Сеть»: адреса из DHCP и прохода подсетей (/api/scan/hosts)
-            net: { data: null, loading: false, error: "", filter: "all", source: null, age: null },
+            // colFilters, sortField, sortDir – фильтры и сортировка по столбцам (этап 47, как в Таблице)
+            net: { data: null, loading: false, error: "", filter: "all", source: null, age: null, colFilters: {}, sortField: null, sortDir: null },
             // Общие настройки (/api/settings): VNC по умолчанию
             appSettings: { vnc_default: "tight" },
             undone: [],          // что отменил Ctrl+Z – для возврата Ctrl+Y
@@ -274,6 +280,9 @@ const app = Vue.createApp({
             nameOnlyRows: false, // воронка у кнопки: только ПК с именем не по правилу
             namePop: null,       // карточка у блочка с именем по правилу
             valueEdit: null,     // правка значения ПК в подробностях «Проверки»
+            // Значения сканера у принтеров (этап 47): MAC из сети по IP – /api/scan/printer-diffs;
+            // у предложения computer_id = id принтера и printer: true (общий код блочков)
+            printerDiffs: { items: [], count: 0, rejected: 0 },
             diffs: {
                 items: [],          // /api/scan/diffs (и отклонённые – с rejected_by)
                 count: 0,           // расхождений без отклонённых – на кнопке
@@ -345,8 +354,10 @@ const app = Vue.createApp({
             window.addEventListener("resize", () => { this.scanFitCompare(); this.placeCheckPlate(); });
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await this.loadTable();
-            // Принтеры (этап 44): их имена – и в таблице ПК (ссылки, окошко принтера)
+            // Принтеры (этап 44): их имена – и в таблице ПК (ссылки, окошко принтера);
+            // MAC из сети по IP (этап 47) – счётчик на их странице
             this.loadPrinters();
+            this.loadPrinterDiffs();
             this.watchTableFit();
             this.loadDiffs();
             this.loadScanMarks();
@@ -368,5 +379,6 @@ app.component("style-controls", styleControls);
 app.component("tree-form", treeForm);
 app.component("location-picker", locationPicker);
 app.component("count-select", countSelect);
+app.directive("tb-fit", toolbarFit);
 
 app.mount("#app");

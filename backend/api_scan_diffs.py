@@ -470,7 +470,7 @@ def compute(session, with_rejected=False):
     names = scan_collect.load_names(session, computers)
     rejects = {}
 
-    for r in session.query(ScanReject):
+    for r in session.query(ScanReject).filter(ScanReject.computer_id.isnot(None)):
         rejects[(r.computer_id, r.field, r.value_key)] = r
 
     rows = {}   # (ПК, поле) → {row из compare, sources: [...]}

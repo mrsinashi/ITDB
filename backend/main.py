@@ -16,6 +16,7 @@ from api_import import router as import_router
 from api_locations import router as locations_router
 from api_naming import router as naming_router
 from api_printers import router as printers_router
+from cartridges import router as cartridges_router
 from auth import get_current_user
 from db import engine
 from import_apply import router as import_apply_router
@@ -32,6 +33,7 @@ from api_scan_records import router as scan_records_router
 from api_scan_diffs import av_router as scan_av_router
 from api_scan_diffs import marks_router as scan_marks_router
 from api_scan_diffs import router as scan_diffs_router
+from api_scan_printers import router as scan_printers_router
 from api_scan_schedule import router as scan_schedule_router
 from api_table_marks import router as table_marks_router
 import scan_schedule
@@ -164,6 +166,11 @@ app.include_router(
     printers_router,
     dependencies=[Depends(get_current_user)],
 )
+# Картриджи (этап 47): смотреть – все, менять – редактор и администратор
+app.include_router(
+    cartridges_router,
+    dependencies=[Depends(get_current_user)],
+)
 
 # Пользователи – только администратор (require_admin в каждом эндпоинте)
 app.include_router(users_router)
@@ -178,6 +185,8 @@ app.include_router(scan_schedule_router)
 app.include_router(scan_diffs_router)
 app.include_router(scan_marks_router)
 app.include_router(scan_av_router)
+# MAC принтеров из сети по IP (этап 47): смотреть – все, решать – редактор и администратор
+app.include_router(scan_printers_router)
 # Выделения значений в Таблице (этап 26к): повтор, «нет в Jabber», «имя на ПК другое»…
 app.include_router(table_marks_router)
 # Пользователи Jabber (этап 26д): смотреть – редактор и администратор

@@ -2,7 +2,8 @@
 // по строке нажали мышью (без Ctrl / Shift / Alt) – полоска у её левого края; Enter –
 // VNC, Alt+P – ping, Alt+R – RDP. «GLPI / GSIT» – к ПК строки (ПК в таблице нет – к адресу
 // записи), «Сеть» – к адресу строки (VNC – какой записан у ПК на нём), «Vacuum» – к
-// последнему IP пользователя. Нажатие мимо строк таблицы и Enter в другой ситуации
+// последнему IP пользователя. На «Сети» Shift+Enter – адрес строки в браузере (этап 47).
+// Нажатие мимо строк таблицы и Enter в другой ситуации
 // (поле, кнопка, меню, карточка) полоску снимают.
 // Полоска – атрибут data-mark у строки (вид – app.css): данные Vue не меняются, страница
 // на клик не перерисовывается. Vue пересоздал строку – атрибут ставится снова (updated);
@@ -88,15 +89,18 @@ export default {
             this._pageMarkEl = el;
         },
 
-        // Enter / Alt+P / Alt+R при полоске. Ответ – обработано ли
+        // Enter / Alt+P / Alt+R при полоске; на «Сети» Shift+Enter – адрес строки в браузере
+        // новой вкладкой (этап 47). Ответ – обработано ли
         onPageMarkKey(event) {
             if (!this._pageMark) {
                 return false;
             }
             const plain = !event.ctrlKey && !event.metaKey && !event.shiftKey;
             const enter = event.key === "Enter" && plain && !event.altKey;
+            const web = event.key === "Enter" && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey &&
+                this._pageMark.page === "net";
             const alt = plain && event.altKey;
-            const what = enter ? "vnc" : (alt && event.code === "KeyP" ? "ping" : (alt && event.code === "KeyR" ? "rdp" : null));
+            const what = enter ? "vnc" : (web ? "web" : (alt && event.code === "KeyP" ? "ping" : (alt && event.code === "KeyR" ? "rdp" : null)));
             if (!what) {
                 return false;
             }
@@ -105,7 +109,7 @@ export default {
                 !(target && target.closest && target.closest("button, .dropdown, .add-bar, .card-overlay")) &&
                 !this.card && !this.openMenu && !this.valueEdit && !this.scanLinkBar && !this.dialog;
             if (!free) {
-                if (enter) {
+                if (enter || web) {
                     this.clearPageMark();
                 }
                 return false;
@@ -115,7 +119,9 @@ export default {
                 return false;
             }
             event.preventDefault();
-            if (what === "vnc") {
+            if (what === "web") {
+                window.open("http://" + pc.ip + "/", "_blank", "noopener");
+            } else if (what === "vnc") {
                 this.vncConnect(pc, null);
             } else {
                 this.connectRow(pc, what);

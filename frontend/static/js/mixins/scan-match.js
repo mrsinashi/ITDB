@@ -250,6 +250,7 @@ export default {
             this.syncHash();
         },
 
+        // «Обновить»: на «GLPI / GSIT» и «Сети» – ещё и изменения таблицы (этап 47)
         reloadScanTab() {
             if (this.scanTab === "names") {
                 this.loadScanNames();
@@ -257,8 +258,10 @@ export default {
                 this.loadSchedule();
             } else if (this.scanTab === "net") {
                 this.loadNet();
+                this.loadTable();
             } else {
                 this.loadCheck();
+                this.loadTable();
             }
         },
 
@@ -554,6 +557,10 @@ export default {
                 this.loadCheck();
             } else {
                 this.loadDiffs();
+            }
+            // Сеть собрана – MAC принтеров по IP (этап 47)
+            if (NET_KINDS.includes(run.source)) {
+                this.loadPrinterDiffs();
             }
         },
 
