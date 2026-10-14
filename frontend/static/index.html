@@ -2117,7 +2117,8 @@
                                     <span v-else class="ct-text">{{ r.value }}</span>
                                     <template v-if="pcardEditKey === r.key && !r.auth">
                                         <location-picker v-if="pcardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="pcard.location_id" :options="locationOptions"
-                                            placeholder="Расположение…" @pick="onCardLocationPick($event, true)" @cancel="pcardEditKey = null"></location-picker>
+                                            :move-room="roomMove(pcard, { field: r.key })" placeholder="Расположение…" @pick="onCardLocationPick($event, true)"
+                                            @move-room="pcardEditKey = null; onRoomMove(pcard, $event)" @cancel="pcardEditKey = null"></location-picker>
                                         <textarea v-else-if="pcardEditCol(r).multiline && !pcardEditCol(r).cartridges" ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onCardEditKeydown($event, r, true)" @input="growCardEditor($event.target)" @blur="savePcardEdit(r)"></textarea>
                                         <input v-else ref="pcardEditor" v-model="pcardEditValue" class="cell-edit card-edit-input"
@@ -2187,7 +2188,8 @@
                                     <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)" @dblclick="onCardValueDblclick($event, r, r.value)">{{ r.value }}</span>
                                     <template v-if="cardEditKey === r.key">
                                         <location-picker v-if="cardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="card.location_id" :options="locationOptions"
-                                            placeholder="Расположение…" @pick="onCardLocationPick" @cancel="cardEditKey = null"></location-picker>
+                                            :move-room="roomMove(card, { field: r.key })" placeholder="Расположение…" @pick="onCardLocationPick"
+                                            @move-room="cardEditKey = null; onRoomMove(card, $event)" @cancel="cardEditKey = null"></location-picker>
                                         <textarea v-else-if="cardEditCol(r).multiline" ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"
                                             @keydown="onCardEditKeydown($event, r)" @input="cardEditCol(r).field === 'ip' && onIpInput($event, null, 'cardEditValue'); growCardEditor($event.target)" @blur="saveCardEdit(r)"></textarea>
                                         <input v-else ref="cardEditor" v-model="cardEditValue" class="cell-edit card-edit-input"

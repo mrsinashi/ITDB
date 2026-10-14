@@ -41,7 +41,8 @@ const ROW_TEMPLATE = `
                 <!-- «Доступ» (этап 45): логин виден, пароль – точками; ячейка на время правки шире и выше -->
                 <span v-if="col.secret && root.webEdit" class="secret-edit" @focusout="root.onWebEditFocusOut($event)"><input v-model="root.webEdit.login" class="cell-edit secret-input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="root.onWebEditKeydown"><input v-model="root.webEdit.password" class="cell-edit secret-input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="root.onWebEditKeydown"></span>
                 <location-picker v-else-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="root.locationOptions"
-                    placeholder="Расположение…" @pick="root.onCellLocationPick(row, $event)" @cancel="root.cancelEdit"></location-picker>
+                    :move-room="root.roomMove(row, col)" placeholder="Расположение…" @pick="root.onCellLocationPick(row, $event)"
+                    @move-room="root.onRoomMove(row, $event)" @cancel="root.cancelEdit"></location-picker>
                 <textarea v-else-if="col.multiline && !col.cartridges" v-model="root.editValue"
                     @keydown="root.handleEditKeydown($event, row, col)"
                     @input="col.field === 'ip' && root.onIpInput($event, null, 'editValue'); root.onEditInput($event, col)"

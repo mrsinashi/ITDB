@@ -6010,6 +6010,40 @@ html.col-dragging * {
 .loc-list .ll-add:hover {
     background: var(--hover-dark-strong);
 }
+/* Перенос кабинета (этап 58): кнопка «＋ 201» у отделения – подсвечена, пока открыто её окошко;
+   окошко «Что перенести?» – справа от списка у строки с кнопкой, без затемнения */
+.loc-list .ll-add.open {
+    background: var(--hover-dark-strong);
+}
+.loc-ask {
+    position: fixed;
+    z-index: 201;
+    min-width: 230px;
+    background: var(--bg);
+    border: 1px solid var(--pop-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-scan-pop);
+    color: var(--text);
+    font-size: 13px;
+    visibility: hidden;
+}
+.loc-ask.placed {
+    visibility: visible;
+}
+.loc-ask .la-q {
+    padding: 8px 10px 6px;
+    white-space: nowrap;
+}
+.loc-ask .la-btns {
+    display: flex;
+    gap: 6px;
+    padding: 0 10px 10px;
+}
+.loc-ask .la-btns .btn {
+    flex: 1;
+    justify-content: center;
+    white-space: nowrap;
+}
 
 /* ============================================================
    Этап 37: «Закругления» выключены – флажки тоже квадратные. Обычный флажок

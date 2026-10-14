@@ -7,8 +7,15 @@ import { LOCATION_FIELDS } from "../columns.js";
 
 // Куда можно добавить кабинет
 const ROOM_PARENTS = ["department", "floor"];
+// Ячейки кабинета: при их правке в списке можно перенести кабинет (этап 58)
+const ROOM_FIELDS = ["room_code", "room_name", "room"];
 // Подсказка полного IP: сколько вариантов
 const IP_FULL_MAX = 8;
+
+// Кабинет словами: «201 Ординаторская», только номер или только название
+function roomLabel(node) {
+    return node.code && node.name && node.name !== node.code ? node.code + " " + node.name : (node.code || node.name || "");
+}
 
 export default {
     computed: {
@@ -59,18 +66,20 @@ export default {
             });
         },
 
-        // Все узлы дерева в его порядке – для выбора расположения ПК
+        // Все узлы дерева в его порядке – для выбора расположения ПК. dept – отделение узла
+        // (у отделения – оно само), code и name – для переноса кабинета (этап 58)
         locationOptions() {
             const list = [];
-            const walk = (nodes, parentId) => {
+            const walk = (nodes, parentId, dept) => {
                 nodes.forEach((node) => {
                     const entry = this.treeIndex[node.id];
                     const path = entry ? entry.path : (node.name || node.code || "");
-                    list.push({ id: node.id, kind: node.kind, parentId: parentId, path: path, search: searchNorm(path) });
-                    walk(node.children || [], node.id);
+                    const own = node.kind === "department" ? node.id : dept;
+                    list.push({ id: node.id, kind: node.kind, parentId: parentId, dept: own, code: node.code, name: node.name, path: path, search: searchNorm(path) });
+                    walk(node.children || [], node.id, own);
                 });
             };
-            walk(this.treeRoots, null);
+            walk(this.treeRoots, null, null);
             return list;
         },
 
@@ -93,6 +102,64 @@ export default {
         onCellLocationPick(row, locationId) {
             this.cancelEdit();
             this.saveLocation(row, locationId);
+        },
+
+        // Перенос кабинета (этап 58): только при правке «Каб» / «Кабинет» у ПК или принтера в
+        // кабинете – что показать на кнопке в списке и с чем сравнивать кабинеты отделения
+        roomMove(row, col) {
+            const entry = ROOM_FIELDS.indexOf(col.field) !== -1 && this.canEdit ? this.treeIndex[row.location_id] : null;
+            const node = entry && entry.node.kind === "room" ? entry.node : null;
+            if (!node) {
+                return null;
+            }
+            return { label: roomLabel(node), code: node.code, name: node.name, what: row._printer ? "принтер" : "компьютер" };
+        },
+
+        // Весь кабинет (keepOld – на старом месте пустой такой же) или только этот ПК (принтер) –
+        // в отделение или на этаж parentId; Ctrl+Z отменяет целиком
+        async onRoomMove(rowOrCard, data) {
+            this.cancelEdit();
+            const printer = !!rowOrCard._printer;
+            // Из карточки – свежая строка таблицы (версия), как у onCardLocationPick
+            const row = (printer ? this.printerRows : this.rows).find((item) => item.id === rowOrCard.id) || rowOrCard;
+            const roomId = row.location_id;
+            const entry = this.treeIndex[roomId];
+            const label = entry ? roomLabel(entry.node) : "";
+            const body = { parent_id: data.parentId, whole: data.whole, keep_old: data.keepOld, version: row.version };
+            body[printer ? "printer_id" : "computer_id"] = row.id;
+            try {
+                const response = await apiFetch("/api/locations/" + roomId + "/move", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                if (response.status === 409) {
+                    this.toastError(await this.errorText(response));
+                    await this.loadTree();
+                    await (printer ? this.loadPrinters() : this.loadTable());
+                    return;
+                }
+                if (!response.ok) {
+                    this.toastError("Не удалось перенести: " + (await this.errorText(response)));
+                    return;
+                }
+                const newRoomId = (await response.json()).id;
+                // Весь кабинет меняет строки обеих таблиц
+                await this.loadTree();
+                await Promise.all(data.whole ? [this.loadTable(), this.loadPrinters()] : [printer ? this.loadPrinters() : this.loadTable()]);
+                this.refreshCardRow();
+                this.refreshCardRow(true);
+                this.reloadCardHistory(row.id, printer);
+                const where = this.treeIndex[data.whole ? data.parentId : newRoomId];
+                const what = data.whole ? "Кабинет " + label : (row[printer ? "name" : "hostname"] || (printer ? "Принтер" : "Компьютер"));
+                this.toast(what + " перенесён: " + (where ? where.path : ""), "success");
+                // Вспышка – у строк перенесённого кабинета (или одной строки) в своей таблице
+                const moved = data.whole ? (printer ? this.printerRows : this.rows).filter((r) => r.location_id === newRoomId) : [row];
+                moved.forEach((r) => LOCATION_FIELDS.concat(["location_id", "number"]).forEach((field) => this.flashCell(this.rowKey(r), field)));
+                this.$nextTick(() => this.scrollToRow(row.id));
+            } catch (e) {
+                this.toastError("Не удалось перенести: " + e);
+            }
         },
 
         // Смена расположения: строка переезжает на своё место в порядке

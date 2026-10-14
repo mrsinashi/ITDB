@@ -11,8 +11,8 @@ from auth import get_current_user, require_editor
 from db import get_db
 from history_search import search, search_words
 from history_undo import (
-    ENTITIES, SIMPLE, Ref, cancel_changes, field_kind, field_label, find_object, object_title, ref_of, revert_value,
-    value_history,
+    ENTITIES, SIMPLE, Ref, cancel_changes, field_kind, field_label, find_object, moved_room, object_title, ref_of,
+    revert_value, value_history,
 )
 from models import Computer, History, Location, Printer
 from scan_decisions import DECISION_ENTITIES
@@ -271,9 +271,12 @@ class UndoLastIn(BaseModel):
 def action_text(session, pairs):
     """Что отменяет Ctrl+Z – словами: «pc-1 – Оперативная память». Решение сканера вместе
     с правкой одного ПК («Привязать»: «Это ПК» + номер в столбец) – подписью этого ПК;
-    несколько объектов – числом."""
+    несколько объектов – числом. Кабинет, созданный переносом (этап 58), – часть переноса:
+    подпись – по перенесённому ПК или кабинету."""
     objects = {ref_of(record) for record, _ in pairs}
-    main = {ref for ref in objects if ref.entity not in DECISION_ENTITIES} or objects
+    copies = {ref_of(record) for record, field in pairs if moved_room(record, field)}
+    main = {ref for ref in objects if ref.entity not in DECISION_ENTITIES and ref not in copies} or objects
+    pairs = [pair for pair in pairs if not moved_room(*pair)] or pairs
 
     if len(main) != 1:
         return f"изменений: {len(pairs)}, объектов: {len(objects)}"
@@ -327,7 +330,10 @@ def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor)
     if any(record.entity not in allowed for record in records):
         raise HTTPException(status_code=400, detail="Последнее действие – настройка: она не отменяется.")
 
-    if any(field_kind(record.entity, field) == "fixed" for record in records for field in record.changes or {}):
+    if any(
+        field_kind(record.entity, field) == "fixed" and not moved_room(record, field)
+        for record in records for field in record.changes or {}
+    ):
         raise HTTPException(status_code=400, detail="Последнее действие – создание или удаление: оно не отменяется.")
 
     pairs = [

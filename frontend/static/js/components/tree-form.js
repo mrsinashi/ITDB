@@ -90,6 +90,10 @@ export default {
                 <option :value="null" disabled>Куда…</option>
                 <option v-for="o in root.treeParentOptions(form.kind)" :key="o.id" :value="o.id">{{ o.path }}</option>
             </select>
+            <!-- Кабинет – в другое отделение или на этаж (этап 58) -->
+            <select v-if="form.action === 'edit' && form.kind === 'room'" class="input tf-parent" v-model="form.parentId" title="Где">
+                <option v-for="o in root.treeParentOptions('room')" :key="o.id" :value="o.id">{{ o.path }}</option>
+            </select>
             <input v-if="form.kind !== 'floor'" class="input tf-code" v-model="form.code" @keydown.enter="submit" placeholder="Код"
                 title="Необязательно. У кабинета – его номер">
             <input class="input tf-name" v-model="form.name" @keydown.enter="submit" placeholder="Название">

@@ -259,6 +259,7 @@ export default {
             this.treeForm = {
                 action: "edit",
                 parentId: node.parent_id,
+                openParentId: node.parent_id,
                 nodeId: node.id,
                 kind: node.kind,
                 kinds: [node.kind],
@@ -311,21 +312,32 @@ export default {
                         })
                     });
                 } else {
+                    const body = { name: form.name, code: form.code };
+                    // Кабинет – и место (этап 58), только если его поменяли в форме: иначе форма,
+                    // открытая до чужого переноса, вернула бы кабинет назад
+                    if (form.kind === "room" && form.parentId !== form.openParentId) {
+                        body.parent_id = form.parentId;
+                    }
                     response = await apiFetch("/api/locations/" + form.nodeId, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            name: form.name,
-                            code: form.code
-                        })
+                        body: JSON.stringify(body)
                     });
                 }
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
+                const moved = form.action !== "add" && form.kind === "room" && form.parentId !== form.openParentId;
                 this.treeForm = null;
                 await this.loadTree();
                 await this.loadTable();
+                // Перенесённый кабинет – виден на новом месте (раскрыть путь к нему)
+                if (moved) {
+                    this.loadPrinters();
+                    for (let id = form.parentId; id && this.treeIndex[id]; id = this.treeIndex[id].node.parent_id) {
+                        this.setTreeOpen(id, true);
+                    }
+                }
             } catch (e) {
                 this.treeFormError = String(e.message || e);
             }

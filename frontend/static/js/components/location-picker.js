@@ -8,6 +8,11 @@
 // add-text – последним пунктом всегда «＋ <add-text>» (этап 43: «новый компьютер» в
 // «Привязать … к:»; виден и при длинном списке – прилипает к низу): событие add с
 // набранным текстом.
+// move-room – кабинет ПК или принтера при правке ячейки «Кабинет» (этап 58, схема пользователя
+// 14.10: { label, code, name, what }): у отделения или этажа под курсором, если в отделении
+// такого кабинета нет, – кнопка «＋ <кабинет>» (клик по строке – как всегда, просто в отделение).
+// Кнопка – окошко «Что перенести?» (только ПК / весь кабинет), у всего кабинета – «Удалить
+// старый кабинет?»: событие move-room { parentId, whole, keepOld }.
 
 import { listPosStyle, placeList, scrollToItem, searchWordsIn } from "../util.js";
 
@@ -17,6 +22,11 @@ const ADD_MAX = 3;
 
 function isRoomParent(o) {
     return ROOM_PARENTS.indexOf(o.kind) !== -1;
+}
+
+// Тот же кабинет – как повтор на сервере (check_duplicate): с номером – по номеру, без – по названию
+function sameRoom(o, room) {
+    return o.kind === "room" && (room.code ? o.code === room.code : o.name === room.name);
 }
 
 // Слова, которых нет в пути узла, – номер и название нового кабинета:
@@ -44,11 +54,13 @@ export default {
         inputClass: { default: "" },
         emptyText: { type: String, default: "Загрузка дерева…" },
         canAddRoom: Boolean,
-        addText: { type: String, default: "" }
+        addText: { type: String, default: "" },
+        moveRoom: { type: Object, default: null }
     },
-    emits: ["pick", "cancel", "add-room", "add"],
+    emits: ["pick", "cancel", "add-room", "add", "move-room"],
     data() {
-        return { open: false, query: "", active: 0, pos: null };
+        // ask – окошко переноса кабинета: { id (отделение или этаж), step: 1 – что, 2 – старый кабинет }
+        return { open: false, query: "", active: 0, pos: null, ask: null };
     },
     computed: {
         current() {
@@ -120,6 +132,7 @@ export default {
     watch: {
         query() {
             this.active = 0;
+            this.ask = null;
         },
         // Дерево догрузилось, пока список открыт, – встать на текущий узел
         options() {
@@ -129,7 +142,11 @@ export default {
         }
     },
     mounted() {
-        this._onMove = () => this.place();
+        // Прокрутка уводит кнопку из-под окошка переноса – окошко закрывается
+        this._onMove = () => {
+            this.ask = null;
+            this.place();
+        };
         window.addEventListener("scroll", this._onMove, true);
         window.addEventListener("resize", this._onMove);
         if (this.editor) {
@@ -160,6 +177,7 @@ export default {
         hide() {
             this.open = false;
             this.query = "";
+            this.ask = null;
         },
         activateCurrent() {
             const value = this.value;
@@ -198,6 +216,18 @@ export default {
         },
         onKeydown(event) {
             const key = event.key;
+            // Окошко переноса: Esc закрывает только его, Enter строку не выбирает
+            if (this.ask && (key === "Escape" || key === "Enter")) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (key === "Escape") {
+                    this.ask = null;
+                }
+                return;
+            }
+            if (key === "ArrowDown" || key === "ArrowUp" || key === "Tab") {
+                this.ask = null;
+            }
             if (key === "ArrowDown" || key === "ArrowUp") {
                 event.preventDefault();
                 if (!this.open) {
@@ -266,6 +296,57 @@ export default {
         },
         canAddHere(option) {
             return this.canAddRoom && (isRoomParent(option) || (option.kind === "room" && !!option.parentId));
+        },
+        // «＋ <кабинет>» – у отделения или этажа, если во всём отделении (на всех этажах) такого
+        // кабинета нет; у текущего отделения он есть – там кнопки нет
+        canMoveHere(option) {
+            const room = this.moveRoom;
+            if (!room || !isRoomParent(option) || !option.dept) {
+                return false;
+            }
+            return !this.options.some(function (o) { return o.dept === option.dept && sameRoom(o, room); });
+        },
+        askMove(option, event) {
+            if (this.ask && this.ask.id === option.id) {
+                this.ask = null;
+                return;
+            }
+            this._askRow = event.currentTarget.closest(".ll-item");
+            this.ask = { id: option.id, step: 1, left: 0, top: 0, placed: false };
+            this.$nextTick(() => this.placeAsk());
+        },
+        // Справа от списка по высоте строки с кнопкой; справа не помещается – слева
+        placeAsk() {
+            const box = this.$refs.ask;
+            const list = this.$refs.list;
+            const row = this._askRow;
+            if (!this.ask || !box || !list || !row || !row.isConnected) {
+                return;
+            }
+            const l = list.getBoundingClientRect();
+            const r = row.getBoundingClientRect();
+            const w = box.offsetWidth;
+            let left = l.right + 4;
+            if (left + w > window.innerWidth - 4) {
+                left = Math.max(4, l.left - w - 4);
+            }
+            this.ask.left = Math.round(left);
+            this.ask.top = Math.round(Math.max(4, Math.min(r.top - 4, window.innerHeight - box.offsetHeight - 4)));
+            this.ask.placed = true;
+        },
+        // whole – весь кабинет: сначала вопрос о старом (keepOld ещё не задан)
+        moveAnswer(whole, keepOld) {
+            const ask = this.ask;
+            if (!ask) {
+                return;
+            }
+            if (whole && keepOld === undefined) {
+                ask.step = 2;
+                this.$nextTick(() => this.placeAsk());
+                return;
+            }
+            this.hide();
+            this.$emit("move-room", { parentId: ask.id, whole: whole, keepOld: !!keepOld });
         }
     },
     template: `
@@ -285,8 +366,21 @@ export default {
                             @mousemove="active = i" @click="pick(o)"><b>＋ {{ addText }}</b></div>
                         <div v-else class="ll-item"
                             :class="['kind-' + o.kind, { active: i === active, current: o.id === value }]"
-                            @mousemove="active = i" @click="pick(o)"><span v-if="i === active && canAddHere(o)" class="ll-add" :title="o.kind === 'room' ? 'Новый кабинет после этого' : 'Новый кабинет здесь'" @click.stop="addHere(o)">＋ кабинет</span>{{ o.path }}</div>
+                            @mousemove="active = i" @click="pick(o)"><span v-if="i === active && canAddHere(o)" class="ll-add" :title="o.kind === 'room' ? 'Новый кабинет после этого' : 'Новый кабинет здесь'" @click.stop="addHere(o)">＋ кабинет</span><span
+                                v-else-if="(i === active || (ask && ask.id === o.id)) && canMoveHere(o)" class="ll-add" :class="{ open: ask && ask.id === o.id }"
+                                title="Перенести сюда" @click.stop="askMove(o, $event)">＋ {{ moveRoom.label }}</span>{{ o.path }}</div>
                     </template>
+                </div>
+                <div v-if="open && pos && ask" ref="ask" class="loc-ask" :class="{ placed: ask.placed }" :style="{ left: ask.left + 'px', top: ask.top + 'px' }" @mousedown.prevent>
+                    <div class="la-q">{{ ask.step === 1 ? "Что перенести?" : "Удалить старый кабинет?" }}</div>
+                    <div v-if="ask.step === 1" class="la-btns">
+                        <button type="button" class="btn" @click="moveAnswer(false)">Только {{ moveRoom.what }}</button>
+                        <button type="button" class="btn" @click="moveAnswer(true)">Весь кабинет</button>
+                    </div>
+                    <div v-else class="la-btns">
+                        <button type="button" class="btn" @click="moveAnswer(true, false)">Удалить</button>
+                        <button type="button" class="btn" @click="moveAnswer(true, true)">Оставить</button>
+                    </div>
                 </div>
             </teleport>
         </span>

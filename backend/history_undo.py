@@ -15,13 +15,14 @@
 ничего не делается – ошибка с объяснением.
 
 Создание ПК или узла не отменяется (удаления в системе нет – только архив).
+Исключение – кабинет, созданный переносом (этап 58): отмена переноса убирает его в архив.
 Служебные поля записей («Заменил», «Заменён на», старые поля) отменяются
 только пометкой: значения у них нет.
 
 Решения сканера (сопоставление записей, названия) отменяются своим снимком
 «до / после» (scan_decisions.py, этап 53).
 """
-from collections import namedtuple
+from collections import Counter, namedtuple
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -42,7 +43,9 @@ from api_computers import (
     user_field_keys_of,
     vacuum_text,
 )
-from api_locations import check_can_archive, check_duplicate, clean, validate_name_code
+from api_locations import (
+    check_can_archive, check_duplicate, check_place, clean, move_room, room_parent, validate_name_code,
+)
 from api_naming import RULE_FIELDS, set_rule
 from api_printers import (
     apply_printer_fields, check_model, clean_model_value, model_title, printer_display, printer_value,
@@ -59,15 +62,20 @@ from scan_decisions import DECISION_ENTITIES, apply_decision, check_decision
 # Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ – столбец)
 Ref = namedtuple("Ref", "entity entity_id entity_key")
 
-# Поля узла дерева, которые можно вернуть (с этапа 35 – и правило имён ПК)
-LOCATION_VALUE_FIELDS = {"name", "code", "archived", "name_part", "name_own", "name_single"}
+# Поля узла дерева, которые можно вернуть (с этапа 35 – и правило имён ПК, с этапа 58 – место
+# кабинета: parent_id, в Истории – путь и id)
+LOCATION_VALUE_FIELDS = {"name", "code", "archived", "name_part", "name_own", "name_single", "parent_id"}
 LOCATION_LABELS = {
     "name": "Название", "code": "Код", "archived": "Архив",
     "name_part": "Часть имени ПК", "name_own": "Только своя часть", "name_single": "Одно место",
+    "parent_id": "Расположение",
 }
 
 # Правило имён ПК у узла (этап 35)
 NAME_RULE_FIELDS = set(RULE_FIELDS.values())
+
+# Поля, от которых зависит повтор узла среди соседей (этап 58)
+PLACE_FIELDS = {"name", "code", "parent_id"}
 
 # Галочки оформления значения и столбца
 STYLE_FLAGS = {"bold", "italic", "underline", "strike", "chip"}
@@ -112,6 +120,22 @@ EXTRA_API_KEYS = {extra_key: key for key, extra_key in EXTRA_FIELDS.items()}
 
 def ref_of(record):
     return Ref(record.entity, record.entity_id, record.entity_key)
+
+
+def moved_room(record, field):
+    """«Создан» у кабинета, созданного переносом (этап 58), – отменяется вместе с переносом."""
+    return (
+        record.entity == "locations" and field == "created"
+        and bool(((record.changes or {}).get("created") or {}).get("move"))
+    )
+
+
+def undo_phase(ref, field, cancel):
+    """Порядок полей одной отмены (этап 58): ПК и принтеры – в прежний кабинет, потом созданный
+    переносом кабинет – в архив (он уже пуст), потом кабинет – на прежнее место (пустой такой же
+    там уже не мешает). Восстановление – наоборот."""
+    phase = {"created": 1, "parent_id": 2}.get(field, 0) if ref.entity == "locations" else 0
+    return phase if cancel else -phase
 
 
 def check_rights(entity, user):
@@ -306,6 +330,10 @@ class Values:
         if entity in ("computers", "printers") and field == "location_id":
             return self.location_id(change, side)
 
+        # Место кабинета (этап 58) – по id: путь мог поменяться
+        if entity == "locations" and field == "parent_id":
+            return change.get(side + "_id")
+
         # Модель принтера – по id (название могли поменять в справочнике)
         if entity == "printers" and field == "model":
             return change.get(side + "_id")
@@ -359,7 +387,7 @@ class Values:
         if (entity, field) in LINK_FIELDS and isinstance(value, list):
             return links_display(self.session, entity, value)
 
-        if entity in ("computers", "printers") and field == "location_id":
+        if (entity in ("computers", "printers") and field == "location_id") or (entity == "locations" and field == "parent_id"):
             if value is None or value == "?":
                 return None
 
@@ -401,11 +429,12 @@ def same(field, a, b):
     return a is not None and b is not None and str(a) == str(b)
 
 
-def set_value(session, entity, obj, field, value, batch, user):
+def set_value(session, entity, obj, field, value, batch, user, check=True):
     """Поставить полю значение из истории. Возвращает изменения для записи
-    истории ({поле: {"old", "new"}}); соседи со сдвинутым № места – в batch."""
+    истории ({поле: {"old", "new"}}); соседи со сдвинутым № места – в batch.
+    check=False – повтор узла проверит вызывающий (cancel_changes, этап 58)."""
     if entity == "locations":
-        return set_location_value(session, obj, field, value)
+        return set_location_value(session, obj, field, value, check)
 
     if entity in SIMPLE:
         return set_simple_value(session, entity, obj, field, value, user, batch)
@@ -461,7 +490,7 @@ def set_value(session, entity, obj, field, value, batch, user):
     return apply_fields(session, obj, payload, user_field_keys_of(session), batch)
 
 
-def set_location_value(session, location, field, value):
+def set_location_value(session, location, field, value, check=True):
     old = getattr(location, field)
 
     if same(field, old, value):
@@ -485,17 +514,51 @@ def set_location_value(session, location, field, value):
     if field in NAME_RULE_FIELDS:
         return set_rule(location, field, value)
 
+    if field == "parent_id":
+        if value is None:
+            raise HTTPException(status_code=400, detail="Без места кабинет оставить нельзя.")
+
+        return move_room(session, location, room_parent(session, value), check)
+
     value = clean(value)
     name = value if field == "name" else location.name
     code = value if field == "code" else location.code
 
     validate_name_code(location.kind, name, code)
 
-    if not location.archived:
+    if check and not location.archived:
         check_duplicate(session, location.kind, location.parent_id, name or code, code, exclude_id=location.id)
 
     setattr(location, field, value if field == "code" else (name or code))
     return {field: {"old": old, "new": getattr(location, field)}}
+
+
+def set_moved_room(session, room, cancel):
+    """Кабинет, созданный переносом (этап 58): отмена – в архив (ПК и принтеры к этому времени
+    вернулись – undo_phase); в нём уже другие ПК или принтеры – остаётся (ответ False).
+    Восстановление – обратно из архива, если в архив его не убрали сами (запись «Архив»)."""
+    if cancel and not room.archived:
+        busy = (
+            session.query(Computer.id).filter(Computer.location_id == room.id, Computer.archived == False).first()
+            or session.query(Printer.id).filter(Printer.location_id == room.id, Printer.archived == False).first()
+        )
+
+        if busy:
+            return False
+
+        check_can_archive(session, room)
+        room.archived = True
+    elif not cancel and room.archived:
+        chain = field_chain(session, Ref("locations", room.id, None), "archived")
+        change, side = effective_point(chain, "archived") if chain else ({}, "new")
+
+        if not change.get(side):
+            set_location_value(session, room, "archived", False)
+            check_place(session, room)
+
+    # Перенос кабинета на прежнее место (следом) проверяет повтор запросом
+    session.flush()
+    return True
 
 
 def set_printer_value(session, printer, field, value, batch):
@@ -651,7 +714,7 @@ def cancel_changes(session, items, cancel, user, batch):
 
         check_rights(record.entity, user)
 
-        if field_kind(record.entity, field) == "fixed":
+        if field_kind(record.entity, field) == "fixed" and not moved_room(record, field):
             raise HTTPException(
                 status_code=400,
                 detail="Создание, удаление и смена пароля не отменяются.",
@@ -663,7 +726,13 @@ def cancel_changes(session, items, cancel, user, batch):
     stamp = {"by": user["login"], "at": datetime.now(timezone.utc).isoformat()} if cancel else None
     count = 0
 
-    for (ref, field), ids in groups.items():
+    # Название, номер и место одного узла в одной отмене (этап 58: «Изменить кабинет» с переносом) –
+    # повтор проверяется один раз, в итоговом месте с итоговым номером: по одному они мешают друг другу
+    places = Counter(ref for ref, field in groups if ref.entity == "locations" and field in PLACE_FIELDS)
+    together = {ref for ref, number in places.items() if number > 1}
+    kept = []
+
+    for (ref, field), ids in sorted(groups.items(), key=lambda item: undo_phase(*item[0], cancel)):
         entity = ref.entity
         obj = load_object(session, ref)
         chain = field_chain(session, ref, field)
@@ -683,6 +752,12 @@ def cancel_changes(session, items, cancel, user, batch):
                            f"(сейчас: {shown if shown not in (None, '') else '–'}). Отмена не выполнена.",
                 )
 
+        # Сюда доходит только кабинет, созданный переносом (moved_room): с другими ПК или
+        # принтерами он остаётся, и его «Создан» не отменяется
+        if field == "created" and not set_moved_room(session, obj, cancel):
+            kept.append(obj)
+            continue
+
         for record in chain:
             if record.id in ids:
                 mark(record, field, stamp)
@@ -693,8 +768,19 @@ def cancel_changes(session, items, cancel, user, batch):
             target = values.of_change(entity, field, change, side)
 
             if not same(field, target, values.current(entity, obj, field)):
-                if set_value(session, entity, obj, field, target, batch, user):
+                if set_value(session, entity, obj, field, target, batch, user, check=ref not in together):
                     touch(entity, obj)
+
+    for ref in together:
+        location = load_object(session, ref)
+
+        if not location.archived:
+            check_place(session, location)
+
+    # Отменяли только «Создан» занятого кабинета – ничего не сделано
+    if kept and not count and not decisions:
+        path = location_path(kept[0].id, load_locations(session))
+        raise HTTPException(status_code=400, detail=f"В кабинете «{path}» есть компьютеры или принтеры – он остаётся.")
 
     # Решения – после ПК (замки в том же порядке, что у «Привязать»: ПК, потом решение).
     # Несколько решений об одной записи – по очереди: отмена – с последнего, восстановление – с первого
