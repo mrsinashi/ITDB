@@ -39,6 +39,10 @@
 источнике не раньше срока «Актуальны».
 Этап 39: сравнение записи с ПК (compare) – у любого предложения номера записи в столбец
 GLPI / GSIT, не только у «привязать?».
+Этап 57: записи GLPI / GSIT не стираются – предлагают только действующие (давние – последнее
+известное). Убрать сканер предлагает только номер GSIT – когда на ПК работает агент GLPI, а
+GSIT молчит (gsit_removals); номер GSIT, убранный у ПК с номером GLPI, больше не предлагается
+(drop_removed_gsit).
 """
 import ipaddress
 import re
@@ -61,7 +65,7 @@ from auth import get_current_user, require_editor
 from db import get_db
 from history_log import log_change
 from models import (
-    AppSetting, Computer, ScanHost, ScanJabberUser, ScanMark, ScanRecord, ScanReject, ScanSource, VacuumAccount,
+    AppSetting, Computer, History, ScanHost, ScanJabberUser, ScanMark, ScanReject, ScanSource, VacuumAccount,
     VacuumAccountComputer,
 )
 from scan_hostmatch import TITLES as HOST_TITLES, confirmed, host_rows
@@ -151,15 +155,18 @@ def enabled_kinds(session):
     return [kind for kind in scan_collect.RECORD_KINDS if kind in enabled]
 
 
-def matched_records(session, kinds, computers, states=("key", "link")):
-    """Записи включённых источников, сопоставленные с рабочими ПК по признаку
-    или вручную (states; «привязать?» – name): (kind, source_id, итог сопоставления, запись)."""
-    for kind in kinds:
-        matches, _ = scan_collect.match(session, kind)
-        records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
+def matched_records(session, kinds, computers, states=("key", "link"), matched=None):
+    """Действующие записи включённых источников, сопоставленные с рабочими ПК по признаку
+    или вручную (states; «привязать?» – name): (kind, source_id, итог сопоставления, запись).
+    Давние (этап 57) – только последнее известное, предлагать из них нечего.
+    matched – match_sources, если уже посчитано."""
+    matched = matched if matched is not None else scan_collect.match_sources(session, kinds)
 
-        for source_id, item in matches.items():
-            if item["state"] in states and item["computer_id"] in computers:
+    for kind in kinds:
+        records = matched[kind].records
+
+        for source_id, item in matched[kind].matches.items():
+            if item["state"] in states and item["computer_id"] in computers and matched[kind].active(records[source_id]):
                 yield kind, source_id, item, records[source_id]
 
 
@@ -468,6 +475,7 @@ class RecordRows:
         self.antivirus = {}     # ПК → {источник: [антивирусы]}
         self.fresh = {}         # ПК → источники актуальных записей, уверенно сопоставленных с ним
         self.ips = defaultdict(set)   # IP → ПК, с которыми сопоставлены записи с этим IP
+        self.talking = defaultdict(set)   # источник → ПК с его действующей записью (по признаку или вручную)
 
 
 def table_numbers(session):
@@ -478,19 +486,20 @@ def table_numbers(session):
     }
 
 
-def record_rows(session, kinds, computers, names, numbers):
+def record_rows(session, kinds, computers, names, numbers, matched):
     """Записи включённых источников, сопоставленные с ПК (и «привязать?») → RecordRows."""
     found = RecordRows()
     moment = datetime.now(timezone.utc)
     fresh_since = {kind: moment - timedelta(days=fresh_days_of(load_source(session, kind), kind)) for kind in kinds}
 
-    for kind, source_id, item, record in matched_records(session, kinds, computers, ("key", "link", "name")):
+    for kind, source_id, item, record in matched_records(session, kinds, computers, ("key", "link", "name"), matched):
         if item["state"] == "name":
             found.offers.append((kind, source_id, item, record))
             continue
 
         computer_id = item["computer_id"]
         values = (record.data or {}).get("values") or {}
+        found.talking[kind].add(computer_id)
 
         if record.checked_at and record.checked_at >= fresh_since[kind]:
             titles = found.fresh.setdefault(computer_id, [])
@@ -550,6 +559,72 @@ def link_offers(offers, computers, names, numbers):
         }
 
     return offered
+
+
+def gsit_removals(session, found, offered, numbers, kinds, matched):
+    """Убрать номер GSIT (этап 57, просьба пользователя): вместо агента GSIT поставили
+    агент GLPI – действующая запись GLPI сопоставлена с ПК, а GSIT молчит: записи с номером
+    из таблицы нет или она давняя, и другой действующей записи GSIT у ПК нет (двух агентов
+    на одном ПК не бывает). Другие ячейки сканер не очищает. {ПК: (номер, источник, пояснение)}."""
+    gsit = matched.get("gsit")
+
+    if "glpi" not in kinds or "gsit" not in kinds or gsit is None or gsit.since is None:
+        return {}
+
+    note = f"нет связи дольше {fresh_days_of(load_source(session, 'gsit'), 'gsit')} дн., работает GLPI"
+    result = {}
+
+    for computer_id in found.talking["glpi"] - found.talking["gsit"]:
+        number = clean_text((numbers.get(computer_id) or {}).get(ID_FIELDS["gsit"]))
+
+        if not number or (computer_id, ID_FIELDS["gsit"]) in offered:
+            continue
+
+        record = gsit.records.get(int(number)) if number.isdigit() else None
+
+        if record is not None and gsit.active(record):
+            continue
+
+        result[computer_id] = (number, {
+            "source": "gsit", "title": SOURCES["gsit"]["title"], "source_id": int(number) if number.isdigit() else None,
+            "checked_at": record.checked_at if record is not None else None, "state": "key", "by": [], "value": "",
+        }, note)
+
+    return result
+
+
+def drop_removed_gsit(session, rows, offered, numbers):
+    """У ПК с номером GLPI номер GSIT убрали (вручную или «убрать» из сканера) – больше его не
+    предлагать ни взять, ни «привязать?» (этап 57, просьба пользователя). Видно по Истории:
+    последняя неотменённая правка номера GSIT – «был номер – стало пусто»."""
+    field = ID_FIELDS["gsit"]
+    wanted = {
+        computer_id for computer_id, f in list(rows) + list(offered)
+        if f == field and clean_text((numbers.get(computer_id) or {}).get(ID_FIELDS["glpi"]))
+        and not clean_text((numbers.get(computer_id) or {}).get(field))
+    }
+
+    if not wanted:
+        return
+
+    edits = (
+        session.query(History.entity_id, History.changes)
+        .filter(
+            History.entity == Computer.__tablename__, History.entity_id.in_(wanted), History.cancelled == False,  # noqa: E712
+            History.changes.has_key(field),
+        )
+        .order_by(History.id.desc())
+    )
+    last = {}
+
+    for computer_id, changes in edits:
+        if computer_id not in last and not changes[field].get("cancelled"):
+            last[computer_id] = changes[field]
+
+    for computer_id, change in last.items():
+        if clean_text(change.get("old")) and not clean_text(change.get("new")):
+            rows.pop((computer_id, field), None)
+            offered.pop((computer_id, field), None)
 
 
 def add_net_rows(rows, computers, names, hosts):
@@ -717,12 +792,15 @@ def compute(session, with_rejected=False):
     если источники предлагают разное – «неточно»."""
     kinds = enabled_kinds(session)
     computers = scan_collect.active_values(session)
-    names = scan_collect.load_names(session, computers)
+    matched = scan_collect.match_sources(session)
+    names = scan_collect.load_names(session, computers, matched)
     numbers = table_numbers(session)
     items = DiffItems(session, with_rejected)
 
-    found = record_rows(session, kinds, computers, names, numbers)
+    found = record_rows(session, kinds, computers, names, numbers, matched)
     offered = link_offers(found.offers, computers, names, numbers)
+    drop_removed_gsit(session, found.rows, offered, numbers)
+    removals = gsit_removals(session, found, offered, numbers, kinds, matched)
     hosts, host_kinds = host_observations(session)
     net_seen, net_found = add_net_rows(found.rows, computers, names, hosts)
     verified, checked = checked_by(found.fresh, net_found)
@@ -740,6 +818,10 @@ def compute(session, with_rejected=False):
     for (computer_id, field), offer in offered.items():
         items.add(computer_id, field, offer["table"], offer["value"], offer["value"], "link", "", [offer["source"]],
                   offer["note"], compare=offer["compare"])
+
+    # Ключ отклонения – номер, который убрать: «оставить» его, а не любой номер этого ПК
+    for computer_id, (number, source, note) in removals.items():
+        items.add(computer_id, ID_FIELDS["gsit"], number, "", "–" + number, "diff", "", [source], note)
 
     missing, seen_at, stale, groups = [], {}, {}, {}
     jabber = add_jabber_items(session, items, computers, found.ips)

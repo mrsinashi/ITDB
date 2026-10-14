@@ -22,6 +22,10 @@
      сопоставлением этого ПК – нет в ITDB (IP – признак слабый);
    - ничего – нет в ITDB (none).
 UUID в ITDB не хранится: он только склеивает дубли внутри источника.
+Этап 57: записи не стираются – у источника есть и давние (active = False: проверены
+раньше срока «Актуальны» до последнего сбора). Давняя запись уступает действующей: на ПК
+указывает и действующая – давняя считается её дублем; номера и IP давних записей не мешают
+действующим (номер в таблице от давней записи – устаревший, сканер предложит новый).
 """
 from collections import defaultdict
 
@@ -348,15 +352,21 @@ def match_one(index, record, kind, links):
     return {"state": "none", "computer_id": None, "candidates": [], "by": [], "note": note}
 
 
+def dup_item(of):
+    return {"state": "dup", "computer_id": None, "candidates": [], "by": [], "note": None, "dup_of": of}
+
+
 def match_all(records, computers, links, kind):
-    """{source_id: итог}. records – [{"source_id", "name", "keys", "dup_of"}]
-    (уже без общих признаков), links – [{"source_id", "computer_id", "action"}]."""
+    """{source_id: итог}. records – [{"source_id", "name", "keys", "dup_of", "active"}]
+    (уже без общих признаков; без active – действующая), links – [{"source_id",
+    "computer_id", "action"}]."""
     index = Index(computers)
-    index.record_ids = {str(record["source_id"]) for record in records if not record.get("dup_of")}
+    active = {record["source_id"] for record in records if record.get("active", True) and not record.get("dup_of")}
+    index.record_ids = {str(source_id) for source_id in active}
     ip_records = defaultdict(int)
 
     for record in records:
-        if not record.get("dup_of"):
+        if record["source_id"] in active:
             for ip in record_ips(record):
                 ip_records[ip] += 1
 
@@ -370,10 +380,7 @@ def match_all(records, computers, links, kind):
 
     for record in records:
         if record.get("dup_of"):
-            result[record["source_id"]] = {
-                "state": "dup", "computer_id": None, "candidates": [], "by": [],
-                "note": None, "dup_of": record["dup_of"],
-            }
+            result[record["source_id"]] = dup_item(record["dup_of"])
             continue
 
         result[record["source_id"]] = match_one(index, record, kind, links_by[record["source_id"]])
@@ -395,6 +402,22 @@ def match_all(records, computers, links, kind):
     for computer_id, source_ids in taken.items():
         if len(source_ids) < 2:
             continue
+
+        # Давняя запись уступает действующей с тем же ПК (этап 57): прежняя запись этого ПК –
+        # её дубль. Действующая только по IP (чужой ПК мог взять адрес) давнюю дублем не делает,
+        # но и давняя ей не мешает
+        fresh = sorted((s for s in source_ids if s in active), key=lambda s: result[s]["state"] == "name")
+        sure = [s for s in fresh if result[s]["by"] != ["ip"]]
+
+        if fresh:
+            for source_id in source_ids:
+                if source_id not in active and sure:
+                    result[source_id] = dup_item(sure[0])
+
+            source_ids = fresh
+
+            if len(source_ids) < 2:
+                continue
 
         host = index.host(computer_id)
         strong = [s for s in source_ids if result[s]["state"] in ("key", "link")]

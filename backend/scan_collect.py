@@ -4,8 +4,9 @@
 Сбор идёт в отдельном потоке программы (служба – один процесс uvicorn),
 со своей сессией базы. Пока идёт, в запуске (scan_runs.stats.progress)
 обновляется «сделано из», страница спрашивает его раз в пару секунд.
-Результат записывается целиком в конце: записи источника заменяются новыми
-одной транзакцией. Сбой на середине ничего не портит – остаются прежние.
+Результат записывается целиком в конце одной транзакцией. Сбой на середине ничего
+не портит – остаются прежние. Записи GLPI / GSIT не стираются (этап 57): пришедшие
+заменяют прежние с теми же номерами, остальные остаются давними (save_records).
 
 В таблицу ПК сбор ничего не пишет (правило 1): только scan_records (GLPI, GSIT),
 scan_jabber_users (Jabber – пользователи не заменяются, а обновляются: у
@@ -20,6 +21,8 @@ import threading
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import func
+
 from api_scan import (
     INTERRUPTED, SOURCES, connection_params, fresh_days_of, interrupted, load_source, remember_host, scan_subnets,
     source_ready,
@@ -31,7 +34,7 @@ from scan_glpi import collect as glpi_collect
 from scan_jabber import collect as jabber_collect
 from scan_net import collect as net_collect
 from scan_http import SourceError
-from scan_match import drop_shared_keys, find_duplicates, match_all
+from scan_match import drop_shared_keys, find_duplicates, key_values, match_all
 from scan_normalize import build
 from scan_values import (
     COMPARE_FIELDS, MULTI_NAME_FIELDS, NAME_FIELDS, NUMBER_FIELDS, Names, board_names, lines_of, route_values,
@@ -228,7 +231,12 @@ def collect_into(session, run):
 
 
 def save_records(session, kind, run, items, stats):
-    """Записи источника заменяются новыми; в stats – итог сопоставления."""
+    """Записи из ответа заменяют прежние с теми же номерами. Прежние, которых в ответе нет
+    (ПК выключен дольше срока «Актуальны», удалён в источнике, сбой или урезанный ответ),
+    остаются последним известным – давними (этап 57: данные GLPI и GSIT не пропадают).
+    Общие признаки и дубли – по записям этого сбора (признаки давних урезаны прежними
+    сборами); давняя запись того же железа – дубль записи сбора. В stats – итог
+    сопоставления записей этого сбора и kept – сколько прежних осталось без обновления."""
     built = []
 
     for item in items:
@@ -245,25 +253,51 @@ def save_records(session, kind, run, items, stats):
 
     stats["shared"] = drop_shared_keys(built)
     dups = find_duplicates(built)
-
-    session.query(ScanRecord).filter(ScanRecord.source == kind).delete()
-    seen = now()
+    existing = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
+    got = {record["source_id"] for record in built}
+    # Признак → записи этого сбора (не дубли): к ним прежние записи того же железа
+    owners = defaultdict(set)
 
     for record in built:
-        record["dup_of"] = dups.get(record["source_id"])
-        session.add(ScanRecord(
-            source=kind, source_id=record["source_id"], name=record["name"], checked_at=record["checked_at"],
-            data=record["data"], keys=record["keys"], dup_of=record["dup_of"], run_id=run.id, seen_at=seen,
-        ))
+        if record["source_id"] not in dups:
+            for key in key_values(record["keys"]):
+                owners[key].add(record["source_id"])
+
+    for record in built:
+        row = existing.get(record["source_id"])
+
+        if row is None:
+            row = ScanRecord(source=kind, source_id=record["source_id"])
+            session.add(row)
+
+        row.name = record["name"]
+        row.checked_at = record["checked_at"]
+        row.data = record["data"]
+        row.keys = record["keys"]
+        row.dup_of = dups.get(record["source_id"])
+        row.run_id = run.id
+        # Время начала сбора: от него считается, какие записи действующие (active_since)
+        row.seen_at = run.started_at
+
+    kept = [row for source_id, row in existing.items() if source_id not in got]
+
+    for row in kept:
+        # Признак прежней записи есть ровно у одной записи сбора – то же железо (агент поставили
+        # заново): прежняя – её дубль. У нескольких – не понять, чья: остаётся как была (через
+        # давнюю запись две живые не склеиваются)
+        sharers = set().union(*(owners.get(key, set()) for key in key_values(row.keys or {})))
+
+        if len(sharers) == 1:
+            row.dup_of = next(iter(sharers))
 
     session.flush()
-    matches, _ = match(session, kind, built)
+    matches = match_sources(session, [kind])[kind].matches
     counts = {state: 0 for state in STATES}
 
-    for item in matches.values():
-        counts[item["state"]] += 1
+    for source_id in got:
+        counts[matches[source_id]["state"]] += 1
 
-    stats.update(counts)
+    stats.update(counts, kept=len(kept))
 
 
 def save_hosts(session, kind, run, items, fresh_days, only=None):
@@ -406,20 +440,62 @@ def links_of(session, kind):
     return session.query(ScanLink).filter(ScanLink.source == kind).all()
 
 
-def match(session, kind, records=None):
-    """Итог сопоставления записей источника с ПК ITDB – сейчас, по текущим
-    данным таблицы и решениям администратора. ({source_id: итог}, Index)."""
-    if records is None:
-        records = [
-            {"source_id": r.source_id, "name": r.name, "keys": r.keys or {}, "dup_of": r.dup_of, "data": r.data}
-            for r in session.query(ScanRecord).filter(ScanRecord.source == kind)
-        ]
+def active_since(session, kind):
+    """С какого времени проверки запись источника действующая (этап 57): не раньше срока
+    «Актуальны» до последнего сбора, который принёс записи. Срок – от сбора, а не от
+    «сейчас»: между сборами записи не гаснут, а сбор, который ничего не принёс (сбой, все
+    ПК выключены), не гасит прежние. Записей нет – None."""
+    last = session.query(func.max(ScanRecord.seen_at)).filter(ScanRecord.source == kind).scalar()
 
-    links = [
-        {"source_id": l.source_id, "computer_id": l.computer_id, "action": l.action}
-        for l in links_of(session, kind)
-    ]
-    return match_all(records, computers_for_match(session), links, kind)
+    if last is None:
+        return None
+
+    return last - timedelta(days=fresh_days_of(load_source(session, kind), kind))
+
+
+def is_active(record, since):
+    return since is not None and record.checked_at is not None and record.checked_at >= since
+
+
+def record_item(record, since):
+    """Запись из базы – в виде для сопоставления (match_all)."""
+    return {"source_id": record.source_id, "name": record.name, "keys": record.keys or {}, "dup_of": record.dup_of,
+            "data": record.data, "active": is_active(record, since)}
+
+
+class Matched:
+    """Записи источника и их сопоставление с ПК: records – {source_id: ScanRecord},
+    matches – {source_id: итог}; since – active_since."""
+
+    def __init__(self, records, matches, since):
+        self.records = records
+        self.matches = matches
+        self.since = since
+
+    def active(self, record):
+        """Действующая: из неё предложения, антивирусы, названия. Давняя – только
+        последнее известное: видна на «GLPI / GSIT» и сопоставляется."""
+        return is_active(record, self.since)
+
+
+def match_sources(session, kinds=RECORD_KINDS):
+    """Итог сопоставления записей источников с ПК ITDB – сейчас, по текущим данным таблицы
+    и решениям администратора: {источник: Matched}. Один расчёт на запрос (этап 57):
+    блочки, «Названия» и «GLPI / GSIT» раньше сопоставляли каждый источник дважды."""
+    computers = computers_for_match(session)
+    result = {}
+
+    for kind in kinds:
+        records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
+        since = active_since(session, kind)
+        links = [
+            {"source_id": l.source_id, "computer_id": l.computer_id, "action": l.action}
+            for l in links_of(session, kind)
+        ]
+        matches, _ = match_all([record_item(r, since) for r in records.values()], computers, links, kind)
+        result[kind] = Matched(records, matches, since)
+
+    return result
 
 
 # ---------- Названия (этап 25б) ----------
@@ -432,10 +508,12 @@ def active_values(session):
     return {row[0]: dict(zip(COMPARE_FIELDS, row[1:])) for row in rows}
 
 
-def load_names(session, computers=None):
+def load_names(session, computers=None, matched=None):
     """Словарь названий: ручные соответствия, значения столбцов и Справочников,
-    пары «источник – таблица» у сопоставленных ПК обоих источников."""
+    пары «источник – таблица» у сопоставленных ПК обоих источников (matched –
+    match_sources по всем RECORD_KINDS, если уже посчитано)."""
     computers = computers if computers is not None else active_values(session)
+    matched = matched if matched is not None else match_sources(session)
     aliases = [
         {"field": a.field, "source": a.source, "table": a.table_value, "kind": a.kind}
         for a in session.query(ScanAlias)
@@ -458,11 +536,13 @@ def load_names(session, computers=None):
     boards = board_names(aliases)
 
     for kind in RECORD_KINDS:
-        matches, _ = match(session, kind)
-        records = {r.source_id: r for r in session.query(ScanRecord).filter(ScanRecord.source == kind)}
+        records = matched[kind].records
 
-        for source_id, item in matches.items():
+        for source_id, item in matched[kind].matches.items():
             if item["state"] not in ("key", "link") or item["computer_id"] not in computers:
+                continue
+
+            if not matched[kind].active(records[source_id]):
                 continue
 
             values = route_values((records[source_id].data or {}).get("values") or {}, boards)

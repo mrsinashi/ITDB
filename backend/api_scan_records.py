@@ -126,6 +126,7 @@ class RecordOut(BaseModel):
     dup_of: Optional[int]
     decisions: list[Decision]
     compare: list[dict]   # поле, значение источника в названиях таблицы, как в источнике, ITDB, = ≈ ≠
+    active: bool = True   # False – давняя (этап 57): последнее известное, ничего не предлагает
 
 
 class ComputerBrief(BaseModel):
@@ -174,8 +175,12 @@ def list_records(source: str, me=Depends(require_editor), session=Depends(get_db
     """Записи последнего сбора и их сопоставление. Смотреть – редактор и
     администратор (вкладка «Проверка», этап 26г); решать о сопоставлении – admin."""
     check_record_kind(source)
-    records = session.query(ScanRecord).filter(ScanRecord.source == source).order_by(ScanRecord.name, ScanRecord.source_id).all()
-    matches, _ = scan_collect.match(session, source)
+    matched = scan_collect.match_sources(session)
+    found = matched[source].records
+    order = session.query(ScanRecord.source_id).filter(ScanRecord.source == source).order_by(ScanRecord.name, ScanRecord.source_id)
+    # Сбор мог дописать записи между запросами – такие покажутся при следующей загрузке
+    records = [found[source_id] for (source_id,) in order if source_id in found]
+    matches = matched[source].matches
     decisions = {}
     referenced = set()
 
@@ -211,7 +216,7 @@ def list_records(source: str, me=Depends(require_editor), session=Depends(get_db
         ]
 
     active = scan_collect.active_values(session)
-    names = scan_collect.load_names(session, active)
+    names = scan_collect.load_names(session, active, matched)
     result = []
 
     for record in records:
@@ -230,9 +235,11 @@ def list_records(source: str, me=Depends(require_editor), session=Depends(get_db
             candidates=item["candidates"],
             by=item["by"],
             note=item["note"],
-            dup_of=record.dup_of,
+            # Давняя запись, уступившая действующей (этап 57), – дубль по сопоставлению, не по сбору
+            dup_of=item.get("dup_of", record.dup_of),
             decisions=decisions_of(record.source_id),
             compare=scan_collect.compare_record(names, data.get("values") or {}, active.get(target)),
+            active=matched[source].active(record),
         ))
 
     return RecordsOut(

@@ -98,7 +98,8 @@ def ipv4_lines(text):
 
 
 def address_index(session):
-    """IP → ПК таблицы (рабочие) и IP → записи GLPI / GSIT (без дублей)."""
+    """IP → ПК таблицы (рабочие) и IP → действующие записи GLPI / GSIT (без дублей; давний
+    адрес записи, этап 57, уже может быть у другого ПК)."""
     locations = load_locations(session)
     computers = {}
     by_ip = {}
@@ -110,8 +111,12 @@ def address_index(session):
             by_ip.setdefault(ip, []).append(c.id)
 
     records = {}
+    since = {kind: scan_collect.active_since(session, kind) for kind in scan_collect.RECORD_KINDS}
 
     for r in session.query(ScanRecord).filter(ScanRecord.source.in_(scan_collect.RECORD_KINDS), ScanRecord.dup_of.is_(None)):
+        if not scan_collect.is_active(r, since[r.source]):
+            continue
+
         values = (r.data or {}).get("values") or {}
 
         for ip in ipv4_lines(values.get("ip")):

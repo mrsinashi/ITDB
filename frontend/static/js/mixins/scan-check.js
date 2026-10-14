@@ -15,6 +15,8 @@
 // Этап 26ж: в подробностях – и «Мат. плата», и номера записей GLPI / GSIT.
 // Этап 28: кнопка «Фильтр» – по атрибутам (у каких полей есть предложения);
 // в подробностях – столбец «Сеть» (что видно по DHCP и проходу подсетей).
+// Этап 57: записи не стираются – давние (r.active = false) серым, в конце своей группы, в
+// «Нужно решить» и «Не узнал ПК» не входят: из них ничего не предлагается.
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords, clickSelect, rowPlate } from "../util.js";
 
@@ -55,12 +57,13 @@ export const CHECK_FILTERS = [
     { key: "rejected", label: "Отклонённые", title: "Оставлено как в таблице" }
 ];
 
+// Давние записи (этап 57) ничего не предлагают – решать по ним нечего
 function inFilter(row, filter) {
     switch (filter) {
     case "todo":
-        return row.state === "name" || row.state === "conflict" || row.state === "diff";
+        return row.state === "diff" || (!row.old && (row.state === "name" || row.state === "conflict"));
     case "unknown":
-        return row.state === "name" || row.state === "conflict";
+        return !row.old && (row.state === "name" || row.state === "conflict");
     case "diff":
         return row.state === "diff";
     case "ok":
@@ -163,6 +166,8 @@ export default {
                     row.state = "diff";
                 }
                 const recs = Object.values(row.recs);
+                // Все записи строки давние (этап 57: не стираются) – строка серая, в конце своей группы
+                row.old = recs.length > 0 && recs.every(function (r) { return !r.active; });
                 row.name = pc ? pc.hostname || "без имени" : ((recs[0] && recs[0].name) || "без имени");
                 row.search = searchNorm([
                     pc ? pc.hostname : "", pc ? pc.place : "",
@@ -171,7 +176,8 @@ export default {
                 ].filter(Boolean).join(" "));
             });
             rows.sort(function (a, b) {
-                return (STATE_ORDER[a.state] - STATE_ORDER[b.state]) || a.name.localeCompare(b.name, "ru", { numeric: true });
+                return (STATE_ORDER[a.state] - STATE_ORDER[b.state]) || (a.old - b.old) ||
+                    a.name.localeCompare(b.name, "ru", { numeric: true });
             });
             return rows;
         },
@@ -510,7 +516,8 @@ export default {
             if (!r) {
                 return null;
             }
-            return { rec: r, text: this.scanStateText(r), state: r.state, title: this.scanStateTitle(r) };
+            const old = r.active ? null : "Давняя, проверен " + this.formatTime(r.checked_at);
+            return { rec: r, text: this.scanStateText(r), state: r.state, title: [this.scanStateTitle(r), old].filter(Boolean).join("\n") || null };
         },
 
         // «Что предлагает»: поля через запятую
@@ -602,7 +609,7 @@ export default {
         // Когда источник проверял ПК – в подсказке у шапки (серые подписи убраны, 01.10)
         checkSourceHeadTitle(row, kind) {
             const r = row.recs[kind];
-            return r && r.checked_at ? "Проверен " + this.formatTime(r.checked_at) : null;
+            return r && r.checked_at ? (r.active ? "Проверен " : "Давняя, проверен ") + this.formatTime(r.checked_at) : null;
         },
 
         checkSourceLink(r) {

@@ -4588,6 +4588,20 @@ button.scan-chip {
 .ck-table td.ck-sum.ck-bad {
     color: var(--danger);
 }
+/* Этап 57: давние записи GLPI / GSIT (старше срока «Актуальны» до последнего сбора) не
+   стираются, а показываются серым – как давнее в «Сети» и «Vacuum»: вся строка, если давние
+   все её записи, или только ячейка источника */
+.ck-table tr.ck-old td,
+.ck-table tr.ck-old td.ck-sum,
+.ck-table tr.ck-old .ck-host,
+.ck-table tr.ck-old .ck-place,
+.ck-table td.ck-old .ck-id,
+.ck-table td.ck-old .sm-state {
+    color: var(--text-muted);
+}
+.ck-table td.ck-old .sm-state.st-conflict {
+    border-color: var(--light-border);
+}
 /* Выделенные строки – синий слой, как в Таблице и Истории */
 .history-table.ck-table tbody tr.row-selected > td {
     background-image: linear-gradient(var(--row-sel-tint), var(--row-sel-tint));
@@ -4629,6 +4643,12 @@ button.scan-chip {
 .ck-compare .ck-mark.manual {
     color: var(--brand);
     font-weight: 700;
+}
+/* Давняя запись (этап 57) ничего не предлагает – её значения и отметки серым */
+.history-table .ck-compare td.ck-old,
+.ck-compare td.ck-old .ck-mark {
+    color: var(--text-muted);
+    font-weight: 400;
 }
 .ck-compare td.cmp-prop {
     min-width: 150px;
