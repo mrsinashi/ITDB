@@ -4,7 +4,7 @@
 // в Справочниках («Выделения в Таблице», GET / PATCH /api/table-marks); фон – всегда
 // блочком у самого значения. Выделение кладётся поверх оформления из Справочников.
 
-import { apiFetch } from "../util.js";
+import { apiFetch, setIfChanged } from "../util.js";
 import { decoration } from "../columns.js";
 
 // Порядок наложения, если у значения несколько выделений: следующее поверх
@@ -55,7 +55,7 @@ export default {
             try {
                 const response = await apiFetch("/api/table-marks");
                 if (response.ok) {
-                    this.tableMarks = await response.json();
+                    setIfChanged(this, "tableMarks", await response.json());
                 }
             } catch (e) {
                 // без настроек – вид по умолчанию

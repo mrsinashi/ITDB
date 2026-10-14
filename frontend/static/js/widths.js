@@ -99,6 +99,9 @@ export function computeAutoWidths(rows, builtinColumns, fieldDefs, choiceStyleMa
     const probe = ensureWidthProbe();
     const savedFontSize = probe.style.fontSize;
     probe.style.fontSize = "9px";
+    // Толщина – как у ячейки, а не у образца: без строк на экране образец – шапка (600), и
+    // ширины выходили на пиксель шире (этап 59: при открытии строк ещё нет)
+    probe.style.fontWeight = "400";
     probe.textContent = "▲";
     const arrowWidth = probe.getBoundingClientRect().width;
     probe.style.fontSize = savedFontSize;

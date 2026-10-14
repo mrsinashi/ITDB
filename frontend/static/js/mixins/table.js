@@ -3,8 +3,8 @@
 // С этапа 44 та же таблица показывает и принтеры (страница «Принтеры», mixins/printers.js):
 // строки – tableRows, столбцы – tableBuiltinColumns, всё, что запоминается, – под своими ключами
 
-import { apiFetch, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, wrapLine } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, refreshDuplicates, styleKey } from "../columns.js";
+import { apiFetch, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, setIfChanged, wrapLine } from "../util.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, keepSameRows, refreshDuplicates, styleKey, todayKey } from "../columns.js";
 import { CHIP_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths, sameWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
@@ -295,13 +295,13 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 const data = await response.json();
-                this.builtinColumns = (data.columns || []).map(toColumnDef);
-                this.cardGroups = data.card_groups || [];
-                this.historyLabels = data.history_labels || {};
+                setIfChanged(this, "builtinColumns", (data.columns || []).map(toColumnDef));
+                setIfChanged(this, "cardGroups", data.card_groups || []);
+                setIfChanged(this, "historyLabels", data.history_labels || {});
                 // Таблица и карточка принтеров (этап 44)
-                this.printerColumns = (data.printer_columns || []).map(toColumnDef);
-                this.printerCardGroups = data.printer_card_groups || [];
-                this.printerHistoryLabels = data.printer_history_labels || {};
+                setIfChanged(this, "printerColumns", (data.printer_columns || []).map(toColumnDef));
+                setIfChanged(this, "printerCardGroups", data.printer_card_groups || []);
+                setIfChanged(this, "printerHistoryLabels", data.printer_history_labels || {});
                 this.applyDefaultHidden();
             } catch (e) {
                 this.tableError = String(e.message || e);
@@ -334,13 +334,21 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 const data = await response.json();
-                this.rows = data.rows || [];
+                const rows = data.rows || [];
+                // Сменился день – «срок прошёл» у дат пересчитается (те же строки сами не перерисуются)
+                this.today = todayKey();
                 // «Кабинет»: номер и название одной строкой
-                this.rows.forEach(function (row) { row.room = roomText(row); });
-                this.applyAntivirus();
-                if (refreshDuplicates(this.rows, this.builtinColumns, "pc")) {
-                    this.dupVersion++;
+                rows.forEach(function (row) { row.room = roomText(row); });
+                // Неизменившиеся строки – прежние объекты: перерисуются только другие (этап 59)
+                const next = keepSameRows(this.rows, rows);
+                if (next) {
+                    this.rows = next;
+                    this.applyAntivirus(true);
+                    if (refreshDuplicates(this.rows, this.builtinColumns, "pc")) {
+                        this.dupVersion++;
+                    }
                 }
+                // И при тех же строках: могло измениться оформление (Ctrl+Z жирности столбца)
                 this.recalcWidths();
             } catch (e) {
                 this.tableError = String(e.message || e);
@@ -485,6 +493,10 @@ export default {
         },
 
         recalcWidths() {
+            // Пока таблица открывается, данные приходят по частям – ширины один раз в конце (этап 59)
+            if (!this.tableReady) {
+                return;
+            }
             // Блочки значений сканера в ячейках – ширина столбца и под них (этап 26в),
             // в «По правилу» – блочок имени по правилу или «своё» (этап 36)
             const scanChip = (row, field) => {
@@ -666,7 +678,7 @@ export default {
         // пользователя в Jabber нет, stale – давно не подключался (сколько дней;
         // null – никогда); overdue – срок прошёл. Нечего выделять – null
         lineMarks(row, col, line) {
-            const overdue = !!col.date && isOverdue(line);
+            const overdue = !!col.date && isOverdue(line, this.today);
             if (row.archived) {
                 return overdue ? { overdue: true } : null;
             }

@@ -23,6 +23,18 @@ export function saveJson(key, value) {
     }
 }
 
+// Новое значение – только если оно другое (этап 59): данные, которые читают строки таблицы,
+// с тем же содержимым, но новым объектом перерисовали бы все 600 строк. Сравнение – с тем, что
+// в данных сейчас (их меняют и на месте после сохранения), а не с прошлым ответом сервера.
+// Ответ – присвоено ли
+export function setIfChanged(target, key, value) {
+    if (JSON.stringify(Vue.toRaw(target[key])) === JSON.stringify(value)) {
+        return false;
+    }
+    target[key] = value;
+    return true;
+}
+
 // Зажат Ctrl – класс на странице: по нему шапка Таблицы показывает закреплённые столбцы
 export function setCtrlDown(on) {
     const root = document.documentElement;

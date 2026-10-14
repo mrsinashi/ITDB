@@ -14,7 +14,7 @@
 // таблицы, липкой у левого края: при прокрутке её ведёт сам браузер, как закреплённые
 // столбцы (этап 40); GLPI / GSIT скрыли поиском или фильтром – она забыта (этап 36).
 
-import { apiFetch, isTypingTarget } from "../util.js";
+import { apiFetch, isTypingTarget, setIfChanged } from "../util.js";
 
 export const VNC_KINDS = [
     { key: "tight", label: "TightVNC" },
@@ -91,7 +91,7 @@ export default {
             try {
                 const response = await apiFetch("/api/settings");
                 if (response.ok) {
-                    this.appSettings = await response.json();
+                    setIfChanged(this, "appSettings", await response.json());
                 }
             } catch (e) {
                 // без настроек – значения по умолчанию

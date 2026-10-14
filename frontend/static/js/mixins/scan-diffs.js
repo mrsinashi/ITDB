@@ -45,7 +45,7 @@
 // computer_id – id принтера, printer – true, решения – своими запросами.
 
 import { decoration } from "../columns.js";
-import { apiFetch } from "../util.js";
+import { apiFetch, setIfChanged } from "../util.js";
 
 // Источник значения: «GLPI №12»; у Jabber номера записи нет
 function sourceName(s) {
@@ -338,21 +338,23 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 const data = await response.json();
-                this.diffs.items = data.items;
+                const diffs = this.diffs;
+                // Те же данные – не присваивать: их читают все строки таблицы (этап 59)
+                setIfChanged(diffs, "items", data.items);
                 // В счётчике – только то, что показывается блочком: без «в таблице часть» и без
                 // другого имени ПК (этап 39)
-                this.diffs.count = data.items.filter((d) => !d.rejected_by && d.kind !== "partial" && !this.scanChipHidden(d)).length;
-                this.diffs.rejected = data.rejected;
-                this.diffs.sources = data.sources;
-                this.diffs.antivirus = data.antivirus || {};
-                this.diffs.links = data.links || {};
-                this.diffs.vacuumMissing = data.vacuum_missing || [];
-                this.diffs.vacuumStale = data.vacuum_stale || {};
-                this.diffs.vacuumGroups = data.vacuum_groups || {};
-                this.diffs.jabber = data.jabber || {};
-                this.diffs.net = data.net || {};
-                this.diffs.verified = data.verified || {};
-                this.diffs.checked = data.checked || {};
+                diffs.count = data.items.filter((d) => !d.rejected_by && d.kind !== "partial" && !this.scanChipHidden(d)).length;
+                diffs.rejected = data.rejected;
+                setIfChanged(diffs, "sources", data.sources);
+                setIfChanged(diffs, "antivirus", data.antivirus || {});
+                setIfChanged(diffs, "links", data.links || {});
+                setIfChanged(diffs, "vacuumMissing", data.vacuum_missing || []);
+                setIfChanged(diffs, "vacuumStale", data.vacuum_stale || {});
+                setIfChanged(diffs, "vacuumGroups", data.vacuum_groups || {});
+                setIfChanged(diffs, "jabber", data.jabber || {});
+                setIfChanged(diffs, "net", data.net || {});
+                setIfChanged(diffs, "verified", data.verified || {});
+                setIfChanged(diffs, "checked", data.checked || {});
             } catch (e) {
                 this.diffs.error = "Не удалось загрузить расхождения: " + (e.message || e);
             } finally {
@@ -388,11 +390,11 @@ export default {
                 }
                 const data = await response.json();
                 const items = data.items.map(function (d) { return Object.assign(d, { computer_id: d.printer_id, printer: true }); });
-                this.printerDiffs = {
+                setIfChanged(this, "printerDiffs", {
                     items: items,
                     count: items.filter(function (d) { return !d.rejected_by; }).length,
                     rejected: data.rejected
-                };
+                });
             } catch (e) {
                 // без предложений таблица принтеров работает как раньше
             }
@@ -409,7 +411,7 @@ export default {
             try {
                 const response = await apiFetch("/api/scan/marks");
                 if (response.ok) {
-                    this.scanMarks = await response.json();
+                    setIfChanged(this, "scanMarks", await response.json());
                 }
             } catch (e) {
                 // без пометок таблица работает как раньше
@@ -422,7 +424,7 @@ export default {
             try {
                 const response = await apiFetch("/api/scan/antivirus");
                 if (response.ok) {
-                    this.avSettings = await response.json();
+                    setIfChanged(this, "avSettings", await response.json());
                 }
             } catch (e) {
                 // без настроек столбец просто пустой
@@ -492,8 +494,9 @@ export default {
             this.updateAvSettings({ hidden: hidden });
         },
 
-        // Строкам таблицы – названия показываемых антивирусов (через перенос)
-        applyAntivirus() {
+        // Строкам таблицы – названия показываемых антивирусов (через перенос).
+        // noWidths – ширины пересчитает тот, кто вызвал (loadTable)
+        applyAntivirus(noWidths) {
             const index = this.avIndex;
             let changed = false;
             this.rows.forEach(function (row) {
@@ -504,7 +507,7 @@ export default {
                     changed = true;
                 }
             });
-            if (changed) {
+            if (changed && !noWidths) {
                 this.recalcWidths();
             }
         },

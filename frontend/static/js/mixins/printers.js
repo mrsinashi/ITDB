@@ -12,8 +12,8 @@
 // его данными (как у значения сканера), на ПК – карточка ПК; значок таблицы рядом –
 // показать в другой таблице без фильтров. Enter на странице – веб-страница принтера.
 
-import { apiFetch, fixIpTyping, loadJson, searchNorm } from "../util.js";
-import { COLUMN_ORDER_KEY, HIDDEN_COLUMNS_KEY, PINNED_COLUMNS_KEY, PRINTER_KINDS, refreshDuplicates, roomText, tableStoreKey } from "../columns.js";
+import { apiFetch, fixIpTyping, loadJson, searchNorm, setIfChanged } from "../util.js";
+import { COLUMN_ORDER_KEY, HIDDEN_COLUMNS_KEY, PINNED_COLUMNS_KEY, PRINTER_KINDS, keepSameRows, refreshDuplicates, roomText, tableStoreKey, todayKey } from "../columns.js";
 import { TABLE_WIDTHS_KEY, loadManualWidths } from "../widths.js";
 import { loadViewNumber, loadViews } from "./table-views.js";
 import { newPrinterName } from "../naming.js";
@@ -218,13 +218,18 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 const rows = (await response.json()).rows || [];
+                this.today = todayKey();   // сменился день – «срок прошёл» пересчитается
                 rows.forEach(function (row) {
                     row._printer = true;
                     row.room = roomText(row);
                 });
-                this.printerRows = rows;
-                if (refreshDuplicates(rows, this.printerColumns, "printer")) {
-                    this.dupVersion++;
+                // Неизменившиеся строки – прежние объекты (этап 59)
+                const next = keepSameRows(this.printerRows, rows);
+                if (next) {
+                    this.printerRows = next;
+                    if (refreshDuplicates(next, this.printerColumns, "printer")) {
+                        this.dupVersion++;
+                    }
                 }
                 if (this.tableKind === "printer") {
                     this.recalcWidths();
@@ -243,7 +248,7 @@ export default {
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
-                this.printerModels = (await response.json()).items || [];
+                setIfChanged(this, "printerModels", (await response.json()).items || []);
             } catch (e) {
                 this.toastError("Не удалось загрузить модели принтеров: " + (e.message || e));
             }

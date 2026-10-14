@@ -48,7 +48,7 @@
 
 import "./settings.js";
 import { loadJson } from "./util.js";
-import { COLUMN_ORDER_KEY, HIDDEN_COLUMNS_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN_KEY, mergeRoomHidden } from "./columns.js";
+import { COLUMN_ORDER_KEY, HIDDEN_COLUMNS_KEY, PINNED_COLUMNS_KEY, SEARCH_HIDDEN_KEY, mergeRoomHidden, todayKey } from "./columns.js";
 import { loadManualWidths } from "./widths.js";
 import "./shortcuts.js";
 import "./alt-copy.js";
@@ -100,6 +100,9 @@ import locationPicker from "./components/location-picker.js";
 import countSelect from "./components/count-select.js";
 import tableRow from "./components/table-row.js";
 
+// При открытии таблица ждёт блочки сканера не дольше этого (этап 59): обычно они – за 0,5 с
+const DIFFS_WAIT_MS = 3000;
+
 const app = Vue.createApp({
     mixins: [common, auth, table, tableEdit, tableSelect, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker, cartridges, pop],
 
@@ -123,6 +126,8 @@ const app = Vue.createApp({
 
             // Таблица
             tableLoading: true,
+            tableReady: false,        // пришло всё для строк – рисовать их (этап 59)
+            today: todayKey(),        // день для «срок прошёл» у дат; обновляет загрузка строк (этап 59)
             tableRefreshing: false,   // «Обновить» слева от поиска (этап 47)
             tableError: "",
             quickFilter: "",
@@ -364,24 +369,29 @@ const app = Vue.createApp({
             this.snapNavUser();
             window.addEventListener("resize", () => { this.snapNavUser(); this.updateStickyShadow(); });
             window.addEventListener("resize", () => { this.scanFitCompare(); this.placeCheckPlate(); });
+            // Всё, что видно в строках таблицы, – разом, а строки рисуются один раз, когда пришло
+            // всё (этап 59; раньше – по мере прихода, 5 раз: на слабом ПК 9 с). Строкам ПК и
+            // принтеров нужны столбцы (повторы) – они после них. Принтеры (этап 44): их имена – и
+            // в таблице ПК; MAC из сети по IP (этап 47) – счётчик на их странице. Блочки сканера
+            // считаются дольше всего – ждать их не больше DIFFS_WAIT_MS, дальше таблица без них.
+            // «Кто в сети» не ждать: после перезапуска сервера первый запрос сам ждёт ejabberd
+            // (до 20 с) – кружки дорисуются, когда придут; обычно – раньше строк
+            this.startLoading();
+            this.loadVacuumOnline();
+            const others = [this.loadPrinterDiffs(), this.loadScanMarks(), this.loadAvSettings(), this.loadTableMarks(),
+                this.loadAppSettings()];
+            const diffs = Promise.race([this.loadDiffs(), new Promise((resolve) => setTimeout(resolve, DIFFS_WAIT_MS))]);
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
-            await this.loadTable();
-            // Принтеры (этап 44): их имена – и в таблице ПК (ссылки, окошко принтера);
-            // MAC из сети по IP (этап 47) – счётчик на их странице
-            this.loadPrinters();
-            this.loadPrinterDiffs();
+            await Promise.all([this.loadTable(), this.loadPrinters(), diffs].concat(others));
+            this.tableReady = true;
+            this.recalcWidths();
+            // Строки – в странице, как до этапа: по ним ищут строку карточки из адреса и т. п.
+            await this.$nextTick();
+            this.finishLoading();
             this.watchTableFit();
-            this.loadDiffs();
-            this.loadScanMarks();
-            this.loadAvSettings();
-            this.loadTableMarks();
-            this.loadAppSettings();
             // Страница из адреса (#scan/net, #table?pc=12): ссылки открываются в новой вкладке
             window.addEventListener("hashchange", () => this.applyHash());
             this.applyHash();
-            if (this.view === "table") {
-                this.loadVacuumOnline();
-            }
         }
     }
 });

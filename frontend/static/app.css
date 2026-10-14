@@ -1600,26 +1600,38 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 /* Дубль – красная заливка (цвет задаёт cellTdStyle, как у цветов справочника) */
 
 /* Ячейка только что сохранена: короткая зелёная вспышка.
-   Зелёный – это слой поверх фона ячейки (inset-тень рисуется над фоном,
-   но под текстом), и гаснет он в прозрачность. Поэтому вспышка уходит
+   Зелёный – это слой поверх фона ячейки, но под текстом (::before с z-index: -1
+   внутри ячейки), и гаснет он в прозрачность. Поэтому вспышка уходит
    в тот фон, что у ячейки на самом деле: бежевый при наведении, цвет
    значения из справочника, красный дубля – без захода в белый и без
-   рывка в конце. Анимируется зарегистрированное свойство --flash. */
-@property --flash {
-    syntax: "<color>";
-    inherits: false;
-    initial-value: transparent;
-}
+   рывка в конце. Линии сетки ячейки слой рисует сам – поверх зелёного.
+   Гаснет прозрачностью (этап 59): это делает видеокарта, а не перерисовка
+   всей страницы на каждом кадре, как при анимации тени ячейки. */
 @keyframes cell-saved {
-    0%, 35% { --flash: var(--saved-bg); }
-    100% { --flash: transparent; }
+    0%, 35% { opacity: 1; }
+    100% { opacity: 0; }
 }
-.data-table td.cell-saved {
-    box-shadow: var(--grid-shadow), inset 0 0 0 100vmax var(--flash);
+.data-table td.cell-saved,
+.card-table tr.ct-saved td.ct-value {
+    isolation: isolate;
+}
+.data-table td.cell-saved::before,
+.card-table tr.ct-saved td.ct-value::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--saved-bg);
+    opacity: 0;
+    pointer-events: none;
     animation: cell-saved 1.4s ease-out;
 }
-.data-table.sticky-stuck td.sticky-edge.cell-saved {
-    box-shadow: var(--grid-shadow), var(--sticky-shadow), inset 0 0 0 100vmax var(--flash);
+.data-table td.cell-saved::before {
+    box-shadow: var(--grid-shadow);
+}
+/* Левую линию рамки ячейки под курсором рисует сосед слева (см. выше) – и его вспышка */
+.data-table tbody td.cell-saved:has(+ td:hover)::before {
+    box-shadow: inset calc(-1 * var(--px)) 0 0 var(--hf-right, var(--hf-row)), var(--grid-shadow);
 }
 
 /* Липкие столбцы IP и HOSTNAME */
@@ -1665,9 +1677,6 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 .data-table.sticky-stuck tbody td.sticky-edge-r:has(+ td:hover) {
     box-shadow: inset calc(-1 * var(--px)) 0 0 var(--hf-right, var(--hf-row)), calc(-1 * var(--px)) 0 0 var(--l-line), var(--grid-shadow), var(--sticky-shadow-r);
-}
-.data-table.sticky-stuck td.sticky-edge-r.cell-saved {
-    box-shadow: calc(-1 * var(--px)) 0 0 var(--l-line), var(--grid-shadow), var(--sticky-shadow-r), inset 0 0 0 100vmax var(--flash);
 }
 
 /* Примечание: обрезка и подсказка */
@@ -1912,10 +1921,6 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 .card-table tr.ct-editable {
     cursor: default;
-}
-.card-table tr.ct-saved td.ct-value {
-    box-shadow: inset 0 0 0 100vmax var(--flash);
-    animation: cell-saved 1.4s ease-out;
 }
 
 /* Значение, которое копируется по клику: без подсветки, при наведении

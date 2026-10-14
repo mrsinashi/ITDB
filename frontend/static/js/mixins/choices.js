@@ -1,6 +1,6 @@
 // Страница «Справочники»: значения, оформление столбцов и значений, пользовательские поля.
 
-import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
+import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, setIfChanged, splitMulti } from "../util.js";
 import { ROOM_COLUMN, ROOM_STYLE_FIELDS, columnTitle, decoration, ipSubnetKey, styleKey } from "../columns.js";
 
 const NO_STYLE = {};
@@ -231,7 +231,7 @@ export default {
             try {
                 const response = await apiFetch("/api/choices");
                 const data = await response.json();
-                this.choicesItems = data.items || [];
+                setIfChanged(this, "choicesItems", data.items || []);
             } catch (e) {
                 // тихо
             }
@@ -300,7 +300,7 @@ export default {
                 (data.items || []).forEach(function (item) {
                     map[item.field] = item;
                 });
-                this.columnStyles = map;
+                setIfChanged(this, "columnStyles", map);
             } catch (e) {
                 // тихо: без оформления столбцов таблица всё равно работает
             }
@@ -436,7 +436,7 @@ export default {
             try {
                 const response = await apiFetch("/api/field-defs");
                 const data = await response.json();
-                this.fieldDefs = data.items || [];
+                setIfChanged(this, "fieldDefs", data.items || []);
             } catch (e) {
                 // тихо
             }

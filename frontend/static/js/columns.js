@@ -378,6 +378,47 @@ export function roomText(row) {
     return code && name ? "[" + code + "] " + name : (code || name || null);
 }
 
+// Поля, которые дописывает в строку сама страница, а не сервер (антивирусы – applyAntivirus)
+const LOCAL_ROW_FIELDS = ["antivirus"];
+
+function sameRow(prev, row) {
+    for (const key in row) {
+        const a = prev[key];
+        const b = row[key];
+        if (a !== b && (a === null || b === null || typeof a !== "object" || typeof b !== "object" ||
+                JSON.stringify(a) !== JSON.stringify(b))) {
+            return false;
+        }
+    }
+    for (const key in prev) {
+        if (!(key in row) && LOCAL_ROW_FIELDS.indexOf(key) === -1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Строки с сервера (этап 59): у строки, где всё то же, что сейчас на экране, остаётся прежний
+// объект – Vue её не перерисовывает. Сравнение – с тем, что в строке сейчас (её меняют на
+// месте после сохранения), а не с прошлым ответом. Ответ – новый список или null, если те же
+// строки в том же порядке (присваивать нечего)
+export function keepSameRows(oldRows, newRows) {
+    const old = Vue.toRaw(oldRows) || [];
+    const byId = new Map();
+    old.forEach(function (row) { byId.set(row.id, row); });
+    let same = old.length === newRows.length;
+    const rows = newRows.map(function (row, i) {
+        const prev = byId.get(row.id);
+        if (prev && sameRow(prev, row)) {
+            same = same && old[i] === prev;
+            return prev;
+        }
+        same = false;
+        return row;
+    });
+    return same ? null : rows;
+}
+
 // Поля карточки, которые можно править двойным кликом (ключ строки карточки → поле)
 export const LOCATION_EDIT = { field: "location_id", headerName: "Расположение", location: true };
 export const CARD_EDIT_EXTRA = {
@@ -448,14 +489,20 @@ export function dateKey(value) {
     return m ? Number(m[3] + m[2] + m[1]) : null;
 }
 
-// Дата уже прошла (сегодняшняя – ещё не просрочена)
-export function isOverdue(value) {
+// Сегодня – ключом, как dateKey
+export function todayKey() {
+    const d = new Date();
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+// Дата уже прошла (сегодняшняя – ещё не просрочена). today – день из данных страницы
+// (этап 59): строки таблицы перерисовывают выделение, когда он сменится
+export function isOverdue(value, today) {
     const key = dateKey(value);
     if (key === null) {
         return false;
     }
-    const d = new Date();
-    return key < d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    return key < (today || todayKey());
 }
 
 export function compareCellValues(a, b, col) {

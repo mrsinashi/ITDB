@@ -1,6 +1,6 @@
 // Страница «Дерево»: узлы, поиск, форма узла, ширина колонки.
 
-import { apiFetch, highlightParts, matchesAllWords, searchNorm, searchWords, searchWordsIn, rowPlate } from "../util.js";
+import { apiFetch, highlightParts, matchesAllWords, searchNorm, searchWords, searchWordsIn, rowPlate, setIfChanged } from "../util.js";
 import { kindLabels } from "../columns.js";
 import { computeTreeWidth, treeNodeTexts } from "../tree-utils.js";
 
@@ -61,11 +61,15 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 const data = await response.json();
-                this.treeRoots = data.roots || [];
+                // То же дерево – не присваивать: по нему считаются имена по правилу у всех строк
+                // таблицы (этап 59)
+                const changed = setIfChanged(this, "treeRoots", data.roots || []);
                 this.treeHover = null;
                 this.$nextTick(() => this.watchTreeScroll());
                 this.unlocated = data.unlocated || 0;
-                this.buildTreeIndex();
+                if (changed || !Object.keys(this.treeIndex).length) {
+                    this.buildTreeIndex();
+                }
             } catch (e) {
                 this.treeError = String(e.message || e);
             }
