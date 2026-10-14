@@ -1,10 +1,10 @@
 """Этап 40: несколько адресов ПК по MAC из сети, «Совпадает: N» у «привязать?»."""
 from pathlib import Path
 
-from conftest import diffs_of, ok
+from conftest import add_pc, diffs_of, ok
+from fakes import ETH, Glpi, collect, pc, setup_source
 from scan_hostmatch import host_rows
 from test_28b import obs, save_hosts
-from test_scan_collect import ETH, Glpi, add_pc, collect, glpi_url, pc, setup_source  # noqa: F401
 
 STATIC = Path(__file__).resolve().parent.parent / "frontend" / "static"
 

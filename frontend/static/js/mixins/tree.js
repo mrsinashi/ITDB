@@ -191,10 +191,6 @@ export default {
             this.setView("table");
         },
 
-        kindLabel(kind) {
-            return kindLabels[kind] || kind;
-        },
-
         // Подсветка слов поиска Справочников в тексте
         hl(text) {
             return highlightParts(String(text || ""), this.choicesMatch.words);

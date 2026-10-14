@@ -4,7 +4,6 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-import pytest
 from sqlalchemy import text
 
 import api_scan_jabber
@@ -12,14 +11,8 @@ import db
 import scan_collect
 from conftest import login, ok
 from db import SessionLocal, engine
+from fakes import setup_jabber
 from models import User, UserSession
-from test_scan_jabber import DOMAIN, jabber_url, reset_jabber, setup_jabber  # noqa: F401
-
-
-@pytest.fixture(autouse=True)
-def forget_online():
-    """Итог быстрой проверки – в памяти процесса: тесты не должны видеть чужой."""
-    api_scan_jabber._online.update(when=None, at=None, logins=None, error=None, key=None)
 
 
 def test_static_files_not_cached(anon):

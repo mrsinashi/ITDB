@@ -3,20 +3,10 @@
 архив, массовая правка, выгрузка, отмена из Истории."""
 from io import BytesIO
 
-import pytest
 from openpyxl import load_workbook
 
 import api_printers
-from conftest import PASSWORDS, add_computer, add_location, get_row, history, ok
-
-
-@pytest.fixture(autouse=True)
-def forget_show_attempts():
-    api_printers.show_attempts.clear()
-
-
-def add_model(client, model, kind="printer", maker=None, color=False, duplex=True):
-    return ok(client.post("/api/printer-models", json={"kind": kind, "maker": maker, "model": model, "color": color, "duplex": duplex}))
+from conftest import PASSWORDS, add_computer, add_location, add_model, get_row, history, ok
 
 
 def add_printer(client, location_id, **fields):
@@ -36,14 +26,6 @@ def printer(client, printer_id):
 def patch(client, printer_id, status=200, **fields):
     fields["_version"] = printer(client, printer_id)["version"]
     return ok(client.patch(f"/api/printers/{printer_id}", json=fields), status)
-
-
-@pytest.fixture
-def models(editor):
-    return {
-        "mfu": add_model(editor, "ECOSYS M2040dn", "mfu", "Kyocera"),
-        "printer": add_model(editor, "LaserJet M404", "printer", "HP", color=True, duplex=False),
-    }
 
 
 def test_models_directory(editor, reader, models):

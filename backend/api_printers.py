@@ -25,8 +25,8 @@ from sqlalchemy import func
 from api_columns import PRINTER_BULK_EXCLUDED, PRINTER_EDITABLE_KEYS
 from api_computer_actions import parse_ids
 from api_computers import (
-    LOCATION_PART_FIELDS, ChangeBatch, get_active_location, load_locations, location_parts, location_path, lock_rows,
-    normalize_ip, normalize_mac, normalize_multiline, normalize_single, save_changes,
+    LOCATION_PART_FIELDS, ChangeBatch, get_active_location, load_locations, location_parts, location_path,
+    location_sort_keys, lock_rows, normalize_ip, normalize_mac, normalize_multiline, normalize_single, save_changes,
 )
 from auth import get_current_user, require_editor, verify_password
 from cartridges import cartridges_by_model, names_text, set_model_cartridges, set_printer_cartridges
@@ -199,26 +199,6 @@ def shift_numbers(session, batch, location_id, kind, number, exclude_ids=()):
 
 
 # ---------- Строки таблицы ----------
-
-
-def location_sort_keys(locations):
-    """id узла → порядок в дереве (sort узлов по пути)."""
-    by_id = {location.id: location for location in locations}
-    keys = {}
-
-    for location in locations:
-        parts = []
-        current = location
-        depth = 0
-
-        while current and depth < 20:
-            parts.append(current.sort or 0)
-            current = by_id.get(current.parent_id)
-            depth += 1
-
-        keys[location.id] = tuple(reversed(parts))
-
-    return keys
 
 
 def printer_row(printer, parts, model, links, cartridges=None):

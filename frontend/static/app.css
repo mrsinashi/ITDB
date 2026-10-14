@@ -29,7 +29,13 @@
     --hover-soft: #917a5d;          /* вместо --text-soft */
     --hover-secondary: #685742;     /* вместо --text-secondary */
     --hover-line: #d9c3a0;          /* рамки блочков и кнопок, точка «не в сети» */
-    --radius: 3px;                  /* единое скругление: как у кнопок и поиска на панели */
+    /* …и на жёлтом найденном поиском в Справочниках */
+    --search-hit-muted: #b5a878;
+    --search-hit-soft: #8f8459;
+    --search-hit-secondary: #675e3d;
+    --search-hit-line: #dccf9d;
+    --search-hit-chip: #f3e3a4;
+    --radius: 3px;                 /* единое скругление: как у кнопок и поиска на панели */
     --block-head: 26px;             /* высота шапки блоков: таблицы Дерева, Истории, Справочники, Сканер… */
     --badge-bg: #8a8a8a;            /* счётчик в углу кнопки панели – серый */
     --copy-ico: #b98a4e;            /* значок копирования – в тон бежевой подсветки строки */
@@ -174,6 +180,9 @@
     --strike-line-cancelled: rgba(0, 0, 0, 0.18);
     --chip-open-frame: inset 0 0 0 1px rgba(0, 0, 0, 0.45);   /* блочок с открытым окошком */
     /* Флажок без «Закруглений» – как у Chrome */
+    --cb-browser-on: #0075ff;       /* синий браузера */
+    --cb-browser-hover: #005cc8;
+    --cb-browser-press: #3793ff;
     --cb-line: #767676;
     --cb-line-hover: #4f4f4f;
     --cb-line-press: #8d8d8d;
@@ -326,10 +335,6 @@ body {
 
 .muted {
     color: var(--text-muted);
-}
-
-.nowrap {
-    white-space: nowrap;
 }
 
 /* ============================================================
@@ -1507,6 +1512,7 @@ body.ui-dark-hostname .data-table td.link:hover span {
     background-image: linear-gradient(var(--row-sel-tint), var(--row-sel-tint));
     --v-line: var(--row-sel-line);
     --h-line: var(--row-sel-line);
+    --self-a: 17%;
 }
 /* Синяя линия и над выбранными: верхняя линия строки – это нижняя линия
    строки над ней */
@@ -1517,13 +1523,8 @@ body.ui-dark-hostname .data-table td.link:hover span {
 .data-table tbody tr:has(+ tr.row-selected.row-hover) td {
     --below-a: 27%;
 }
-.data-table tbody tr.row-selected td {
-    --self-a: 17%;
-}
 .data-table tbody tr.row-selected.row-hover td {
     --self-a: 27%;
-}
-.data-table tbody tr.row-selected.row-hover td {
     background-color: var(--bg);
     background-image: linear-gradient(var(--row-sel-tint-hover), var(--row-sel-tint-hover));
 }
@@ -1694,12 +1695,6 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 
 /* Редактирование ячейки */
-.data-table td.cell-editing {
-    overflow: visible;
-}
-.data-table td.cell-editing:not(.sticky) {
-    position: relative;
-}
 .data-table td:not(.sticky) {
     position: relative;
 }
@@ -2533,6 +2528,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .history-table td.h-time {
     padding: 3px 16px;
     text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 .history-table td.h-user {
     padding: 3px 12px;
@@ -2549,9 +2545,6 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .history-table .h-user {
     width: 1%;
     white-space: nowrap;
-}
-.history-table td.h-time {
-    font-variant-numeric: tabular-nums;
 }
 .history-table .h-obj {
     width: 1%;
@@ -2596,16 +2589,14 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     vertical-align: 1px;
 }
 
-.history-table .h-obj-kind {
-    color: var(--text-secondary);
-    margin-right: 5px;
-}
 /* Имя объекта – жирным (вид объекта, «Расположение», – обычным) */
 .history-table .h-link,
 .history-table .h-other {
     font-weight: 600;
 }
 .history-table .h-obj-kind {
+    color: var(--text-secondary);
+    margin-right: 5px;
     font-weight: 400;
 }
 .history-table .h-link {
@@ -2632,10 +2623,6 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .ch-val {
     min-width: 0;
     overflow-wrap: anywhere;
-}
-
-.change {
-    margin: 1px 0;
 }
 
 .field {
@@ -3411,7 +3398,7 @@ select.er-input {
     background: var(--brand);
     color: var(--on-accent);
     --grid-head-line-h: var(--brand-dark);
-    --grid-head-line-v: rgba(255, 255, 255, 0.22);
+    --grid-head-line-v: var(--on-accent-soft);
     border-bottom-color: var(--brand-dark);
 }
 .tree-grid.accent-head .tg-head .tg-count {
@@ -3638,9 +3625,12 @@ body.login-page {
     border-color: var(--danger);
     color: var(--danger);
 }
+/* Столбцы формы подключения – постоянной ширины: длинное значение (отпечаток сервера)
+   форму не раздвигает */
 .scan-form {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
 }
 .scan-form td {
     height: 24px;
@@ -3654,6 +3644,7 @@ body.login-page {
     background: var(--surface-alt);
     border-right: 1px solid var(--grid-line);
     white-space: nowrap;
+    box-sizing: content-box;
 }
 .scan-form .input {
     width: 100%;
@@ -3769,13 +3760,6 @@ body.login-page {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
-.subnets-table th.sn-c,
-.subnets-table td.sn-c {
-    width: 1%;
-    padding-left: 12px;
-    padding-right: 12px;
-    text-align: center;
-}
 .subnets-table td.sn-n {
     font-variant-numeric: tabular-nums;
 }
@@ -3805,6 +3789,7 @@ body.login-page {
     width: auto;
     padding-left: 6px;
     padding-right: 6px;
+    text-align: center;
 }
 .subnets-table tr.er-row input[type="checkbox"] {
     margin: 0;
@@ -4149,18 +4134,6 @@ body.login-page {
 }
 .sm-table.names-table tbody tr:not(.sm-detail):not(.h-empty) {
     cursor: default;
-}
-
-/* ============================================================
-   Фильтры с кнопками (этап 26)
-   ============================================================ */
-.sm-filters .sb-gap {
-    flex: 1;
-}
-.sm-filters .btn {
-    height: 22px;
-    padding: 0 9px;
-    font-size: 12px;
 }
 
 /* ============================================================
@@ -4520,16 +4493,7 @@ button.scan-chip {
 .scan-marks-table td {
     padding: 4px 8px 4px 0;
     vertical-align: middle;
-}
-.scan-marks-table .smk-sample {
-    display: inline-block;
-    min-width: 120px;
-    padding: 2px 6px;
-    border: 1px solid var(--grid-line);
-    border-radius: 2px;
-}
-.scan-marks-table .smk-sample.off {
-    opacity: 0.45;
+    white-space: nowrap;
 }
 .scan-marks-table label {
     display: inline-flex;
@@ -4548,11 +4512,6 @@ button.scan-chip {
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
-}
-.scan-marks-table td {
-    white-space: nowrap;
-}
-.scan-marks-table td.smk-label {
     white-space: normal;
 }
 .scan-marks-body {
@@ -4578,12 +4537,9 @@ button.scan-chip {
 /* ============================================================
    «Сканирование» → «Проверка» (этап 26г)
    ============================================================ */
-/* Один «Собрать» – перед фильтрами (этап 26д) */
-.sm-filters .ck-collect {
-    margin-right: 6px;
-}
 .ck-wrap {
     min-width: 760px;
+    timeline-scope: --ck-scroll;
 }
 .ck-table tbody tr.ck-row {
     cursor: pointer;
@@ -4709,9 +4665,6 @@ button.scan-chip {
    (от шапки до низа, место – placeCheckPlate): выше и ниже поля обрезается. За строкой
    её двигает браузер – анимацией по прокрутке таблицы (ключевые кадры – из скрипта),
    поэтому без задержки, как липкая полоска строки в Таблице */
-.ck-wrap {
-    timeline-scope: --ck-scroll;
-}
 .ck-wrap .history-scroll {
     scroll-timeline: --ck-scroll block;
 }
@@ -4762,10 +4715,6 @@ button.scan-chip {
 .names-help b {
     color: var(--text-strong);
 }
-/* Кнопка, которая сейчас работает (идёт сбор), – полупрозрачная, как недоступная */
-.btn.busy {
-    cursor: progress;
-}
 
 /* Vacuum: таблица в рамке «Проверки», ширина по содержимому */
 .vacuum-wrap {
@@ -4808,9 +4757,6 @@ button.scan-chip {
 .vacuum-table .vc-flag {
     color: var(--warn-text);
 }
-.vacuum-table td.vc-status {
-    font-variant-numeric: tabular-nums;
-}
 /* Идёт сбор: полоса и «просмотрено из» – в строке фильтров */
 .scan-progress {
     display: inline-flex;
@@ -4837,6 +4783,7 @@ button.scan-chip {
 }
 .vacuum-table td.vc-status {
     color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
 }
 .vacuum-table td.vc-status.on {
     color: var(--text-strong);
@@ -5133,11 +5080,11 @@ html.no-radius .card-sec-body .vac-dot {
 }
 /* Найденное поиском в Справочниках – жёлтое: серое в его тон */
 .st-row.search-hit {
-    --text-muted: #b5a878;
-    --text-soft: #8f8459;
-    --text-secondary: #675e3d;
-    --tint-line: #dccf9d;
-    --tint-chip: #f3e3a4;
+    --text-muted: var(--search-hit-muted);
+    --text-soft: var(--search-hit-soft);
+    --text-secondary: var(--search-hit-secondary);
+    --tint-line: var(--search-hit-line);
+    --tint-chip: var(--search-hit-chip);
 }
 /* Серое, заданное напрямую: рамки блочков и кнопок, точка «не в сети», счётчик */
 .sm-state.st-name,
@@ -5295,14 +5242,6 @@ html.no-radius .card-sec-body .vac-dot {
     white-space: nowrap;
 }
 
-/* Столбцы формы подключения – постоянной ширины: длинное значение (отпечаток сервера)
-   форму не раздвигает */
-.scan-form {
-    table-layout: fixed;
-}
-.scan-form .sf-label {
-    box-sizing: content-box;
-}
 /* DHCP: кнопки ключа и отпечаток сервера в форме подключения */
 .scan-form .sf-key {
     display: flex;
@@ -5444,7 +5383,6 @@ html.no-radius .st-title mark,
 html.no-radius .st-val mark,
 html.no-radius .node-title mark,
 html.no-radius .h-swatch,
-html.no-radius .scan-marks-table .smk-sample,
 html.no-radius .nr-table .nr-pre,
 html.no-radius .nr-table .nr-suf {
     border-radius: 2px !important;
@@ -5713,7 +5651,7 @@ html.no-radius .nr-table .nr-suf {
 html.ctrl-down .data-table thead:hover th.sticky {
     background: var(--brand);
     color: var(--on-accent);
-    --grid-head-line-v: rgba(255, 255, 255, 0.22);
+    --grid-head-line-v: var(--on-accent-soft);
     --grid-head-line-h: var(--brand-dark);
 }
 html.ctrl-down .data-table thead:hover th.sticky .sort-arrow,
@@ -6062,9 +6000,9 @@ html.col-dragging * {
    --cb-press)
    ============================================================ */
 html.no-radius input[type="checkbox"] {
-    --cb-on: #0075ff;
-    --cb-hover: #005cc8;
-    --cb-press: #3793ff;
+    --cb-on: var(--cb-browser-on);
+    --cb-hover: var(--cb-browser-hover);
+    --cb-press: var(--cb-browser-press);
     appearance: none;
     flex: none;
     width: 13px;

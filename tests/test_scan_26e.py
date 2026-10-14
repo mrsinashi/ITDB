@@ -5,12 +5,9 @@ from io import BytesIO
 from openpyxl import load_workbook
 
 import scan_normalize as sn
-from conftest import diffs_data, get_row, ok, set_vacuum
+from conftest import add_pc, diffs_data, get_row, ok, set_vacuum
+from fakes import ETH, Ejabberd, Glpi, collect, pc, setup_jabber, setup_source
 from scan_values import Names
-from test_scan_collect import ETH, Glpi, add_pc, glpi_url, pc, reset_glpi, setup_source  # noqa: F401
-from test_scan_collect import collect as glpi_collect
-from test_scan_jabber import DOMAIN, Ejabberd, jabber_url, reset_jabber, setup_jabber  # noqa: F401
-from test_scan_jabber import collect as jabber_collect
 
 GB = 1e9 / (1024 * 1024)   # 1 ГБ «с наклейки» в двоичных МБ, как пишет агент
 
@@ -113,7 +110,7 @@ def test_hostname_only_reported(admin, editor, room, glpi_url):
         2: pc("reg-101-1", ports=[(ETH, "d8:bb:c1:00:00:02", [])]),
     }
     setup_source(admin, glpi_url)
-    assert glpi_collect(admin)["status"] == "ok"
+    assert collect(admin)["status"] == "ok"
 
     diffs = diffs_data(editor)[1]
     d = diffs[(named, "hostname")]
@@ -155,7 +152,7 @@ def test_jabber_vacuum(admin, editor, room, glpi_url, jabber_url):
 
     Glpi.computers = {7: pc("pc-glpi", ports=[(ETH, "d8:bb:c1:00:00:07", ["10.0.2.77"])])}
     setup_source(admin, glpi_url)
-    assert glpi_collect(admin)["status"] == "ok"
+    assert collect(admin)["status"] == "ok"
 
     Ejabberd.online = {
         "ivanov": [("Vacuum-IM", "10.0.2.11")],          # ПК без VACUUM → заполнить
@@ -167,7 +164,7 @@ def test_jabber_vacuum(admin, editor, room, glpi_url, jabber_url):
         "orlov": [("Vacuum-IM", "10.0.2.20")],           # адрес у двух ПК – не понять
     }
     setup_jabber(admin, jabber_url)
-    assert jabber_collect(admin)["status"] == "ok"
+    assert collect(admin, "jabber")["status"] == "ok"
 
     data = ok(editor.get("/api/scan/diffs"))
     diffs = {(d["computer_id"], d["field"]): d for d in data["items"]}
@@ -224,7 +221,7 @@ def test_antivirus_rename(admin, editor, reader, room, glpi_url):
     long_name = "Kaspersky Endpoint Security для Windows"
     Glpi.antivirus = [{"id": 1, "computers_id": 1, "name": long_name, "is_active": 1, "is_uptodate": 1}]
     setup_source(admin, glpi_url)
-    assert glpi_collect(admin)["status"] == "ok"
+    assert collect(admin)["status"] == "ok"
 
     # Начальный вид – блочок с фоном по состоянию
     settings = ok(reader.get("/api/scan/antivirus"))

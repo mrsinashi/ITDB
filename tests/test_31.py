@@ -3,13 +3,12 @@
 только дополнить, но и заменить теми, кто сейчас с адреса ПК."""
 from datetime import datetime, timedelta, timezone
 
-from conftest import ago, diffs_data, get_row, ok, set_vacuum
+from conftest import add_pc, ago, diffs_data, get_row, ok, set_vacuum
 from db import SessionLocal
+from fakes import DOMAIN, Ejabberd, collect, setup_jabber
 from models import ScanJabberUser
 from test_28b import obs, save_hosts
-from test_scan_collect import add_pc
-from test_scan_jabber import DOMAIN, Ejabberd, jabber_url, reset_jabber, setup_jabber, users_of  # noqa: F401
-from test_scan_jabber import collect as jabber_collect
+from test_scan_jabber import users_of
 
 
 def test_hosts_stale(admin, editor, room):
@@ -56,7 +55,7 @@ def test_vacuum_page_stale(admin, editor, room, jabber_url):
     Ejabberd.online = {"ivanov": [("Vacuum-IM", "10.0.2.11")]}
     Ejabberd.groups = {"ИТ": [f"{u}@{DOMAIN}" for u in ("ivanov", "old_user", "never", "moved", "ghost2", "gone")]}
     setup_jabber(admin, jabber_url)
-    assert jabber_collect(admin)["status"] == "ok"
+    assert collect(admin, "jabber")["status"] == "ok"
 
     # «moved» подключался вчера, но ITDB видел его в сети (и его адрес) 20 дней назад
     session = SessionLocal()
@@ -107,7 +106,7 @@ def test_vacuum_replace(admin, editor, reader, room, jabber_url):
         "novikov": [("Vacuum-IM", "10.0.2.14")],
     }
     setup_jabber(admin, jabber_url)
-    assert jabber_collect(admin)["status"] == "ok"
+    assert collect(admin, "jabber")["status"] == "ok"
 
     _, diffs = diffs_data(reader)
     # Дополнить – все прежние и новый; заменить – только те, кто сейчас с адреса ПК

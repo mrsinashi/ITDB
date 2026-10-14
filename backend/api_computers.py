@@ -200,14 +200,22 @@ def load_locations(session):
     return {location.id: location for location in session.query(Location).all()}
 
 
-def location_parts(location_id, locations_by_id):
-    """Адрес / отделение / этаж / кабинет ПК – для строки таблицы."""
-    parts = {field: None for field in LOCATION_PART_FIELDS}
-
+def location_chain(location_id, locations_by_id):
+    """Узел и его предки – снизу вверх (не глубже 20: на случай петли в дереве)."""
     current = locations_by_id.get(location_id) if location_id is not None else None
     depth = 0
 
     while current and depth < 20:
+        yield current
+        current = locations_by_id.get(current.parent_id)
+        depth += 1
+
+
+def location_parts(location_id, locations_by_id):
+    """Адрес / отделение / этаж / кабинет ПК – для строки таблицы."""
+    parts = {field: None for field in LOCATION_PART_FIELDS}
+
+    for current in location_chain(location_id, locations_by_id):
         if current.kind == "building" and parts["building"] is None:
             parts["building"] = current.name
 
@@ -223,9 +231,6 @@ def location_parts(location_id, locations_by_id):
 
             parts["room_code"] = code
             parts["room_name"] = None if code and name == code else name
-
-        current = locations_by_id.get(current.parent_id)
-        depth += 1
 
     return parts
 
@@ -248,16 +253,19 @@ def location_title(location):
 def location_path(location_id, locations_by_id):
     """Полный путь узла для истории: «ул. Ленина, 1 / Терапия / 201 Ординаторская».
     Разделитель не «→»: в истории стрелкой уже показано «было → стало»."""
-    titles = []
-    current = locations_by_id.get(location_id) if location_id is not None else None
-    depth = 0
-
-    while current and depth < 20:
-        titles.append(location_title(current))
-        current = locations_by_id.get(current.parent_id)
-        depth += 1
+    titles = [location_title(node) for node in location_chain(location_id, locations_by_id)]
 
     return " / ".join(reversed(titles)) if titles else None
+
+
+def location_sort_keys(locations):
+    """id узла → порядок в дереве (sort узлов по пути)."""
+    by_id = {location.id: location for location in locations}
+
+    return {
+        location.id: tuple(reversed([node.sort or 0 for node in location_chain(location.id, by_id)]))
+        for location in locations
+    }
 
 
 def get_active_location(session, value):
@@ -639,6 +647,41 @@ def list_computers(archived: str = "no", session=Depends(get_db)):
     return computer_rows(session, archived)
 
 
+def main_users(session):
+    """id ПК → главный пользователь (как get_main_person_link, всем ПК разом)."""
+    people_by_id = {person.id: person for person in session.query(Person).all()}
+    links_by_computer = defaultdict(list)
+
+    for link in session.query(ComputerPerson).all():
+        links_by_computer[link.computer_id].append(link)
+
+    users = {}
+
+    for computer_id, links in links_by_computer.items():
+        links.sort(key=lambda item: (not item.is_main, item.sort, item.id))
+        person = people_by_id.get(links[0].person_id)
+
+        if person:
+            users[computer_id] = person.full_name
+
+    return users
+
+
+def vacuum_by_computer(session):
+    """id ПК → логины VACUUM (всем ПК разом)."""
+    rows = (
+        session.query(VacuumAccountComputer.computer_id, VacuumAccount.login)
+        .join(VacuumAccount, VacuumAccountComputer.account_id == VacuumAccount.id)
+        .all()
+    )
+    logins = defaultdict(list)
+
+    for computer_id, login in rows:
+        logins[computer_id].append(login)
+
+    return logins
+
+
 def computer_rows(session, archived="no"):
     """Строки таблицы (для списка и выгрузки): {"total", "rows"}."""
     query = session.query(Computer)
@@ -650,59 +693,10 @@ def computer_rows(session, archived="no"):
 
     computers = query.all()
     locations = session.query(Location).all()
-
-    locations_by_id = {location.id: location for location in locations}
-
-    location_sort_keys = {}
-
-    for location in locations:
-        sort_parts = []
-        current = location
-        depth = 0
-
-        while current and depth < 20:
-            sort_parts.append(current.sort or 0)
-            current = locations_by_id.get(current.parent_id)
-            depth += 1
-
-        location_sort_keys[location.id] = tuple(reversed(sort_parts))
-
-    location_parts_cache = {}
-
-    def get_location_parts(location_id):
-        if location_id not in location_parts_cache:
-            location_parts_cache[location_id] = location_parts(location_id, locations_by_id)
-
-        return location_parts_cache[location_id]
-
-    people = session.query(Person).all()
-    people_by_id = {person.id: person for person in people}
-
-    computer_people = session.query(ComputerPerson).all()
-    people_links_by_computer = defaultdict(list)
-
-    for link in computer_people:
-        people_links_by_computer[link.computer_id].append(link)
-
-    main_user_by_computer = {}
-
-    for computer_id, links in people_links_by_computer.items():
-        links.sort(key=lambda item: (not item.is_main, item.sort, item.id))
-
-        person = people_by_id.get(links[0].person_id)
-
-        if person:
-            main_user_by_computer[computer_id] = person.full_name
-
-    vacuum_rows = (
-        session.query(VacuumAccountComputer.computer_id, VacuumAccount.login)
-        .join(
-            VacuumAccount,
-            VacuumAccountComputer.account_id == VacuumAccount.id,
-        )
-        .all()
-    )
-
+    by_id = {location.id: location for location in locations}
+    sort_keys = location_sort_keys(locations)
+    users = main_users(session)
+    vacuum = vacuum_by_computer(session)
     field_defs = (
         session.query(FieldDef)
         .filter(FieldDef.archived == False)
@@ -710,26 +704,29 @@ def computer_rows(session, archived="no"):
         .all()
     )
     field_defs = [fd for fd in field_defs if not is_reserved_field_key(fd.key)]
-
-    vacuum_by_computer = defaultdict(list)
-
-    for computer_id, login in vacuum_rows:
-        vacuum_by_computer[computer_id].append(login)
-
     printers_by_id = printers_by_computer(session)
     models = model_titles(session)
+    parts_cache = {}
+
+    # Порядок: дерево → № места (без номера – в конце) → имя
+    def sort_key(computer):
+        seat_sort = computer.seat_sort
+
+        return (
+            sort_keys.get(computer.location_id, (999999,)),
+            seat_sort is None,
+            float(seat_sort) if seat_sort is not None else 0,
+            (computer.hostname or "").lower(),
+            computer.id,
+        )
 
     rows = []
 
-    for computer in computers:
+    for computer in sorted(computers, key=sort_key):
         extra = computer.extra or {}
-        parts = get_location_parts(computer.location_id)
 
-        vacuum_logins = vacuum_by_computer.get(computer.id, [])
-
-        seat_sort = computer.seat_sort
-        if seat_sort is not None:
-            seat_sort = float(seat_sort)
+        if computer.location_id not in parts_cache:
+            parts_cache[computer.location_id] = location_parts(computer.location_id, by_id)
 
         # Пользовательские поля идут первыми: при совпадении ключа
         # встроенное значение ниже их перекроет, а не наоборот.
@@ -738,9 +735,9 @@ def computer_rows(session, archived="no"):
         row.update(
             column_values(
                 computer,
-                parts,
-                main_user_by_computer.get(computer.id),
-                vacuum_text(vacuum_logins),
+                parts_cache[computer.location_id],
+                users.get(computer.id),
+                vacuum_text(vacuum.get(computer.id, [])),
                 printers_by_id.get(computer.id, []),
                 models,
             )
@@ -749,7 +746,6 @@ def computer_rows(session, archived="no"):
             {
                 "id": computer.id,
                 "location_id": computer.location_id,
-                "_seat_sort": seat_sort,
                 "archived": computer.archived,
                 "version": computer.version,
                 "updated_at": computer.updated_at,
@@ -757,27 +753,6 @@ def computer_rows(session, archived="no"):
         )
 
         rows.append(row)
-
-    def sort_key(row):
-        location_key = location_sort_keys.get(row["location_id"])
-
-        if location_key is None:
-            location_key = (999999,)
-
-        seat_sort = row["_seat_sort"]
-
-        return (
-            location_key,
-            seat_sort is None,
-            seat_sort if seat_sort is not None else 0,
-            (row["hostname"] or "").lower(),
-            row["id"],
-        )
-
-    rows.sort(key=sort_key)
-
-    for row in rows:
-        row.pop("_seat_sort", None)
 
     return {
         "total": len(rows),

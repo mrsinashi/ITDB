@@ -1,13 +1,13 @@
 """Этап 26ж: список пользователей Jabber (кто удалён, кто давно не подключался),
 VACUUM только по IP, номера записей в столбцы GLPI / GSIT, «это материнская
 плата», столбцы «Агент», «GSIT», «Мат. плата»."""
+from datetime import datetime
+
 import scan_jabber as sj
-from conftest import ago, diffs_data, get_row, ok, set_vacuum
+from conftest import add_pc, ago, diffs_data, get_row, ok, set_vacuum
+from fakes import DOMAIN, ETH, Ejabberd, Glpi, collect, pc, setup_jabber, setup_source
 from scan_values import Names, route_values
-from test_scan_collect import ETH, Glpi, add_pc, glpi_url, pc, reset_glpi, setup_source  # noqa: F401
-from test_scan_collect import collect as glpi_collect
-from test_scan_jabber import DOMAIN, Ejabberd, jabber_url, reset_jabber, setup_jabber, users_of  # noqa: F401
-from test_scan_jabber import collect as jabber_collect
+from test_scan_jabber import users_of
 
 
 # ---------- Список пользователей ejabberd ----------
@@ -37,7 +37,7 @@ def test_users_list_grows(admin, jabber_url, monkeypatch):
     monkeypatch.setattr(sj, "USERS_STEP", 2)
     Ejabberd.users = {f"user{i}": "Никогда" for i in range(5)}
     setup_jabber(admin, jabber_url)
-    run = jabber_collect(admin)
+    run = collect(admin, "jabber")
     assert run["status"] == "ok" and run["stats"]["total"] == 5
     assert Ejabberd.asked == ["users/1-2/", "users/1-4/", "users/1-6/", "users/1-8/"]
 
@@ -56,7 +56,7 @@ def test_users_marks_and_stale(admin, editor, reader, room, jabber_url):
     Ejabberd.online = {"ivanov": [("Vacuum-IM", "10.0.2.11")], "petrova": [("Vacuum-IM", "10.0.2.11")]}
     Ejabberd.groups = {"ИТ": [f"{u}@{DOMAIN}" for u in ("ivanov", "old_user", "never", "fresh", "stale2", "petrova", "ghost")]}
     setup_jabber(admin, jabber_url)
-    run = jabber_collect(admin)
+    run = collect(admin, "jabber")
     assert run["status"] == "ok" and run["message"] is None
     assert (run["stats"]["total"], run["stats"]["online"], run["stats"]["gone"], run["stats"]["no_group"]) == (7, 2, 1, 1)
 
@@ -66,7 +66,10 @@ def test_users_marks_and_stale(admin, editor, reader, room, jabber_url):
     assert data["listed"] and set(users) == {"ivanov", "old_user", "never", "fresh", "stale2", "petrova", "lonely", "ghost"}
     assert users["ghost"]["gone"] and not users["ghost"]["no_group"] and not users["ghost"]["online"]
     assert users["lonely"]["no_group"] and not users["lonely"]["gone"]
-    assert users["never"]["last_login_at"] is None and users["old_user"]["last_login_at"].startswith(ago(40)[:10])
+    # Время ejabberd – местное, в ответе – пояс базы (UTC): сравнивать само время, а не
+    # дату строкой – после местной полуночи даты разные
+    old_login =datetime.strptime(ago(40), "%Y-%m-%d %H:%M:%S").astimezone()
+    assert users["never"]["last_login_at"] is None and datetime.fromisoformat(users["old_user"]["last_login_at"]) == old_login
     assert users["ivanov"]["online"] and users["ivanov"]["addresses"][0]["hosts"][0]["hostname"] == "pc-1"
 
     # Таблица: из ячейки сканер никого не убирает (этап 26з) – кто давно не подключался
@@ -93,13 +96,13 @@ def test_users_marks_and_stale(admin, editor, reader, room, jabber_url):
     # Пользователя удалили из ejabberd и из групп – на странице его больше нет, в таблице – «нет в Jabber»
     del Ejabberd.users["fresh"]
     Ejabberd.groups = {"ИТ": [f"ivanov@{DOMAIN}"]}
-    assert jabber_collect(admin)["status"] == "ok"
+    assert collect(admin, "jabber")["status"] == "ok"
     assert "fresh" not in users_of(editor) and "ghost" not in users_of(editor)
     assert "fresh" in diffs_data(editor)[0]["vacuum_missing"]
 
     # Список не получен – прежние пометки остаются
     Ejabberd.users = None
-    run = jabber_collect(admin)
+    run = collect(admin, "jabber")
     assert run["status"] == "ok" and "Список пользователей не получен" in run["message"]
     assert "fresh" in diffs_data(editor)[0]["vacuum_missing"]
 
@@ -117,8 +120,8 @@ def test_record_ids(admin, editor, room, glpi_url):
     }
     setup_source(admin, glpi_url, "glpi")
     setup_source(admin, glpi_url, "gsit")
-    assert glpi_collect(admin, "glpi")["status"] == "ok"
-    assert glpi_collect(admin, "gsit")["status"] == "ok"
+    assert collect(admin, "glpi")["status"] == "ok"
+    assert collect(admin, "gsit")["status"] == "ok"
 
     data, diffs = diffs_data(editor)
     assert data["links"] == {
@@ -158,7 +161,7 @@ def test_stale_record_id(admin, editor, room, glpi_url):
         33: pc("pc-3", ports=[(ETH, "d8:bb:c1:00:00:03", [])]),
     }
     setup_source(admin, glpi_url)
-    assert glpi_collect(admin)["status"] == "ok"
+    assert collect(admin)["status"] == "ok"
     records = {r["source_id"]: r for r in ok(admin.get("/api/scan/records", params={"source": "glpi"}))["records"]}
     assert (records[11]["state"], records[11]["computer_id"]) == ("key", moved)
     d = diffs_data(editor)[1][(moved, "glpi_id")]
@@ -200,7 +203,7 @@ def test_board(admin, editor, reader, room, glpi_url):
         2: pc("pc-2", maker="ASUSTeK COMPUTER INC.", model="PRIME H310M-K", ports=[(ETH, "d8:bb:c1:00:00:02", [])]),
     }
     setup_source(admin, glpi_url)
-    assert glpi_collect(admin)["status"] == "ok"
+    assert collect(admin)["status"] == "ok"
     _, diffs = diffs_data(editor)
     d = diffs[(second, "model")]
     assert (d["proposed"], d["raw"]) == ("ASUS PRIME H310M-K", "ASUS PRIME H310M-K")
@@ -249,7 +252,7 @@ def test_own_value_is_same(admin, editor, room, glpi_url):
         2: pc("pc-2", os_name="Microsoft Windows 11 Pro", ports=[(ETH, "d8:bb:c1:00:00:02", [])]),
     }
     setup_source(admin, glpi_url)
-    assert glpi_collect(admin)["status"] == "ok"
+    assert collect(admin)["status"] == "ok"
     d = diffs_data(editor)[1][(first, "os")]
     ok(editor.patch(f"/api/computers/{first}", json={"os": "W11", "_version": get_row(editor, first)["version"]}))
     ok(editor.post("/api/scan/names", json={"field": "os", "source": d["raw"], "table": "W11", "kind": "same"}))

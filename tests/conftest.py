@@ -71,6 +71,8 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 from fastapi.testclient import TestClient  # noqa: E402
 
 import api_auth  # noqa: E402
+import api_printers  # noqa: E402
+import api_scan_jabber  # noqa: E402
 from auth import hash_password  # noqa: E402
 from db import SessionLocal, engine  # noqa: E402
 from main import app  # noqa: E402
@@ -133,7 +135,6 @@ def clean_data(database):
         if tables:
             conn.execute(text(f"truncate {', '.join(tables)} restart identity cascade"))
 
-    api_auth.login_attempts.clear()
     yield
 
 
@@ -206,6 +207,17 @@ def get_row(client, computer_id, archived="all"):
     return next((row for row in rows if row["id"] == computer_id), None)
 
 
+def add_pc(client, location_id, hostname, **fields):
+    """ПК с любыми полями: POST принимает только расположение, имя и IP."""
+    computer_id = add_computer(client, location_id, hostname=hostname)
+
+    if fields:
+        version = get_row(client, computer_id)["version"]
+        ok(client.patch(f"/api/computers/{computer_id}", json=dict(fields, _version=version)))
+
+    return computer_id
+
+
 def set_vacuum(client, computer_id, logins):
     ok(client.patch(f"/api/computers/{computer_id}", json={"vacuum": logins, "_version": get_row(client, computer_id)["version"]}))
 
@@ -220,6 +232,19 @@ def history(client, entity, entity_id=None):
 
 def choice(client, choice_id):
     return next(c for c in ok(client.get("/api/choices"))["items"] if c["id"] == choice_id)
+
+
+def add_model(client, model, kind="printer", maker=None, color=False, duplex=True):
+    return ok(client.post("/api/printer-models", json={"kind": kind, "maker": maker, "model": model, "color": color, "duplex": duplex}))
+
+
+@pytest.fixture
+def models(editor):
+    """Модели принтеров: МФУ Kyocera и цветной принтер HP без двусторонней печати."""
+    return {
+        "mfu": add_model(editor, "ECOSYS M2040dn", "mfu", "Kyocera"),
+        "printer": add_model(editor, "LaserJet M404", "printer", "HP", color=True, duplex=False),
+    }
 
 
 # ---------- Сканер ----------
@@ -248,3 +273,36 @@ def diffs_data(client, rejected=False):
     """diffs_of и предложения по ключу (ПК, поле)."""
     data = diffs_of(client, rejected)
     return data, {(d["computer_id"], d["field"]): d for d in data["items"]}
+
+
+# ---------- Поддельные источники (fakes.py) и память процесса ----------
+# fakes импортирует conftest – здесь его импорт внутри фикстур, иначе цикл
+
+
+@pytest.fixture(scope="module")
+def glpi_url():
+    from fakes import FakeGlpi, serve_http
+    yield from serve_http(FakeGlpi)
+
+
+@pytest.fixture(scope="module")
+def jabber_url():
+    from fakes import FakeEjabberd, serve_http
+    yield from serve_http(FakeEjabberd)
+
+
+@pytest.fixture(scope="module")
+def ssh_port():
+    from fakes import serve_ssh
+    yield from serve_ssh()
+
+
+@pytest.fixture(autouse=True)
+def fresh_memory():
+    """Перед каждым тестом – поддельные источники и память процесса (попытки входа и
+    показа пароля Web, «кто в сети» Jabber) с чистого листа: тест не видит чужое."""
+    from fakes import reset_fakes
+    reset_fakes()
+    api_auth.login_attempts.clear()
+    api_printers.show_attempts.clear()
+    api_scan_jabber._online.update(when=None, at=None, logins=None, error=None, key=None)

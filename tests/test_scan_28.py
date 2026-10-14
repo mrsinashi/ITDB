@@ -1,12 +1,10 @@
 """Этап 28: DHCP по SSH (файл аренд, ключ ITDB), сеть (проход подсетей),
 предложения MAC / IP / имени из сети, расписание сборов.
 
-Сервер SSH изображает paramiko в этом же процессе – как старый OpenSSH: о
+Сервер SSH изображает paramiko в этом же процессе (fakes.py) – как старый OpenSSH: о
 подписях не сообщает, по ключу выполняет только свою команду."""
-import socket
-import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import paramiko
 import pytest
@@ -16,47 +14,12 @@ import scan_dhcp
 import scan_net
 import scan_schedule
 import scan_ssh
-from conftest import diffs_data, ok
+from conftest import add_pc, diffs_data, ok
 from db import SessionLocal
+from fakes import LEASES, NOW, Ssh, collect, lease, setup_dhcp, source
 from models import ScanHost
 from scan_hostmatch import confirmed, host_rows, same_name
 from scan_http import SourceError
-from test_scan_collect import add_pc, collect
-
-UTC = timezone.utc
-NOW = datetime.now(UTC)
-
-
-def stamp(moment):
-    return moment.strftime("%w %Y/%m/%d %H:%M:%S")
-
-
-def lease(ip, mac, name=None, state="active", ends=None, starts=None):
-    lines = [
-        f"lease {ip} {{",
-        f"  starts {stamp(starts or NOW - timedelta(hours=1))};",
-        f"  ends {stamp(ends or NOW + timedelta(days=1))};",
-        f"  binding state {state};",
-        f"  hardware ethernet {mac};",
-        '  uid "\\001\\330}\\212";',
-    ]
-
-    if name:
-        lines.append(f'  client-hostname "{name}";')
-
-    return "\n".join(lines + ["}"])
-
-
-LEASES = "\n".join([
-    "# dhcpd.leases",
-    'server-duid "\\000\\001";',
-    lease("10.0.5.11", "d8:cb:8a:00:00:11", "OLD-NAME", ends=NOW - timedelta(days=2), state="free"),
-    lease("10.0.5.11", "d8:cb:8a:00:00:11", "pc-1.corp.lan"),
-    lease("10.0.5.12", "d8:cb:8a:00:00:12", "pc-2", state="free", ends=NOW - timedelta(days=40), starts=NOW - timedelta(days=41)),
-    lease("10.0.5.13", "d8:cb:8a:00:00:13", state="free", ends=NOW - timedelta(days=3), starts=NOW - timedelta(days=4)),
-    "host printer-1 { hardware ethernet 00:1b:a9:00:00:01; fixed-address 10.0.5.200; }",
-    "host two {\n  hardware ethernet 00:1b:a9:00:00:02;\n  fixed-address 10.0.5.201, 10.0.5.202;\n}",
-])
 
 
 # ---------- Файл аренд ----------
@@ -135,138 +98,6 @@ def test_ssh_address_and_paths():
     for bad in ("", "dhcpd.leases", "/tmp/a;rm", "/tmp/$(id)", "/tmp/../etc/shadow", "/tmp/a'b"):
         with pytest.raises(SourceError):
             scan_ssh.split_paths(bad)
-
-
-# ---------- Поддельный сервер SSH ----------
-
-
-OLD_SERVER = {"pubkeys": ["rsa-sha2-512", "rsa-sha2-256"], "keys": ["rsa-sha2-512", "rsa-sha2-256"]}
-
-
-class Ssh:
-    password = "pw"
-    files = {}
-    authorized = []     # строки authorized_keys
-    commands = []
-    host_key = paramiko.RSAKey.generate(2048)
-
-
-class FakeSsh(paramiko.ServerInterface):
-    def __init__(self):
-        self.by_key = False
-
-    def get_allowed_auths(self, username):
-        return "publickey,password"
-
-    def check_auth_password(self, username, password):
-        return paramiko.AUTH_SUCCESSFUL if (username, password) == ("itdbscan", Ssh.password) else paramiko.AUTH_FAILED
-
-    def check_auth_publickey(self, username, key):
-        blob = key.get_base64()
-
-        if username == "itdbscan" and any(blob in line for line in Ssh.authorized):
-            self.by_key = True
-            return paramiko.AUTH_SUCCESSFUL
-
-        return paramiko.AUTH_FAILED
-
-    def check_channel_request(self, kind, chanid):
-        return paramiko.OPEN_SUCCEEDED
-
-    def check_channel_exec_request(self, channel, command):
-        threading.Thread(target=self.execute, args=(channel, command.decode()), daemon=True).start()
-        return True
-
-    def execute(self, channel, command):
-        time.sleep(0.05)   # сначала клиенту уходит «команда принята»
-        Ssh.commands.append(command)
-        out, err, code = b"", b"", 0
-
-        if self.by_key:
-            # Ключ с command="…": что бы ни просили, выполняется команда из authorized_keys
-            command = next(line for line in Ssh.authorized).split('"')[1]
-
-        if "cat -- " in command and "authorized_keys" not in command:
-            # «echo; echo '#ITDB-FILE путь'; cat -- путь; …» (или прежнее «cat -- a b»)
-            for step in command.split(";"):
-                step = step.strip()
-
-                if step == "echo":
-                    out += b"\n"
-                elif step.startswith("echo "):
-                    out += step[len("echo "):].strip("'").encode() + b"\n"
-                elif step.startswith("cat -- "):
-                    for path in step[len("cat -- "):].split():
-                        if path in Ssh.files:
-                            out += Ssh.files[path].encode()
-                            code = 0
-                        else:
-                            err, code = f"cat: {path}: No such file or directory".encode(), 1
-        elif "authorized_keys" in command:
-            data = b""
-
-            while not data.endswith(b"\n"):
-                chunk = channel.recv(4096)
-
-                if not chunk:
-                    break
-
-                data += chunk
-
-            Ssh.authorized = [line for line in Ssh.authorized if not line.endswith(" itdb")] + [data.decode().strip()]
-        else:
-            err, code = b"unknown command", 127
-
-        channel.sendall(out)
-        channel.sendall_stderr(err)
-        channel.send_exit_status(code)
-        channel.close()
-
-
-@pytest.fixture(scope="module")
-def ssh_port():
-    listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
-    listener.listen(20)
-    transports = []
-
-    def serve():
-        while True:
-            try:
-                client, _ = listener.accept()
-            except OSError:
-                return
-
-            # Как OpenSSH 5.3: о подписях не сообщает и подписи rsa-sha2 не принимает
-            transport = paramiko.Transport(client, server_sig_algs=False, disabled_algorithms=OLD_SERVER)
-            transports.append(transport)   # иначе соединение закроет сборщик мусора
-            transport.add_server_key(Ssh.host_key)
-
-            try:
-                transport.start_server(server=FakeSsh())
-            except Exception:  # noqa: BLE001 – клиент оборвал соединение
-                pass
-
-    threading.Thread(target=serve, daemon=True).start()
-    yield listener.getsockname()[1]
-    listener.close()
-
-
-@pytest.fixture(autouse=True)
-def reset_ssh():
-    Ssh.password = "pw"
-    Ssh.files = {scan_dhcp.DEFAULT_PATH: LEASES}
-    Ssh.authorized = []
-    Ssh.commands = []
-
-
-def source(admin, kind):
-    return next(s for s in ok(admin.get("/api/scan/sources"))["sources"] if s["kind"] == kind)
-
-
-def setup_dhcp(admin, port, **more):
-    body = dict({"url": f"127.0.0.1:{port}", "login": "itdbscan", "password": "pw", "enabled": True}, **more)
-    return ok(admin.patch("/api/scan/sources/dhcp", json=body))
 
 
 def hosts(kind):

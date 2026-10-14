@@ -2,10 +2,8 @@
 удалённого доступа – не видеокарты; личные настройки «без закруглений» и
 «счётчики на кнопках»; столбец «Антивирус» по центру."""
 import scan_normalize as sn
-from conftest import diffs_data, ok, set_vacuum
-from test_scan_collect import add_pc
-from test_scan_jabber import DOMAIN, Ejabberd, jabber_url, reset_jabber, setup_jabber  # noqa: F401
-from test_scan_jabber import collect as jabber_collect
+from conftest import add_pc, diffs_data, ok, set_vacuum
+from fakes import DOMAIN, Ejabberd, collect, setup_jabber
 
 
 def test_lookalike_login_is_replaced(admin, editor, room, jabber_url):
@@ -23,7 +21,7 @@ def test_lookalike_login_is_replaced(admin, editor, room, jabber_url):
     }
     Ejabberd.groups = {"ИТ": [f"{u}@{DOMAIN}" for u in Ejabberd.users]}
     setup_jabber(admin, jabber_url)
-    assert jabber_collect(admin)["status"] == "ok"
+    assert collect(admin, "jabber")["status"] == "ok"
 
     data, diffs = diffs_data(editor)
     d = diffs[(first, "vacuum")]

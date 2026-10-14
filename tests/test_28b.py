@@ -3,11 +3,11 @@
 антивирусов, Ctrl+Z (отмена своего последнего действия), VNC по умолчанию."""
 from datetime import datetime, timedelta, timezone
 
-from conftest import get_row, ok
+from conftest import add_pc, get_row, ok
 from db import SessionLocal
+from fakes import ETH, Glpi, collect, pc, setup_source
 from models import ScanHost
 from scan_hostmatch import confirmed
-from test_scan_collect import ETH, Glpi, add_pc, collect, glpi_url, pc, setup_source  # noqa: F401
 
 NOW = datetime.now(timezone.utc)
 

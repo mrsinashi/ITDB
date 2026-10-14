@@ -1,132 +1,9 @@
 """Jabber (VACUUM, этап 26д): сбор пользователей из веб-админки ejabberd 14.12 и
 вкладка «Vacuum». Веб-админка изображается маленьким HTTP-сервером в этом же
-процессе: страницы – как у ejabberd 14.12 (прислал пользователь 30.09)."""
-import base64
-import threading
-import time
-import urllib.parse
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-import pytest
-
+процессе (fakes.py): страницы – как у ejabberd 14.12 (прислал пользователь 30.09)."""
 import scan_jabber as sj
 from conftest import add_computer, get_row, ok
-
-DOMAIN = "jabber.test"
-AUTH = "Basic " + base64.b64encode(f"admin@{DOMAIN}:pw".encode()).decode()
-
-
-class Ejabberd:
-    groups = {}      # группа → [JID]
-    online = {}      # логин → [(клиент, адрес)]
-    roster_fails = False
-    users = None     # список пользователей (этап 26ж): логин → «Последнее подключение»; None – страницы нет
-    asked = []       # какие страницы users/… спрашивали
-
-
-def page(body):
-    return ("<?xml version='1.0'?><html xmlns='http://www.w3.org/1999/xhtml' xml:lang='ru-RU'><head>"
-            "<title>Ejabberd Web Admin</title></head><body><div id='content'>" + body +
-            "</div><p>ejabberd (c) 2002-2014 ProcessOne</p></body></html>")
-
-
-class FakeEjabberd(BaseHTTPRequestHandler):
-    def log_message(self, *args):
-        pass
-
-    def send(self, status, html):
-        data = html.encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def do_GET(self):
-        if self.headers.get("Authorization") != AUTH:
-            return self.send(401, "no")
-        path = urllib.parse.unquote(self.path.split("?")[0])
-        rest = path[len(f"/admin/server/{DOMAIN}/"):]
-
-        if rest.startswith("users/"):
-            Ejabberd.asked.append(rest)
-
-            if Ejabberd.users is None:
-                return self.send(404, "Not Found")
-
-            first, last = (int(x) for x in rest[len("users/"):].strip("/").split("-"))
-            rows = "".join(
-                f"<tr><td><a href='../../user/{urllib.parse.quote(u)}/'>{u}@{DOMAIN}</a></td>"
-                f"<td><a href='../../user/{u}/queue/'>0</a></td><td>{when}</td></tr>"
-                for u, when in sorted(Ejabberd.users.items())[first - 1:last])
-            return self.send(200, page(
-                "<h1>Пользователи</h1><table><thead><tr><td>Пользователь</td><td>Офлайновые сообщения</td>"
-                "<td>Последнее подключение</td></tr></thead><tbody>" + rows + "</tbody></table>"))
-
-        if rest == "online-users/":
-            return self.send(200, page("".join(
-                f"<a href='../user/{urllib.parse.quote(u)}/'>{u}@{DOMAIN}</a><br/>" for u in sorted(Ejabberd.online))))
-
-        if rest == "shared-roster/":
-            if Ejabberd.roster_fails:
-                return self.send(500, "error")
-            rows = "".join(
-                f"<tr><td><input type='checkbox' name='selected' value='{g}'/></td><td><a href='{g}/'>{g}</a></td></tr>"
-                for g in Ejabberd.groups)
-            return self.send(200, page(
-                "<form action='' method='post'><table>" + rows +
-                "<tr><td><input type='text' name='namenew' value=''/></td></tr></table></form>"))
-
-        if rest.startswith("shared-roster/"):
-            group = rest[len("shared-roster/"):].rstrip("/")
-            if group not in Ejabberd.groups:
-                return self.send(404, "Not Found")
-            members = "".join(f"{jid}\n" for jid in Ejabberd.groups[group])
-            return self.send(200, page(
-                f"<input type='text' name='name' value='{group}'/><textarea name='description'></textarea>"
-                f"<textarea name='members' rows='3' cols='20'>{members}</textarea>"
-                f"<textarea name='dispgroups' rows='3' cols='20'>{group}\n</textarea>"))
-
-        if rest.startswith("user/"):
-            user = rest[len("user/"):].rstrip("/")
-            items = "".join(f"<li>{c} (plain://{ip}:10394#ejabberd@localhost)</li>" for c, ip in Ejabberd.online.get(user, []))
-            return self.send(200, page(f"<h1>Пользователь {user}@{DOMAIN}</h1><h3>Подключённые ресурсы:</h3><ul>{items}</ul>"))
-
-        return self.send(404, "Not Found")
-
-
-@pytest.fixture(scope="module")
-def jabber_url():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), FakeEjabberd)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{server.server_address[1]}"
-    server.shutdown()
-
-
-@pytest.fixture(autouse=True)
-def reset_jabber():
-    Ejabberd.groups = {}
-    Ejabberd.online = {}
-    Ejabberd.roster_fails = False
-    Ejabberd.users = None
-    Ejabberd.asked = []
-
-
-def setup_jabber(admin, url):
-    ok(admin.patch("/api/scan/sources/jabber", json={
-        "url": f"{url}/admin/server/{DOMAIN}/", "login": "admin", "password": "pw", "enabled": True,
-    }))
-
-
-def collect(admin):
-    run = ok(admin.post("/api/scan/sources/jabber/collect"))
-    for _ in range(200):
-        run = ok(admin.get(f"/api/scan/runs/{run['id']}"))
-        if run["status"] != "running":
-            return run
-        time.sleep(0.05)
-    raise AssertionError("сбор не закончился")
+from fakes import DOMAIN, Ejabberd, collect, setup_jabber
 
 
 def users_of(client):
@@ -160,7 +37,7 @@ def test_collect_and_tab(admin, editor, reader, room, jabber_url):
     Ejabberd.online = {"ivanov": [("Vacuum-IM", "10.0.2.11")], "petrova": [("Vacuum-IM", "10.0.2.12"), ("Vacuum-IM", "10.9.9.9")]}
     setup_jabber(admin, jabber_url)
 
-    run = collect(admin)
+    run = collect(admin, "jabber")
     assert run["status"] == "ok", run
     assert (run["stats"]["total"], run["stats"]["online"], run["stats"]["groups"]) == (2, 2, 2)
 
@@ -180,7 +57,7 @@ def test_collect_and_tab(admin, editor, reader, room, jabber_url):
     seen = users["ivanov"]["last_seen_at"]
     Ejabberd.online = {"petrova": [("Vacuum-IM", "10.0.2.12")]}
     Ejabberd.groups = {"ИТ": [f"petrova@{DOMAIN}"]}
-    assert collect(admin)["status"] == "ok"
+    assert collect(admin, "jabber")["status"] == "ok"
     users = users_of(admin)
     ivanov = users["ivanov"]
     assert not ivanov["online"] and ivanov["groups"] == [] and ivanov["last_seen_at"] == seen
@@ -189,7 +66,7 @@ def test_collect_and_tab(admin, editor, reader, room, jabber_url):
 
     # Группы не получены – прежние остаются, в итоге сбора – предупреждение
     Ejabberd.roster_fails = True
-    run = collect(admin)
+    run = collect(admin, "jabber")
     assert run["status"] == "ok" and "Группы не получены" in run["message"]
     assert users_of(admin)["petrova"]["groups"] == ["ИТ"]
 
@@ -204,6 +81,6 @@ def test_collect_errors(admin, jabber_url):
     ok(admin.patch("/api/scan/sources/jabber", json={
         "url": f"{jabber_url}/admin/server/{DOMAIN}/", "login": "admin", "password": "wrong", "enabled": True,
     }))
-    run = collect(admin)
+    run = collect(admin, "jabber")
     assert run["status"] == "error" and "не пустил" in run["message"]
     assert ok(admin.get("/api/scan/jabber"))["users"] == []

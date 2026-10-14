@@ -3,26 +3,14 @@
 import socket
 import threading
 
-import pytest
-
 import api_scan_jabber
 from conftest import add_computer, get_row, ok
-from test_scan_jabber import DOMAIN, Ejabberd, collect, jabber_url, reset_jabber, setup_jabber  # noqa: F401
-
-
-@pytest.fixture(autouse=True)
-def forget_online():
-    """Итог быстрой проверки – в памяти процесса: тесты не должны видеть чужой."""
-    api_scan_jabber._online.update(when=None, at=None, logins=None, error=None, key=None)
-
-
-def jabber_source(client):
-    return next(s for s in ok(client.get("/api/scan/sources"))["sources"] if s["kind"] == "jabber")
+from fakes import DOMAIN, Ejabberd, collect, setup_jabber, source
 
 
 def test_online_settings(admin):
-    source = jabber_source(admin)
-    assert (source["online_watch"], source["online_minutes"]) == (True, 2)
+    jabber = source(admin, "jabber")
+    assert (jabber["online_watch"], jabber["online_minutes"]) == (True, 2)
 
     for minutes in (0, 61):
         response = admin.patch("/api/scan/sources/jabber", json={"online_minutes": minutes})
@@ -30,7 +18,7 @@ def test_online_settings(admin):
 
     saved = ok(admin.patch("/api/scan/sources/jabber", json={"online_watch": False, "online_minutes": 5}))
     assert (saved["online_watch"], saved["online_minutes"]) == (False, 5)
-    assert (jabber_source(admin)["online_watch"], jabber_source(admin)["online_minutes"]) == (False, 5)
+    assert (source(admin, "jabber")["online_watch"], source(admin, "jabber")["online_minutes"]) == (False, 5)
 
     # В Истории – оба поля; у других источников настройки нет
     item = ok(admin.get("/api/history?entity=scan_sources"))["items"][0]
@@ -109,7 +97,7 @@ def test_vacuum_groups(admin, editor, room, jabber_url):
     Ejabberd.groups = {"Терапия": [f"ivanov@{DOMAIN}", f"sidorov@{DOMAIN}"], "ИТ": [f"ivanov@{DOMAIN}"]}
     Ejabberd.online = {"ivanov": [("Vacuum-IM", "10.0.2.11")], "petrova": [], "sidorov": []}
     setup_jabber(admin, jabber_url)
-    assert collect(admin)["status"] == "ok"
+    assert collect(admin, "jabber")["status"] == "ok"
 
     # petrova – без групп, sidorov – не в таблице
     assert ok(editor.get("/api/scan/diffs"))["vacuum_groups"] == {"ivanov": ["Терапия", "ИТ"]}

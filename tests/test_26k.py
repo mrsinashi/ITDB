@@ -3,7 +3,8 @@ GLPI); выделения значений в Таблице настраива�
 «давно не подключался», «имя на ПК другое», «срок прошёл»)."""
 import scan_normalize as sn
 from conftest import ok
-from test_scan_collect import Glpi, collect, glpi_url, pc, records, reset_glpi, setup_source  # noqa: F401
+from fakes import Glpi, collect, pc, setup_source
+from test_scan_collect import records
 
 SSD = ("Samsung SSD 870 EVO 250GB", 238475)
 

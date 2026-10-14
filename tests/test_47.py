@@ -9,7 +9,7 @@ from db import SessionLocal
 from models import History, ScanJabberUser, ScanSource
 from scan_hostmatch import printer_rows
 from test_28b import obs, save_hosts
-from test_printers import add_model, add_printer, models, patch, printer  # noqa: F401
+from test_printers import add_printer, patch, printer
 
 
 def age_history(minutes):
