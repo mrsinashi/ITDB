@@ -704,25 +704,35 @@ def row_kind(field, entry):
 
 
 class DiffItems:
-    """Расхождения по мере подсчёта; отклонённые считаются, а без with_rejected – пропускаются."""
+    """Расхождения по мере подсчёта; отклонённые считаются, а без with_rejected – пропускаются.
+    owner – чьи отклонения: "computer_id" (ПК) / "printer_id" (принтеры, api_scan_printers)."""
 
-    def __init__(self, session, with_rejected):
+    def __init__(self, session, with_rejected, owner="computer_id"):
+        column = getattr(ScanReject, owner)
         self.rejects = {
-            (r.computer_id, r.field, r.value_key): r
-            for r in session.query(ScanReject).filter(ScanReject.computer_id.isnot(None))
+            (getattr(r, owner), r.field, r.value_key): r
+            for r in session.query(ScanReject).filter(column.isnot(None))
         }
         self.with_rejected = with_rejected
         self.items = []
         self.rejected = 0
 
-    def add(self, computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note="", replace="", compare=None):
-        reject = self.rejects.get((computer_id, field, key_of(raw)))
+    def reject_of(self, row_id, field, raw, counted=True):
+        """(отклонение или None, показывать ли). Отклонённое считается (если counted) и без
+        with_rejected не показывается."""
+        reject = self.rejects.get((row_id, field, key_of(raw)))
 
-        if reject is not None and diff_kind != "partial":
+        if reject is not None and counted:
             self.rejected += 1
+            return reject, self.with_rejected
 
-            if not self.with_rejected:
-                return
+        return reject, True
+
+    def add(self, computer_id, field, table, proposed, raw, diff_kind, unsure, sources, note="", replace="", compare=None):
+        reject, shown = self.reject_of(computer_id, field, raw, diff_kind != "partial")
+
+        if not shown:
+            return
 
         self.items.append({
             "id": f"{computer_id}:{field}", "computer_id": computer_id, "field": field,
@@ -907,6 +917,22 @@ def check_field(field):
         raise HTTPException(status_code=400, detail=f"Это поле из сканера не принимается: {field}")
 
 
+def add_scan_changes(changes, field_changes, source):
+    """Изменения «Записать» у одной строки (ПК или принтера) – с пометкой источника. Поле
+    второй раз: «было» – первое, «стало» – последнее, вернулось к прежнему – убрать (как
+    ChangeBatch.record)."""
+    for field, change in field_changes.items():
+        first = changes.get(field)
+
+        if first:
+            change = dict(change, **{key: value for key, value in first.items() if key.startswith("old")})
+
+        changes[field] = dict(change, scan=source or "сканер")
+
+        if changes[field]["old"] == changes[field]["new"]:
+            del changes[field]
+
+
 @router.post("/accept")
 def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db)):
     """Записать значения сканера в ПК. Пропускаются ПК, у которых значение в
@@ -943,9 +969,7 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
                 continue
 
             field_changes = apply_fields(session, computer, {item.field: item.value}, user_field_keys, batch)
-
-            for field, change in field_changes.items():
-                changes[field] = dict(change, scan=item.source or "сканер")
+            add_scan_changes(changes, field_changes, item.source)
 
             if field_changes:
                 accepted += 1

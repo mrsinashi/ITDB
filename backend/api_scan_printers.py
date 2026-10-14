@@ -16,11 +16,11 @@ from pydantic import BaseModel
 
 import scan_collect
 from api_computers import ChangeBatch, save_changes
-from api_printers import apply_printer_fields, lock_printer
-from api_scan_diffs import DiffSource, drop_rejects, host_observations, save_rejects
+from api_printers import apply_printer_fields
+from api_scan_diffs import DiffItems, DiffSource, add_scan_changes, drop_rejects, host_observations, save_rejects
 from auth import get_current_user, require_editor
 from db import get_db
-from models import Printer, ScanReject
+from models import Printer
 from scan_hostmatch import printer_rows
 from scan_values import key_of, lines_of
 
@@ -65,33 +65,25 @@ def compute(session, with_rejected=False):
         p.id: {"ip": p.ip, "mac": p.mac, "name": p.name}
         for p in session.query(Printer).filter(Printer.archived == False)  # noqa: E712
     }
-    rejects = {
-        (r.printer_id, r.field, r.value_key): r
-        for r in session.query(ScanReject).filter(ScanReject.printer_id.isnot(None))
-    }
-    items = []
-    rejected = 0
+    items = DiffItems(session, with_rejected, "printer_id")
 
     for proposal in printer_rows(printers, scan_collect.active_values(session), hosts):
         printer_id, field, value = proposal["printer_id"], proposal["field"], proposal["value"]
         table = printers[printer_id].get(field) or ""
-        reject = rejects.get((printer_id, field, key_of(value)))
+        reject, shown = items.reject_of(printer_id, field, value)
 
-        if reject is not None:
-            rejected += 1
-
-            if not with_rejected:
-                continue
+        if not shown:
+            continue
 
         written = lines_of(table)
-        items.append(PrinterDiffOut(
+        items.items.append(PrinterDiffOut(
             id=f"p{printer_id}:{field}", printer_id=printer_id, name=printers[printer_id]["name"], field=field,
             table=table, proposed="\n".join(written + [value]), raw=value, kind="diff" if written else "fill",
             unsure=proposal["unsure"], sources=[DiffSource(**dict(proposal["source"], value=value))],
             rejected_by=reject.user_name if reject else None, rejected_at=reject.at if reject else None,
         ))
 
-    return items, rejected
+    return items.items, items.rejected
 
 
 @router.get("", response_model=PrinterDiffsOut)
@@ -129,28 +121,39 @@ def check_field(field):
 
 @router.post("/accept")
 def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db)):
-    """Записать значения сканера в принтеры. Пропускаются те, у кого значение в таблице
-    уже не то, что было при просмотре."""
+    """Записать значения сканера в принтеры. Пропускаются пропавшие и те, у кого значение
+    в таблице уже не то, что было при просмотре (как у ПК – api_scan_diffs.accept)."""
     batch = ChangeBatch(me["login"])
     accepted = 0
     skipped = []
+    by_printer = {}
 
     for item in payload.items:
         check_field(item.field)
-        printer = lock_printer(session, item.printer_id)
+        by_printer.setdefault(item.printer_id, []).append(item)
 
-        if printer.archived or key_of(getattr(printer, item.field) or "") != key_of(item.table):
-            skipped.append(printer.name or f"#{printer.id}")
+    # Принтеры блокируются по возрастанию id – два «Записать» с одними принтерами не ждут друг друга вечно
+    for printer_id, items in sorted(by_printer.items()):
+        printer = session.query(Printer).filter(Printer.id == printer_id).with_for_update().first()
+
+        if printer is None:
+            skipped.extend(f"#{printer_id}" for _ in items)
             continue
 
-        changes = apply_printer_fields(session, printer, {item.field: item.value}, batch)
+        changes = {}
 
-        for change in changes.values():
-            change["scan"] = item.source or "сканер"
+        for item in items:
+            if printer.archived or key_of(getattr(printer, item.field) or "") != key_of(item.table):
+                skipped.append(printer.name or f"#{printer.id}")
+                continue
 
-        if changes:
-            save_changes(session, printer, changes, me["login"])
-            accepted += 1
+            field_changes = apply_printer_fields(session, printer, {item.field: item.value}, batch)
+            add_scan_changes(changes, field_changes, item.source)
+
+            if field_changes:
+                accepted += 1
+
+        save_changes(session, printer, changes, me["login"])
 
     batch.finish(session)
     session.commit()

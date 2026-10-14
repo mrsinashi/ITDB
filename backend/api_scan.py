@@ -357,103 +357,114 @@ def list_sources(me=Depends(require_admin), session=Depends(get_db)):
     )
 
 
-@router.patch("/sources/{kind}", response_model=SourceOut)
-def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), session=Depends(get_db)):
-    check_kind(kind)
-    glpi = SOURCES[kind]["glpi"]
-    form = SOURCES[kind]["form"]
-    data = payload.model_dump(exclude_none=True)
-
-    if not glpi:
-        for field in ("user_token", "app_token"):
-            data.pop(field, None)
-
-    if form != "jabber":
-        for field in ("domain", "online_watch", "online_minutes"):
-            data.pop(field, None)
-
-    if form != "ssh":
-        for field in ("path", "configs", "forget_host"):
-            data.pop(field, None)
-
-    if form != "net":
-        for field in ("names", "ports"):
-            data.pop(field, None)
-    else:
-        for field in ("url", "login", "password", "verify_tls"):
-            data.pop(field, None)
-
+def lock_or_new_source(session, kind):
+    """Строка настроек источника под замком; её ещё нет – новая (появится при сохранении)."""
     source = load_source(session, kind, lock=True)
 
     if source is None:
         source = ScanSource(kind=kind, enabled=False, verify_tls=True, secrets={}, options={})
         session.add(source)
 
-    before = {
-        "enabled": bool(source.enabled),
-        "url": source.url,
-        "domain": source.domain,
-        "login": source.login,
-        "verify_tls": source.verify_tls if source.verify_tls is not None else True,
-        "fresh_days": fresh_days_of(source, kind),
-    }
-    changes = {}
+    return source
 
-    # Jabber: адрес любой страницы веб-админки → адрес админки, домен – из пути
-    if form == "jabber" and data.get("url"):
+
+# Поля формы только своего вида источника; у остальных – отбрасываются
+FORM_FIELDS = {
+    "jabber": ("domain", "online_watch", "online_minutes"),
+    "ssh": ("path", "configs", "forget_host"),
+    "net": ("names", "ports"),
+}
+# У «Сети» нет адреса и входа
+NOT_NET_FIELDS = ("url", "login", "password", "verify_tls")
+# Параметры подключения: изменились – прошлая проверка больше ничего не говорит
+CONNECTION_FIELDS = {"url", "domain", "login", "verify_tls", "path", "configs", "host_key"} | set(SECRET_FIELDS)
+
+
+def form_data(kind, payload):
+    """Значения формы, которые есть у этого источника (None – не менять)."""
+    form = SOURCES[kind]["form"]
+    drop = set() if SOURCES[kind]["glpi"] else {"user_token", "app_token"}
+
+    for other, fields in FORM_FIELDS.items():
+        if other != form:
+            drop.update(fields)
+
+    if form == "net":
+        drop.update(NOT_NET_FIELDS)
+
+    return {field: value for field, value in payload.model_dump(exclude_none=True).items() if field not in drop}
+
+
+def save_address(source, form, data, changes):
+    """Адрес, домен, логин, проверка сертификата. Jabber: адрес любой страницы
+    веб-админки → адрес админки, домен – из пути (если домена ещё нет)."""
+    values = {field: data[field] for field in ("url", "domain", "login") if field in data}
+
+    if form == "jabber" and values.get("url"):
         try:
-            data["url"], domain = scan_jabber.normalize(data["url"])
+            values["url"], domain = scan_jabber.normalize(values["url"])
         except SourceError as err:
             raise HTTPException(status_code=400, detail=str(err))
 
-        if domain and not clean(data.get("domain")) and not source.domain:
-            data["domain"] = domain
+        if domain and not clean(values.get("domain")) and not source.domain:
+            values["domain"] = domain
 
     for field in ("url", "domain", "login"):
-        if field in data:
-            value = clean(data[field])
+        if field not in values:
+            continue
 
-            if field == "url" and value:
-                try:
-                    value = scan_ssh.clean_address(value) if form == "ssh" else check_url(value, "Адрес")
-                except SourceError as err:
-                    raise HTTPException(status_code=400, detail=str(err))
+        value = clean(values[field])
 
-            setattr(source, field, value)
-            changes[field] = {"old": before[field], "new": value}
+        if field == "url" and value:
+            try:
+                value = scan_ssh.clean_address(value) if form == "ssh" else check_url(value, "Адрес")
+            except SourceError as err:
+                raise HTTPException(status_code=400, detail=str(err))
+
+        changes[field] = {"old": getattr(source, field), "new": value}
+        setattr(source, field, value)
 
     if "verify_tls" in data:
+        changes["verify_tls"] = {"old": source.verify_tls if source.verify_tls is not None else True, "new": data["verify_tls"]}
         source.verify_tls = data["verify_tls"]
-        changes["verify_tls"] = {"old": before["verify_tls"], "new": data["verify_tls"]}
 
+
+def save_options(source, kind, data, changes):
+    """Срок «Актуальны»; у «Сети» – спрашивать ли имена и проверять ли порты."""
     if "fresh_days" in data:
         days = clean_fresh_days(data["fresh_days"], kind)
+        changes["fresh_days"] = {"old": fresh_days_of(source, kind), "new": days}
         source.options = dict(source.options or {}, fresh_days=days)
-        changes["fresh_days"] = {"old": before["fresh_days"], "new": days}
-
-    if "path" in data or "configs" in data:
-        old_path, old_configs = dhcp_files(source)
-
-        try:
-            path, configs = dhcp_files(source, data)
-        except SourceError as err:
-            raise HTTPException(status_code=400, detail=str(err))
-
-        source.options = dict(source.options or {}, path=path, configs=configs)
-
-        if path != old_path:
-            changes["path"] = {"old": old_path, "new": path}
-
-        if configs != old_configs:
-            changes["configs"] = {"old": "\n".join(old_configs) or None, "new": "\n".join(configs) or None}
 
     for field, default in (("names", True), ("ports", False)):
         if field in data:
-            old = option_of(source, field, default)
+            changes[field] = {"old": option_of(source, field, default), "new": data[field]}
             source.options = dict(source.options or {}, **{field: data[field]})
-            changes[field] = {"old": old, "new": data[field]}
 
-    # Jabber: быстрая проверка «кто в сети» (этап 41)
+
+def save_dhcp_files(source, data, changes):
+    """DHCP: файл аренд и файлы настроек; в Историю – что изменилось."""
+    if "path" not in data and "configs" not in data:
+        return
+
+    old_path, old_configs = dhcp_files(source)
+
+    try:
+        path, configs = dhcp_files(source, data)
+    except SourceError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+    source.options = dict(source.options or {}, path=path, configs=configs)
+
+    if path != old_path:
+        changes["path"] = {"old": old_path, "new": path}
+
+    if configs != old_configs:
+        changes["configs"] = {"old": "\n".join(old_configs) or None, "new": "\n".join(configs) or None}
+
+
+def save_online(source, data, changes):
+    """Jabber: быстрая проверка «кто в сети» (этап 41) – включена ли, раз в сколько минут."""
     if "online_minutes" in data and not (1 <= data["online_minutes"] <= ONLINE_MAX_MINUTES):
         raise HTTPException(status_code=400, detail=f"Проверять «в сети» – раз в 1–{ONLINE_MAX_MINUTES} мин.")
 
@@ -461,42 +472,64 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
 
     for field, old in (("online_watch", old_watch), ("online_minutes", old_minutes)):
         if field in data:
-            source.options = dict(source.options or {}, **{field: data[field]})
             changes[field] = {"old": old, "new": data[field]}
+            source.options = dict(source.options or {}, **{field: data[field]})
 
-    # Запомненный ключ сервера SSH: забыть по просьбе или при смене адреса
+
+def forget_host_key(source, form, data, changes):
+    """Запомненный ключ сервера SSH: забыть по просьбе или при смене адреса."""
     host_changed = form == "ssh" and "url" in changes and changes["url"]["old"] != changes["url"]["new"]
 
     if (data.get("forget_host") or host_changed) and option_of(source, "host_key", None):
         source.options = {key: value for key, value in (source.options or {}).items() if key != "host_key"}
         changes["host_key"] = {"old": None, "new": HOST_KEY_FORGOTTEN}
 
+
+def save_secrets(source, data, changes):
+    """Пароли и токены – зашифрованными, "" – удалить сохранённый; в Историю – без значения."""
     secrets = dict(source.secrets or {})
 
     for field in SECRET_FIELDS:
         if field not in data:
             continue
 
-        value = data[field]
-
-        if value:
-            secrets[field] = encrypt(value)
+        if data[field]:
+            secrets[field] = encrypt(data[field])
             changes[field] = {"old": None, "new": PASSWORD_SET}
         elif secrets.pop(field, None):
             changes[field] = {"old": None, "new": SECRET_REMOVED}
 
     source.secrets = secrets
 
-    if "enabled" in data:
-        if data["enabled"] and not source.url and form != "net":
-            raise HTTPException(status_code=400, detail="Сначала укажи адрес.")
-        source.enabled = data["enabled"]
-        changes["enabled"] = {"old": before["enabled"], "new": data["enabled"]}
 
-    # Параметры подключения изменились – прошлая проверка больше ничего не говорит
-    connection = {"url", "domain", "login", "verify_tls", "path", "configs", "host_key"} | set(SECRET_FIELDS)
+def save_enabled(source, form, data, changes):
+    if "enabled" not in data:
+        return
 
-    if any(field in connection for field, change in changes.items() if change["old"] != change["new"]):
+    if data["enabled"] and not source.url and form != "net":
+        raise HTTPException(status_code=400, detail="Сначала укажи адрес.")
+
+    changes["enabled"] = {"old": bool(source.enabled), "new": data["enabled"]}
+    source.enabled = data["enabled"]
+
+
+@router.patch("/sources/{kind}", response_model=SourceOut)
+def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), session=Depends(get_db)):
+    check_kind(kind)
+    form = SOURCES[kind]["form"]
+    data = form_data(kind, payload)
+    source = lock_or_new_source(session, kind)
+    changes = {}
+
+    save_address(source, form, data, changes)
+    save_options(source, kind, data, changes)
+    save_dhcp_files(source, data, changes)
+    save_online(source, data, changes)
+    forget_host_key(source, form, data, changes)
+    save_secrets(source, data, changes)
+    save_enabled(source, form, data, changes)
+
+    if any(field in CONNECTION_FIELDS for field, change in changes.items() if change["old"] != change["new"]):
         source.checked_at = None
         source.check_ok = None
         source.check_message = None
@@ -574,11 +607,7 @@ def check_ssh_kind(kind):
 
 def ensure_key(session, kind, me):
     """Ключ ITDB для источника: создаётся при первой надобности. (источник, создан ли)."""
-    source = load_source(session, kind, lock=True)
-
-    if source is None:
-        source = ScanSource(kind=kind, enabled=False, verify_tls=True, secrets={}, options={})
-        session.add(source)
+    source = lock_or_new_source(session, kind)
 
     if (source.secrets or {}).get(SSH_KEY):
         return source, False

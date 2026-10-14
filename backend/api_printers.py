@@ -739,13 +739,15 @@ def clean_model_value(field, value):
 def renumber_after_kind_change(session, model, batch):
     """Тип модели сменился: её принтеры – в другом счёте №; где № занят – следующий свободный."""
     session.flush()
+    # Блокировка – по возрастанию id (правило lock_rows), обход – по кабинетам и №
     printers = (
         session.query(Printer)
         .filter(Printer.model_id == model.id, Printer.archived == False, Printer.number.isnot(None))  # noqa: E712
-        .order_by(Printer.location_id, Printer.number, Printer.id)
+        .order_by(Printer.id)
         .with_for_update()
         .all()
     )
+    printers.sort(key=lambda p: (p.location_id is None, p.location_id or 0, p.number, p.id))
 
     for printer in printers:
         others = same_group(session, printer.location_id, model.kind, {printer.id})
