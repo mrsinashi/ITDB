@@ -1,42 +1,20 @@
 // Страница «История».
 
-import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, splitMulti } from "../util.js";
+import { apiFetch, searchWords, splitMulti } from "../util.js";
 import { isOverdue, refreshDuplicates, styleKey } from "../columns.js";
 
 // Сколько записей истории загружать сразу и по «Показать ещё»
 const HISTORY_PAGE = 200;
+// Поиск – на сервере (этап 53): запрос, когда ввод затих
+const HISTORY_SEARCH_DELAY_MS = 300;
 
 export default {
     computed: {
-        filteredHistory() {
-            if (!searchWords(this.historyQuery).length) {
-                return this.historyItems;
-            }
-            const texts = this.historyItems.map((item) => {
-                const parts = [
-                    item.title,
-                    item.user_name,
-                    this.entityLabel(item.entity),
-                    this.formatTime(item.at)
-                ];
-                Object.keys(item.changes || {}).forEach((field) => {
-                    const ch = item.changes[field] || {};
-                    parts.push(field, this.fieldLabel(item.entity, field), this.displayValue(ch.old), this.displayValue(ch.new));
-                });
-                return searchNorm(parts.filter(function (p) { return p !== null && p !== undefined; }).join("\n"));
-            });
-            // Слово, которого нет ни в одной записи, – в другой раскладке
-            const words = searchWordsIn(this.historyQuery, texts);
-            return this.historyItems.filter(function (item, i) {
-                return matchesAllWords(texts[i], words);
-            });
-        },
-
         // Записи истории, разбитые по дням (порядок – как пришёл с сервера)
         historyDays() {
             const days = [];
             let current = null;
-            this.filteredHistory.forEach((item) => {
+            this.historyItems.forEach((item) => {
                 const date = this.formatDate(item.at);
                 if (!current || current.date !== date) {
                     current = { key: date + ":" + item.id, date: date, items: [] };
@@ -49,10 +27,15 @@ export default {
 
         historyCountText() {
             const total = this.historyTotal;
-            if (!this.historyQuery.trim()) {
+            if (!this.historySearched) {
                 return (this.historyFiltered ? "Найдено: " : "Записей: ") + total;
             }
-            return "Показано: " + this.filteredHistory.length + " из " + total;
+            return "Найдено: " + total + " из " + this.historyTotalAll;
+        },
+
+        // Список на экране найден поиском (а не только набран в поле)
+        historySearched() {
+            return searchWords(this.historyShownQuery).length > 0;
         },
 
         // Сколько записей ещё не загружено (кнопки «Показать ещё» внизу)
@@ -69,11 +52,17 @@ export default {
             });
         },
 
-        // Поиск идёт по всей истории – догрузить остальное
+        // Поиск – на сервере по всей истории: запрос, когда ввод затих (очистка – сразу).
+        // Сравнение – с последним запрошенным: вернулись к показанному, пока шёл другой
+        // запрос, – спросить снова (ответ на другой текст отбросится)
         historyQuery(value) {
-            if (value.trim() && this.historyRest > 0) {
-                this.loadMoreHistory(true);
+            clearTimeout(this._historySearchTimer);
+            if (searchWords(value).join(" ") === searchWords(this._historyAsked || "").join(" ")) {
+                return;
             }
+            this._historySearchTimer = setTimeout(() => {
+                this.loadHistory();
+            }, value.trim() ? HISTORY_SEARCH_DELAY_MS : 0);
         },
     },
 
@@ -93,12 +82,9 @@ export default {
             });
         },
 
-        // Число записей за день: без поиска – точное с сервера (день мог
-        // загрузиться не целиком), с поиском – сколько найдено
+        // Число записей за день – точное с сервера (день мог загрузиться не целиком;
+        // с поиском – сколько найдено)
         historyDayCount(day) {
-            if (this.historyQuery.trim()) {
-                return day.items.length;
-            }
             const count = this.historyDayCounts[day.date];
             return count === undefined ? day.items.length : count;
         },
@@ -273,50 +259,76 @@ export default {
 
         // ---------- История ----------
 
-        // Порция истории с сервера: записи + точные счётчики (всего и по дням)
-        async fetchHistory(offset, limit) {
+        // Порция истории с сервера: записи + точные счётчики (всего и по дням); поиск –
+        // query (этап 53). Ответ запроса, после которого список уже сменили (фильтр,
+        // поиск, обновление), не нужен – null
+        async fetchHistory(offset, limit, query) {
+            const seq = this._historySeq;
             const params = this.historyParams();
             params.set("limit", limit);
             params.set("offset", offset);
             params.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+            if (searchWords(query).length) {
+                params.set("q", query);
+            }
             const response = await apiFetch("/api/history?" + params);
             if (!response.ok) {
                 throw new Error(await this.errorText(response));
             }
             const data = await response.json();
+            if (seq !== this._historySeq) {
+                return null;
+            }
             this.historyTotal = data.total || 0;
+            this.historyTotalAll = data.total_all || 0;
             this.historyDayCounts = data.days || {};
             this.historyUsers = data.users || [];
             return data.items || [];
         },
 
-        // Сначала – последние 200 записей, остальное – «Показать ещё / все»
+        // Сначала – последние 200 записей (найденных – с поиском), остальное – «Показать ещё / все»
         async loadHistory() {
+            clearTimeout(this._historySearchTimer);
+            this._historySeq = (this._historySeq || 0) + 1;
+            const seq = this._historySeq;
+            const query = this.historyQuery;
+            this._historyAsked = query;
             this.historyLoading = true;
             this.startLoading();
             this.historyError = "";
             try {
-                this.historyItems = await this.fetchHistory(0, HISTORY_PAGE);
-                if (this.historyQuery.trim() && this.historyRest > 0) {
-                    this.loadMoreHistory(true);
+                const items = await this.fetchHistory(0, HISTORY_PAGE, query);
+                if (items) {
+                    this.historyItems = items;
+                    this.historyShownQuery = query;
                 }
             } catch (e) {
-                this.historyError = String(e.message || e);
+                if (seq === this._historySeq) {
+                    this.historyError = String(e.message || e);
+                }
             }
             this.finishLoading();
-            this.historyLoading = false;
+            if (seq === this._historySeq) {
+                this.historyLoading = false;
+            }
         },
 
         async loadMoreHistory(all) {
-            if (this.historyLoadingMore) {
+            // Пока грузится новый список (поиск, фильтр), догружать прежний нельзя
+            if (this.historyLoadingMore || this.historyLoading) {
                 return;
             }
+            const seq = this._historySeq;
             this.historyLoadingMore = true;
             this.startLoading();
             try {
                 do {
                     const limit = all ? 5000 : HISTORY_PAGE;
-                    const items = await this.fetchHistory(this.historyItems.length, limit);
+                    const items = await this.fetchHistory(this.historyItems.length, limit, this.historyShownQuery);
+                    // Список сменили, пока догружали, – старое в новый не дописывать
+                    if (!items || seq !== this._historySeq) {
+                        break;
+                    }
                     // Пока листали, могли добавиться новые записи – без повторов
                     const seen = new Set(this.historyItems.map(function (item) { return item.id; }));
                     const fresh = items.filter(function (item) { return !seen.has(item.id); });
@@ -326,7 +338,9 @@ export default {
                     }
                 } while (all && this.historyRest > 0);
             } catch (e) {
-                this.toastError("Не удалось загрузить историю: " + (e.message || e));
+                if (seq === this._historySeq) {
+                    this.toastError("Не удалось загрузить историю: " + (e.message || e));
+                }
             }
             this.finishLoading();
             this.historyLoadingMore = false;

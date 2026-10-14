@@ -17,6 +17,9 @@
 Создание ПК или узла не отменяется (удаления в системе нет – только архив).
 Служебные поля записей («Заменил», «Заменён на», старые поля) отменяются
 только пометкой: значения у них нет.
+
+Решения сканера (сопоставление записей, названия) отменяются своим снимком
+«до / после» (scan_decisions.py, этап 53).
 """
 from collections import namedtuple
 from datetime import datetime, timezone
@@ -47,9 +50,11 @@ from api_printers import (
 )
 from api_users import ROLES, check_login_free, clean_login, clean_text, end_sessions
 from cartridges import check_name as check_cartridge_name, model_cartridges_text, set_model_cartridges
+from history_labels import SIMPLE_FIELD_LABELS
 from history_log import choice_title, column_label
 from models import Cartridge, Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, Printer, PrinterModel, User
 from printer_links import computer_title, links_ids, links_text, printer_title, printers_by_computer
+from scan_decisions import DECISION_ENTITIES, apply_decision, check_decision
 
 # Объект истории: вид, id и ключ (у оформления столбца id = 0, ключ – столбец)
 Ref = namedtuple("Ref", "entity entity_id entity_key")
@@ -120,7 +125,10 @@ def check_rights(entity, user):
 def field_kind(entity, field):
     """value – у поля есть значение (можно отменить и вернуть);
     info – служебная пометка (только отменить); fixed – создание, удаление,
-    смена пароля (нельзя)."""
+    смена пароля (нельзя); decision – решение сканера (своя отмена, scan_decisions)."""
+    if entity in DECISION_ENTITIES:
+        return "decision"
+
     if field in FIXED_FIELDS:
         return "fixed"
 
@@ -145,6 +153,9 @@ def field_kind(entity, field):
 
 
 def field_label(session, entity, field):
+    if entity in DECISION_ENTITIES:
+        return SIMPLE_FIELD_LABELS.get(field, field)
+
     if entity == "printer_models":
         return MODEL_LABELS.get(field) or SIMPLE_LABELS.get(field, field)
 
@@ -624,11 +635,18 @@ def cancel_changes(session, items, cancel, user, batch):
     """items – [(запись, поле)]. cancel=True – отменить, False – восстановить.
     Возвращает, сколько изменений отмечено."""
     groups = {}
+    decisions = []
 
     for record, field in items:
         change = (record.changes or {}).get(field)
 
         if change is None or bool(change.get("cancelled")) == cancel:
+            continue
+
+        # Решения сканера (этап 53) – своим снимком «до / после»
+        if record.entity in DECISION_ENTITIES:
+            check_decision(record, field, user)
+            decisions.append((record, field))
             continue
 
         check_rights(record.entity, user)
@@ -677,6 +695,13 @@ def cancel_changes(session, items, cancel, user, batch):
             if not same(field, target, values.current(entity, obj, field)):
                 if set_value(session, entity, obj, field, target, batch, user):
                     touch(entity, obj)
+
+    # Решения – после ПК (замки в том же порядке, что у «Привязать»: ПК, потом решение).
+    # Несколько решений об одной записи – по очереди: отмена – с последнего, восстановление – с первого
+    for record, field in sorted(decisions, key=lambda pair: pair[0].id, reverse=cancel):
+        apply_decision(session, record, field, cancel)
+        mark(record, field, stamp)
+        count += 1
 
     return count
 

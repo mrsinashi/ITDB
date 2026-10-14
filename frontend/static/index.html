@@ -1036,8 +1036,8 @@
                                 <span class="h-tool" :class="{ on: historyShowCancelled }" :title="historyShowCancelled ? 'Скрыть отменённые изменения' : 'Показать отменённые изменения'" @click="toggleShowCancelled"><template v-if="historyShowCancelled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></template><template v-else><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.8 0 3.4-.5 4.8-1.3"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M2 2l20 20"/></svg></template></span>
                             </span></span></th></tr>
                     </thead>
-                    <tbody v-if="!filteredHistory.length && !historyLoading">
-                        <tr class="h-empty"><td colspan="4">{{ historyQuery.trim() || historyFiltered ? "Ничего не найдено." : "История пока пуста." }}</td></tr>
+                    <tbody v-if="!historyItems.length && !historyLoading">
+                        <tr class="h-empty"><td colspan="4">{{ historySearched || historyFiltered ? "Ничего не найдено." : "История пока пуста." }}</td></tr>
                     </tbody>
                     <tbody v-for="day in historyDays" :key="day.key">
                         <tr class="h-day">
@@ -1068,10 +1068,10 @@
                     </tbody>
                 </table>
                 <!-- Сначала загружены последние 200 записей; остальное – по кнопке -->
-                <div v-if="historyRest > 0 && !historyQuery.trim() && historyItems.length" class="history-more">
+                <div v-if="historyRest > 0 && historyItems.length" class="history-more">
                     <span>Показаны последние {{ historyItems.length }} из {{ historyTotal }}</span>
-                    <button class="btn" :disabled="historyLoadingMore" @click="loadMoreHistory(false)">Показать ещё {{ Math.min(200, historyRest) }}</button>
-                    <button class="btn" :disabled="historyLoadingMore" @click="loadMoreHistory(true)">Показать все</button>
+                    <button class="btn" :disabled="historyLoadingMore || historyLoading" @click="loadMoreHistory(false)">Показать ещё {{ Math.min(200, historyRest) }}</button>
+                    <button class="btn" :disabled="historyLoadingMore || historyLoading" @click="loadMoreHistory(true)">Показать все</button>
                 </div>
                 </div>
                 </div>
@@ -2397,7 +2397,7 @@
 
         <!-- ================= Сообщения ================= -->
         <div class="toasts">
-            <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">
+            <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type" @mouseenter="holdToasts(t.id)" @mouseleave="holdToasts(null)">
                 <span>{{ t.text }}</span>
                 <span class="toast-x" title="Закрыть" @click="dismissToast(t.id)">×</span>
             </div>

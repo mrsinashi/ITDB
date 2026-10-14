@@ -117,6 +117,10 @@ export default {
             if (this.view === "scan" && this.scanTab === "check") {
                 this.loadCheck();
             }
+            // Решения сканера отменяются тоже (этап 53) – «Названия» на экране перечитать
+            if (this.view === "scan" && this.scanTab === "names") {
+                this.loadScanNames();
+            }
         },
 
         // Ctrl+Z: отменить своё последнее действие (как «Отменить изменения» в Истории).

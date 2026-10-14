@@ -31,9 +31,22 @@ const ENTITY_FILTERS = {
     printer_models: "Модели принтеров",
     cartridges: "Картриджи"
 };
-// Только администратор видит эти записи; отмены у них нет (только просмотр)
+// Только администратор видит эти записи
 const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule"];
-const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule", "scan_marks", "scan_antivirus", "table_marks", "app_settings", "naming"];
+// Отмены нет (только просмотр)
+const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_schedule", "scan_marks", "scan_antivirus", "table_marks", "app_settings", "naming"];
+// Решения сканера (этап 53): отменяются целиком, «Истории значения» у них нет
+const DECISION_ENTITIES = ["scan_records", "scan_aliases"];
+
+// Запись можно отменить: не настройка; решение сканера – только со снимком «до / после»
+// (записанные до этапа 53 его не имеют)
+function canUndo(item) {
+    if (NO_UNDO_ENTITIES.indexOf(item.entity) !== -1) {
+        return false;
+    }
+    return DECISION_ENTITIES.indexOf(item.entity) === -1 ||
+        Object.keys(item.changes || {}).every(function (field) { return !!(item.changes[field] || {}).undo; });
+}
 
 export default {
     computed: {
@@ -49,15 +62,15 @@ export default {
         // Выбранные записи Истории (только из видимых сейчас)
         historySelectedItems() {
             const set = new Set(this.historySelected);
-            return this.filteredHistory.filter(function (item) { return set.has(item.id); });
+            return this.historyItems.filter(function (item) { return set.has(item.id); });
         },
 
         historySelectedCanCancel() {
-            return this.historySelectedItems.some((item) => NO_UNDO_ENTITIES.indexOf(item.entity) === -1 && this.hasFields(item.changes, false));
+            return this.historySelectedItems.some((item) => canUndo(item) && this.hasFields(item.changes, false));
         },
 
         historySelectedCanRestore() {
-            return this.historySelectedItems.some((item) => NO_UNDO_ENTITIES.indexOf(item.entity) === -1 && this.hasFields(item.changes, true));
+            return this.historySelectedItems.some((item) => canUndo(item) && this.hasFields(item.changes, true));
         },
 
         historyFiltered() {
@@ -165,7 +178,8 @@ export default {
 
         // Двойной клик открывает «Историю значения» (у создания, удаления и пароля – нет)
         canOpenValue(entity, field) {
-            return !!ENTITY_FILTERS[entity] && NO_UNDO_ENTITIES.indexOf(entity) === -1 && FIXED_HISTORY_FIELDS.indexOf(field) === -1;
+            return !!ENTITY_FILTERS[entity] && NO_UNDO_ENTITIES.indexOf(entity) === -1 && DECISION_ENTITIES.indexOf(entity) === -1 &&
+                FIXED_HISTORY_FIELDS.indexOf(field) === -1;
         },
 
         toggleShowCancelled() {
@@ -242,7 +256,7 @@ export default {
             if (event.target.closest(".h-link, .h-user-link, .h-only")) {
                 return;
             }
-            const ids = this.filteredHistory.map(function (i) { return i.id; });
+            const ids = this.historyItems.map(function (i) { return i.id; });
             const r = clickSelect(this.historySelected, ids, this.historyAnchor, item.id, event, false);
             this.historySelected = r.selected;
             this.historyAnchor = r.anchor;
@@ -253,7 +267,7 @@ export default {
         },
 
         selectAllHistory() {
-            this.historySelected = this.filteredHistory.map(function (i) { return i.id; });
+            this.historySelected = this.historyItems.map(function (i) { return i.id; });
         },
 
         clearHistorySelection() {
@@ -269,7 +283,8 @@ export default {
                 const response = await this.apiSend("/api/history/cancel", "POST", { items: items, cancel: cancel });
                 const data = await response.json();
                 this.toast((cancel ? "Отменено изменений: " : "Восстановлено изменений: ") + data.count, "success");
-                await this.afterHistoryAction();
+                // И значения сканера: отменяются и решения сканера (этап 53)
+                await this.reloadAfterUndo();
                 return true;
             } catch (e) {
                 this.toastError(e.message || e);
@@ -279,7 +294,7 @@ export default {
 
         async cancelSelectedHistory(cancel) {
             const items = this.historySelectedItems
-                .filter(function (item) { return NO_UNDO_ENTITIES.indexOf(item.entity) === -1; })
+                .filter(canUndo)
                 .map(function (item) { return { id: item.id }; });
             this.closeMenus();
             if (items.length && await this.cancelHistory(items, cancel)) {

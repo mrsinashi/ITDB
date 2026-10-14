@@ -13,7 +13,8 @@
 - GET /api/scan/names, POST /api/scan/names, DELETE /api/scan/names/{id} –
   соответствия названий источника и таблицы (этап 25б, scan_values.py).
 
-Решения пишутся в Историю (видит администратор, отмены нет).
+Решения пишутся в Историю (видит администратор) со снимком «до / после» – отменяются
+там и Ctrl+Z (этап 53, scan_decisions.py).
 """
 from datetime import datetime
 from typing import Optional
@@ -29,6 +30,7 @@ from db import get_db
 from history_log import log_change
 from api_columns import COLUMNS_BY_KEY
 from models import Computer, ScanAlias, ScanLink, ScanRecord, ScanRun
+from scan_decisions import aliases_state, aliases_undo, links_state, links_undo
 from scan_glpi import api_base
 from scan_values import NAME_FIELDS, clean_text, key_of
 
@@ -277,9 +279,14 @@ def record_title(kind, record):
     return f"{SOURCES[kind]['title']} №{record.source_id}" + (f" {record.name}" if record.name else "")
 
 
-def log_decision(session, kind, record, me, changes):
+def log_decision(session, kind, record, me, field, old, new, undo):
+    """Решение о записи – в Историю со снимком для отмены (этап 53); ничего не изменилось
+    (undo None – то же решение ещё раз) – не пишется."""
+    if undo is None:
+        return
+
     log_change(
-        session, "scan_records", 0, me["login"], changes,
+        session, "scan_records", 0, me["login"], {field: {"old": old, "new": new, "undo": undo}},
         title=record_title(kind, record), entity_key=f"{kind}:{record.source_id}",
     )
 
@@ -296,12 +303,16 @@ def save_link(session, me, kind, record, computer):
     if computer.archived:
         raise HTTPException(status_code=400, detail=f"{host_of(computer)} в архиве: сначала верни его из архива.")
 
-    old = None
+    old = new = None
+    before = links_state(session, kind, source_id)
 
     for link in links_for(session, kind, source_id):
         if link.action == "link" and link.computer_id != computer.id:
             prev = session.get(Computer, link.computer_id)
             old = host_of(prev) if prev else None
+            # Тот же HOSTNAME у другого ПК (повторы разрешены) – с номерами, иначе «было» = «стало»
+            if prev and old == host_of(computer):
+                old, new = f"{old} (ПК №{prev.id})", f"{old} (ПК №{computer.id})"
             session.delete(link)
         elif link.computer_id == computer.id:
             session.delete(link)
@@ -311,12 +322,13 @@ def save_link(session, me, kind, record, computer):
         source=kind, source_id=source_id, computer_id=computer.id, action="link",
         title=record.name, user_name=me["login"],
     ))
-    log_decision(session, kind, record, me, {"link": {"old": old, "new": host_of(computer)}})
+    log_decision(session, kind, record, me, "link", old, new or host_of(computer), links_undo(session, kind, source_id, before))
 
 
 def save_reject(session, me, kind, record, computer):
     """«Это не этот ПК»: его больше не предлагать для этой записи."""
     source_id = record.source_id
+    before = links_state(session, kind, source_id)
 
     for link in links_for(session, kind, source_id):
         if link.computer_id == computer.id:
@@ -327,7 +339,7 @@ def save_reject(session, me, kind, record, computer):
         source=kind, source_id=source_id, computer_id=computer.id, action="reject",
         title=record.name, user_name=me["login"],
     ))
-    log_decision(session, kind, record, me, {"reject": {"old": None, "new": host_of(computer)}})
+    log_decision(session, kind, record, me, "reject", None, host_of(computer), links_undo(session, kind, source_id, before))
 
 
 @router.post("/records/{kind}/{source_id}/link")
@@ -350,6 +362,7 @@ def reject_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(req
 def reset_record(kind: str, source_id: int, me=Depends(require_admin), session=Depends(get_db)):
     """Забыть решения по записи: снова сопоставлять по признакам."""
     record = load_record(session, kind, source_id)
+    before = links_state(session, kind, source_id)
     links = links_for(session, kind, source_id)
 
     if not links:
@@ -363,7 +376,7 @@ def reset_record(kind: str, source_id: int, me=Depends(require_admin), session=D
         described.append(("это " if link.action == "link" else "не ") + host)
         session.delete(link)
 
-    log_decision(session, kind, record, me, {"reset": {"old": ", ".join(described), "new": None}})
+    log_decision(session, kind, record, me, "reset", ", ".join(described), None, links_undo(session, kind, source_id, before))
     session.commit()
     return {"ok": True}
 
@@ -446,6 +459,7 @@ def save_alias(session, me, field, source, table, kind):
 
     source_key, table_key = key_of(source), key_of(table)
     query = session.query(ScanAlias).filter(ScanAlias.field == field, ScanAlias.source_key == source_key)
+    before = aliases_state(session, field, source_key)
     removed = []
     # «Одно и то же» и «материнская плата» – одно на значение источника
     single = ("same", "board")
@@ -461,21 +475,25 @@ def save_alias(session, me, field, source, table, kind):
 
     if kind == "auto":
         if removed:
-            log_change(
-                session, "scan_aliases", 0, me["login"],
-                {"deleted": {"old": "; ".join(f"{ALIAS_KINDS[a.kind]}: {a.table_value}" for a in removed), "new": None}},
-                title=title, entity_key=field,
-            )
+            old = "; ".join(f"{ALIAS_KINDS[a.kind]}: {a.table_value}" for a in removed)
+            log_alias(session, me, field, title, "deleted", old, None, aliases_undo(session, field, source_key, before))
         return
 
     session.add(ScanAlias(
         field=field, source=source, source_key=source_key, table_value=table, table_key=table_key,
         kind=kind, user_name=me["login"],
     ))
-    log_change(
-        session, "scan_aliases", 0, me["login"], {kind: {"old": None, "new": table}},
-        title=title, entity_key=field,
-    )
+    log_alias(session, me, field, title, kind, None, table, aliases_undo(session, field, source_key, before))
+
+
+def log_alias(session, me, field, title, change, old, new, undo):
+    """Решение по названию – в Историю со снимком для отмены (этап 53); то же решение ещё
+    раз (undo None) – не пишется."""
+    if undo is not None:
+        log_change(
+            session, "scan_aliases", 0, me["login"], {change: {"old": old, "new": new, "undo": undo}},
+            title=title, entity_key=field,
+        )
 
 
 @router.post("/names")
@@ -497,11 +515,11 @@ def delete_name(alias_id: int, me=Depends(require_admin), session=Depends(get_db
     if alias is None:
         raise HTTPException(status_code=404, detail="Соответствие не найдено.")
 
-    log_change(
-        session, "scan_aliases", 0, me["login"],
-        {"deleted": {"old": f"{ALIAS_KINDS[alias.kind]}: {alias.table_value}", "new": None}},
-        title=f"{field_title(alias.field)}: {alias.source}", entity_key=alias.field,
-    )
+    field, source_key = alias.field, alias.source_key
+    old = f"{ALIAS_KINDS[alias.kind]}: {alias.table_value}"
+    title = f"{field_title(field)}: {alias.source}"
+    before = aliases_state(session, field, source_key)
     session.delete(alias)
+    log_alias(session, me, field, title, "deleted", old, None, aliases_undo(session, field, source_key, before))
     session.commit()
     return {"ok": True}

@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -8,11 +9,13 @@ from sqlalchemy import desc, func, text
 from api_computers import ChangeBatch
 from auth import get_current_user, require_editor
 from db import get_db
+from history_search import search, search_words
 from history_undo import (
     ENTITIES, SIMPLE, Ref, cancel_changes, field_kind, field_label, find_object, object_title, ref_of, revert_value,
     value_history,
 )
 from models import Computer, History, Location, Printer
+from scan_decisions import DECISION_ENTITIES
 
 router = APIRouter(prefix="/api", tags=["history"])
 
@@ -21,6 +24,12 @@ ADMIN_ENTITIES = ("users", "scan_sources", "scan_subnets", "scan_records", "scan
 
 
 HISTORY_PAGE_MAX = 5000
+
+# Поля записи в ответе (и для поиска – строками, без объектов ORM)
+ROW_COLUMNS = (
+    History.id, History.entity, History.entity_id, History.entity_key, History.user_name, History.at,
+    History.title, History.changes, History.cancelled,
+)
 
 
 def valid_time_zone(session, tz):
@@ -58,12 +67,12 @@ def history_filters(me, user, entity, entity_id, entity_key, cancelled):
     return filters
 
 
-# Объекты, у которых в Истории – имя сейчас: таблица → (модель, имя). Принтер без
+# Объекты, у которых в Истории – имя сейчас: таблица → (столбец имени, имя). Принтер без
 # имени (этап 44) – «#N» (вид объекта «Принтер» пишет фронт)
 NAMED_ENTITIES = {
-    "computers": (Computer, lambda computer: computer.hostname),
-    "locations": (Location, lambda location: location.name),
-    "printers": (Printer, lambda printer: printer.name or f"#{printer.id}"),
+    "computers": (Computer.hostname, lambda computer: computer.hostname),
+    "locations": (Location.name, lambda location: location.name),
+    "printers": (Printer.name, lambda printer: printer.name or f"#{printer.id}"),
 }
 
 
@@ -74,20 +83,20 @@ def entry_titles(session, items):
     настройки сканирования – на момент записи."""
     names = {}
 
-    for entity, (model, name_of) in NAMED_ENTITIES.items():
+    # Только номер и имя (при поиске записей – тысячи, целые строки ПК не нужны)
+    for entity, (column, name_of) in NAMED_ENTITIES.items():
         ids = {item.entity_id for item in items if item.entity == entity}
+        model = column.class_
         names[entity] = {
-            row.id: name_of(row) for row in (session.query(model).filter(model.id.in_(ids)).all() if ids else [])
+            row.id: name_of(row) for row in (session.query(model.id, column).filter(model.id.in_(ids)).all() if ids else [])
         }
 
     simple_titles = {}
+    simple_refs = {Ref(item.entity, item.entity_id, item.entity_key) for item in items if item.entity in SIMPLE}
 
-    for item in items:
-        ref = Ref(item.entity, item.entity_id, item.entity_key)
-
-        if item.entity in SIMPLE and ref not in simple_titles:
-            obj = find_object(session, ref, lock=False)
-            simple_titles[ref] = object_title(session, obj, ref) if obj is not None else None
+    for ref in simple_refs:
+        obj = find_object(session, ref, lock=False)
+        simple_titles[ref] = object_title(session, obj, ref) if obj is not None else None
 
     def title_of(item):
         if item.entity in names:
@@ -111,6 +120,7 @@ def history(
     entity_id: Optional[int] = None,
     entity_key: Optional[str] = None,
     cancelled: bool = False,
+    q: str = "",
     me=Depends(get_current_user),
     session=Depends(get_db),
 ):
@@ -121,30 +131,36 @@ def history(
     Фильтры: user – кто менял, entity (+ entity_id / entity_key) – что менялось.
     Записи о пользователях системы видит только администратор.
     Отменённые целиком записи – только с cancelled=true (и в счётчиках тоже).
+    q – поиск по словам (history_search.py, этап 53): total и days – по найденным,
+    total_all – сколько записей без поиска.
     users – все, кто что-либо менял (для фильтра)."""
     limit = min(max(limit, 1), HISTORY_PAGE_MAX)
     offset = max(offset, 0)
     filters = history_filters(me, user, entity, entity_id, entity_key, cancelled)
+    zone = valid_time_zone(session, tz)
 
     total = session.query(func.count(History.id)).filter(*filters).scalar()
+    total_all = total
+    order = (desc(History.at), desc(History.id))
 
-    items = (
-        session.query(History)
-        .filter(*filters)
-        .order_by(desc(History.at), desc(History.id))
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-
-    day = func.date(func.timezone(valid_time_zone(session, tz), History.at))
-    days = {
-        value.strftime("%d.%m.%Y"): count
-        for value, count in session.query(day, func.count(History.id))
-        .filter(*filters)
-        .group_by(day)
-        .all()
-    }
+    if search_words(q):
+        # Поиск – по всем записям фильтра (время – как на странице); строки – без объектов ORM
+        local = func.to_char(func.timezone(zone, History.at), "DD.MM.YYYY HH24:MI:SS").label("local")
+        rows = session.query(*ROW_COLUMNS, local).filter(*filters).order_by(*order).all()
+        found = search(session, rows, q, entry_titles(session, rows))
+        total = len(found)
+        days = dict(Counter(row.local[:10] for row in found))
+        items = found[offset:offset + limit]
+    else:
+        items = session.query(History).filter(*filters).order_by(*order).offset(offset).limit(limit).all()
+        day = func.date(func.timezone(zone, History.at))
+        days = {
+            value.strftime("%d.%m.%Y"): count
+            for value, count in session.query(day, func.count(History.id))
+            .filter(*filters)
+            .group_by(day)
+            .all()
+        }
 
     users = [
         name
@@ -174,6 +190,7 @@ def history(
     return {
         "items": result,
         "total": total,
+        "total_all": total_all,
         "days": days,
         "users": users,
     }
@@ -251,6 +268,32 @@ class UndoLastIn(BaseModel):
     confirm_id: Optional[int] = None   # действие старше минуты: его запись, отмену подтвердили
 
 
+def action_text(session, pairs):
+    """Что отменяет Ctrl+Z – словами: «pc-1 – Оперативная память». Решение сканера вместе
+    с правкой одного ПК («Привязать»: «Это ПК» + номер в столбец) – подписью этого ПК;
+    несколько объектов – числом."""
+    objects = {ref_of(record) for record, _ in pairs}
+    main = {ref for ref in objects if ref.entity not in DECISION_ENTITIES} or objects
+
+    if len(main) != 1:
+        return f"изменений: {len(pairs)}, объектов: {len(objects)}"
+
+    ref = next(iter(main))
+    stored = next(record.title for record, _ in pairs if ref_of(record) == ref)
+    obj = find_object(session, ref, lock=False) if ref.entity not in DECISION_ENTITIES else None
+    title = (object_title(session, obj, ref) if obj is not None else None) or stored or ""
+    labels = []
+
+    # Сначала поля самого объекта, потом решения
+    for record, field in sorted(pairs, key=lambda pair: ref_of(pair[0]) != ref):
+        label = field_label(session, record.entity, field)
+
+        if label not in labels:
+            labels.append(label)
+
+    return f"{title} – {', '.join(labels)}" if title else ", ".join(labels)
+
+
 @router.post("/history/undo-last")
 def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor), session=Depends(get_db)):
     """Отменить своё последнее действие (Ctrl+Z): все его записи истории – одной
@@ -258,10 +301,11 @@ def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor)
     сохранения (у них одно время). items – что отменено (для возврата Ctrl+Y).
     Действие старше минуты не отменяется сразу: ответ confirm (что, сколько секунд
     назад, last_id) – отменить его можно, прислав confirm_id = last_id."""
+    # Решения сканера – и редактору: здесь только свои («Привязать» в Таблице, этап 53)
     allowed = [
         entity for entity in ENTITIES
         if user["role"] == "admin" or not SIMPLE.get(entity, {}).get("admin")
-    ]
+    ] + list(DECISION_ENTITIES)
     mine = [
         History.user_name == user["login"],
         History.cancelled == False,  # noqa: E712
@@ -294,23 +338,7 @@ def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor)
     ]
 
     # Что отменяется – словами, пока значения ещё прежние
-    objects = {ref_of(record) for record, _ in pairs}
-
-    if len(objects) == 1:
-        ref = ref_of(pairs[0][0])
-        obj = find_object(session, ref, lock=False)
-        title = (object_title(session, obj, ref) if obj is not None else None) or pairs[0][0].title or ""
-        labels = []
-
-        for record, field in pairs:
-            label = field_label(session, record.entity, field)
-
-            if label not in labels:
-                labels.append(label)
-
-        text = f"{title} – {', '.join(labels)}" if title else ", ".join(labels)
-    else:
-        text = f"изменений: {len(pairs)}, объектов: {len(objects)}"
+    text = action_text(session, pairs)
 
     # Сделано больше минуты назад – сначала спросить (этап 47)
     if age > UNDO_CONFIRM and (payload is None or payload.confirm_id != last.id):

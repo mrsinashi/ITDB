@@ -4,6 +4,11 @@ import { apiFetch, pad2 } from "../util.js";
 import { ENTITY_LABELS, LOCATION_FIELD_LABELS, SIMPLE_FIELD_LABELS, buildFieldLabels, printerModelValue } from "../columns.js";
 import { ROLE_LABELS } from "../settings.js";
 
+// Сообщения снизу справа (этап 53): на 3 с дольше своего срока; курсор ушёл с них –
+// видно ещё хотя бы секунду
+const TOAST_EXTRA_MS = 3000;
+const TOAST_RESUME_MS = 1000;
+
 export default {
     computed: {
         // Подписи полей в Истории: полные названия столбцов + записи не-столбцы
@@ -158,10 +163,8 @@ export default {
         toast(text, type, ms) {
             const id = (this._toastSeq = (this._toastSeq || 0) + 1);
             this.toasts.push({ id: id, text: String(text), type: type || "info" });
-            const delay = ms || (type === "error" ? 7000 : 3000);
-            setTimeout(() => {
-                this.dismissToast(id);
-            }, delay);
+            this.toastTimers().set(id, { left: (ms || (type === "error" ? 7000 : 3000)) + TOAST_EXTRA_MS, timer: null, start: 0 });
+            this.runToastTimer(id);
         },
 
         toastError(text) {
@@ -170,6 +173,52 @@ export default {
 
         dismissToast(id) {
             this.toasts = this.toasts.filter(function (t) { return t.id !== id; });
+            const timers = this.toastTimers();
+            if (timers.has(id)) {
+                clearTimeout(timers.get(id).timer);
+                timers.delete(id);
+            }
+            // Закрыли крестиком то, что под курсором: ухода курсора не будет
+            if (this._toastHover === id) {
+                this.holdToasts(null);
+            }
+        },
+
+        // Сроки сообщений (не данные: шаблон их не читает)
+        toastTimers() {
+            if (!this._toastTimers) {
+                this._toastTimers = new Map();
+            }
+            return this._toastTimers;
+        },
+
+        runToastTimer(id) {
+            const t = this.toastTimers().get(id);
+            if (!t || this._toastHover) {
+                return;
+            }
+            t.start = Date.now();
+            t.timer = setTimeout(() => {
+                this.dismissToast(id);
+            }, t.left);
+        },
+
+        // Курсор на сообщении (id) – ни одно не гаснет; ушёл (null) – сроки идут дальше,
+        // но не меньше секунды
+        holdToasts(id) {
+            this._toastHover = id;
+            this.toastTimers().forEach((t, key) => {
+                if (id !== null) {
+                    if (t.timer) {
+                        clearTimeout(t.timer);
+                        t.timer = null;
+                        t.left -= Date.now() - t.start;
+                    }
+                } else if (!t.timer) {
+                    t.left = Math.max(t.left, TOAST_RESUME_MS);
+                    this.runToastTimer(key);
+                }
+            });
         },
 
         confirmDialog(text, options) {
