@@ -100,14 +100,7 @@ export default {
 
         async setVncDefault(kind) {
             try {
-                const response = await apiFetch("/api/settings", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ vnc_default: kind })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/settings", "PATCH", { vnc_default: kind });
                 this.appSettings = await response.json();
             } catch (e) {
                 this.toastError("Не удалось сохранить: " + (e.message || e));

@@ -1,6 +1,6 @@
 // Страница «Дерево»: узлы, поиск, форма узла, ширина колонки.
 
-import { apiFetch, highlightParts, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
+import { apiFetch, highlightParts, matchesAllWords, searchNorm, searchWords, searchWordsIn, rowPlate } from "../util.js";
 import { kindLabels } from "../columns.js";
 import { computeTreeWidth, treeNodeTexts } from "../tree-utils.js";
 
@@ -99,13 +99,7 @@ export default {
         // Плашка действий у строки дерева – одна на всё дерево и стоит
         // снаружи таблицы (сама таблица обрезана по скруглённой рамке)
         setTreeHover(node, rowEl) {
-            const wrap = rowEl.closest(".tree-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const r = rowEl.getBoundingClientRect();
-            this.treeHover = { id: node.id, node: node, top: r.top - w.top, height: r.height };
+            this.treeHover = rowPlate(rowEl, ".tree-wrap", { id: node.id, node: node });
         },
 
         // Когда у дерева появляется полоса прокрутки, колонка расширяется
@@ -374,35 +368,11 @@ export default {
                 return;
             }
             try {
-                let response;
                 if (node.sort === target.sort) {
-                    response = await apiFetch("/api/locations/" + node.id, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            sort: target.sort + (dir > 0 ? 1 : -1)
-                        })
-                    });
-                    if (!response.ok) {
-                        throw new Error(await this.errorText(response));
-                    }
+                    await this.apiSend("/api/locations/" + node.id, "PATCH", { sort: target.sort + (dir > 0 ? 1 : -1) });
                 } else {
-                    response = await apiFetch("/api/locations/" + node.id, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sort: target.sort })
-                    });
-                    if (!response.ok) {
-                        throw new Error(await this.errorText(response));
-                    }
-                    response = await apiFetch("/api/locations/" + target.id, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sort: node.sort })
-                    });
-                    if (!response.ok) {
-                        throw new Error(await this.errorText(response));
-                    }
+                    await this.apiSend("/api/locations/" + node.id, "PATCH", { sort: target.sort });
+                    await this.apiSend("/api/locations/" + target.id, "PATCH", { sort: node.sort });
                 }
                 await this.loadTree();
                 await this.loadTable();

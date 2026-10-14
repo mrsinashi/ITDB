@@ -94,14 +94,7 @@ export default {
 
         async savePrefs(patch) {
             try {
-                const response = await apiFetch("/api/auth/me/prefs", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/auth/me/prefs", "PATCH", patch);
                 return true;
             } catch (e) {
                 this.toastError("Не удалось сохранить настройку: " + (e.message || e));

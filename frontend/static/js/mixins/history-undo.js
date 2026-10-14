@@ -266,14 +266,7 @@ export default {
 
         async cancelHistory(items, cancel) {
             try {
-                const response = await apiFetch("/api/history/cancel", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ items: items, cancel: cancel })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/history/cancel", "POST", { items: items, cancel: cancel });
                 const data = await response.json();
                 this.toast((cancel ? "Отменено изменений: " : "Восстановлено изменений: ") + data.count, "success");
                 await this.afterHistoryAction();
@@ -408,14 +401,7 @@ export default {
                 : { id: r.item.id, field: vd.field };
             vd.busy = true;
             try {
-                const response = await apiFetch("/api/history/revert", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/history/revert", "POST", body);
                 this.toast(vd.data.label + ": возвращено «" + this.historyValueText(vd.entity, vd.field, r.initial ? r.value : r.item.new) + "»", "success");
                 await this.afterHistoryAction();
                 await this.loadValueHistory();

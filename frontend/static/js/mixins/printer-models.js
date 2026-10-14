@@ -4,7 +4,7 @@
 // Правка модели меняет все её принтеры. Этап 47: и картриджи модели (через запятую, подсказками
 // из справочника картриджей; новые попадают в него сами).
 
-import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
+import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, rowPlate } from "../util.js";
 import { COLOR_LABELS, PRINTER_KINDS, YES_NO_LABELS } from "../columns.js";
 
 // Выбор в строке правки: «да / нет / не указано» – как в select
@@ -159,17 +159,10 @@ export default {
             bar.saving = true;
             bar.error = "";
             try {
-                const response = await apiFetch(bar.kind === "new" ? "/api/printer-models" : "/api/printer-models/" + bar.id, {
-                    method: bar.kind === "new" ? "POST" : "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        kind: bar.type, maker: bar.maker, model: bar.model, color: boolOf(bar.color), duplex: boolOf(bar.duplex),
-                        cartridges: bar.cartridges
-                    })
+                const response = await this.apiSend(bar.kind === "new" ? "/api/printer-models" : "/api/printer-models/" + bar.id, bar.kind === "new" ? "POST" : "PATCH", {
+                    kind: bar.type, maker: bar.maker, model: bar.model, color: boolOf(bar.color), duplex: boolOf(bar.duplex),
+                    cartridges: bar.cartridges
                 });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
                 const saved = await response.json();
                 await Promise.all([this.loadPrinterModels(), this.loadCartridges()]);
                 // Значения модели видны в таблице принтеров, название – и у ПК (этап 47)
@@ -207,13 +200,9 @@ export default {
 
         // Плашка действий справа от таблицы, у строки под курсором (как у Пользователей)
         setModelsHover(m, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap || !this.canEdit) {
-                return;
+            if (this.canEdit) {
+                this.modelsHover = rowPlate(rowEl, ".users-wrap", { id: m.id, model: m });
             }
-            const w = wrap.getBoundingClientRect();
-            const r = rowEl.getBoundingClientRect();
-            this.modelsHover = { id: m.id, model: m, top: r.top - w.top, height: r.height };
         },
 
         // Принтеры этой модели – на странице «Принтеры» (фильтр по столбцу «Модель»)

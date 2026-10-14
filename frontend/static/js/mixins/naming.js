@@ -12,7 +12,7 @@
 // имя по правилу у ПК, названных иначе; клик – карточка: переименовать или оставить своё.
 // На странице «Принтеры» (этап 44) – то же у принтеров: ter-proc-mfu-1 (js/naming.js).
 
-import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
+import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, rowPlate } from "../util.js";
 import { KIND_ICONS, treeNodeTexts } from "../tree-utils.js";
 import {
     checkNames, checkPrinterNames, hostKey, keepValid, learnAll, namingIndex, newName, observedNames, printerRuleText, ruleText,
@@ -400,13 +400,7 @@ export default {
         },
 
         setNamesHover(node, rowEl) {
-            const wrap = rowEl.closest(".nr-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const r = rowEl.getBoundingClientRect();
-            this.namesHover = { node: node, top: r.top - w.top, height: r.height };
+            this.namesHover = rowPlate(rowEl, ".nr-wrap", { node: node });
         },
 
         // Клик по строке – справа её ПК; ещё раз – снять. Клик в имени – в поле части
@@ -433,14 +427,7 @@ export default {
             }
             this.nameSaving = true;
             try {
-                const response = await apiFetch("/api/naming/nodes", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ items: items })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/naming/nodes", "PATCH", { items: items });
                 // Узлы дерева – на месте, без перечитывания
                 (await response.json()).nodes.forEach((saved) => {
                     const entry = this.namingIdx.get(saved.id);
@@ -551,14 +538,7 @@ export default {
         // printer – «своё имя» принтеров (этап 44)
         async setNameKeepFor(ids, keep, printer) {
             try {
-                const response = await apiFetch("/api/naming/keep", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ids: ids, keep: keep, kind: printer ? "printer" : "pc" })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/naming/keep", "POST", { ids: ids, keep: keep, kind: printer ? "printer" : "pc" });
                 const items = (await response.json()).items;
                 if (printer) {
                     this.setPrinterNameKeep(items);
@@ -707,14 +687,7 @@ export default {
                 return;
             }
             try {
-                const response = await apiFetch("/api/naming/rename", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ items: items, kind: printer ? "printer" : "pc" })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/naming/rename", "POST", { items: items, kind: printer ? "printer" : "pc" });
                 const data = await response.json();
                 if (printer) {
                     await this.loadPrinters();

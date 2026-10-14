@@ -8,7 +8,7 @@
 // Подсказки по частям через запятую (картриджи у модели и у принтера, модели у картриджа) –
 // openTokenSuggest: выбор заменяет набираемую часть, список открывается снова для следующей.
 
-import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
+import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, rowPlate } from "../util.js";
 
 // Части значения: «CF283A, CF283X» (и строками)
 export function splitTokens(text) {
@@ -160,14 +160,7 @@ export default {
             bar.saving = true;
             bar.error = "";
             try {
-                const response = await apiFetch(bar.kind === "new" ? "/api/cartridges" : "/api/cartridges/" + bar.id, {
-                    method: bar.kind === "new" ? "POST" : "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: bar.name, model_ids: ids })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend(bar.kind === "new" ? "/api/cartridges" : "/api/cartridges/" + bar.id, bar.kind === "new" ? "POST" : "PATCH", { name: bar.name, model_ids: ids });
                 const saved = await response.json();
                 await Promise.all([this.loadCartridges(), this.loadPrinterModels()]);
                 // Картриджи моделей видны в таблице принтеров
@@ -202,13 +195,9 @@ export default {
 
         // Плашка действий справа от таблицы, у строки под курсором (как у моделей)
         setCartridgesHover(c, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap || !this.canEdit) {
-                return;
+            if (this.canEdit) {
+                this.cartridgesHover = rowPlate(rowEl, ".users-wrap", { id: c.id, cart: c });
             }
-            const w = wrap.getBoundingClientRect();
-            const r = rowEl.getBoundingClientRect();
-            this.cartridgesHover = { id: c.id, cart: c, top: r.top - w.top, height: r.height };
         },
 
         // Принтеры с этим картриджем – на странице «Принтеры» (фильтр по столбцу «Картриджи»)

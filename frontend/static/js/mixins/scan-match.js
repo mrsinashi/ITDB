@@ -9,7 +9,7 @@
 // конфликт, нет в ITDB, дубль. Решения администратора: «это этот ПК», «не этот
 // ПК», «забыть».
 
-import { apiFetch, loadJson, saveJson, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
+import { apiFetch, loadJson, saveJson, searchNorm, searchWordsIn, matchesAllWords, rowPlate } from "../util.js";
 
 const POLL_MS = 1000;
 const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net"];
@@ -738,14 +738,7 @@ export default {
                 return;
             }
             try {
-                const response = await apiFetch("/api/scan/names", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ field: c.field, source: c.raw, table: c.itdb, kind: c.next || "auto" })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/scan/names", "POST", { field: c.field, source: c.raw, table: c.itdb, kind: c.next || "auto" });
                 this.toast(c.label + ": «" + c.raw.split("\n").join(", ") + "» и «" + c.itdb + "» – " + (c.next ? MANUAL_NEXT[c.next] : "решение сброшено"), "success");
                 await this.loadCheck();
             } catch (e) {
@@ -815,14 +808,7 @@ export default {
         async differScanName(n) {
             this.scanNames.hover = null;
             try {
-                const response = await apiFetch("/api/scan/names", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ field: n.field, source: n.source, table: n.table, kind: "differ" })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/scan/names", "POST", { field: n.field, source: n.source, table: n.table, kind: "differ" });
                 this.toast(this.scanFieldLabel(n.field) + ": «" + n.source + "» и «" + n.table + "» – разное", "success");
                 await this.loadScanNames();
             } catch (e) {
@@ -831,13 +817,7 @@ export default {
         },
 
         setScanNameHover(n, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const rect = rowEl.getBoundingClientRect();
-            this.scanNames.hover = { name: n, top: rect.top - w.top, height: rect.height };
+            this.scanNames.hover = rowPlate(rowEl, ".users-wrap", { name: n });
         },
 
         scanAntivirusText(a) {
@@ -981,14 +961,7 @@ export default {
             form.saving = true;
             form.error = "";
             try {
-                const response = await apiFetch("/api/computers", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ location_id: form.location_id, seat_no: form.seat_no, hostname: form.hostname, ip: form.ip })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/computers", "POST", { location_id: form.location_id, seat_no: form.seat_no, hostname: form.hostname, ip: form.ip });
                 const data = await response.json();
                 // ПК уже есть: привязать не вышло – ошибка в строке «Привязать», ПК – в её списке
                 bar.pc = null;

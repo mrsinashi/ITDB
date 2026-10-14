@@ -230,3 +230,70 @@ export function clickSelect(selected, ids, anchor, id, event, single) {
     }
     return { selected: single ? [id] : selected, anchor: id };
 }
+
+// ---------- Плашки у строки, списки под полем (этап 55) ----------
+
+// Плашка действий у строки под курсором: поля data и место строки (top, height) в блоке
+// wrapSel, в котором стоит плашка
+export function rowPlate(rowEl, wrapSel, data) {
+    const wrap = rowEl.closest(wrapSel);
+    if (!wrap) {
+        return null;
+    }
+    const w = wrap.getBoundingClientRect();
+    const r = rowEl.getBoundingClientRect();
+    return Object.assign(data, { top: r.top - w.top, height: r.height });
+}
+
+// Список под полем el; снизу меньше opt.room и сверху больше места – над ним; за край окна
+// не уходит. opt: width – наименьшая ширина, height – наибольшая высота, maxWidth –
+// наибольшая ширина (нет – до края окна). Ответ – для listPosStyle
+export function placeList(el, opt) {
+    const r = el.getBoundingClientRect();
+    const minWidth = Math.max(Math.round(r.width), opt.width);
+    const left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - minWidth - 4));
+    const below = window.innerHeight - r.bottom;
+    const up = below < opt.room && r.top > below;
+    const toEdge = window.innerWidth - left - 8;
+    return {
+        up: up,
+        left: left,
+        top: Math.round(r.bottom),
+        bottom: Math.round(window.innerHeight - r.top),
+        minWidth: minWidth,
+        maxWidth: opt.maxWidth ? Math.max(minWidth, Math.min(opt.maxWidth, toEdge)) : toEdge,
+        maxHeight: Math.min(opt.height, Math.round((up ? r.top : below) - 8))
+    };
+}
+
+export function listPosStyle(pos) {
+    if (!pos) {
+        return null;
+    }
+    const style = {
+        left: pos.left + "px",
+        minWidth: pos.minWidth + "px",
+        maxWidth: pos.maxWidth + "px",
+        maxHeight: pos.maxHeight + "px"
+    };
+    if (pos.up) {
+        style.bottom = pos.bottom + "px";
+    } else {
+        style.top = pos.top + "px";
+    }
+    return style;
+}
+
+// Прокрутить список к пункту: center – пункт посередине, иначе – только чтобы был виден
+export function scrollToItem(list, item, center) {
+    if (!list || !item) {
+        return;
+    }
+    if (center) {
+        list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
+    } else if (item.offsetTop < list.scrollTop) {
+        list.scrollTop = item.offsetTop;
+    } else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) {
+        list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
+    }
+}

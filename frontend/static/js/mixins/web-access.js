@@ -6,8 +6,6 @@
 // пароль – точками); пока они открыты, столбец шире. Показанное прячут Esc и уход в другую
 // часть интерфейса (правка другой ячейки, карточка, другая страница); клик мимо – нет.
 
-import { apiFetch } from "../util.js";
-
 // Логин и пароль заданы – столько точек, какой бы длины ни был пароль
 export const SECRET_DOTS = "••••••";
 // Ширина столбца, пока в ячейке два поля
@@ -134,19 +132,8 @@ export default {
             });
         },
 
-        // Под ячейкой, по её левому краю; снизу мало места – над ней
         placeWebAsk() {
-            const ask = this.webAsk;
-            const box = this.$refs.webAsk;
-            if (!ask || !box || !ask.el.isConnected) {
-                return;
-            }
-            const r = ask.el.getBoundingClientRect();
-            const w = box.offsetWidth;
-            const h = box.offsetHeight;
-            ask.left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - w - 4));
-            ask.top = r.bottom + h + 4 > window.innerHeight ? Math.max(4, Math.round(r.top - h)) : Math.round(r.bottom);
-            ask.placed = true;
+            this.placeUnderPop("webAsk");
         },
 
         closeWebAsk() {
@@ -181,14 +168,7 @@ export default {
             ask.busy = true;
             ask.error = "";
             try {
-                const response = await apiFetch("/api/printers/" + ask.row.id + "/web-auth/show", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ login: this.isAdmin ? null : ask.login, password: ask.password })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/printers/" + ask.row.id + "/web-auth/show", "POST", { login: this.isAdmin ? null : ask.login, password: ask.password });
                 const shown = await response.json();
                 if (this.webAsk !== ask) {
                     return;
@@ -339,14 +319,7 @@ export default {
                 }
             }
             try {
-                const response = await apiFetch("/api/printers/" + row.id + "/web-auth", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ login: login, password: ed.password })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/printers/" + row.id + "/web-auth", "PUT", { login: login, password: ed.password });
                 const data = await response.json();
                 if (data.updated) {
                     row.web_auth = data.updated.web_auth;

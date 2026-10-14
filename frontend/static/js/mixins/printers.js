@@ -570,14 +570,7 @@ export default {
             form.error = "";
             form.saving = true;
             try {
-                const response = await apiFetch("/api/printers", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ location_id: form.location_id, model_id: form.model_id, number: form.number, name: form.name, ip: form.ip })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/printers", "POST", { location_id: form.location_id, model_id: form.model_id, number: form.number, name: form.name, ip: form.ip });
                 const data = await response.json();
                 await this.loadPrinters();
                 this.flashRow(data.id);
@@ -637,14 +630,7 @@ export default {
             form.saving = true;
             form.error = "";
             try {
-                const response = await apiFetch("/api/printer-models", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ kind: form.kind, maker: form.maker, model: form.model, color: form.color, duplex: form.duplex })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/printer-models", "POST", { kind: form.kind, maker: form.maker, model: form.model, color: form.color, duplex: form.duplex });
                 const saved = await response.json();
                 await this.loadPrinterModels();
                 this.newModel = null;

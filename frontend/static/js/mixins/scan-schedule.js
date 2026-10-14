@@ -7,7 +7,7 @@
 // Сам запуск делает сервер (scan_schedule.py); страница перечитывает расписание
 // раз в 15 с, пока открыта, – чтобы увидеть сборы, начатые им.
 
-import { apiFetch } from "../util.js";
+import { apiFetch, rowPlate } from "../util.js";
 
 const REFRESH_MS = 15000;
 const MINUTES_LABELS = { 15: "каждые 15 мин", 30: "каждые 30 мин", 60: "каждый час", 120: "каждые 2 ч", 240: "каждые 4 ч", 480: "каждые 8 ч" };
@@ -103,14 +103,7 @@ export default {
 
         async saveSchedule(it, body) {
             try {
-                const response = await apiFetch("/api/scan/schedule/" + it.kind, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/scan/schedule/" + it.kind, "PATCH", body);
                 const saved = await response.json();
                 this.schedule.items = this.schedule.items.map(function (x) { return x.kind === saved.kind ? saved : x; });
             } catch (e) {
@@ -151,13 +144,7 @@ export default {
         },
 
         setScheduleHover(it, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const r = rowEl.getBoundingClientRect();
-            this.schedule.hover = { kind: it.kind, top: r.top - w.top, height: r.height };
+            this.schedule.hover = rowPlate(rowEl, ".users-wrap", { kind: it.kind });
         }
     }
 };

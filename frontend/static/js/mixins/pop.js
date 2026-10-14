@@ -1,5 +1,6 @@
 // Всплывающие окошки: общее у окошка принтера, карточки у блочка сканера и «Имени по правилу»
-// (у ссылки или блочка), слушатели окна – ещё и у «Доступа» и подключения принтеров.
+// (у ссылки или блочка), слушатели окна и место под ячейкой – ещё и у «Доступа» и подключения
+// принтеров.
 // name – имя окошка в data и его ref в шаблоне.
 
 export default {
@@ -71,6 +72,22 @@ export default {
             }
             pop.left = left;
             pop.top = top;
+            pop.placed = true;
+        },
+
+        // Под ячейкой pop.el по её левому краю; снизу не помещается и сверху больше места –
+        // над ней (pop.up). width – ширина окошка, если она задана заранее (этап 55)
+        placeUnderPop(name, width) {
+            const pop = this[name];
+            const box = this.$refs[name];
+            if (!pop || !box || !pop.el.isConnected) {
+                return;
+            }
+            const r = pop.el.getBoundingClientRect();
+            const h = box.offsetHeight;
+            pop.left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - (width || box.offsetWidth) - 4));
+            pop.up = r.bottom + h + 4 > window.innerHeight && r.top > window.innerHeight - r.bottom;
+            pop.top = pop.up ? Math.max(4, Math.round(r.top - h)) : Math.round(r.bottom);
             pop.placed = true;
         },
 

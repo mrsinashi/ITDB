@@ -9,7 +9,7 @@
 // «Привязать … к:»; виден и при длинном списке – прилипает к низу): событие add с
 // набранным текстом.
 
-import { searchWordsIn } from "../util.js";
+import { listPosStyle, placeList, scrollToItem, searchWordsIn } from "../util.js";
 
 const ROOM_PARENTS = ["department", "floor"];
 // Сколько мест для нового кабинета предлагать
@@ -114,22 +114,7 @@ export default {
             return this.open ? this.query : (this.current ? this.current.path : "");
         },
         listStyle() {
-            const p = this.pos;
-            if (!p) {
-                return null;
-            }
-            const style = {
-                left: p.left + "px",
-                minWidth: p.minWidth + "px",
-                maxWidth: p.maxWidth + "px",
-                maxHeight: p.maxHeight + "px"
-            };
-            if (p.up) {
-                style.bottom = p.bottom + "px";
-            } else {
-                style.top = p.top + "px";
-            }
-            return style;
+            return listPosStyle(this.pos);
         }
     },
     watch: {
@@ -186,34 +171,11 @@ export default {
             if (!this.open || !this.$refs.input) {
                 return;
             }
-            const r = this.$refs.input.getBoundingClientRect();
-            const minWidth = Math.max(Math.round(r.width), 420);
-            const left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - minWidth - 4));
-            const below = window.innerHeight - r.bottom;
-            const up = below < 220 && r.top > below;
-            this.pos = {
-                up: up,
-                left: left,
-                top: Math.round(r.bottom),
-                bottom: Math.round(window.innerHeight - r.top),
-                minWidth: minWidth,
-                maxWidth: window.innerWidth - left - 8,
-                maxHeight: Math.min(360, Math.round((up ? r.top : below) - 8))
-            };
+            this.pos = placeList(this.$refs.input, { width: 420, room: 220, height: 360 });
         },
         scrollActive(center) {
             const list = this.$refs.list;
-            const item = list && list.querySelectorAll(".ll-item")[this.active];
-            if (!item) {
-                return;
-            }
-            if (center) {
-                list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
-            } else if (item.offsetTop < list.scrollTop) {
-                list.scrollTop = item.offsetTop;
-            } else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) {
-                list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
-            }
+            scrollToItem(list, list && list.querySelectorAll(".ll-item")[this.active], center);
         },
         onInput(event) {
             this.query = event.target.value;

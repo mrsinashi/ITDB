@@ -350,14 +350,7 @@ export default {
 
         async setColumnStyle(field, patch) {
             try {
-                const response = await apiFetch("/api/column-styles/" + encodeURIComponent(field), {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/column-styles/" + encodeURIComponent(field), "PATCH", patch);
                 const data = await response.json();
                 const next = Object.assign({}, this.columnStyles);
                 if (this.hasStyle(data.item)) {
@@ -384,14 +377,7 @@ export default {
             if (entry.choice) {
                 return entry.choice;
             }
-            const response = await apiFetch("/api/choices", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ field: field, value: entry.value })
-            });
-            if (!response.ok) {
-                throw new Error(await this.errorText(response));
-            }
+            const response = await this.apiSend("/api/choices", "POST", { field: field, value: entry.value });
             const data = await response.json();
             const maxSort = this.choicesItems
                 .filter(function (c) { return c.field === field; })
@@ -406,14 +392,7 @@ export default {
         async setValueStyle(field, entry, patch) {
             try {
                 const choice = await this.ensureChoice(field, entry);
-                const response = await apiFetch("/api/choices/" + choice.id, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/choices/" + choice.id, "PATCH", patch);
                 Object.keys(patch).forEach(function (k) {
                     const v = patch[k];
                     choice[k] = (k === "color" || k === "bg_color") ? (v || null) : v;
@@ -520,14 +499,7 @@ export default {
 
         async patchFieldDef(fd, patch) {
             try {
-                const response = await apiFetch("/api/field-defs/" + fd.id, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/field-defs/" + fd.id, "PATCH", patch);
                 return true;
             } catch (e) {
                 this.toastError("Не удалось сохранить: " + (e.message || e));
@@ -557,14 +529,7 @@ export default {
             });
             try {
                 for (const c of changed) {
-                    const response = await apiFetch("/api/field-defs/" + c.f.id, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sort: c.sort })
-                    });
-                    if (!response.ok) {
-                        throw new Error(await this.errorText(response));
-                    }
+                    await this.apiSend("/api/field-defs/" + c.f.id, "PATCH", { sort: c.sort });
                 }
             } catch (e) {
                 this.toastError("Не удалось переместить: " + (e.message || e));

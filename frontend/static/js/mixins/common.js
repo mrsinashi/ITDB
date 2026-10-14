@@ -35,6 +35,19 @@ export default {
             return message;
         },
 
+        // Отправить JSON; ответ не ok – ошибка с текстом сервера (этап 55)
+        async apiSend(url, method, body) {
+            const response = await apiFetch(url, {
+                method: method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            if (!response.ok) {
+                throw new Error(await this.errorText(response));
+            }
+            return response;
+        },
+
         formatTime(value) {
             if (!value) {
                 return "";

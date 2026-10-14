@@ -431,14 +431,7 @@ export default {
 
         async updateAvSettings(patch) {
             try {
-                const response = await apiFetch("/api/scan/antivirus", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/scan/antivirus", "PATCH", patch);
                 this.avSettings = await response.json();
             } catch (e) {
                 this.toastError("Не удалось сохранить: " + (e.message || e));
@@ -878,14 +871,7 @@ export default {
         // ---------- Решения ----------
 
         async diffPost(url, body) {
-            const response = await apiFetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body)
-            });
-            if (!response.ok) {
-                throw new Error(await this.errorText(response));
-            }
+            const response = await this.apiSend(url, "POST", body);
             return response.json();
         },
 
@@ -1102,14 +1088,7 @@ export default {
 
         async updateScanMark(kind, patch) {
             try {
-                const response = await apiFetch("/api/scan/marks/" + kind, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/scan/marks/" + kind, "PATCH", patch);
                 const saved = await response.json();
                 this.scanMarks = this.scanMarks.map(function (m) { return m.kind === kind ? saved : m; });
             } catch (e) {

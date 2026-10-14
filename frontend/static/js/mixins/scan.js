@@ -9,7 +9,7 @@
 // Подсети – таблица; новая и «Изменить» – строкой прямо в таблице (этап 26д), как у
 // пользователей; при вводе подсети – список подсетей /24 с ПК из базы, которых нет в списке.
 
-import { apiFetch, fixIpTyping } from "../util.js";
+import { apiFetch, fixIpTyping, rowPlate } from "../util.js";
 
 const SOURCE_TEXT_FIELDS = ["url", "domain", "login"];
 const SECRET_FIELDS = ["password", "user_token", "app_token"];
@@ -227,14 +227,7 @@ export default {
             f.saving = true;
             f.error = "";
             try {
-                const response = await apiFetch("/api/scan/sources/" + kind, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/scan/sources/" + kind, "PATCH", body);
                 const saved = await response.json();
                 this.scanSources = this.scanSources.map(function (s) { return s.kind === kind ? saved : s; });
                 const show = f.show;
@@ -266,14 +259,7 @@ export default {
             f.error = "";
             f.result = null;
             try {
-                const response = await apiFetch("/api/scan/sources/" + kind + "/check", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/scan/sources/" + kind + "/check", "POST", body);
                 const result = await response.json();
                 if (result.saved) {
                     const s = this.scanSource(kind);
@@ -377,14 +363,7 @@ export default {
             f.keyBusy = true;
             f.error = "";
             try {
-                const response = await apiFetch("/api/scan/sources/" + kind + "/key", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(this.scanKeyBody(kind))
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/scan/sources/" + kind + "/key", "POST", this.scanKeyBody(kind));
                 const key = await response.json();
                 this.scanSource(kind).has_key = true;
                 await this.copyText(key.line, "Ключ скопирован – строка для authorized_keys");
@@ -400,14 +379,7 @@ export default {
             f.keyBusy = true;
             f.error = "";
             try {
-                const response = await apiFetch("/api/scan/sources/" + kind + "/key/install", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(this.scanKeyBody(kind))
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/scan/sources/" + kind + "/key/install", "POST", this.scanKeyBody(kind));
                 const result = await response.json();
                 if (!result.ok) {
                     throw new Error(result.message);
@@ -563,14 +535,7 @@ export default {
             bar.saving = true;
             bar.error = "";
             try {
-                const response = await apiFetch(url, {
-                    method: method,
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend(url, method, body);
                 const saved = await response.json();
                 await this.loadScanSubnets();
                 if (bar.kind === "new") {
@@ -596,14 +561,7 @@ export default {
 
         async patchSubnet(s, body, done) {
             try {
-                const response = await apiFetch("/api/scan/subnets/" + s.id, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/scan/subnets/" + s.id, "PATCH", body);
                 await this.loadScanSubnets();
                 this.toast(done, "success");
             } catch (e) {
@@ -633,13 +591,7 @@ export default {
         },
 
         setSubnetHover(s, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const r = rowEl.getBoundingClientRect();
-            this.subnetHover = { id: s.id, subnet: s, top: r.top - w.top, height: r.height };
+            this.subnetHover = rowPlate(rowEl, ".users-wrap", { id: s.id, subnet: s });
         },
     }
 };

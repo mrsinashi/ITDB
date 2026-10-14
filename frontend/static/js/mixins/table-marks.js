@@ -64,14 +64,7 @@ export default {
 
         async updateTableMark(kind, patch) {
             try {
-                const response = await apiFetch("/api/table-marks/" + kind, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/table-marks/" + kind, "PATCH", patch);
                 const saved = await response.json();
                 this.tableMarks = this.tableMarkList.map(function (m) { return m.kind === kind ? saved : m; });
             } catch (e) {

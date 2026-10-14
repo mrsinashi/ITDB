@@ -134,19 +134,8 @@ export default {
             });
         },
 
-        // Под ячейкой по её левому краю; снизу мало места – над ней
         placeLinkPick() {
-            const p = this.linkPick;
-            const box = this.$refs.linkPick;
-            if (!p || !box || !p.el.isConnected) {
-                return;
-            }
-            const r = p.el.getBoundingClientRect();
-            const h = box.offsetHeight;
-            p.left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - PICK_WIDTH - 4));
-            p.up = r.bottom + h + 4 > window.innerHeight && r.top > window.innerHeight - r.bottom;
-            p.top = p.up ? Math.max(4, Math.round(r.top - h)) : Math.round(r.bottom);
-            p.placed = true;
+            this.placeUnderPop("linkPick", PICK_WIDTH);
         },
 
         closeLinkPick() {

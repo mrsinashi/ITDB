@@ -11,7 +11,7 @@
 //                                  Enter берёт выбранное (true – клавиша занята);
 //   closeSuggest()               – при сохранении и отмене.
 
-import { matchesAllWords, searchNorm, searchWords, searchWordsIn } from "../util.js";
+import { listPosStyle, matchesAllWords, placeList, scrollToItem, searchNorm, searchWords, searchWordsIn } from "../util.js";
 
 export default {
     computed: {
@@ -43,22 +43,7 @@ export default {
         },
 
         suggestListStyle() {
-            const p = this.suggest && this.suggest.pos;
-            if (!p) {
-                return null;
-            }
-            const style = {
-                left: p.left + "px",
-                minWidth: p.minWidth + "px",
-                maxWidth: p.maxWidth + "px",
-                maxHeight: p.maxHeight + "px"
-            };
-            if (p.up) {
-                style.bottom = p.bottom + "px";
-            } else {
-                style.top = p.top + "px";
-            }
-            return style;
+            return listPosStyle(this.suggest && this.suggest.pos);
         },
     },
 
@@ -189,35 +174,12 @@ export default {
             if (!s || !s.el || !s.el.isConnected) {
                 return;
             }
-            const r = s.el.getBoundingClientRect();
-            const minWidth = Math.max(Math.round(r.width), 180);
-            const left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - minWidth - 4));
-            const below = window.innerHeight - r.bottom;
-            const up = below < 200 && r.top > below;
-            s.pos = {
-                up: up,
-                left: left,
-                top: Math.round(r.bottom),
-                bottom: Math.round(window.innerHeight - r.top),
-                minWidth: minWidth,
-                maxWidth: Math.max(minWidth, Math.min(420, window.innerWidth - left - 8)),
-                maxHeight: Math.min(300, Math.round((up ? r.top : below) - 8))
-            };
+            s.pos = placeList(s.el, { width: 180, room: 200, height: 300, maxWidth: 420 });
         },
 
         scrollSuggestTo(index, center) {
             const list = this.$refs.suggestList;
-            const item = list && index >= 0 ? list.children[index] : null;
-            if (!item) {
-                return;
-            }
-            if (center) {
-                list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
-            } else if (item.offsetTop < list.scrollTop) {
-                list.scrollTop = item.offsetTop;
-            } else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) {
-                list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
-            }
+            scrollToItem(list, list && index >= 0 ? list.children[index] : null, center);
         },
 
         // Значение в списке – в оформлении из Справочников (цвет, фон, Ж, К)

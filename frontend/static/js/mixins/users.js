@@ -8,7 +8,7 @@
 // администратор). Свои логин, ФИО и должность любой меняет в меню пользователя.
 
 import { ROLE_LABELS } from "../settings.js";
-import { apiFetch } from "../util.js";
+import { apiFetch, rowPlate } from "../util.js";
 
 // Буквы и цифры без похожих друг на друга (l/1, O/0) – пароль диктуют голосом
 const PASSWORD_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -227,14 +227,7 @@ export default {
             bar.saving = true;
             bar.error = "";
             try {
-                const response = await apiFetch(url, {
-                    method: method,
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend(url, method, body);
                 const saved = await response.json();
                 await this.loadUsers();
                 if (bar.kind === "new") {
@@ -271,14 +264,7 @@ export default {
         async setUserArchived(u, archived) {
             this.usersHover = null;
             try {
-                const response = await apiFetch("/api/users/" + u.id, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: archived })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/users/" + u.id, "PATCH", { archived: archived });
                 if (this.userBar && this.userBar.id === u.id) {
                     this.closeUserBar();
                 }
@@ -291,13 +277,7 @@ export default {
 
         // Плашка действий справа от таблицы, у строки под курсором (как в Дереве)
         setUsersHover(u, rowEl) {
-            const wrap = rowEl.closest(".users-wrap");
-            if (!wrap) {
-                return;
-            }
-            const w = wrap.getBoundingClientRect();
-            const r = rowEl.getBoundingClientRect();
-            this.usersHover = { id: u.id, user: u, top: r.top - w.top, height: r.height };
+            this.usersHover = rowPlate(rowEl, ".users-wrap", { id: u.id, user: u });
         },
 
         // ---------- Свой пароль (меню пользователя) ----------
@@ -326,14 +306,7 @@ export default {
             f.saving = true;
             f.error = "";
             try {
-                const response = await apiFetch("/api/auth/me/profile", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ login: f.login, full_name: f.full_name, position: f.position })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/auth/me/profile", "PATCH", { login: f.login, full_name: f.full_name, position: f.position });
                 const me = await response.json();
                 Object.assign(this.user, { login: me.login, full_name: me.full_name, position: me.position });
                 this.ownProfile = null;
@@ -366,14 +339,7 @@ export default {
             f.saving = true;
             f.error = "";
             try {
-                const response = await apiFetch("/api/auth/me/password", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ current: f.current, new: f.next })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend("/api/auth/me/password", "POST", { current: f.current, new: f.next });
                 this.ownPassword = null;
                 this.closeMenus();
                 this.toast("Пароль изменён. Входы на других компьютерах завершены.", "success");

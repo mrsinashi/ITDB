@@ -395,14 +395,7 @@ export default {
             form.saving = true;
             form.error = "";
             try {
-                const response = await apiFetch("/api/locations", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ parent_id: form.parent_id, kind: "room", code: code, name: name, before_id: next ? next.id : null })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                const response = await this.apiSend("/api/locations", "POST", { parent_id: form.parent_id, kind: "room", code: code, name: name, before_id: next ? next.id : null });
                 const id = (await response.json()).id;
                 await this.loadTree();
                 this.newRoom = null;
@@ -431,19 +424,12 @@ export default {
             this.newComputerError = "";
             this.newComputerSaving = true;
             try {
-                const response = await apiFetch("/api/computers", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        location_id: form.location_id,
-                        seat_no: form.seat_no,
-                        hostname: form.hostname,
-                        ip: form.ip
-                    })
+                const response = await this.apiSend("/api/computers", "POST", {
+                    location_id: form.location_id,
+                    seat_no: form.seat_no,
+                    hostname: form.hostname,
+                    ip: form.ip
                 });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
                 const data = await response.json();
                 await this.loadTable();
                 this.flashRow(data.id);
@@ -523,14 +509,7 @@ export default {
             this.archiveSaving = true;
             const printers = this.tableKind === "printer";
             try {
-                const response = await apiFetch(printers ? "/api/printers/archive" : "/api/computers/archive", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ids: ids, archived: archived })
-                });
-                if (!response.ok) {
-                    throw new Error(await this.errorText(response));
-                }
+                await this.apiSend(printers ? "/api/printers/archive" : "/api/computers/archive", "POST", { ids: ids, archived: archived });
                 let text;
                 if (ids.length === 1) {
                     text = (archived ? "В архиве: " : "Возвращён из архива: ") + this.rowName(ids[0]);
