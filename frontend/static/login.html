@@ -5,7 +5,7 @@
   <title>ITDB – Вход</title>
 
   <link rel="stylesheet" href="/app.css">
-  <script>try { document.documentElement.dataset.theme = localStorage.getItem("itdb.theme") || "red"; } catch (e) {}</script>
+  <script>try { document.documentElement.dataset.theme = localStorage.getItem("itdb.theme") || "red"; document.documentElement.classList.toggle("no-radius", localStorage.getItem("itdb.noRadius") === "1"); } catch (e) {}</script>
 </head>
 
 <body class="login-page">

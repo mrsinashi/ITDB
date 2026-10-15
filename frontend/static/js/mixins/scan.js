@@ -202,7 +202,7 @@ export default {
                 }
                 return name === "password" ? "сменить пароль" : "сменить токен";
             }
-            return name === "password" ? "" : "не указан";
+            return "не указан";
         },
 
         toggleSecretClear(kind, name) {

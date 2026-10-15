@@ -112,6 +112,13 @@ export default {
             }
         },
 
+        // Почему не собирается: галочка «Включён» снята – «выключен»; стоит, но не хватает
+        // адреса, пароля или ключа – «не настроен» (раньше было «выключен» и при стоящей галочке)
+        scheduleOffText(it) {
+            const s = this.scanSource(it.kind);
+            return s && s.enabled ? "не настроен" : "выключен";
+        },
+
         scheduleNextText(it) {
             if (it.mode === "off" || !it.available || !it.next_at) {
                 return "";

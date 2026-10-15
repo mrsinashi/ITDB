@@ -45,7 +45,8 @@ def test_search(admin, editor, reader, room):
     second = add_pc(admin, loc, "pc-202", ip="10.0.5.17")
     ok(editor.patch(f"/api/computers/{first}", json={"os": "Windows 11 Pro", "_version": get_row(editor, first)["version"]}))
     ok(admin.patch(f"/api/users/{ok(admin.get('/api/users'))[0]['id']}", json={"position": "Инженер"}))
-    everything = ok(admin.get("/api/history", params={"limit": 5000}))
+    # Дни – в том же поясе, что и поиск: иначе с 00:00 до 08:00 по Иркутску дата другая
+    everything = ok(admin.get("/api/history", params={"limit": 5000, "tz": "Asia/Irkutsk"}))
 
     # Без поиска – как было: total_all = total
     assert everything["total"] == everything["total_all"] == len(everything["items"])

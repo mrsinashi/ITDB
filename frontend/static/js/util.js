@@ -50,7 +50,8 @@ export function pad2(n) {
 export async function apiFetch(url, options) {
     const response = await fetch(url, options);
     if (response.status === 401) {
-        window.location.replace("/login.html");
+        // Адрес страницы (#table?pc=…) – с собой: после входа откроется он же
+        window.location.replace("/login.html" + window.location.hash);
         return new Promise(function () {});
     }
     return response;

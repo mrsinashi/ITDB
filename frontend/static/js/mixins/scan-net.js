@@ -219,7 +219,11 @@ export default {
             if (this.net.loading && !this.net.data) {
                 return "Загрузка…";
             }
-            return this.netHosts.length ? "Ничего не найдено." : "Пока пусто – собери DHCP или Сеть.";
+            if (this.netHosts.length) {
+                return "Ничего не найдено.";
+            }
+            // «Сканировать» есть только у администратора
+            return this.isAdmin ? "Пока пусто – нажми «Сканировать»." : "Пока пусто.";
         },
 
         setNetSource(key) {

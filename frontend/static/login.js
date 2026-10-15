@@ -1,9 +1,13 @@
+// Пришли со страницы, где кончилась сессия: её адрес (#table?pc=…) – в адресе входа,
+// после входа открывается она же
+const backTo = "/" + window.location.hash;
+
 async function checkAlreadyLogged() {
   try {
     const response = await fetch("/api/auth/me");
 
     if (response.ok) {
-      window.location.replace("/");
+      window.location.replace(backTo);
     }
   } catch (e) {
     // не залогинен – оставляем форму входа
@@ -34,7 +38,7 @@ document.getElementById("loginForm").addEventListener("submit", async function (
     });
 
     if (response.ok) {
-      window.location.replace("/");
+      window.location.replace(backTo);
       return;
     }
 

@@ -154,6 +154,15 @@ window.addEventListener("keydown", function (event) {
             vm.subnetBar = null;
             return;
         }
+        // Модели принтеров и картриджи (Справочники) – так же, как пользователи и подсети
+        if (vm.view === "choices" && vm.modelsBar) {
+            vm.closeModelsBar();
+            return;
+        }
+        if (vm.view === "choices" && vm.cartridgesBar) {
+            vm.closeCartridgesBar();
+            return;
+        }
         if (vm.view === "scan" && vm.scanLinkBar) {
             // Сначала – строка нового ПК под ней (этап 43)
             if (vm.scanLinkBar.pc) {
