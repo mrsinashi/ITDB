@@ -73,7 +73,7 @@ def col(key, short, title=None, kind="text", **flags):
     # В карточке – без расшифровки в скобках: «Процессор (ЦП / CPU)» → «Процессор»
     card = flags.pop("card", None) or re.sub(r"\s*\(.*\)$", "", title)
     # Подсказки при вводе – у столбцов с повторяющимися значениями в одну строку
-    # (статус, ТИП, OS, модель, CPU…); у уникальных (имя, ИНВ) и дат – нет
+    # (статус, тип, OS, модель, CPU…); у уникальных (имя, ИНВ) и дат – нет
     flags.setdefault("suggest", flags.get("values", "yes") == "yes" and kind in ("text", "extra"))
     return Column(key=key, short=short, title=title, card=card, kind=kind, **flags)
 
@@ -84,14 +84,14 @@ COLUMNS = [
     col("building", "Адрес", kind="location", card_copy=True, export_width=16, card_always=True),
     col("department", "Отделение", kind="location", card_copy=True, export_width=14, card_always=True),
     col("floor", "Эт.", "Этаж", kind="location", center=True, export_width=6),
-    col("room_code", "Каб", "№ Кабинета", kind="location", center=True, values="no", card_copy=True, export_width=8, card_always=True),
+    col("room_code", "Каб", "№ кабинета", kind="location", center=True, values="no", card_copy=True, export_width=8, card_always=True),
     col("room_name", "Кабинет", kind="location", export_width=18),
-    col("seat_no", "№", "№ Места", kind="seat", center=True, values="no", bulk=False, export_width=6),
+    col("seat_no", "№", "№ места", kind="seat", center=True, values="no", bulk=False, export_width=6),
     col("hostname", "HOSTNAME", link=True, sticky=True, values="no", dup=True, bulk=False, export_width=18),
     col("ip", "IP", "IP адрес", kind="ip", sticky=True, multiline=True, values="subnet", card_copy=True, dup=True, bulk=False, export_width=16, card_always=True),
-    col("vacuum", "VACUUM", "Vacuum", kind="vacuum", multiline=True, values="no", dup=True, bulk=False, export_width=16),
+    col("vacuum", "VACUUM", kind="vacuum", multiline=True, values="no", dup=True, bulk=False, export_width=16),
     col("os", "OS", "Операционная система (ОС / OS)", center=True, card_copy=True, export_width=14, card_always=True),
-    col("type", "ТИП", "Тип компьютера", center=True, export_width=10, card_always=True),
+    col("type", "Тип", "Тип компьютера", center=True, export_width=10, card_always=True),
     col("model", "Модель", center=True, card_copy=True, export_width=16),
     col("motherboard", "Мат. плата", "Материнская плата", center=True, card_copy=True, export_width=18),
     col("cpu", "CPU", "Процессор (ЦП / CPU)", center=True, card_copy=True, export_width=20, card_always=True),
@@ -111,7 +111,7 @@ COLUMNS = [
     col("state", "Сост.", kind="extra", extra_key="Сост.", center=True, export_width=8),
     col("label", "Метка", kind="extra", extra_key="Метка", center=True, export_width=10),
     col("status", "Статус", center=True, export_width=10),
-    col("temp_until", "Временно до", "Временно, до…", kind="date", center=True, values="no", hidden=True, export_width=12),
+    col("temp_until", "Временно до", kind="date", center=True, values="no", hidden=True, export_width=12),
     col("note", "Примечание", kind="multiline", multiline=True, note=True, max_width=200, values="no", export_width=30, card_always=True),
 ]
 
@@ -137,7 +137,7 @@ HISTORY_LABELS = {
     "replaced": "Заменил",
     "replaced_by": "Заменён на",
     "created": "Создан",
-    "temp_note": "Временно, до…",  # до этапа 16 – текстовое поле
+    "temp_note": "Временно до",  # до этапа 16 – текстовое поле
 }
 
 
@@ -156,7 +156,7 @@ PRINTER_COLUMNS = [
     col("building", "Адрес", kind="location", card_copy=True, export_width=16, card_always=True),
     col("department", "Отделение", kind="location", card_copy=True, export_width=14, card_always=True),
     col("floor", "Эт.", "Этаж", kind="location", center=True, export_width=6),
-    col("room_code", "Каб", "№ Кабинета", kind="location", center=True, values="no", card_copy=True, export_width=8, card_always=True),
+    col("room_code", "Каб", "№ кабинета", kind="location", center=True, values="no", card_copy=True, export_width=8, card_always=True),
     col("room_name", "Кабинет", kind="location", export_width=18),
     col("number", "№", "№ в кабинете", kind="seat", center=True, values="no", bulk=False, export_width=6, card_always=True),
     col("name", "Имя", link=True, sticky=True, values="no", card_copy=True, dup=True, bulk=False, export_width=22),

@@ -176,6 +176,11 @@ export default {
             return ["Отменил", c.by, this.formatTime(c.at)].filter(Boolean).join(" ");
         },
 
+        // Пометка принятого из сканера: «из GLPI №157», «из сети» (в записи – «Сеть»)
+        scanFromText(scan) {
+            return "из " + (scan === "Сеть" ? "сети" : scan);
+        },
+
         // Двойной клик открывает «Историю значения» (у создания, удаления и пароля – нет)
         canOpenValue(entity, field) {
             return !!ENTITY_FILTERS[entity] && NO_UNDO_ENTITIES.indexOf(entity) === -1 && DECISION_ENTITIES.indexOf(entity) === -1 &&

@@ -202,7 +202,7 @@ export const SIMPLE_FIELD_LABELS = {
     archived: "Архив",
     role: "Роль",
     password: "Пароль",
-    created: "Создано",
+    created: "Создан",
     deleted: "Удалено",
     login: "Логин",
     full_name: "ФИО",

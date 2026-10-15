@@ -422,11 +422,40 @@ export default {
             }
             this.$nextTick(() => {
                 this.placeColFilter();
+                this.$nextTick(() => this.fitColFilterWidth());
                 const input = this.$refs.colFilterInput;
                 if (input) {
                     input.focus({ preventScroll: true });
                 }
             });
+        },
+
+        // Подписи обрезаны («Давно не подключ…» у узкого VACUUM) – меню шире, по самой
+        // длинной (до 360px, этап 64); мерится один раз при открытии
+        fitColFilterWidth() {
+            const menu = this.colFilterMenu;
+            const panel = this.$refs.colFilterPanel;
+            if (!menu || !panel || !menu.pos) {
+                return;
+            }
+            const values = panel.querySelectorAll(".cf-value");
+            const cutOf = function () {
+                let cut = 0;
+                values.forEach(function (el) {
+                    cut = Math.max(cut, el.scrollWidth - el.clientWidth);
+                });
+                return cut;
+            };
+            // Ширина текста дробная, scrollWidth – целое: подбирать, пока не перестанет резать
+            let width = menu.pos.width;
+            for (let cut = cutOf(); cut > 0 && width < 360; cut = cutOf()) {
+                width = Math.min(360, width + cut + 1);
+                panel.style.width = width + "px";
+            }
+            if (width !== menu.pos.width) {
+                menu.need = width;
+                this.placeColFilter();
+            }
         },
 
         removeColFilterMove() {
@@ -453,7 +482,7 @@ export default {
                 return;
             }
             const r = th.getBoundingClientRect();
-            const width = Math.min(360, Math.max(240, Math.round(r.width)), window.innerWidth - 8);
+            const width = Math.min(360, Math.max(240, Math.round(r.width), menu.need || 0), window.innerWidth - 8);
             let left = Math.round(r.left);
             if (left + width > window.innerWidth - 4) {
                 left = Math.max(4, Math.round(r.right) - width);

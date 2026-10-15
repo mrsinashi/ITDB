@@ -1010,7 +1010,6 @@ export default {
                 export: this.$refs.exportWrap,
                 settings: this.$refs.settingsWrap,
                 user: this.$refs.userWrap,
-                page: this.$refs.pageSetWrap,
                 historySel: this.$refs.historySelWrap,
                 checkSel: this.$refs.checkSelWrap,
                 checkFields: this.$refs.checkFieldsWrap,

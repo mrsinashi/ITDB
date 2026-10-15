@@ -34,6 +34,19 @@ export default {
         roleLabel() {
             return this.user ? (ROLE_LABELS[this.user.role] || this.user.role) : "";
         },
+
+        // «Акцентные шапки» в «Настройках» (этап 64; раньше – шестерёнка на каждой странице):
+        // страницы, которые пользователь видит, в порядке меню
+        accentHeaderPages() {
+            return [
+                { key: "tree", label: "Структура" },
+                { key: "vacuum", label: "Vacuum", edit: true },
+                { key: "scan", label: "Сканер", edit: true },
+                { key: "choices", label: "Справочники" },
+                { key: "history", label: "История" },
+                { key: "users", label: "Пользователи", admin: true }
+            ].filter((p) => (!p.edit || this.canEdit) && (!p.admin || this.isAdmin));
+        },
     },
 
     watch: {

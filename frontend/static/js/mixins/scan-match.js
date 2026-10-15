@@ -193,7 +193,7 @@ export default {
 
         scanSearchPlaceholder() {
             if (this.scanTab === "names") {
-                return "Поиск по названиям: поле, значение";
+                return "Поиск: поле, значение";
             }
             if (this.scanTab === "net") {
                 return "Поиск: IP, MAC, имя, ПК";

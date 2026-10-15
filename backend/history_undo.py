@@ -96,7 +96,7 @@ SIMPLE_LABELS = {
     "value": "Значение", "color": "Цвет текста", "bg_color": "Фон", "bold": "Жирный",
     "italic": "Курсив", "underline": "Подчёркнутый", "strike": "Зачёркнутый", "chip": "Фон блочком",
     "label": "Название", "archived": "Архив", "role": "Роль",
-    "password": "Пароль", "created": "Создано", "deleted": "Удалено",
+    "password": "Пароль", "created": "Создан", "deleted": "Удалено",
     "login": "Логин", "full_name": "ФИО", "position": "Должность",
     "kind": "Тип", "maker": "Производитель", "model": "Модель", "duplex": "Дуплекс",
     "cartridges": "Картриджи", "name": "Название",

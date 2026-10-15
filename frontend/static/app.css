@@ -915,11 +915,6 @@ body.ui-light-toolbar .toolbar .tb-error {
 .btn-primary:hover {
     background: var(--brand-dark);
 }
-/* ✓ «добавить / сохранить» значком – зелёная галочка на обычной белой кнопке, как ✓ в
-   строке правки (этап 63; раньше в строках под панелью – белая на цвете схемы) */
-.btn.btn-ok {
-    color: var(--success);
-}
 .btn-primary:disabled:hover {
     background: var(--brand);
 }
@@ -2592,16 +2587,21 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .history-table tbody tr:not(.h-day):hover td:last-child {
     border-right-color: transparent;
 }
-.history-table .h-time,
-.history-table .h-user {
+/* Ширины не зависят от записей (этап 64): после фильтра и при пустом поиске столбцы не
+   сдвигаются. «Объект» – по ширине окна, до 340px («Справочник Процессор: Pentium G5400» –
+   целиком, этап 19б), длинное – с «…»; остаток – «Изменениям» */
+.history-table .h-time {
     width: 1%;
     white-space: nowrap;
 }
-.history-table .h-obj {
-    width: 1%;
+.history-table .h-user {
+    width: 80px;
     white-space: nowrap;
-    /* «Справочник Процессор: Pentium G5400» – помещается целиком (этап 19б) */
-    max-width: 340px;
+}
+.history-table .h-obj {
+    width: clamp(200px, 22vw, 340px);
+    max-width: clamp(200px, 22vw, 340px);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -2674,6 +2674,14 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .ch-val {
     min-width: 0;
     overflow-wrap: anywhere;
+}
+/* «Было» и «стало» – каждое одним блоком: вторая строка многострочного значения (картриджи)
+   – под его началом, а не под стрелкой (этап 64) */
+.ch-val .old,
+.ch-val .new {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
 }
 
 .field {
@@ -4597,8 +4605,10 @@ button.scan-chip {
 /* ============================================================
    «Сканирование» → «Проверка» (этап 26г)
    ============================================================ */
+/* Наименьшая ширина – как у таблицы с записями (этап 64): поиск без результата не сжимает
+   её по подписям шапки; в узком окне – не шире места до плашки */
 .ck-wrap {
-    min-width: 760px;
+    min-width: min(1100px, 100% - 110px);
     timeline-scope: --ck-scroll;
 }
 .ck-table tbody tr.ck-row {
@@ -4617,8 +4627,23 @@ button.scan-chip {
     font-style: italic;
     color: var(--text-secondary);
 }
+/* Путь и «по GLPI ID, MAC, серийному» в узком окне (меньше ~1200px) – с «…» (полностью – в
+   подсказке), чтобы «Что предлагает сканер» не уезжал за край (этап 64); на 1600px всё
+   целиком. Имя ПК не сокращается */
+.ck-table .sm-state.st-key {
+    display: inline-block;
+    max-width: max(90px, calc(100vw - 1010px));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
+}
 .ck-table .ck-place {
+    display: inline-block;
+    max-width: max(200px, calc(100vw - 940px));
     margin-left: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
     font-size: 12px;
     color: var(--text-secondary);
 }
@@ -4794,11 +4819,13 @@ button.scan-chip {
 }
 .names-help b {
     color: var(--text-strong);
+    white-space: nowrap;
 }
 
 /* Vacuum: таблица в рамке «Проверки», ширина по содержимому */
+/* Наименьшая ширина – как у таблицы с записями (этап 64), как у «GLPI / GSIT» */
 .vacuum-wrap {
-    min-width: 600px;
+    min-width: min(800px, 100% - 110px);
 }
 .vacuum-table td {
     white-space: nowrap;
@@ -5527,8 +5554,12 @@ html.no-radius .nr-table .nr-suf {
 }
 
 /* «Сканер» → «Сеть»: адреса из DHCP и прохода подсетей */
+/* У строк «Сети» плашки нет – место под неё справа не нужно (этап 64: в узком окне не
+   прятались «Когда» и «ПК в таблице») */
 .net-wrap {
     min-width: 600px;
+    max-width: 100%;
+    margin-right: 0;
 }
 .net-table td {
     white-space: nowrap;
@@ -5638,6 +5669,11 @@ html.no-radius .nr-table .nr-suf {
 .vacuum-table tr.vc-ip-stale td.vc-hosts,
 .vacuum-table tr.vc-ip-stale .vc-host {
     color: var(--text-muted);
+}
+/* Группа блочков «Сети» – переносится целиком (этап 64) */
+.sm-filters .sm-group {
+    display: inline-flex;
+    gap: 5px;
 }
 /* Черта между фильтрами и фильтрами по источникам («Сеть») */
 .sm-filters .sm-sep {
@@ -6895,6 +6931,7 @@ a.pr-web:hover {
 .add-bar .btn.ab-many {
     margin-left: auto;
     min-width: 84px;
+    justify-content: center;
 }
 .add-bar .btn.ab-many.on {
     background: var(--tb-ctrl-on-bg);

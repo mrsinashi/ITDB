@@ -135,7 +135,7 @@ export default {
             <span class="tf-fields">
                 <input v-if="form.kind !== 'floor'" ref="code" class="input tf-code" v-model="form.code" :placeholder="codeHint.short" :title="codeHint.title" spellcheck="false">
                 <input ref="name" class="input tf-name" v-model="form.name" placeholder="Название" title="Название" spellcheck="false">
-                <button class="btn btn-ok icon-only" @click="submit" :title="form.action === 'add' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn btn-primary icon-only" @click="submit" :title="form.action === 'add' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="cancel" title="Отмена (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </span>
             <span v-if="root.treeFormError" class="tf-error">{{ root.treeFormError }}</span>

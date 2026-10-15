@@ -452,10 +452,15 @@ export default {
                     list.push({ label: label, value: value });
                 }
             };
-            add("Модель", [row.kind, row.model_title].filter(Boolean).join(" "));
+            // Тип – в шапке окошка; «Где» – путь, как в выборе расположения («2 этаж» и
+            // «104 Склад» не разрываются)
+            const floor = /^\d+$/.test(String(row.floor || "").trim()) ? row.floor + "\u00a0этаж" : row.floor;
+            const room = [row.room_code, row.room_name].filter(Boolean).join("\u00a0");
+            add("Модель", row.model_title);
             add("Печать", [row.color, row.duplex ? "дуплекс " + row.duplex : ""].filter(Boolean).join(", "));
             add("Картриджи", (row.cartridges || "").split("\n").join(", "));
-            add("Где", [row.department, row.room].filter(Boolean).join(", ") + (row.number ? ", № " + row.number : ""));
+            add("Где", [row.building, row.department, floor, room].filter(Boolean).join(" / "));
+            add("№ в кабинете", row.number);
             add("IP", (row.ip || "").split("\n").join(", "));
             add("MAC", (row.mac || "").split("\n").join(", "));
             add("Компьютеры", (row.computers || "").split("\n").join(", "));

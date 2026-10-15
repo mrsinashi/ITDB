@@ -243,7 +243,7 @@ export default {
             const labels = {
                 status: "Статус",
                 os: "OS",
-                type: "ТИП",
+                type: "Тип",
                 model: "Модель",
                 cpu: "CPU",
                 gpu: "GPU",
