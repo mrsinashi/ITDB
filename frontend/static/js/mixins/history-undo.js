@@ -15,7 +15,7 @@ const ENTITY_FILTERS = {
     printers: "Принтеры",
     locations: "Расположения",
     choices: "Справочники",
-    field_defs: "Польз. поля",
+    field_defs: "Пользовательские поля",
     column_styles: "Оформление столбцов",
     users: "Пользователи системы",
     scan_sources: "Сканер: подключения",
@@ -27,7 +27,7 @@ const ENTITY_FILTERS = {
     scan_antivirus: "Антивирусы (вид столбца)",
     table_marks: "Выделения в таблице",
     app_settings: "Настройки",
-    naming: "Имена: своё имя",
+    naming: "Имена ПК: своё имя",
     printer_models: "Модели принтеров",
     cartridges: "Картриджи"
 };

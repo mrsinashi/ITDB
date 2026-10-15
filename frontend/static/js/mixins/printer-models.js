@@ -52,8 +52,11 @@ export default {
             return rows;
         },
 
+        // При поиске – «Показано: X из N», как на других страницах (этап 61)
         modelsCountText() {
-            return "Моделей: " + this.printerModels.length;
+            const all = this.printerModels.length;
+            const shown = this.modelsView.filter(function (item) { return item.model; }).length;
+            return shown === all ? "Моделей: " + all : "Показано: " + shown + " из " + all;
         }
     },
 
@@ -123,6 +126,7 @@ export default {
                 this.closeModelsBar();
                 return;
             }
+            this.modelsHover = null;
             this.modelsBar = { kind: "new", type: "printer", maker: "", model: "", color: "false", duplex: "", cartridges: "", error: "", saving: false, plate: null };
             this.loadCartridges();
             this.showEditRow("modelsBar", "mb-maker");
@@ -166,7 +170,7 @@ export default {
                 const saved = await response.json();
                 await Promise.all([this.loadPrinterModels(), this.loadCartridges()]);
                 // Значения модели видны в таблице принтеров, название – и у ПК (этап 47)
-                if (bar.kind === "edit" && saved.printers) {
+                if (bar.kind === "edit" && (saved.printers || saved.archived_printers)) {
                     this.loadPrinters();
                     this.loadTable();
                 }
@@ -178,8 +182,16 @@ export default {
             }
         },
 
-        async deleteModel(m) {
+        // Число в справочнике – рабочие принтеры; в архиве – тоже ссылаются на модель (этап 61)
+        modelDeleteTitle(m) {
             if (m.printers) {
+                return "Есть принтеры – не удалить";
+            }
+            return m.archived_printers ? "Есть принтеры в архиве – не удалить" : "Удалить";
+        },
+
+        async deleteModel(m) {
+            if (m.printers || m.archived_printers) {
                 return;
             }
             if (!(await this.confirmDialog("Удалить модель «" + m.title + "»?", { okText: "Удалить", danger: true }))) {
@@ -198,10 +210,11 @@ export default {
             }
         },
 
-        // Плашка действий справа от таблицы, у строки под курсором (как у Пользователей)
+        // Плашка действий справа от таблицы, у строки под курсором (как у Пользователей);
+        // пока открыта строка правки, плашка – только её (одна на блок)
         setModelsHover(m, rowEl) {
             if (this.canEdit) {
-                this.modelsHover = rowPlate(rowEl, ".users-wrap", { id: m.id, model: m });
+                this.modelsHover = this.modelsBar ? null : rowPlate(rowEl, ".users-wrap", { id: m.id, model: m });
             }
         },
 

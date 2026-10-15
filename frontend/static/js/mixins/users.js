@@ -107,6 +107,7 @@ export default {
                 this.closeUserBar();
                 return;
             }
+            this.usersHover = null;
             this.userBar = this.emptyUserBar("reader", false);
             this.showEditRow("userBar", "ub-login");
         },
@@ -275,9 +276,10 @@ export default {
             }
         },
 
-        // Плашка действий справа от таблицы, у строки под курсором (как в Дереве)
+        // Плашка действий справа от таблицы, у строки под курсором (как в Дереве);
+        // пока открыта строка правки, плашка – только её
         setUsersHover(u, rowEl) {
-            this.usersHover = rowPlate(rowEl, ".users-wrap", { id: u.id, user: u });
+            this.usersHover = this.userBar ? null : rowPlate(rowEl, ".users-wrap", { id: u.id, user: u });
         },
 
         // ---------- Свой пароль (меню пользователя) ----------

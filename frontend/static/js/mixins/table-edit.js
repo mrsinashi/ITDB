@@ -32,6 +32,11 @@ export default {
                 this.openLinkPick(row, col, td);
                 return;
             }
+            // Тип, производитель, печать, дуплекс принтера – из модели: сказать, где меняются
+            if (this.canEdit && col.fromModel) {
+                this.toast("Меняется в справочнике моделей");
+                return;
+            }
             if (!this.canEdit || !(col.editable || col.location)) {
                 return;
             }

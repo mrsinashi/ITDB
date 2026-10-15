@@ -695,7 +695,10 @@ class ModelIn(BaseModel):
 MODEL_FIELDS = ("kind", "maker", "model", "color", "duplex")
 
 
-def model_out(model, count, cartridges=()):
+def model_out(model, counts=(0, 0), cartridges=()):
+    """counts – (рабочих принтеров, в архиве): число в справочнике – рабочие, как на
+    «Принтерах» и у картриджей (этап 61); принтеры в архиве – в подсказке, из-за них модель
+    тоже не удалить."""
     return {
         "id": model.id,
         "kind": model.kind,
@@ -705,13 +708,26 @@ def model_out(model, count, cartridges=()):
         "color": model.color,
         "duplex": model.duplex,
         "cartridges": list(cartridges),
-        "printers": count,
+        "printers": counts[0],
+        "archived_printers": counts[1],
     }
 
 
 def model_counts(session):
-    """id модели → число принтеров (и в архиве: они тоже на неё ссылаются)."""
-    return dict(session.query(Printer.model_id, func.count(Printer.id)).filter(Printer.model_id.isnot(None)).group_by(Printer.model_id).all())
+    """id модели → (рабочих принтеров, в архиве): в архиве тоже на неё ссылаются."""
+    counts = {}
+    rows = (
+        session.query(Printer.model_id, Printer.archived, func.count(Printer.id))
+        .filter(Printer.model_id.isnot(None))
+        .group_by(Printer.model_id, Printer.archived)
+        .all()
+    )
+
+    for model_id, archived, count in rows:
+        working, old = counts.get(model_id, (0, 0))
+        counts[model_id] = (working, old + count) if archived else (working + count, old)
+
+    return counts
 
 
 def check_model(session, model):
@@ -765,7 +781,7 @@ def list_models(session=Depends(get_db)):
     cartridges = cartridges_by_model(session)
     models = session.query(PrinterModel).all()
     models.sort(key=lambda m: (KIND_ORDER.get(m.kind, 2), title_key(model_title(m))))
-    return {"items": [model_out(model, counts.get(model.id, 0), cartridges.get(model.id, [])) for model in models]}
+    return {"items": [model_out(model, counts.get(model.id, (0, 0)), cartridges.get(model.id, [])) for model in models]}
 
 
 def model_cartridges(session, model):
@@ -795,7 +811,7 @@ def create_model(payload: ModelIn, user=Depends(require_editor), session=Depends
 
     log_change(session, "printer_models", model.id, user["login"], changes, title=model_title(model))
     session.commit()
-    return model_out(model, 0, model_cartridges(session, model))
+    return model_out(model, cartridges=model_cartridges(session, model))
 
 
 @router.patch("/printer-models/{model_id}")
@@ -829,7 +845,7 @@ def update_model(model_id: int, payload: ModelIn, user=Depends(require_editor), 
     log_change(session, "printer_models", model.id, user["login"], changes, title=model_title(model))
     batch.finish(session)
     session.commit()
-    return model_out(model, model_counts(session).get(model.id, 0), model_cartridges(session, model))
+    return model_out(model, model_counts(session).get(model.id, (0, 0)), model_cartridges(session, model))
 
 
 @router.delete("/printer-models/{model_id}")
@@ -840,7 +856,7 @@ def delete_model(model_id: int, user=Depends(require_editor), session=Depends(ge
     if not model:
         raise HTTPException(status_code=404, detail="Модели нет в справочнике. Обнови страницу.")
 
-    count = model_counts(session).get(model.id, 0)
+    count = sum(model_counts(session).get(model.id, (0, 0)))
 
     if count:
         raise HTTPException(status_code=400, detail=f"У модели есть принтеры: {count}.")

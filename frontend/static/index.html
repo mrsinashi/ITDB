@@ -152,7 +152,8 @@
                         </div>
                     </span>
                     <span v-if="selectedRows.length > 0" class="dropdown-wrap" ref="selectionWrap">
-                        <button class="btn" :class="{ 'menu-open': openMenu === 'selection' }" @click="toggleMenu('selection')" title="Действия с выбранными">
+                        <!-- У читателя в меню был бы один пункт – кнопка сразу снимает выделение (этап 61) -->
+                        <button class="btn" :class="{ 'menu-open': openMenu === 'selection' }" @click="canEdit ? toggleMenu('selection') : clearSelection()" :title="canEdit ? 'Действия с выбранными' : 'Снять выделение'">
                             Выбрано: {{ selectedRows.length }}
                         </button>
                         <div v-if="openMenu === 'selection'" class="dropdown attached">
@@ -397,7 +398,7 @@
                             <th v-for="col in viewColumns" :key="'th-' + col.field" :data-field="col.field"
                                 :class="{ center: col.center, sorted: sortField === col.field, sticky: col.sticky, 'sticky-edge': col.field === stuckEdge, 'sticky-edge-r': col.field === stuckEdgeRight, filtered: isColFiltered(col.field), 'filter-open': colFilterMenu && colFilterMenu.field === col.field, 'th-virtual': col.virtual }"
                                 :style="col.sticky ? stickyStyle(col) : null"
-                                :title="scanOpenFields.has(col.field) && isColumnHidden(col.field) ? 'Скрытый столбец: виден со значениями сканера' : null"
+                                :title="scanOpenFields.has(col.field) && isColumnHidden(col.field) ? 'Скрытый столбец: виден со значениями сканера' : (col.fromModel ? 'Из справочника моделей' : null)"
                                 @mousedown="onHeadMouseDown($event, col)" @click="onHeadClick($event, col)" @contextmenu.prevent="openColFilter(col, $event)">
                                 <!-- Подпись по центру; справа всегда место под воронку: не хватает – подпись левее -->
                                 <span class="th-in"><span class="th-pad"></span><span class="th-label">{{ col.headerName }}</span><span class="sort-arrow" v-if="sortField === col.field">{{ sortDir === 'asc' ? '▲' : '▼' }}</span><span class="th-pad th-pad-r"></span></span>
@@ -414,6 +415,8 @@
                         <template v-if="tableReady">
                             <tr is="vue:table-row" v-for="(row, i) in displayRows" :key="row.id" :row="row" :below="displayRows[i + 1] || null"
                                 :selected="selectedSet.has(row.id)" :edit-field="editingRowId === row.id ? editingField : null"></tr>
+                            <!-- Ничего не нашлось, архив пуст (этап 61) – строкой, как в Истории -->
+                            <tr v-if="emptyTableText" class="tbl-empty"><td :colspan="viewColumns.length"><span>{{ emptyTableText }}</span></td></tr>
                         </template>
                     </tbody>
                 </table>
@@ -601,7 +604,7 @@
                                 <div v-for="st in avSettings.statuses" :key="st.kind" class="st-row" :class="{ 'av-off': !st.show }">
                                     <span class="st-val"><span :class="{ boxed: !!st.bg_color, fill: !!st.bg_color && st.chip === false }" :style="avStatusStyle(st)">{{ st.label }}</span></span>
                                     <span class="st-n" :title="'Антивирусов в таком состоянии: ' + (avStatusCounts[st.kind] || 0)">{{ avStatusCounts[st.kind] || 0 }}</span>
-                                    <style-controls extra :value="st" :disabled="!canEdit" @change="updateAvSettings(Object.assign({ kind: st.kind }, $event))"></style-controls>
+                                    <style-controls v-if="canEdit" extra :value="st" @change="updateAvSettings(Object.assign({ kind: st.kind }, $event))"></style-controls>
                                     <span class="st-act av-act">
                                         <span v-if="canEdit && hasStyle(st)" class="st-reset" title="Сбросить оформление" @click="updateAvSettings({ kind: st.kind, color: '', bg_color: '', bold: false, italic: false, underline: false, strike: false })">↺</span>
                                         <span class="st-eye" :class="{ off: !st.show, disabled: !canEdit }" :title="st.show ? 'Скрыть в таблице' : 'Показывать в таблице'"
@@ -631,7 +634,7 @@
                         <div v-if="!b.orphan" class="st-row st-colrow">
                             <span class="st-val"><span :class="sampleClass(b.field, null)" :style="effectiveStyle(b.field, null)">Весь столбец</span></span>
                             <span class="st-n"></span>
-                            <style-controls extra :value="columnStyles[b.field]" :disabled="!canEdit" @change="setColumnStyle(b.field, $event)"></style-controls>
+                            <style-controls v-if="canEdit" extra :value="columnStyles[b.field]" @change="setColumnStyle(b.field, $event)"></style-controls>
                             <span class="st-act"><span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)">↺</span></span>
                         </div>
                         <!-- Тип VNC: чем подключаться к ПК, у которого он не указан (Enter по выбранной строке) -->
@@ -644,7 +647,7 @@
                                 <div v-for="v in b.values" :key="v.key" class="st-row" :class="{ unused: v.count === 0, 'search-hit': choicesMatch.valueSet.has(b.field + '|' + v.key) }">
                                     <span class="st-val" :title="v.value"><span :class="sampleClass(b.field, v.choice)" :style="effectiveStyle(b.field, v.choice)"><template v-if="choicesMatch.valueSet.has(b.field + '|' + v.key)"><template v-for="(p, i) in hl(v.value)" :key="i"><mark v-if="p.m">{{ p.t }}</mark><template v-else>{{ p.t }}</template></template></template><template v-else>{{ v.value }}</template></span></span>
                                     <span class="st-n" :title="'ПК с этим значением: ' + v.count">{{ v.count }}</span>
-                                    <style-controls extra :value="v.choice" :disabled="!canEdit" @change="setValueStyle(b.field, v, $event)"></style-controls>
+                                    <style-controls v-if="canEdit" extra :value="v.choice" @change="setValueStyle(b.field, v, $event)"></style-controls>
                                     <span class="st-act">
                                         <span v-if="canEdit && hasStyle(v.choice)" class="st-reset" title="Сбросить оформление" @click="resetValueStyle(b.field, v)">↺</span>
                                         <span v-else-if="canEdit && v.choice && v.count === 0" class="st-del" title="Удалить из справочника (в таблице не встречается)" @click="deleteChoice(v.choice)">✕</span>
@@ -708,7 +711,7 @@
                                 <td class="smk-sample-td"><span class="tm-sample" :class="{ chip: !!m.bg_color, fill: !!m.bg_color && m.chip === false }" :style="markStyle(m.kind)">{{ tableMarkSample(m.kind) }}</span></td>
                                 <td class="smk-label">{{ m.label }}</td>
                                 <td>
-                                    <style-controls :value="m" :disabled="!canEdit" extra @change="updateTableMark(m.kind, $event)"></style-controls>
+                                    <style-controls v-if="canEdit" :value="m" extra @change="updateTableMark(m.kind, $event)"></style-controls>
                                     <span v-if="canEdit && m.changed" class="st-reset" title="Вернуть как было" @click="updateTableMark(m.kind, { reset: true })">↺</span>
                                 </td>
                             </tr>
@@ -728,14 +731,14 @@
                                 <td class="smk-sample-td"><span class="scan-chip" :class="{ off: !m.enabled }" :style="scanChipStyle(m)">{{ scanLegendSample(m.kind) }}</span></td>
                                 <td class="smk-label">{{ scanMarkHint(m.kind) }}</td>
                                 <td>
-                                    <style-controls :value="m" :disabled="!canEdit" @change="updateScanMark(m.kind, $event)"></style-controls>
-                                    <span class="sc" :class="{ disabled: !canEdit }">
+                                    <style-controls v-if="canEdit" :value="m" @change="updateScanMark(m.kind, $event)"></style-controls>
+                                    <span v-if="canEdit" class="sc">
                                         <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка блочка ' + m.frame + '\nCtrl + клик – убрать' : 'Рамка блочка – в тон фона'"
-                                            @click.capture="($event.ctrlKey || $event.metaKey) && ($event.preventDefault(), canEdit && m.frame && updateScanMark(m.kind, { frame: '' }))">
+                                            @click.capture="($event.ctrlKey || $event.metaKey) && ($event.preventDefault(), m.frame && updateScanMark(m.kind, { frame: '' }))">
                                             <span class="sc-swatch sc-frame" :style="{ borderColor: m.frame || null }"></span>
-                                            <input type="color" :value="m.frame || '#9db4cc'" :disabled="!canEdit" @change="updateScanMark(m.kind, { frame: $event.target.value })">
+                                            <input type="color" :value="m.frame || '#9db4cc'" @change="updateScanMark(m.kind, { frame: $event.target.value })">
                                         </label>
-                                        <button type="button" class="sc-btn" :class="{ on: m.strike }" :disabled="!canEdit" title="Зачёркивать значение таблицы" @click="updateScanMark(m.kind, { strike: !m.strike })"><s>З</s></button>
+                                        <button type="button" class="sc-btn" :class="{ on: m.strike }" title="Зачёркивать значение таблицы" @click="updateScanMark(m.kind, { strike: !m.strike })"><s>З</s></button>
                                     </span>
                                     <span v-if="canEdit && scanMarkHasStyle(m)" class="st-reset" title="Убрать оформление" @click="updateScanMark(m.kind, { color: '', bg_color: '', frame: '', bold: false, italic: false, strike: false })">↺</span>
                                 </td>
@@ -856,7 +859,7 @@
                             <table v-else class="history-table users-table pm-table" :class="{ 'accent-head': accentHeaders.choices }">
                                 <colgroup><col class="pm-kind"><col class="pm-maker"><col class="pm-model"><col class="pm-color"><col class="pm-duplex"><col class="pm-carts"><col class="pm-count"></colgroup>
                                 <thead>
-                                    <tr><th>Тип</th><th>Производитель</th><th>Модель</th><th>Печать</th><th>Дуплекс</th><th>Картриджи</th><th class="pm-n" title="Принтеров этой модели (и в архиве)">Принтеров</th></tr>
+                                    <tr><th>Тип</th><th>Производитель</th><th>Модель</th><th>Печать</th><th>Дуплекс</th><th>Картриджи</th><th class="pm-n" title="Рабочих принтеров этой модели">Принтеров</th></tr>
                                 </thead>
                                 <tbody>
                                     <template v-for="item in modelsView" :key="item.key">
@@ -887,7 +890,8 @@
                                             <td>{{ modelColorText(item.model.color) }}</td>
                                             <td>{{ modelYesNoText(item.model.duplex) }}</td>
                                             <td class="pm-carts-cell" :title="(item.model.cartridges || []).join(', ') || null">{{ (item.model.cartridges || []).join(", ") }}</td>
-                                            <td class="pm-n"><a v-if="item.model.printers" class="pm-show" href="#printers" title="Показать в Принтерах" @click.prevent="showModelPrinters(item.model)">{{ item.model.printers }}</a></td>
+                                            <td class="pm-n" :title="item.model.archived_printers ? 'В архиве: ' + item.model.archived_printers : null"><a v-if="item.model.printers" class="pm-show" href="#printers"
+                                                :title="'Показать в Принтерах' + (item.model.archived_printers ? '\nЕщё в архиве: ' + item.model.archived_printers : '')" @click.prevent="showModelPrinters(item.model)">{{ item.model.printers }}</a></td>
                                         </tr>
                                     </template>
                                 </tbody>
@@ -898,7 +902,7 @@
                         <span class="na-box">
                             <span class="icon-btn" title="Изменить" @click="openEditModel(modelsHover.model)">✎</span>
                             <span class="na-sep"></span>
-                            <span class="icon-btn danger" :class="{ off: modelsHover.model.printers }" :title="modelsHover.model.printers ? 'Есть принтеры – не удалить' : 'Удалить'" @click="deleteModel(modelsHover.model)">✕</span>
+                            <span class="icon-btn danger" :class="{ off: modelsHover.model.printers || modelsHover.model.archived_printers }" :title="modelDeleteTitle(modelsHover.model)" @click="deleteModel(modelsHover.model)">✕</span>
                         </span>
                     </div>
                     <div v-if="modelsBar && modelsBar.plate" class="tree-actions er-plate" :style="{ top: modelsBar.plate.top + 'px', height: modelsBar.plate.height + 'px' }">
@@ -980,7 +984,7 @@
                         <span class="chip-text">{{ historyEntityChip() }}</span><span class="chip-x">✕</span>
                     </button>
                     <span v-if="historySelected.length > 0" class="dropdown-wrap" ref="historySelWrap">
-                        <button class="btn" :class="{ 'menu-open': openMenu === 'historySel' }" @click="toggleMenu('historySel')" title="Действия с выбранными">
+                        <button class="btn" :class="{ 'menu-open': openMenu === 'historySel' }" @click="canEdit ? toggleMenu('historySel') : clearHistorySelection()" :title="canEdit ? 'Действия с выбранными' : 'Снять выделение'">
                             Выбрано: {{ historySelected.length }}
                         </button>
                         <div v-if="openMenu === 'historySel'" class="dropdown attached">
@@ -1569,7 +1573,7 @@
                                                     <div class="smc-box">
                                                         <table class="sm-compare ck-compare">
                                                             <tr>
-                                                                <th></th>
+                                                                <th>Поле</th>
                                                                 <th :title="row.pc ? (row.pc.hostname || '') + ' – ' + (row.pc.place || '') : 'ПК в таблице нет'">В таблице</th>
                                                                 <th v-for="k in checkSourceKinds.filter(x => row.recs[x])" :key="'ch-' + k" colspan="2" class="ck-src-head" :title="checkSourceHeadTitle(row, k)">{{ checkSourceHead(row, k) }}</th>
                                                                 <th v-if="checkJabberOn && !row.record" colspan="2" class="ck-src-head" title="Кто в Jabber с адреса этого ПК">Vacuum</th>
@@ -1970,7 +1974,7 @@
                 </table>
                 <!-- Номер записи GLPI / GSIT (этапы 38, 39): запись и этот ПК по полям -->
                 <table v-if="scanPop.d.compare.length" class="sp-compare">
-                    <tr><th></th><th>В таблице</th><th></th><th>{{ diffSourceShort(scanPop.d) }}</th></tr>
+                    <tr><th>Поле</th><th>В таблице</th><th></th><th>{{ diffSourceShort(scanPop.d) }}</th></tr>
                     <tr v-for="c in scanPop.d.compare" :key="c.field" :class="{ same: c.mark === '=' }">
                         <td class="sp-label">{{ diffFieldLabel(c.field) }}</td>
                         <td class="sp-v"><span v-if="c.table">{{ c.table }}</span><span v-else class="sp-empty">пусто</span></td>
@@ -2358,7 +2362,7 @@
                             </div>
                             <div class="dd-sep"></div>
                             <button @click="setPrintColumns('table')" :disabled="printColumnsAsTable">Как в таблице</button>
-                            <button @click="setPrintColumns('all')" :disabled="printColumns.length === allColumns.length">Все</button>
+                            <button @click="setPrintColumns('all')" :disabled="printColumns.length === allColumns.length">Показать все</button>
                         </div>
                     </span>
                     <span class="pr-sep"></span>

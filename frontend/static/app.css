@@ -1065,6 +1065,10 @@ select.input {
     flex-direction: column;
     gap: 1px;
 }
+/* «Столбцы» – до низа окна: меню под панелью (~70px) + пункты под списком (~95px) (этап 61) */
+.columns-menu .dd-scroll {
+    max-height: calc(100vh - 175px);
+}
 .dropdown .dd-note {
     padding: 2px 12px;
     font-size: 11px;
@@ -1503,6 +1507,17 @@ body.ui-dark-hostname .data-table td.link:hover span {
     --v-line: var(--row-hover-line);
     --h-line: transparent;
 }
+/* Пустая таблица (этап 61): «Ничего не найдено.» серым, без подсветки и линии; текст –
+   у левого края видимой части, и когда таблица прокручена вбок */
+.data-table tbody tr.tbl-empty td {
+    background: var(--bg);
+    color: var(--text-muted);
+    --h-line: transparent;
+}
+.data-table tr.tbl-empty span {
+    position: sticky;
+    left: 6px;
+}
 
 
 /* Выбранные строки. Синий – полупрозрачный слой (background-image) поверх
@@ -1729,6 +1744,10 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     resize: none;
     white-space: pre-line;
 }
+/* В столбце «по центру» и при правке текст по центру – не прыгает к левому краю (этап 61) */
+.data-table td.center .cell-edit:not(.secret-input) {
+    text-align: center;
+}
 
 /* ============================================================
    Карточка компьютера
@@ -1891,8 +1910,10 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     border-bottom: 1px solid var(--border);
     vertical-align: top;
 }
+/* Ширина подписей – по самой длинной встроенной («Операционная система»), одна у карточек
+   ПК и принтера: значения не скачут, когда ⌄ показывает пустые поля (этап 61) */
 .card-table .ct-label {
-    width: 100px;
+    width: 152px;
     color: var(--text-strong);
     background: var(--surface-alt);
     border-right: 1px solid var(--border);
@@ -5087,7 +5108,7 @@ html.no-radius .card-sec-body .vac-dot {
    серое, заданное цветом напрямую, – правилами ниже. Выбранные (синие) строки,
    раскрытые строки «Проверки» и строки правки – не жёлтые, их не касается.
    ============================================================ */
-.data-table tbody tr.row-hover:not(.row-selected),
+.data-table tbody tr.row-hover:not(.row-selected, .tbl-empty),
 .card-table tr:not(.ct-group):hover,
 .card-section.toggle-sec:hover,
 .node-row:hover,

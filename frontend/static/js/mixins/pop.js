@@ -85,7 +85,10 @@ export default {
             }
             const r = pop.el.getBoundingClientRect();
             const h = box.offsetHeight;
-            pop.left = Math.max(4, Math.min(Math.round(r.left), window.innerWidth - (width || box.offsetWidth) - 4));
+            // Правый край – видимая часть таблицы без её полосы прокрутки (этап 61), иначе – окно
+            const wrap = pop.el.closest(".table-wrap");
+            const right = wrap ? Math.min(window.innerWidth, wrap.getBoundingClientRect().left + wrap.clientWidth) : window.innerWidth;
+            pop.left = Math.max(4, Math.min(Math.round(r.left), right - (width || box.offsetWidth) - 4));
             pop.up = r.bottom + h + 4 > window.innerHeight && r.top > window.innerHeight - r.bottom;
             pop.top = pop.up ? Math.max(4, Math.round(r.top - h)) : Math.round(r.bottom);
             pop.placed = true;

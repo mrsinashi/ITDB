@@ -91,6 +91,8 @@ export function toColumnDef(c) {
         // scan: только из сканера (антивирусы, этап 26д) – не правится; у принтера (этап 44)
         // значения модели и вход Web в ячейке тоже не правятся
         editable: ["location", "scan", "pattr", "secret"].indexOf(c.kind) === -1,
+        // Значение модели у принтера (этап 61): двойной клик говорит, где оно меняется
+        fromModel: c.kind === "pattr",
         scanOnly: c.kind === "scan",
         // Принтеры у ПК и ПК у принтера – ссылками (этап 44): к какой таблице ведут
         links: c.kind === "printers" ? "printer" : (c.kind === "computers" ? "pc" : null),

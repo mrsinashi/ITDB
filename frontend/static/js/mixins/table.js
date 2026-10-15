@@ -253,6 +253,18 @@ export default {
           return this.displayRows.length;
         },
 
+        // Строка пустой таблицы (этап 61): поиск или фильтры ничего не нашли, архив пуст;
+        // пока строк нет вовсе (не загрузились) – ничего
+        emptyTableText() {
+            if (this.displayRows.length || !this.tableRows.length) {
+                return "";
+            }
+            if (this.rowCount) {
+                return "Ничего не найдено.";
+            }
+            return this.showArchive ? "Архив пуст." : "";
+        },
+
     },
 
     watch: {
@@ -1021,6 +1033,11 @@ export default {
             if (event.key === "Escape" && this.openMenu) {
                 event.stopPropagation();
                 this.closeMenus();
+                // Кнопка меню в фокусе после клавиши – браузер обвёл бы её толстой рамкой (этап 61)
+                const el = document.activeElement;
+                if (el && el.tagName === "BUTTON") {
+                    el.blur();
+                }
             }
         },
 

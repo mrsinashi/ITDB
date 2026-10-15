@@ -13,6 +13,9 @@
 
 import { listPosStyle, matchesAllWords, placeList, scrollToItem, searchNorm, searchWords, searchWordsIn } from "../util.js";
 
+// Высота строки списка (.loc-list .ll-item) – с запасом, для выбора «вниз или вверх»
+const SUGGEST_ITEM_HEIGHT = 22;
+
 export default {
     computed: {
         // Что показывать: пока не печатали – все значения, потом – по словам. По частям через
@@ -168,13 +171,15 @@ export default {
             }
         },
 
-        // Список под полем (или над ним, если снизу мало места); за краем окна не уходит
+        // Список под полем (или над ним, если снизу мало места); за краем окна не уходит.
+        // Короткому списку хватает места по его высоте, а не по 200px (этап 61)
         placeSuggest() {
             const s = this.suggest;
             if (!s || !s.el || !s.el.isConnected) {
                 return;
             }
-            s.pos = placeList(s.el, { width: 180, room: 200, height: 300, maxWidth: 420 });
+            const room = Math.min(200, this.suggestShown.length * SUGGEST_ITEM_HEIGHT + 8);
+            s.pos = placeList(s.el, { width: 180, room: room, height: 300, maxWidth: 420 });
         },
 
         scrollSuggestTo(index, center) {

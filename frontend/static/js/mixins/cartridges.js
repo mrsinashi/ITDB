@@ -44,8 +44,11 @@ export default {
             return rows;
         },
 
+        // При поиске – «Показано: X из N», как на других страницах (этап 61)
         cartridgesCountText() {
-            return "Картриджей: " + this.cartridges.length;
+            const all = this.cartridges.length;
+            const shown = this.cartridgesView.filter(function (item) { return item.cart; }).length;
+            return shown === all ? "Картриджей: " + all : "Показано: " + shown + " из " + all;
         }
     },
 
@@ -115,6 +118,7 @@ export default {
             if (!this.printerModels.length) {
                 this.loadPrinterModels();
             }
+            this.cartridgesHover = null;
             this.cartridgesBar = { kind: "new", name: "", models: "", error: "", saving: false, plate: null };
             this.showEditRow("cartridgesBar", "cb-name");
         },
@@ -193,10 +197,11 @@ export default {
             }
         },
 
-        // Плашка действий справа от таблицы, у строки под курсором (как у моделей)
+        // Плашка действий справа от таблицы, у строки под курсором (как у моделей);
+        // пока открыта строка правки, плашка – только её
         setCartridgesHover(c, rowEl) {
             if (this.canEdit) {
-                this.cartridgesHover = rowPlate(rowEl, ".users-wrap", { id: c.id, cart: c });
+                this.cartridgesHover = this.cartridgesBar ? null : rowPlate(rowEl, ".users-wrap", { id: c.id, cart: c });
             }
         },
 

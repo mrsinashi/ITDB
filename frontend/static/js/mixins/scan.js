@@ -448,6 +448,7 @@ export default {
                 this.subnetBar = null;
                 return;
             }
+            this.subnetHover = null;
             this.subnetBar = { kind: "new", cidr: "", purpose: "mixed", location_id: "", scan: true, note: "", error: "", saving: false, plate: null };
             this.showEditRow("subnetBar", "sb-cidr");
         },
@@ -590,8 +591,9 @@ export default {
             }
         },
 
+        // Пока открыта строка правки, плашка – только её (одна на блок)
         setSubnetHover(s, rowEl) {
-            this.subnetHover = rowPlate(rowEl, ".users-wrap", { id: s.id, subnet: s });
+            this.subnetHover = this.subnetBar ? null : rowPlate(rowEl, ".users-wrap", { id: s.id, subnet: s });
         },
     }
 };
