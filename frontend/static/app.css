@@ -915,6 +915,11 @@ body.ui-light-toolbar .toolbar .tb-error {
 .btn-primary:hover {
     background: var(--brand-dark);
 }
+/* ✓ «добавить / сохранить» значком – зелёная галочка на обычной белой кнопке, как ✓ в
+   строке правки (этап 63; раньше в строках под панелью – белая на цвете схемы) */
+.btn.btn-ok {
+    color: var(--success);
+}
 .btn-primary:disabled:hover {
     background: var(--brand);
 }
@@ -1803,18 +1808,26 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     color: var(--nav-text);
 }
 
+/* ✎ – значок Lucide, кнопкой как ⌄ справа (этап 63; символ шрифта на тёмном был еле виден) */
 .card-hostname .card-edit {
-    margin-left: 3px;
-    font-size: 14px;
-    font-weight: 400;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 20px;
+    margin-left: 2px;
+    vertical-align: -3px;
+    border-radius: var(--radius);
     color: var(--nav-text);
-    opacity: 0.8;
     cursor: pointer;
 }
-
+.card-hostname .card-edit svg {
+    width: 14px;
+    height: 14px;
+}
 .card-hostname .card-edit:hover {
     color: var(--on-accent);
-    opacity: 1;
+    background: var(--head-btn-hover);
 }
 
 /* Отметка «в архиве» рядом с именем: блочок в тон меню */
@@ -3159,6 +3172,17 @@ select.er-input {
 .st-row:hover {
     background: var(--row-hover-bg);
 }
+/* Кнопки оформления и ↺, корзина – только у строки под курсором (этап 63, аудит С3):
+   оформление и так видно на образце. Место под них остаётся – строка не прыгает; пока
+   открыт выбор цвета (поле в фокусе), кнопки видны и без мыши. Глаз «показывать» – всегда */
+.st-block .st-row .sc,
+.st-block .st-row .st-act > :not(.st-eye) {
+    visibility: hidden;
+}
+.st-block .st-row:is(:hover, :has(input:focus)) .sc,
+.st-block .st-row:is(:hover, :has(input:focus)) .st-act > :not(.st-eye) {
+    visibility: visible;
+}
 /* Первая строка – весь столбец: отделена линией потемнее */
 .st-colrow {
     background: var(--surface-sub);
@@ -3213,6 +3237,19 @@ select.er-input {
 }
 .st-del:hover {
     color: var(--danger-strong);
+}
+/* ↺ ✎ и корзина – значки Lucide 12px (этап 63) */
+.st-reset,
+.st-del,
+.st-ren {
+    display: inline-flex;
+    vertical-align: middle;
+}
+.st-reset svg,
+.st-del svg,
+.st-ren svg {
+    width: 12px;
+    height: 12px;
 }
 .st-values {
     max-height: 400px;
@@ -3269,10 +3306,11 @@ select.er-input {
 .sc-btn:hover {
     border-color: var(--light-border-hover);
 }
+/* Включённая – тёмно-серая, как включённые кнопки панели, не цветом схемы (этап 63) */
 .sc-btn.on {
-    background: var(--brand);
-    border-color: var(--brand-dark);
-    color: var(--on-accent);
+    background: var(--tb-ctrl-on-bg);
+    border-color: var(--tb-ctrl-on-border);
+    color: var(--tb-ctrl-on-text);
 }
 .sc-chip svg {
     width: 14px;
@@ -3341,8 +3379,14 @@ select.er-input {
     font-weight: 600;
     color: var(--text-strong);    white-space: nowrap;
 }
-.fd-sub {
-    color: var(--text-secondary);
+/* Обёртка пользовательских полей – для плашки действий справа снаружи рамки (этап 63) */
+.fd-wrap {
+    position: relative;
+    max-width: 600px;
+    margin-top: 14px;
+}
+.fd-wrap > .fd-panel {
+    margin-top: 0;
 }
 .fd-table {
     width: 100%;
@@ -3364,7 +3408,7 @@ select.er-input {
 .fd-table td + td {
     border-left: 1px solid var(--grid-line);
 }
-.fd-table tr:hover td {
+.fd-table tr:is(:hover, .is-hover) td {
     background: var(--row-hover-bg);
 }
 .fd-rename {
@@ -3376,18 +3420,6 @@ select.er-input {
     color: var(--text-secondary);
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     font-size: 11.5px;
-}
-.fd-actions {
-    width: 1%;
-    white-space: nowrap;
-    text-align: right;
-}
-.fd-actions .icon-btn {
-    height: 18px;
-}
-.fd-actions .icon-btn.off {
-    opacity: 0.3;
-    pointer-events: none;
 }
 .fd-table tr.reserved .fd-label {
     color: var(--text-muted);
@@ -3450,8 +3482,7 @@ select.er-input {
 .scan-page.accent-head .scan-on {
     color: var(--nav-text);
 }
-.choices-page.accent-head .st-head-n,
-.choices-page.accent-head .fd-sub {
+.choices-page.accent-head .st-head-n {
     color: var(--nav-text);
 }
 .choices-page.accent-head .st-tag,
@@ -4108,17 +4139,8 @@ body.login-page {
 .history-table.sm-table tbody tr.sm-detail .sm-compare:not(.short) tr:last-child td {
     border-bottom: none;
 }
-/* Акцентная шапка страницы – и у таблички: цвет схемы, линии как у большой шапки */
-.history-table.accent-head .sm-compare th,
-.history-table.sm-table.accent-head tbody tr.sm-detail .sm-compare th {
-    background: var(--brand);
-    color: var(--on-accent);
-    border-right: 1px solid var(--on-accent-soft);
-    border-bottom: 1px solid var(--brand-dark);
-}
-.history-table.sm-table.accent-head tbody tr.sm-detail .sm-compare th:last-child {
-    border-right-color: var(--brand-dark);
-}
+/* Шапка таблички серая и при акцентной шапке страницы – второго цветного пояса внутри
+   таблицы нет (этап 63, как табличка окна «История значения») */
 /* Подсветка строк большой таблицы под курсором и «у последней строки нет нижней
    линии» (.history-table tbody:last-child tr:last-child td) в табличку не попадают */
 .history-table.sm-table tbody tr.sm-detail .sm-compare td {
@@ -4934,8 +4956,6 @@ button.scan-chip {
     visibility: hidden;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 12px;
-    line-height: 14px;
 }
 .st-row:hover .st-ren {
     visibility: visible;
@@ -5060,10 +5080,6 @@ button.scan-chip {
 .st-act.av-name-act {
     flex-basis: 52px;
 }
-.st-act.av-act .st-reset {
-    font-size: 12px;
-    line-height: 14px;
-}
 /* Фильтр столбца «Антивирусы»: сверху – состояния */
 .cf-menu .cf-states {
     padding-bottom: 2px;
@@ -5146,7 +5162,7 @@ html.no-radius .card-sec-body .vac-dot {
 }
 /* Серое, заданное напрямую: рамки блочков и кнопок, точка «не в сети», счётчик */
 .sm-state.st-name,
-.st-row .sc-btn,
+.st-row .sc-btn:not(.on),
 .st-row .st-tag {
     border-color: var(--tint-line, var(--light-border));
 }
@@ -5400,9 +5416,15 @@ html.no-radius .card-sec-body .vac-dot {
 .runs-table td.rn-result.bad {
     color: var(--danger);
 }
-.sched-wrap .tree-actions .icon-btn.off {
+/* Недоступная кнопка плашки (Расписание, модели и картриджи «не удалить», крайнее поле
+   «Левее» / «Правее») – бледная; подсказка с причиной видна */
+.tree-actions .icon-btn.off {
     opacity: 0.4;
     cursor: default;
+}
+.tree-actions .icon-btn.off:hover {
+    background: none;
+    color: var(--text-secondary);
 }
 
 /* ============================================================
@@ -5783,15 +5805,21 @@ html.col-dragging * {
     min-width: 260px;
     margin-right: 0;
 }
+/* «Своё имя» у редактора – справа плашка «Снова по правилу» (этап 63) */
+.nr-layout > .nr-keep-wrap.nr-plated {
+    margin-right: 44px;
+}
 /* Ширина – по таблице; полоса прокрутки появляется – блок шире на неё (места
    под полосу заранее нет, этап 37) */
 .nr-layout .history-scroll {
     overflow-x: hidden;
 }
+/* Рамка уже таблицы не бывает (min-width блока) – таблица во всю рамку, без белой дыры в шапке */
 .nr-table,
 .nr-keep,
 .nr-pcs-table {
     width: auto;
+    min-width: 100%;
 }
 .nr-table td.nr-loc {
     padding-right: 24px;
@@ -5823,8 +5851,7 @@ html.col-dragging * {
     background: var(--sm-open-bg);
 }
 .nr-table td.nr-c,
-.nr-pcs-table td.nr-c,
-.nr-keep td.nr-c {
+.nr-pcs-table td.nr-c {
     width: 1%;
     text-align: center;
 }
@@ -5985,18 +6012,19 @@ html.col-dragging * {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.nr-keep td.nr-c {
-    padding: 2px 4px;
-}
-.nr-unkeep:hover {
-    color: var(--danger-strong);
-}
-/* «своё» – ПК с именем не по правилу, так и надо */
+/* «своё» – ПК с именем не по правилу, так и надо; рядом – «снова по правилу» */
 .name-kept {
     color: var(--text-muted);
 }
 .name-kept .nr-unkeep {
-    margin-left: 4px;
+    min-width: 18px;
+    height: 18px;
+    margin-left: 2px;
+    vertical-align: -5px;
+}
+.name-kept .nr-unkeep svg {
+    width: 12px;
+    height: 12px;
 }
 /* Блочок имени по правилу – в столбце «По правилу», справа на вкладке и в карточке */
 .scan-chip.name-chip {

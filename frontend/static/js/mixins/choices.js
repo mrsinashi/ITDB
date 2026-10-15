@@ -1,6 +1,6 @@
 // Страница «Справочники»: значения, оформление столбцов и значений, пользовательские поля.
 
-import { apiFetch, matchesAllWords, searchNorm, searchWords, searchWordsIn, setIfChanged, splitMulti } from "../util.js";
+import { apiFetch, matchesAllWords, rowPlate, searchNorm, searchWords, searchWordsIn, setIfChanged, splitMulti } from "../util.js";
 import { ROOM_COLUMN, ROOM_STYLE_FIELDS, columnTitle, decoration, ipSubnetKey, styleKey } from "../columns.js";
 
 const NO_STYLE = {};
@@ -470,6 +470,19 @@ export default {
                 this.recalcWidths();
             } catch (e) {
                 this.toastError("Не удалось создать: " + e);
+            }
+        },
+
+        // Плашка действий у строки поля (этап 63); после нажатия прячется, как в Дереве
+        setFdHover(fd, index, rowEl) {
+            this.fdHover = rowPlate(rowEl, ".fd-wrap", { fd: fd, i: index });
+        },
+
+        fdAction(method, arg) {
+            const hover = this.fdHover;
+            this.fdHover = null;
+            if (hover) {
+                this[method](hover.fd, arg);
             }
         },
 

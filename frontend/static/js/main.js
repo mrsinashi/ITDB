@@ -200,6 +200,7 @@ const app = Vue.createApp({
             choicesTab: "styles",
             namesQuery: "",
             namesHover: null,    // строка «Имён ПК» под курсором – плашка действий
+            nameKeepHover: null, // строка «Своего имени» под курсором – плашка «Снова по правилу» (этап 63)
             nameDraft: null,     // часть имени, которую сейчас вводят: { id узла, raw, part }
             nameSaving: false,
             nameKeep: {},        // «своё имя»: id ПК → { name, location_id, by, at }
@@ -344,6 +345,7 @@ const app = Vue.createApp({
             // Пользовательские поля
             fieldDefs: [],
             fieldDefsLoading: false,
+            fdHover: null,          // строка поля под курсором – плашка действий (этап 63)
             selectedRows: [],
             selectAnchorId: null,   // строка, от которой идёт Shift+клик
             activeRowId: null,      // последняя нажатая строка: Enter – VNC, Alt+P – ping, Alt+R – RDP

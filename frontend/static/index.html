@@ -298,7 +298,7 @@
                 <input ref="nc-hostname" class="input ab-host" v-model="newComputer.hostname" placeholder="HOSTNAME" spellcheck="false" @keydown.enter="submitNewComputer"
                     :title="newComputer.hostname && newComputer.hostname === newComputer.autoName ? 'Имя по правилу' : null">
                 <input ref="nc-ip" class="input ab-ip" v-model="newComputer.ip" placeholder="IP" spellcheck="false" autocomplete="off" @keydown="onNewIpKeydown" @input="onNewIpInput" @blur="closeIpSuggest">
-                <button class="btn btn-primary icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn btn-ok icon-only" :disabled="newComputerSaving" @click="submitNewComputer" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewComputer" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newComputerError" class="ab-error">{{ newComputerError }}</span>
                 <!-- Один / Несколько (этап 45): после добавления строка закрывается или остаётся (только на это открытие) -->
@@ -315,7 +315,7 @@
                 <input ref="np-name" class="input ab-host" v-model="newPrinter.name" placeholder="Имя" spellcheck="false" @keydown.enter="submitNewPrinter"
                     :title="newPrinter.name && newPrinter.name === newPrinter.autoName ? 'Имя по правилу' : null">
                 <input ref="np-ip" class="input ab-ip" v-model="newPrinter.ip" placeholder="IP" spellcheck="false" autocomplete="off" @input="onNewPrinterIpInput" @keydown.enter="submitNewPrinter">
-                <button class="btn btn-primary icon-only" :disabled="newPrinter.saving" @click="submitNewPrinter" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn btn-ok icon-only" :disabled="newPrinter.saving" @click="submitNewPrinter" title="Добавить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewPrinter" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newPrinter.error" class="ab-error">{{ newPrinter.error }}</span>
                 <button class="btn ab-many" :class="{ on: newPrinter.many }" :title="newPrinter.many ? 'После добавления – не закрывать' : 'После добавления – закрыть'" @click="newPrinter.many = !newPrinter.many">{{ newPrinter.many ? "Несколько" : "Один" }}</button>
@@ -332,7 +332,7 @@
                 <input ref="nm-model" class="input ab-host" v-model="newModel.model" placeholder="Модель" spellcheck="false">
                 <label class="ab-check"><input type="checkbox" v-model="newModel.color">цветной</label>
                 <label class="ab-check"><input type="checkbox" v-model="newModel.duplex">дуплекс</label>
-                <button class="btn btn-primary icon-only" :disabled="newModel.saving" @click="submitNewModel" title="Добавить модель (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn btn-ok icon-only" :disabled="newModel.saving" @click="submitNewModel" title="Добавить модель (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewModel" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newModel.error" class="ab-error">{{ newModel.error }}</span>
             </div>
@@ -343,7 +343,7 @@
                     placeholder="Отделение или этаж" @pick="onNewRoomParent"></location-picker>
                 <input ref="nr-code" class="input ab-seat" v-model="newRoom.code" placeholder="№ каб." title="Номер кабинета" spellcheck="false" @keydown.enter="submitNewRoom">
                 <input ref="nr-name" class="input ab-host" v-model="newRoom.name" placeholder="Название" spellcheck="false" @keydown.enter="submitNewRoom">
-                <button class="btn btn-primary icon-only" :disabled="newRoom.saving" @click="submitNewRoom" title="Добавить кабинет (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn btn-ok icon-only" :disabled="newRoom.saving" @click="submitNewRoom" title="Добавить кабинет (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeNewRoom" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="newRoom.error" class="ab-error">{{ newRoom.error }}</span>
             </div>
@@ -380,7 +380,7 @@
                         @focus="openBulkSuggest($event.target)" @click="!suggest && openBulkSuggest($event.target)" @input="onBulkSuggestInput($event.target)"
                         @keydown="suggestKeydown($event)" @blur="closeSuggest()">
                 </template>
-                <button class="btn btn-primary icon-only" :disabled="actionBar.saving" @click="submitAction" title="Выполнить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn btn-ok icon-only" :disabled="actionBar.saving" @click="submitAction" title="Выполнить (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeAction" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="actionBar.error" class="ab-error">{{ actionBar.error }}</span>
             </div>
@@ -481,19 +481,19 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Действия со строкой – плашка справа от таблицы -->
+                    <!-- Действия со строкой – плашка справа от таблицы; значки – Lucide, как на панели (этап 63) -->
                     <div v-if="treeHover" class="tree-actions" :style="{ top: treeHover.top + 'px', height: treeHover.height + 'px' }">
                         <span class="na-box">
                             <a class="icon-btn" :href="pageHref('table', { loc: treeHover.node.id })" title="Показать эти ПК в таблице" @click="navClick($event, () => treeAction('showLocationInTable'))">
-                                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.5h12M6 6.5V13"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
                             </a>
                             <template v-if="canEdit">
                                 <span class="na-sep"></span>
-                                <span class="icon-btn" title="Выше" @click="treeAction('moveLocationUp')">↑</span>
-                                <span class="icon-btn" title="Ниже" @click="treeAction('moveLocationDown')">↓</span>
-                                <span class="icon-btn" v-if="treeHover.node.kind !== 'room'" title="Добавить внутрь" @click="treeAction('openAddForm')">+</span>
-                                <span class="icon-btn" title="Изменить" @click="treeAction('openEditForm')">✎</span>
-                                <span class="icon-btn danger" title="Архивировать" @click="treeAction('archiveLocation')">✕</span>
+                                <span class="icon-btn" title="Выше" @click="treeAction('moveLocationUp')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></span>
+                                <span class="icon-btn" title="Ниже" @click="treeAction('moveLocationDown')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></span>
+                                <span class="icon-btn" v-if="treeHover.node.kind !== 'room'" title="Добавить внутрь" @click="treeAction('openAddForm')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+                                <span class="icon-btn" title="Изменить" @click="treeAction('openEditForm')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
+                                <span class="icon-btn danger" title="Архивировать" @click="treeAction('archiveLocation')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span>
                             </template>
                         </span>
                     </div>
@@ -595,7 +595,7 @@
                             <span v-if="b.extra" class="st-tag" title="Пользовательское поле">польз.</span>
                             <span v-if="b.orphan" class="st-tag" title="Справочник поля, которого нет в таблице">вне таблицы</span>
                             <span v-if="b.av" class="st-tag">из сканера</span>
-                            <span v-if="b.valuesOn" class="st-head-n" title="Значений">{{ b.values.length }}</span>
+                            <span v-if="b.valuesOn && b.values.length" class="st-head-n" title="Значений">{{ b.values.length }}</span>
                         </div>
                         <!-- Антивирусы (этап 26д): цвет по состоянию, что показывать; названия – скрыть ненужные -->
                         <template v-if="b.av">
@@ -606,7 +606,7 @@
                                     <span class="st-n" :title="'Антивирусов в таком состоянии: ' + (avStatusCounts[st.kind] || 0)">{{ avStatusCounts[st.kind] || 0 }}</span>
                                     <style-controls v-if="canEdit" extra :value="st" @change="updateAvSettings(Object.assign({ kind: st.kind }, $event))"></style-controls>
                                     <span class="st-act av-act">
-                                        <span v-if="canEdit && hasStyle(st)" class="st-reset" title="Сбросить оформление" @click="updateAvSettings({ kind: st.kind, color: '', bg_color: '', bold: false, italic: false, underline: false, strike: false })">↺</span>
+                                        <span v-if="canEdit && hasStyle(st)" class="st-reset" title="Сбросить оформление" @click="updateAvSettings({ kind: st.kind, color: '', bg_color: '', bold: false, italic: false, underline: false, strike: false })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
                                         <span class="st-eye" :class="{ off: !st.show, disabled: !canEdit }" :title="st.show ? 'Скрыть в таблице' : 'Показывать в таблице'"
                                             @click="canEdit && updateAvSettings({ kind: st.kind, show: !st.show })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><template v-if="st.show"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></template><template v-else><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></template></svg></span>
                                     </span>
@@ -620,8 +620,8 @@
                                             :title="(v.title ? v.title + '\nВ источнике: ' + v.name : v.name) + (canEdit ? '\nДвойной клик – своё название' : '')"><span v-if="v.title" class="av-own">{{ v.title }}</span><template v-else>{{ v.name }}</template></span>
                                         <span class="st-n" :title="'ПК с этим антивирусом: ' + v.count">{{ v.count }}</span>
                                         <span class="st-act av-act av-name-act">
-                                            <span v-if="canEdit" class="st-ren" title="Своё название" @click="startAvRename(v)">✎</span>
-                                            <span v-if="canEdit && v.title" class="st-reset" title="Вернуть название источника" @click="updateAvSettings({ rename: { source: v.name, name: '' } })">↺</span>
+                                            <span v-if="canEdit" class="st-ren" title="Своё название" @click="startAvRename(v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
+                                            <span v-if="canEdit && v.title" class="st-reset" title="Вернуть название источника" @click="updateAvSettings({ rename: { source: v.name, name: '' } })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
                                             <span class="st-eye" :class="{ off: v.hidden, disabled: !canEdit }" :title="v.hidden ? 'Показывать в таблице' : 'Скрыть в таблице'"
                                                 @click="canEdit && toggleAvHidden(v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><template v-if="!v.hidden"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></template><template v-else><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></template></svg></span>
                                         </span>
@@ -635,7 +635,7 @@
                             <span class="st-val"><span :class="sampleClass(b.field, null)" :style="effectiveStyle(b.field, null)">Весь столбец</span></span>
                             <span class="st-n"></span>
                             <style-controls v-if="canEdit" extra :value="columnStyles[b.field]" @change="setColumnStyle(b.field, $event)"></style-controls>
-                            <span class="st-act"><span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)">↺</span></span>
+                            <span class="st-act"><span v-if="canEdit && hasStyle(columnStyles[b.field])" class="st-reset" title="Сбросить оформление столбца" @click="resetColumnStyle(b.field)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span></span>
                         </div>
                         <!-- Тип VNC: чем подключаться к ПК, у которого он не указан (Enter по выбранной строке) -->
                         <div v-if="b.field === 'vnc'" class="st-row st-vnc" title="Подключение, если у ПК тип VNC не указан">
@@ -649,8 +649,8 @@
                                     <span class="st-n" :title="'ПК с этим значением: ' + v.count">{{ v.count }}</span>
                                     <style-controls v-if="canEdit" extra :value="v.choice" @change="setValueStyle(b.field, v, $event)"></style-controls>
                                     <span class="st-act">
-                                        <span v-if="canEdit && hasStyle(v.choice)" class="st-reset" title="Сбросить оформление" @click="resetValueStyle(b.field, v)">↺</span>
-                                        <span v-else-if="canEdit && v.choice && v.count === 0" class="st-del" title="Удалить из справочника (в таблице не встречается)" @click="deleteChoice(v.choice)">✕</span>
+                                        <span v-if="canEdit && hasStyle(v.choice)" class="st-reset" title="Сбросить оформление" @click="resetValueStyle(b.field, v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
+                                        <span v-else-if="canEdit && v.choice && v.count === 0" class="st-del" title="Удалить из справочника (в таблице не встречается)" @click="deleteChoice(v.choice)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                                     </span>
                                 </div>
                                 <div v-if="!b.values.length" class="st-empty">Значений пока нет</div>
@@ -665,17 +665,19 @@
                     </div>
                 </div>
 
+                <!-- Пользовательские поля; действия строки – плашкой справа снаружи рамки (этап 63) -->
+                <div class="fd-wrap" @mouseleave="fdHover = null">
                 <div class="fd-panel">
                     <div class="fd-head">
-                        <span class="fd-title">Пользовательские поля</span>
-                        <span class="fd-sub">столбцы перед «Статусом», в этом порядке</span>
+                        <span class="fd-title" title="Столбцы перед «Статусом», в этом порядке">Пользовательские поля</span>
                     </div>
                     <table v-if="fieldDefs.length" class="fd-table">
                         <thead>
-                            <tr><th>Название</th><th>Ключ</th><th v-if="canEdit"></th></tr>
+                            <tr><th>Название</th><th>Ключ</th></tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(fd, i) in fieldDefs" :key="fd.id" :class="{ reserved: fd.reserved }">
+                            <tr v-for="(fd, i) in fieldDefs" :key="fd.id" :class="{ reserved: fd.reserved, 'is-hover': fdHover && fdHover.fd.id === fd.id }"
+                                @mouseenter="setFdHover(fd, i, $event.currentTarget)">
                                 <td class="fd-label">
                                     <input v-if="fieldDefEdit && fieldDefEdit.id === fd.id" class="input fd-rename" v-model="fieldDefEdit.label"
                                         @keydown.enter="saveRenameFieldDef(fd)" @keydown.esc="fieldDefEdit = null" @blur="saveRenameFieldDef(fd)">
@@ -683,21 +685,25 @@
                                     <span v-if="fd.reserved" class="field-def-warn" title="Создай поле с другим ключом">ключ занят встроенным полем – не показывается</span>
                                 </td>
                                 <td><code class="fd-key">{{ fd.key }}</code></td>
-                                <td v-if="canEdit" class="fd-actions">
-                                    <span class="icon-btn" :class="{ off: i === 0 }" title="Левее в таблице" @click="moveFieldDef(fd, -1)">↑</span>
-                                    <span class="icon-btn" :class="{ off: i === fieldDefs.length - 1 }" title="Правее в таблице" @click="moveFieldDef(fd, 1)">↓</span>
-                                    <span class="icon-btn" title="Переименовать" @click="startRenameFieldDef(fd)">✎</span>
-                                    <span class="icon-btn danger" title="Архивировать" @click="archiveFieldDef(fd)">✕</span>
-                                </td>
                             </tr>
                         </tbody>
                     </table>
                     <div v-else-if="!fieldDefsLoading" class="fd-empty">Пользовательских полей пока нет.</div>
                     <div v-if="canEdit" class="fd-add">
                         <input class="input fd-add-label" v-model="newFieldDef.label" placeholder="Название столбца" @keydown.enter="addFieldDef">
-                        <input class="input fd-add-key" v-model="newFieldDef.key" placeholder="ключ_латиницей" title="Латиница, цифры и _. Потом не меняется" @keydown.enter="addFieldDef">
-                        <button class="btn btn-primary" @click="addFieldDef">Добавить поле</button>
+                        <input class="input fd-add-key" v-model="newFieldDef.key" placeholder="Ключ" title="Ключ: латиница, цифры и _. Потом не меняется" @keydown.enter="addFieldDef">
+                        <button class="btn" title="Добавить поле" @click="addFieldDef">+</button>
                     </div>
+                </div>
+                <div v-if="canEdit && fdHover" class="tree-actions" :style="{ top: fdHover.top + 'px', height: fdHover.height + 'px' }">
+                    <span class="na-box">
+                        <span class="icon-btn" :class="{ off: fdHover.i === 0 }" title="Левее в таблице" @click="fdAction('moveFieldDef', -1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></span>
+                        <span class="icon-btn" :class="{ off: fdHover.i === fieldDefs.length - 1 }" title="Правее в таблице" @click="fdAction('moveFieldDef', 1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></span>
+                        <span class="icon-btn" title="Переименовать" @click="fdAction('startRenameFieldDef')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
+                        <span class="na-sep"></span>
+                        <span class="icon-btn danger" title="Архивировать" @click="fdAction('archiveFieldDef')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span>
+                    </span>
+                </div>
                 </div>
 
                 <!-- Выделения значений в Таблице (этап 26к): повтор, имя на ПК другое, логины VACUUM, срок -->
@@ -712,7 +718,7 @@
                                 <td class="smk-label">{{ m.label }}</td>
                                 <td>
                                     <style-controls v-if="canEdit" :value="m" extra @change="updateTableMark(m.kind, $event)"></style-controls>
-                                    <span v-if="canEdit && m.changed" class="st-reset" title="Вернуть как было" @click="updateTableMark(m.kind, { reset: true })">↺</span>
+                                    <span v-if="canEdit && m.changed" class="st-reset" title="Вернуть как было" @click="updateTableMark(m.kind, { reset: true })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
                                 </td>
                             </tr>
                         </table>
@@ -722,8 +728,7 @@
                 <!-- Значения сканера в Таблице (этапы 26б, 26в): цвет блочка по ситуации, показывать ли без кнопки -->
                 <div v-if="scanMarks.length" class="fd-panel scan-marks-panel">
                     <div class="fd-head">
-                        <span class="fd-title">Значения сканера</span>
-                        <span class="fd-sub">блочки в ячейках таблицы</span>
+                        <span class="fd-title" title="Блочки в ячейках таблицы">Значения сканера</span>
                     </div>
                     <div class="scan-marks-body">
                         <table class="scan-marks-table">
@@ -731,16 +736,8 @@
                                 <td class="smk-sample-td"><span class="scan-chip" :class="{ off: !m.enabled }" :style="scanChipStyle(m)">{{ scanLegendSample(m.kind) }}</span></td>
                                 <td class="smk-label">{{ scanMarkHint(m.kind) }}</td>
                                 <td>
-                                    <style-controls v-if="canEdit" :value="m" @change="updateScanMark(m.kind, $event)"></style-controls>
-                                    <span v-if="canEdit" class="sc">
-                                        <label class="sc-btn sc-color sc-bg" :class="{ set: !!m.frame }" :title="m.frame ? 'Рамка блочка ' + m.frame + '\nCtrl + клик – убрать' : 'Рамка блочка – в тон фона'"
-                                            @click.capture="($event.ctrlKey || $event.metaKey) && ($event.preventDefault(), m.frame && updateScanMark(m.kind, { frame: '' }))">
-                                            <span class="sc-swatch sc-frame" :style="{ borderColor: m.frame || null }"></span>
-                                            <input type="color" :value="m.frame || '#9db4cc'" @change="updateScanMark(m.kind, { frame: $event.target.value })">
-                                        </label>
-                                        <button type="button" class="sc-btn" :class="{ on: m.strike }" title="Зачёркивать значение таблицы" @click="updateScanMark(m.kind, { strike: !m.strike })"><s>З</s></button>
-                                    </span>
-                                    <span v-if="canEdit && scanMarkHasStyle(m)" class="st-reset" title="Убрать оформление" @click="updateScanMark(m.kind, { color: '', bg_color: '', frame: '', bold: false, italic: false, strike: false })">↺</span>
+                                    <style-controls v-if="canEdit" :value="m" frame @change="updateScanMark(m.kind, $event)"></style-controls>
+                                    <span v-if="canEdit && scanMarkHasStyle(m)" class="st-reset" title="Убрать оформление" @click="updateScanMark(m.kind, { color: '', bg_color: '', frame: '', bold: false, italic: false, strike: false })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
                                 </td>
                                 <td><label title="Показывать такие значения сканера"><input type="checkbox" :checked="m.enabled" :disabled="!canEdit" @change="updateScanMark(m.kind, { enabled: $event.target.checked })"> Показывать</label></td>
                                 <td><label title="Показывать всегда"><input type="checkbox" :checked="m.always" :disabled="!canEdit || !m.enabled" @change="updateScanMark(m.kind, { always: $event.target.checked })"> Без кнопки</label></td>
@@ -786,7 +783,7 @@
                         <div v-if="namesHover" class="tree-actions" :style="{ top: namesHover.top + 'px', height: namesHover.height + 'px' }">
                             <span class="na-box">
                                 <a class="icon-btn" :href="pageHref('table', { loc: namesHover.node.id })" title="Показать в таблице" @click="navClick($event, () => showNamesInTable(namesHover.node, false))">
-                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.5h12M6 6.5V13"/></svg>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
                                 </a>
                             </span>
                         </div>
@@ -803,7 +800,7 @@
                                         <tr class="nr-sel-head">
                                             <td colspan="3"><span class="nr-sel-in"><span class="nr-sel-title" :title="(treeIndex[nameSelId] || {}).path">{{ nameSelTitle }}</span>
                                                 <button v-if="canEdit && nameSelFixes.length" class="btn nr-rename-all" @click="renameNodeByRule" title="Все ПК узла – по правилу">Переименовать: {{ nameSelFixes.length }}</button>
-                                                <span class="icon-btn nr-sel-close" title="Закрыть (Esc)" @click="nameSelId = null">✕</span></span></td>
+                                                <span class="icon-btn nr-sel-close" title="Закрыть (Esc)" @click="nameSelId = null"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></span></td>
                                         </tr>
                                         <tr v-if="!nameSelRows.length" class="h-empty"><td colspan="3">ПК нет.</td></tr>
                                         <template v-for="item in nameSelRows" :key="item.key">
@@ -813,7 +810,7 @@
                                                 <td class="nr-host"><a :href="pageHref('table', { pc: item.row.id })" @click="navClick($event, () => openNameKeepPc(item.row))">{{ item.row.hostname || "–" }}</a></td>
                                                 <td class="nr-want">
                                                     <template v-if="item.check">
-                                                        <span v-if="item.check.kept" class="name-kept" :title="'Своё имя · правило ' + nameRuleText(item.check.entry)">своё<span v-if="canEdit" class="icon-btn danger nr-unkeep" title="Снова по правилу" @click="setNameKeepFor([item.row.id], false)">✕</span></span>
+                                                        <span v-if="item.check.kept" class="name-kept" :title="'Своё имя · правило ' + nameRuleText(item.check.entry)">своё<span v-if="canEdit" class="icon-btn nr-unkeep" title="Снова по правилу" @click="setNameKeepFor([item.row.id], false)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span></span>
                                                         <button v-else-if="!item.check.ok" type="button" class="scan-chip name-chip" :class="{ open: namePop && namePop.row.id === item.row.id }"
                                                             :title="'Правило: ' + nameRuleText(item.check.entry)" @click="openNamePop(item.row, $event)">{{ item.check.expected }}</button>
                                                         <span v-else class="nr-ok" title="По правилу">✓</span>
@@ -827,23 +824,28 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Ничего не выбрано – ПК со своим именем: не по правилу, и так и надо -->
-                    <div v-else-if="nameKeepRows.length" class="users-wrap nr-side-wrap nr-keep-wrap">
+                    <!-- Ничего не выбрано – ПК со своим именем: не по правилу, и так и надо; «снова по правилу» – плашкой (этап 63) -->
+                    <div v-else-if="nameKeepRows.length" class="users-wrap nr-side-wrap nr-keep-wrap" :class="{ 'nr-plated': canEdit }" @mouseleave="nameKeepHover = null">
                         <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
-                            <div class="history-scroll">
+                            <div class="history-scroll" @scroll="nameKeepHover = null">
                                 <table class="history-table users-table nr-keep" :class="{ 'accent-head': accentHeaders.choices }">
                                     <thead>
-                                        <tr><th>Своё имя</th><th>Расположение</th><th v-if="canEdit" class="nr-c"></th></tr>
+                                        <tr><th>Своё имя</th><th>Расположение</th></tr>
                                     </thead>
                                     <tbody>
-                                        <tr v-for="k in nameKeepRows" :key="k.row.id">
+                                        <tr v-for="k in nameKeepRows" :key="k.row.id" :class="{ 'is-hover': nameKeepHover && nameKeepHover.id === k.row.id }"
+                                            @mouseenter="setNameKeepHover(k.row, $event.currentTarget)">
                                             <td class="nr-host"><a :href="pageHref('table', { pc: k.row.id })" :title="'Оставил ' + k.by" @click="navClick($event, () => openNameKeepPc(k.row))">{{ k.row.hostname }}</a></td>
                                             <td class="nr-path" :title="k.path">{{ k.place }}</td>
-                                            <td v-if="canEdit" class="nr-c"><span class="icon-btn danger nr-unkeep" title="Снова по правилу" @click="setNameKeepFor([k.row.id], false)">✕</span></td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                        <div v-if="canEdit && nameKeepHover" class="tree-actions" :style="{ top: nameKeepHover.top + 'px', height: nameKeepHover.height + 'px' }">
+                            <span class="na-box">
+                                <span class="icon-btn" title="Снова по правилу" @click="unkeepHoverName"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -900,9 +902,9 @@
                     </div>
                     <div v-if="modelsHover" class="tree-actions" :style="{ top: modelsHover.top + 'px', height: modelsHover.height + 'px' }">
                         <span class="na-box">
-                            <span class="icon-btn" title="Изменить" @click="openEditModel(modelsHover.model)">✎</span>
+                            <span class="icon-btn" title="Изменить" @click="openEditModel(modelsHover.model)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                             <span class="na-sep"></span>
-                            <span class="icon-btn danger" :class="{ off: modelsHover.model.printers || modelsHover.model.archived_printers }" :title="modelDeleteTitle(modelsHover.model)" @click="deleteModel(modelsHover.model)">✕</span>
+                            <span class="icon-btn danger" :class="{ off: modelsHover.model.printers || modelsHover.model.archived_printers }" :title="modelDeleteTitle(modelsHover.model)" @click="deleteModel(modelsHover.model)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                         </span>
                     </div>
                     <div v-if="modelsBar && modelsBar.plate" class="tree-actions er-plate" :style="{ top: modelsBar.plate.top + 'px', height: modelsBar.plate.height + 'px' }">
@@ -952,9 +954,9 @@
                     </div>
                     <div v-if="cartridgesHover" class="tree-actions" :style="{ top: cartridgesHover.top + 'px', height: cartridgesHover.height + 'px' }">
                         <span class="na-box">
-                            <span class="icon-btn" title="Изменить" @click="openEditCartridge(cartridgesHover.cart)">✎</span>
+                            <span class="icon-btn" title="Изменить" @click="openEditCartridge(cartridgesHover.cart)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                             <span class="na-sep"></span>
-                            <span class="icon-btn danger" :class="{ off: cartridgesHover.cart.models.length }" :title="cartridgesHover.cart.models.length ? 'Подходит моделям – не удалить' : 'Удалить'" @click="deleteCartridge(cartridgesHover.cart)">✕</span>
+                            <span class="icon-btn danger" :class="{ off: cartridgesHover.cart.models.length }" :title="cartridgesHover.cart.models.length ? 'Подходит моделям – не удалить' : 'Удалить'" @click="deleteCartridge(cartridgesHover.cart)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                         </span>
                     </div>
                     <div v-if="cartridgesBar && cartridgesBar.plate" class="tree-actions er-plate" :style="{ top: cartridgesBar.plate.top + 'px', height: cartridgesBar.plate.height + 'px' }">
@@ -1167,7 +1169,7 @@
                     </div>
                     <div v-if="usersHover" class="tree-actions" :style="{ top: usersHover.top + 'px', height: usersHover.height + 'px' }">
                         <span class="na-box">
-                            <span class="icon-btn" title="Изменить" @click="openEditUser(usersHover.user)">✎</span>
+                            <span class="icon-btn" title="Изменить" @click="openEditUser(usersHover.user)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                             <template v-if="!usersHover.user.is_self">
                                 <span class="na-sep"></span>
                                 <span v-if="!usersHover.user.archived" class="icon-btn danger" title="Отключить: не сможет войти" @click="setUserArchived(usersHover.user, true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/></svg></span>
@@ -1283,7 +1285,7 @@
                 <input ref="sl-seat" class="input ab-seat" v-model="scanLinkBar.pc.seat_no" placeholder="№ места" title="№ Места – только число">
                 <input ref="sl-hostname" class="input ab-host" v-model="scanLinkBar.pc.hostname" placeholder="HOSTNAME" spellcheck="false">
                 <input ref="sl-ip" class="input ab-ip" v-model="scanLinkBar.pc.ip" placeholder="IP" spellcheck="false" autocomplete="off" @input="onIpInput($event, scanLinkBar.pc, 'ip')">
-                <button class="btn btn-primary icon-only" :disabled="scanLinkBar.pc.saving" @click="submitScanNewPc" title="Добавить и привязать (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                <button class="btn btn-ok icon-only" :disabled="scanLinkBar.pc.saving" @click="submitScanNewPc" title="Добавить и привязать (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="closeScanNewPc" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 <span v-if="scanLinkBar.pc.error" class="ab-error">{{ scanLinkBar.pc.error }}</span>
             </div>
@@ -1467,7 +1469,7 @@
                     </div>
                     <div v-if="subnetHover" class="tree-actions" :style="{ top: subnetHover.top + 'px', height: subnetHover.height + 'px' }">
                         <span class="na-box">
-                            <span class="icon-btn" title="Изменить" @click="openEditSubnet(subnetHover.subnet)">✎</span>
+                            <span class="icon-btn" title="Изменить" @click="openEditSubnet(subnetHover.subnet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                             <span class="na-sep"></span>
                             <span v-if="subnetHover.subnet.scan" class="icon-btn" title="Не сканировать" @click="setSubnetScan(subnetHover.subnet, false)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span>
                             <span v-else class="icon-btn" title="Сканировать" @click="setSubnetScan(subnetHover.subnet, true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
@@ -1830,7 +1832,7 @@
                     <div v-if="scanNames.hover" class="tree-actions" :style="{ top: scanNames.hover.top + 'px', height: scanNames.hover.height + 'px' }">
                         <span class="na-box">
                             <span v-if="scanNames.hover.name.origin === 'manual'" class="icon-btn danger" title="Удалить" @click="deleteScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
-                            <span v-else class="icon-btn danger" title="Это разное" @click="differScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                            <span v-else class="icon-btn danger" title="Это разное" @click="differScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14"/><path d="M5 15h14"/><path d="M19 5 5 19"/></svg></span>
                         </span>
                     </div>
                 </div>
@@ -2056,7 +2058,7 @@
                 <input v-if="!isAdmin" ref="webAskLogin" class="input" v-model="webAsk.login" placeholder="Логин администратора" spellcheck="false" autocomplete="off">
                 <span class="wa-row">
                     <input ref="webAskPassword" class="input" type="password" v-model="webAsk.password" :placeholder="isAdmin ? 'Ваш пароль' : 'Пароль'" autocomplete="off">
-                    <button class="btn btn-primary icon-only" :disabled="webAsk.busy" title="Показать (Enter)" @click="submitWebAsk"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                    <button class="btn btn-ok icon-only" :disabled="webAsk.busy" title="Показать (Enter)" @click="submitWebAsk"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 </span>
                 <div v-if="webAsk.error" class="wa-error">{{ webAsk.error }}</div>
             </div>
@@ -2089,7 +2091,7 @@
                 <div class="card-head">
                     <span v-if="!pcardNameEdit" class="card-hostname">
                         <span :class="{ 'copy-val': pcard.name }" :title="pcard.name ? 'Скопировать' : null" @click="pcard.name && copyText(pcard.name)">{{ pcard.name || "Без имени" }}<svg v-if="pcard.name" class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
-                        <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startPcardName">✎</span>
+                        <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startPcardName"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                         <span v-if="pcard.archived" class="card-archived" title="Принтер в архиве: его нет в таблице и выгрузке">в архиве</span>
                     </span>
                     <span v-else class="card-hostname-edit">
@@ -2166,7 +2168,7 @@
                 <div class="card-head">
                     <span v-if="!editingHostname" class="card-hostname">
                         <span :class="{ 'copy-val': card.hostname }" :title="card.hostname ? 'Скопировать' : null" @click="card.hostname && copyText(card.hostname)">{{ card.hostname || "Без имени" }}<svg v-if="card.hostname" class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
-                        <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startEditHostname">✎</span>
+                        <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startEditHostname"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                         <span v-if="card.archived" class="card-archived" title="Компьютер в архиве: его нет в таблице, дереве и выгрузке">в архиве</span>
                     </span>
                     <span v-else class="card-hostname-edit">

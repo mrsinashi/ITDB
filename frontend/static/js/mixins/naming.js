@@ -295,6 +295,7 @@ export default {
         setChoicesTab(tab) {
             this.choicesTab = tab;
             this.namesHover = null;
+            this.nameKeepHover = null;
             if (tab === "names") {
                 this.ensureTree();
                 this.loadNameKeep();
@@ -401,6 +402,16 @@ export default {
 
         setNamesHover(node, rowEl) {
             this.namesHover = rowPlate(rowEl, ".nr-wrap", { node: node });
+        },
+
+        setNameKeepHover(row, rowEl) {
+            this.nameKeepHover = rowPlate(rowEl, ".nr-keep-wrap", { id: row.id });
+        },
+
+        unkeepHoverName() {
+            const id = this.nameKeepHover.id;
+            this.nameKeepHover = null;
+            this.setNameKeepFor([id], false);
         },
 
         // Клик по строке – справа её ПК; ещё раз – снять. Клик в имени – в поле части
