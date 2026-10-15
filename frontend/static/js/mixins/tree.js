@@ -1,10 +1,26 @@
 // Страница «Дерево»: узлы, поиск, форма узла, ширина колонки.
 
-import { apiFetch, highlightParts, matchesAllWords, searchNorm, searchWords, searchWordsIn, rowPlate, setIfChanged } from "../util.js";
+import { apiFetch, highlightParts, loadJson, matchesAllWords, saveJson, searchNorm, searchWords, searchWordsIn, rowPlate, setIfChanged } from "../util.js";
 import { kindLabels } from "../columns.js";
-import { computeTreeWidth, treeNodeTexts } from "../tree-utils.js";
+import { KIND_ICONS, computeTreeWidth, treeFormWidth, treeNodeTexts } from "../tree-utils.js";
+
+// Раскрытые узлы Структуры – в браузере (этап 62): список id
+const TREE_OPEN_KEY = "itdb.treeOpen.v1";
+
+function loadTreeOpen() {
+    const state = {};
+    const ids = loadJson(TREE_OPEN_KEY, []);
+    (Array.isArray(ids) ? ids : []).forEach(function (id) { state[id] = true; });
+    return state;
+}
 
 export default {
+    data() {
+        return {
+            treeOpenState: loadTreeOpen()
+        };
+    },
+
     computed: {
         // Поиск по дереву: self – совпали сами, anc – предки совпавших
         treeMatch() {
@@ -45,6 +61,25 @@ export default {
                 walk(this.treeRoots, [], "");
             }
             return { query: q, words: words, self: self, anc: anc, size: self.size };
+        },
+
+        // Ширина колонки дерева: по самому широкому узлу; пока открыта форма узла – не уже,
+        // чем нужно её полям и кнопкам одной строкой на её уровне (этап 62)
+        treeBoxWidth() {
+            const width = this.treeWidth + this.treeScrollbar;
+            const f = this.treeForm;
+            if (!f) {
+                return width;
+            }
+            // Форма – под узлом (правка) или его родителем (добавление), уровнем ниже
+            let level = 0;
+            if (!f.top) {
+                const id = f.action === "add" ? f.parentId : f.nodeId;
+                for (let e = this.treeIndex[id]; e; e = this.treeIndex[e.node.parent_id]) {
+                    level++;
+                }
+            }
+            return Math.max(width, treeFormWidth(level) + this.treeScrollbar);
         },
     },
 
@@ -139,7 +174,7 @@ export default {
         },
 
         // Раскрыт ли узел: по умолчанию всё свёрнуто; что раскрыл пользователь –
-        // остаётся раскрытым до перезагрузки страницы
+        // помнится в браузере (этап 62)
         isTreeOpen(node, level) {
             const state = this.treeOpenState[node.id];
             return state === true;
@@ -147,6 +182,16 @@ export default {
 
         setTreeOpen(id, open) {
             this.treeOpenState[id] = open;
+            this.saveTreeOpen();
+        },
+
+        // Только раскрытые и только узлы, которые есть в дереве (ушедшие в архив – забываются)
+        saveTreeOpen() {
+            const state = this.treeOpenState;
+            const index = this.treeIndex;
+            const known = Object.keys(index).length > 0;
+            const ids = Object.keys(state).filter(function (id) { return state[id] && (!known || index[id]); });
+            saveJson(TREE_OPEN_KEY, ids.map(Number));
         },
 
         setAllTreeOpen(open) {
@@ -161,6 +206,7 @@ export default {
             };
             walk(this.treeRoots);
             this.treeOpenState = state;
+            this.saveTreeOpen();
         },
 
         expandAllTree() {
@@ -274,23 +320,25 @@ export default {
             this.treeFormError = "";
         },
 
-        // Куда можно добавить узел этого типа – для формы на панели
+        // Куда можно добавить узел этого типа (форма с панели), где может быть кабинет –
+        // варианты для выбора места в форме, в порядке дерева (этап 62)
         treeParentOptions(kind) {
             const parentKinds = {
                 department: ["building"],
                 floor: ["department"],
                 room: ["department", "floor"]
             }[kind] || [];
-            return Object.keys(this.treeIndex)
-                .map((id) => this.treeIndex[id])
-                .filter(function (e) { return parentKinds.indexOf(e.node.kind) !== -1; })
-                .map(function (e) { return { id: e.node.id, path: e.path }; })
-                .sort(function (a, b) { return a.path.localeCompare(b.path, "ru", { numeric: true }); });
+            return this.locationOptions.filter(function (o) { return parentKinds.indexOf(o.kind) !== -1; });
+        },
+
+        // Значок типа узла – как в дереве (меню «+», этап 62)
+        treeKindIcon(kind) {
+            return KIND_ICONS[kind] || KIND_ICONS.room;
         },
 
         async submitTreeForm() {
             const form = this.treeForm;
-            if (!form) {
+            if (!form || form.saving) {
                 return;
             }
             this.treeFormError = "";
@@ -302,6 +350,8 @@ export default {
                     return;
                 }
             }
+            // Enter дважды подряд – один запрос
+            form.saving = true;
             try {
                 let response;
                 if (form.action === "add") {
@@ -343,6 +393,7 @@ export default {
                     }
                 }
             } catch (e) {
+                form.saving = false;
                 this.treeFormError = String(e.message || e);
             }
         },

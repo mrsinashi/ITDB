@@ -193,7 +193,6 @@ const app = Vue.createApp({
             treeForm: null,
             treeFormError: "",
             treeIndex: {},
-            treeOpenState: {},
             treeQuery: "",
             choicesQuery: "",
             choicesPos: 0,

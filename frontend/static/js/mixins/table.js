@@ -382,6 +382,10 @@ export default {
                 } else {
                     await Promise.all([this.loadTable(), this.loadDiffs(), this.loadVacuumOnline(true), this.loadPrinters()]);
                     this.refreshCardRow();
+                    // Карточка – и её история, «Пользователи», «VACUUM» (этап 62)
+                    if (this.card) {
+                        this.reloadCardHistory(this.card.id);
+                    }
                 }
             } finally {
                 this.tableRefreshing = false;

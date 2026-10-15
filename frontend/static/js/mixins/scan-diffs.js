@@ -881,6 +881,10 @@ export default {
         async afterDiffChange() {
             await Promise.all([this.loadDiffs(), this.loadTable()]);
             this.refreshCardRow();
+            // Открытая карточка ПК: история, «Пользователи» и «VACUUM» – с принятым (этап 62)
+            if (this.card) {
+                this.reloadCardHistory(this.card.id);
+            }
             this.reloadCheckIfShown();
         },
 

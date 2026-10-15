@@ -22,6 +22,22 @@ export const TREE = {
     border: 2,       // рамка таблицы
     min: 300
 };
+// Форма узла (tree-form, этап 62): код, название и кнопки – одной строкой. Те же числа – в
+// app.css (.tree-form)
+export const TREE_FORM = {
+    padR: 8,         // отступ формы справа
+    code: 74,        // поле «Код»: 60 + поля и рамка
+    name: 150,       // поле «Название» – не уже
+    button: 28       // кнопка ✓ / ✕
+};
+
+// Ширина колонки, при которой форма уровня level помещается одной строкой
+export function treeFormWidth(level) {
+    return TREE.padL + level * TREE.indent + TREE.toggle + TREE.gap +
+        TREE_FORM.code + TREE.gap + TREE_FORM.name + TREE.gap + TREE_FORM.button * 2 + TREE.gap +
+        TREE_FORM.padR + TREE.border;
+}
+
 // Шрифт по типу узла: [размер, жирность, заглавные]
 export const TREE_FONTS = {
     building: [13, 600, false],

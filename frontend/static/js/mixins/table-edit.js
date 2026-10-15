@@ -95,6 +95,68 @@ export default {
             } else if (event.key === "Escape") {
                 event.preventDefault();
                 this.cancelEdit();
+            } else if (event.key === "Tab") {
+                event.preventDefault();
+                // Выбранная в списке подсказка – как по Enter (у картриджей выбор только дописывает
+                // часть – там сохраняется набранное)
+                const s = this.suggest;
+                const option = s && !s.tokens && s.active >= 0 ? this.suggestShown[s.active] : null;
+                if (option) {
+                    this.editValue = option.value;
+                }
+                this.editNextCell(row, col, event.shiftKey ? -1 : 1);
+            }
+        },
+
+        // Tab / Shift+Tab (этап 62, как в Excel): сохранить и править следующую ячейку строки справа /
+        // слева. Пропускаются те, что правятся не полем: расположение (одно на все его столбцы),
+        // «Доступ», подключения ПК – принтер, значения модели принтера, «По правилу»
+        editNextCell(row, col, dir) {
+            const cols = this.viewColumns;
+            let next = null;
+            for (let i = cols.findIndex((c) => c.field === col.field) + dir; i >= 0 && i < cols.length; i += dir) {
+                const c = cols[i];
+                if (c.editable && !c.location && !c.secret && !c.links && !c.fromModel && !c.virtual) {
+                    next = c;
+                    break;
+                }
+            }
+            this.saveEdit(row, col);
+            if (next) {
+                this.startEdit(row, next);
+                this.$nextTick(() => this.revealEditCell(row));
+            }
+        },
+
+        // Ячейка правки за краем таблицы или под закреплёнными столбцами – прокрутить вбок к ней
+        revealEditCell(row) {
+            const wrap = this.$refs.tableWrap;
+            const tr = this.$refs.table && this.$refs.table.querySelector('tbody tr[data-id="' + row.id + '"]');
+            const td = tr && tr.querySelector("td.editing");
+            if (!wrap || !td) {
+                return;
+            }
+            // Закреплённые стоят поверх прокрутки: видимое – между ними
+            let left = wrap.getBoundingClientRect().left;
+            let right = left + wrap.clientWidth;
+            let before = true;
+            tr.querySelectorAll("td").forEach(function (cell) {
+                if (cell === td) {
+                    before = false;
+                } else if (cell.classList.contains("sticky")) {
+                    const r = cell.getBoundingClientRect();
+                    if (before) {
+                        left = Math.max(left, r.right);
+                    } else {
+                        right = Math.min(right, r.left);
+                    }
+                }
+            });
+            const r = td.getBoundingClientRect();
+            if (r.left < left) {
+                wrap.scrollLeft -= Math.ceil(left - r.left);
+            } else if (r.right > right) {
+                wrap.scrollLeft += Math.ceil(Math.min(r.right - right, r.left - left));
             }
         },
 

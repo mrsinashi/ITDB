@@ -1627,11 +1627,13 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     100% { opacity: 0; }
 }
 .data-table td.cell-saved,
-.card-table tr.ct-saved td.ct-value {
+.card-table tr.ct-saved td.ct-value,
+.card-sec-body.ct-saved {
     isolation: isolate;
 }
 .data-table td.cell-saved::before,
-.card-table tr.ct-saved td.ct-value::before {
+.card-table tr.ct-saved td.ct-value::before,
+.card-sec-body.ct-saved::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -2026,7 +2028,13 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 
 .card-sec-body {
+    position: relative;
     padding: 0 10px 6px;
+}
+/* Правка раздела «Пользователи» / «VACUUM» (этап 62): редактор поверх раздела, текст в нём –
+   там же, где текст раздела (сверху у поля 4px – столько же у редактора строки) */
+.card-sec-body .sec-edit {
+    top: -4px;
 }
 /* Под VACUUM строки не подсвечиваются бежевым – значок серый */
 .card-sec-body .copy-ico {
@@ -2411,12 +2419,13 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     background: transparent;
 }
 
-/* Форма добавления/правки – строкой под узлом, со сдвигом его детей */
+/* Форма добавления/правки – строкой под узлом, со сдвигом его детей. Раскладка одна (этап 62):
+   подпись, место – во всю ширину (путь бывает длинным), код, название и кнопки – одной
+   строкой; колонку под неё расширяет treeFormWidth (tree-utils.js, те же числа) */
 .tree-form {
     --lvl: 0;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-direction: column;
     gap: 5px;
     padding: 4px 8px 4px calc(6px + var(--lvl) * 18px + 17px);
     background: var(--surface-sub);
@@ -2429,10 +2438,11 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     top: var(--block-head);
     z-index: 4;
 }
-/* «Куда» – отдельной строкой: путь бывает длинным */
-.tree-form .tf-parent {
-    flex: 1 1 100%;
-    min-width: 0;
+.tree-form .tf-head,
+.tree-form .tf-fields {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 .tree-form .tf-title {
     color: var(--text-secondary);
@@ -2440,14 +2450,21 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 .tree-form .input {
     padding: 2px 6px;
 }
+.tree-form .tf-place .input {
+    width: 100%;
+    box-sizing: border-box;
+}
 .tree-form .tf-code {
+    flex: none;
     width: 60px;
 }
 .tree-form .tf-name {
-    flex: 1 1 140px;
-    min-width: 120px;
+    flex: 1 1 150px;
+    min-width: 0;
+    box-sizing: border-box;
 }
 .tree-form .btn {
+    flex: none;
     padding: 2px 9px;
 }
 .tree-form .btn.icon-only,
@@ -2460,12 +2477,7 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     width: 14px;
     height: 14px;
 }
-.tree-form .tf-buttons {
-    display: flex;
-    gap: 5px;
-}
 .tree-form .tf-error {
-    flex-basis: 100%;
     color: var(--danger);
 }
 

@@ -1,4 +1,6 @@
-// Форма добавления/правки узла – прямо в дереве, под узлом
+// Форма добавления/правки узла – прямо в дереве, под узлом. Раскладка одна (этап 62):
+// подпись, место (список с поиском, как в «Новый компьютер»), код и название с кнопками –
+// одной строкой; колонка дерева на это время не уже, чем нужно полям (treeBoxWidth)
 
 import { kindLabels } from "../columns.js";
 
@@ -46,12 +48,33 @@ export default {
                 return "Внутри: " + f.path;
             }
             return f.action !== "add" && f.path ? f.path : null;
+        },
+        // Место: с панели – куда добавить; у кабинета в правке – где он (этап 58)
+        placeOptions() {
+            const f = this.form;
+            if (f.top && f.kind !== "building") {
+                return this.root.treeParentOptions(f.kind);
+            }
+            if (f.action === "edit" && f.kind === "room") {
+                return this.root.treeParentOptions("room");
+            }
+            return null;
+        },
+        // У кабинета код – его номер
+        codeHint() {
+            return this.form.kind === "room" ? { short: "№ каб.", title: "Номер кабинета" } : { short: "Код", title: "Код" };
         }
     },
     mounted() {
-        const input = this.$el.querySelector && this.$el.querySelector("input");
-        if (input) {
-            input.focus();
+        // Фокус: место, пока не выбрано; у нового кабинета – номер; иначе – название
+        const f = this.form;
+        if (f && this.placeOptions && !f.parentId) {
+            const place = this.$refs.place && this.$refs.place.$refs.input;
+            if (place) {
+                place.focus();
+            }
+        } else {
+            this.focusField();
         }
         // Форма с панели прилипает под шапкой и не уезжает при прокрутке;
         // прилипший адрес встаёт под неё – ему нужна её высота (--tf-h)
@@ -70,6 +93,24 @@ export default {
         }
     },
     methods: {
+        focusField() {
+            const f = this.form;
+            const input = f && f.action === "add" && f.kind === "room" && this.$refs.code ? this.$refs.code : this.$refs.name;
+            if (input) {
+                input.focus();
+            }
+        },
+        onPlace(id) {
+            this.form.parentId = id;
+            this.$nextTick(() => this.focusField());
+        },
+        // Enter на кнопке – это её нажатие, не отправка формы второй раз
+        onEnter(event) {
+            if (event.target.tagName !== "BUTTON") {
+                event.preventDefault();
+                this.submit();
+            }
+        },
         submit() {
             this.root.submitTreeForm();
         },
@@ -80,24 +121,20 @@ export default {
             return kindLabels[kind] || kind;
         }
     },
+    // Enter – у всей формы: открытый список места забирает его себе
     template: `
-        <div class="tree-form" v-if="form" :class="{ 'tf-top': form.top }" :style="{ '--lvl': level }" @keydown.esc.stop="cancel">
-            <span class="tf-title" :title="titleHint">{{ title }}</span>
-            <select v-if="form.kinds.length > 1" class="input" v-model="form.kind" @change="form.top && (form.parentId = null)">
-                <option v-for="k in form.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
-            </select>
-            <select v-if="form.top && form.kind !== 'building'" class="input tf-parent" v-model="form.parentId" title="Куда добавить">
-                <option :value="null" disabled>Куда…</option>
-                <option v-for="o in root.treeParentOptions(form.kind)" :key="o.id" :value="o.id">{{ o.path }}</option>
-            </select>
-            <!-- Кабинет – в другое отделение или на этаж (этап 58) -->
-            <select v-if="form.action === 'edit' && form.kind === 'room'" class="input tf-parent" v-model="form.parentId" title="Где">
-                <option v-for="o in root.treeParentOptions('room')" :key="o.id" :value="o.id">{{ o.path }}</option>
-            </select>
-            <input v-if="form.kind !== 'floor'" class="input tf-code" v-model="form.code" @keydown.enter="submit" placeholder="Код"
-                title="Необязательно. У кабинета – его номер">
-            <input class="input tf-name" v-model="form.name" @keydown.enter="submit" placeholder="Название">
-            <span class="tf-buttons">
+        <div class="tree-form" v-if="form" :class="{ 'tf-top': form.top }" :style="{ '--lvl': level }" @keydown.esc.stop="cancel" @keydown.enter="onEnter">
+            <span class="tf-head">
+                <span class="tf-title" :title="titleHint">{{ title }}</span>
+                <select v-if="form.kinds.length > 1" class="input" v-model="form.kind" title="Что добавить" @change="form.top && (form.parentId = null)">
+                    <option v-for="k in form.kinds" :key="k" :value="k">{{ kindLabel(k) }}</option>
+                </select>
+            </span>
+            <location-picker v-if="placeOptions" ref="place" class="tf-place" input-class="input" :value="form.parentId" :options="placeOptions"
+                :placeholder="form.action === 'add' ? 'Куда' : 'Где'" @pick="onPlace"></location-picker>
+            <span class="tf-fields">
+                <input v-if="form.kind !== 'floor'" ref="code" class="input tf-code" v-model="form.code" :placeholder="codeHint.short" :title="codeHint.title" spellcheck="false">
+                <input ref="name" class="input tf-name" v-model="form.name" placeholder="Название" title="Название" spellcheck="false">
                 <button class="btn btn-primary icon-only" @click="submit" :title="form.action === 'add' ? 'Добавить (Enter)' : 'Сохранить (Enter)'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
                 <button class="btn icon-only" @click="cancel" title="Отмена (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </span>

@@ -5,8 +5,19 @@ import { UI_OPTIONS } from "../settings.js";
 import { apiFetch } from "../util.js";
 import { CARD_EDIT_EXTRA } from "../columns.js";
 
+// Разделы карточки ПК под таблицей, которые правятся как её строки (этап 62): ФИО – поле, как
+// в ячейке; VACUUM – логины строками. sec – редактор раздела, а не строки таблицы
+const CARD_SECTIONS = {
+    user: { key: "user", sec: true },
+    vacuum: { key: "vacuum", sec: true }
+};
+
 export default {
     computed: {
+        cardSec() {
+            return CARD_SECTIONS;
+        },
+
         cardRoom() {
             if (!this.card) {
                 return "";
@@ -139,7 +150,7 @@ export default {
             }
             const value = this.card[col.field];
             this.cardEditValue = value === null || value === undefined ? "" : String(value);
-            this.focusCardEditor("cardEditor", col.multiline ? null : (input) => {
+            this.focusCardEditor(r.sec ? "cardSecEditor" : "cardEditor", col.multiline ? null : (input) => {
                 this.openSuggest(input, col, (value) => {
                     this.cardEditValue = value;
                     this.saveCardEdit(r);
@@ -170,14 +181,17 @@ export default {
 
         growCardEditor(el) {
             const td = el.closest("td");
-            if (!td) {
+            // Раздел «Пользователи» / «VACUUM» (этап 62): редактор выше на 4px – текст в нём там же,
+            // где текст раздела
+            const sec = td ? null : el.closest(".card-sec-body");
+            if (!td && !sec) {
                 return;
             }
             // Ширина – ровно по ячейке: clientWidth округляется вверх, и на
             // дробном масштабе (125%) редактор вылезал на 1px – снизу
             // появлялась полоса прокрутки
             el.style.width = "100%";
-            el.style.height = td.clientHeight + "px";
+            el.style.height = (td ? td.clientHeight : sec.clientHeight + 4) + "px";
             if (el.scrollHeight > el.clientHeight) {
                 el.style.height = el.scrollHeight + 2 + "px";
             }
@@ -243,7 +257,8 @@ export default {
             return list.filter(function (item) { return !item.cancelled; });
         },
 
-        // Открыта карточка этого ПК (принтера) – перечитать её историю после правки
+        // Открыта карточка этого ПК (принтера) – перечитать её историю после правки, у ПК – и
+        // разделы «Пользователи» и «VACUUM» (их правят и в карточке, и в таблице, этап 62)
         async reloadCardHistory(id, printer) {
             const open = () => {
                 const card = printer ? this.pcard : this.card;
@@ -257,11 +272,14 @@ export default {
                 if (!response.ok || !open()) {
                     return;
                 }
-                const history = (await response.json()).history || [];
+                const data = await response.json();
+                const history = data.history || [];
                 if (printer) {
                     this.pcardHistory = history;
                 } else {
                     this.cardHistory = history;
+                    this.cardPeople = data.people || [];
+                    this.cardVacuum = data.vacuum || [];
                 }
             } catch (e) {
                 // не страшно: история обновится при следующем открытии
