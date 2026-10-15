@@ -222,8 +222,22 @@ export default {
                 : rows;
         },
 
-        displayRows() {
+        // Id показанных строк; null – показаны все (поиска и фильтров нет)
+        shownRowIds() {
             const rows = this.filteredRows;
+            return rows.length === this.modeRows.length ? null : new Set(rows.map(function (row) { return row.id; }));
+        },
+
+        // Показанные строки по порядку сортировки
+        displayRows() {
+            const shown = this.shownRowIds;
+            return shown ? this.sortedRows.filter(function (row) { return shown.has(row.id); }) : this.sortedRows;
+        },
+
+        // Все строки режима по порядку сортировки – их рисует таблица; поиск и фильтры
+        // строки прячут, а не удаляют (этап 65): очистка поиска не создаёт 600 строк заново
+        sortedRows() {
+            const rows = this.modeRows;
             if (!this.sortField || !this.sortDir) {
                 return rows;
             }
@@ -249,6 +263,25 @@ export default {
             });
         },
 
+        // Строка ниже для линий сетки (свойство below у table-row) – по индексу в sortedRows: у
+        // показанной – следующая показанная, у спрятанной – следующая в таблице (её не видно, зато
+        // показ и прятанье её не перерисовывают)
+        belowRows() {
+            const rows = this.sortedRows;
+            const shown = this.shownRowIds;
+            const below = new Array(rows.length);
+            let next = null;
+            for (let i = rows.length - 1; i >= 0; i--) {
+                if (!shown || shown.has(rows[i].id)) {
+                    below[i] = next;
+                    next = rows[i];
+                } else {
+                    below[i] = rows[i + 1] || null;
+                }
+            }
+            return below;
+        },
+
         displayedCount() {
           return this.displayRows.length;
         },
@@ -270,6 +303,14 @@ export default {
     watch: {
         searchHidden(value) {
             saveJson(SEARCH_HIDDEN_KEY, value);
+        },
+
+        // Поиск или фильтры сменились – спрятать и показать строки, когда Vue их уже нарисовал
+        displayRows: {
+            handler() {
+                this.syncHiddenRows();
+            },
+            flush: "post"
         },
 
         // Сняли выделение – меню действий больше не нужно
@@ -1229,6 +1270,39 @@ export default {
             this.setHoverRow(null);
         },
         
+        // Строки, не прошедшие поиск и фильтры, – атрибутом hidden прямо у элемента (этап 65):
+        // Vue строку не перерисовывает, браузер только убирает её с экрана и возвращает.
+        // Новую строку прячет она сама (mounted в table-row.js)
+        isRowShown(id) {
+            const shown = this.shownRowIds;
+            return !shown || shown.has(id);
+        },
+
+        syncHiddenRows() {
+            const body = this.$refs.table && this.$refs.table.tBodies[0];
+            if (!body) {
+                return;
+            }
+            let changed = false;
+            Array.prototype.forEach.call(body.rows, (tr) => {
+                // строка «Ничего не найдено» – без data-id
+                const hide = tr.dataset.id !== undefined && !this.isRowShown(Number(tr.dataset.id));
+                if (tr.hidden !== hide) {
+                    tr.hidden = hide;
+                    changed = true;
+                }
+            });
+            if (!changed) {
+                return;
+            }
+            // Строка под курсором спряталась – подсветка у неё не остаётся; полоска нажатой
+            // строки – на её новом месте
+            if (this.hoverRowEl && this.hoverRowEl.hidden) {
+                this.setHoverRow(null);
+            }
+            this.placeRowMark();
+        },
+
         refreshHoverFromPoint() {
             if (this.lastMouseX === undefined || this.lastMouseY === undefined) {
                 return;

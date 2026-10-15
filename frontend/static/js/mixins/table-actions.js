@@ -204,7 +204,8 @@ export default {
         scrollToRow(id) {
             const wrap = this.$refs.tableWrap;
             const tr = wrap && wrap.querySelector('tr[data-id="' + id + '"]');
-            if (!tr) {
+            // Спрятана поиском или фильтром (этап 65) – как будто её нет
+            if (!tr || tr.hidden) {
                 return false;
             }
             const w = wrap.getBoundingClientRect();

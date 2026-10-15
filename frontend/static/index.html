@@ -416,9 +416,10 @@
                     </thead>
                     <tbody>
                         <!-- Строка – компонент table-row (js/components/table-row.js, этап 52): перерисовывается,
-                             только когда меняется то, что в ней видно. При открытии – когда пришло всё (этап 59) -->
+                             только когда меняется то, что в ней видно. При открытии – когда пришло всё (этап 59).
+                             Рисуются все строки режима, поиск и фильтры их прячут (этап 65, syncHiddenRows) -->
                         <template v-if="tableReady">
-                            <tr is="vue:table-row" v-for="(row, i) in displayRows" :key="row.id" :row="row" :below="displayRows[i + 1] || null"
+                            <tr is="vue:table-row" v-for="(row, i) in sortedRows" :key="row.id" :row="row" :below="belowRows[i]"
                                 :selected="selectedSet.has(row.id)" :edit-field="editingRowId === row.id ? editingField : null"></tr>
                             <!-- Ничего не нашлось, архив пуст (этап 61) – строкой, как в Истории -->
                             <tr v-if="emptyTableText" class="tbl-empty"><td :colspan="viewColumns.length"><span>{{ emptyTableText }}</span></td></tr>
