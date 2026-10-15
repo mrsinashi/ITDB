@@ -6968,3 +6968,248 @@ a.pr-web:hover {
 .net-scan-menu .ns-only:hover {
     color: var(--menu-hover-text);
 }
+
+/* ============================================================
+   Окно записи журнала «Движение» (этап 66, просьба пользователя): с затемнением, без типа –
+   посередине, с типом – выше (top – из moveWinStyle) и растёт вниз; свёрнутое – полоска
+   заголовка (тянется мышью), видна на всех страницах
+   ============================================================ */
+.mw-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    background: var(--dialog-overlay);
+}
+.dialog.mw {
+    position: fixed;
+    z-index: 181;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 560px;
+    display: flex;
+    flex-direction: column;
+    transition: top 0.15s ease-out, transform 0.15s ease-out;
+}
+.dialog.mw.typed {
+    transform: translate(-50%, 0);
+}
+.dialog.mw.min {
+    left: 16px;
+    top: auto;
+    bottom: 16px;
+    width: 340px;
+    transform: none;
+    transition: none;
+}
+.mw.min .mw-head {
+    cursor: move;
+    user-select: none;
+}
+.mw-head .vh-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.mw-head .mw-min {
+    margin-right: -8px;
+}
+.mw-head .vh-close svg {
+    width: 14px;
+    height: 14px;
+}
+.mw-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    outline: none;
+}
+/* Подпись | поле – как в карточке ПК; группы – серой строкой */
+.mw-form {
+    width: 100%;
+    border-collapse: collapse;
+}
+.mw-form th,
+.mw-form td {
+    padding: 2px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+}
+.mw-form th {
+    width: 140px;
+    font-weight: 400;
+    color: var(--text-strong);
+    background: var(--surface-alt);
+    border-right: 1px solid var(--border);
+    white-space: nowrap;
+}
+.mw-form tr:last-child th,
+.mw-form tr:last-child td {
+    border-bottom: none;
+}
+.mw-form tr.mw-group td {
+    padding: 4px 10px;
+    background: var(--gray-group);
+    border-top: 1px solid var(--gray-line);
+    border-bottom: 1px solid var(--gray-line);
+    color: var(--text-strong);
+    font-weight: 600;
+}
+.mw-form tr.mw-group .mw-gname {
+    margin-right: 10px;
+}
+/* «Понятное название», как получится в таблице */
+.mw-form tr.mw-group .mw-preview {
+    font-weight: 400;
+    color: var(--text);
+}
+.mw-form td .input {
+    width: 100%;
+    box-sizing: border-box;
+}
+.mw-form .loc-pick {
+    display: block;
+}
+.mw-form .loc-pick input {
+    width: 100%;
+    box-sizing: border-box;
+}
+.mw-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mw-line + .mw-line {
+    margin-top: 4px;
+}
+.mw-form td .input.mw-short {
+    flex: none;
+    width: 84px;
+}
+.mw-form td .input.mw-grow {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.mw-form td .input.mw-kind {
+    flex: none;
+    width: 90px;
+}
+.mw-form td .input.mw-maker {
+    flex: none;
+    width: 130px;
+}
+.mw-unit {
+    color: var(--text-secondary);
+}
+.mw-gap {
+    flex: 1 1 auto;
+}
+.mw-form .ab-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+.mw-form .ab-check input {
+    margin: 0;
+}
+.mw-form .btn {
+    padding: 2px 9px;
+}
+/* Выбор с крестиком «очистить» справа в поле */
+.mw-pick {
+    position: relative;
+}
+.mw-pick .loc-pick input {
+    padding-right: 22px;
+}
+.mw-clear {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 15px;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.mw-clear:hover {
+    color: var(--text);
+}
+.mw-form textarea.mw-note {
+    display: block;
+    min-height: 36px;
+    resize: vertical;
+}
+.mw-error {
+    display: block;
+    margin-top: 4px;
+    color: var(--danger);
+}
+/* Один / Несколько – слева, как справа у строки «Новый компьютер» */
+.mw-foot .btn.ab-many {
+    order: -1;
+    margin-right: auto;
+    min-width: 84px;
+    justify-content: center;
+}
+.mw-foot .btn.ab-many.on {
+    background: var(--tb-ctrl-on-bg);
+    border-color: var(--tb-ctrl-on-border);
+    color: var(--tb-ctrl-on-text);
+}
+.dialog-buttons.mw-foot .vh-error {
+    margin-right: 0;
+}
+
+/* Дата блоками (components/date-parts.js): день, месяц, год – без календаря и стрелок */
+.dp {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+.dp-part {
+    box-sizing: border-box;
+    padding: 3px 0;
+    font-size: 12px;
+    line-height: 15px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+}
+.dp-part.dp-d,
+.dp-part.dp-m {
+    width: 34px;
+}
+.dp-part.dp-y {
+    width: 48px;
+}
+.dp-part.empty {
+    color: var(--text-muted);
+}
+.dp-part:focus,
+.dp-part.open {
+    outline: none;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+.dp-dot {
+    color: var(--text-secondary);
+}
+.dp-list .ll-item {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.dp-list .ll-item:hover {
+    background: var(--menu-hover-bg);
+    color: var(--menu-hover-text);
+}

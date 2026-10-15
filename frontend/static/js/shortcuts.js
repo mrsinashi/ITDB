@@ -18,10 +18,10 @@ window.addEventListener("blur", function () {
     setCtrlDown(false);
 });
 
-// Ctrl+F и Alt+F – в поиск текущего раздела
+// Ctrl+F и Alt+F – в поиск текущего раздела (не за окном записи журнала – этап 66)
 window.addEventListener("keydown", function (event) {
     const ctrl = event.ctrlKey || event.metaKey;
-    if (event.code === "KeyF" && !event.shiftKey && (ctrl !== event.altKey)) {
+    if (event.code === "KeyF" && !event.shiftKey && (ctrl !== event.altKey) && !(window.itdbTable && window.itdbTable.moveWinOpen)) {
         const input = Array.from(document.querySelectorAll(".tb-search input")).find(function (el) {
             return el.offsetParent !== null;
         });
@@ -80,6 +80,15 @@ window.addEventListener("keydown", function (event) {
         } else if (event.key === "Enter") {
             event.preventDefault();
             vm.closeDialog(true);
+        }
+        return;
+    }
+    // Окно записи журнала (этап 66): Esc – закрыть (открытые списки закрываются своим Esc
+    // раньше); сочетания страницы за окном не работают
+    if (vm.moveWinOpen) {
+        if (event.key === "Escape" && !event.defaultPrevented) {
+            event.preventDefault();
+            vm.closeMoveWin();
         }
         return;
     }

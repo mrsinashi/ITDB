@@ -29,8 +29,8 @@ from fastapi import HTTPException
 
 from api_column_styles import is_empty
 from api_columns import (
-    EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY, PRINTER_COLUMNS_BY_KEY, PRINTER_EDITABLE_KEYS,
-    PRINTER_HISTORY_LABELS,
+    EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY, MOVE_COLUMNS_BY_KEY, MOVE_HISTORY_LABELS,
+    PRINTER_COLUMNS_BY_KEY, PRINTER_EDITABLE_KEYS, PRINTER_HISTORY_LABELS,
 )
 from api_computers import (
     DATE_FIELDS,
@@ -46,6 +46,10 @@ from api_computers import (
 from api_locations import (
     check_can_archive, check_duplicate, check_place, clean, move_room, room_parent, validate_name_code,
 )
+from api_moves import (
+    DATE_FIELDS as MOVE_DATE_FIELDS, SPEC_FIELDS as MOVE_SPEC_FIELDS, TEXT_FIELDS as MOVE_TEXT_FIELDS,
+    move_change_value, move_display, move_names, move_value, set_move_value,
+)
 from api_naming import RULE_FIELDS, set_rule
 from api_printers import (
     apply_printer_fields, check_model, clean_model_value, model_title, printer_display, printer_value,
@@ -55,7 +59,7 @@ from api_users import ROLES, check_login_free, clean_login, clean_text, end_sess
 from cartridges import check_name as check_cartridge_name, model_cartridges_text, set_model_cartridges
 from history_labels import SIMPLE_FIELD_LABELS
 from history_log import choice_title, column_label
-from models import Cartridge, Choice, ColumnStyle, Computer, FieldDef, History, Location, Person, Printer, PrinterModel, User
+from models import Cartridge, Choice, ColumnStyle, Computer, FieldDef, History, Location, Move, Person, Printer, PrinterModel, User
 from printer_links import computer_title, links_ids, links_text, printer_title, printers_by_computer
 from scan_decisions import DECISION_ENTITIES, apply_decision, check_decision
 
@@ -104,7 +108,14 @@ SIMPLE_LABELS = {
 # У модели принтера color – не «Цвет текста», а «Печать»
 MODEL_LABELS = {"color": "Печать"}
 
-ENTITIES = ("computers", "locations", "printers") + tuple(SIMPLE)
+ENTITIES = ("computers", "locations", "printers", "moves") + tuple(SIMPLE)
+
+# Записи журнала «Движение» (этап 66): поля со значением (тип, модель принтера, «Куда»,
+# «Установил» – по номерам, api_moves.move_value)
+MOVE_VALUE_FIELDS = (
+    set(MOVE_TEXT_FIELDS) | set(MOVE_DATE_FIELDS) | MOVE_SPEC_FIELDS
+    | {"archived", "item_type", "printer_model", "dest", "installer"}
+)
 
 # Не отменяются: создание, удаление (удалённое не вернуть), смена пароля
 # (с этапа 44 – и логина и пароля Web у принтера)
@@ -133,7 +144,11 @@ def moved_room(record, field):
 def undo_phase(ref, field, cancel):
     """Порядок полей одной отмены (этап 58): ПК и принтеры – в прежний кабинет, потом созданный
     переносом кабинет – в архив (он уже пуст), потом кабинет – на прежнее место (пустой такой же
-    там уже не мешает). Восстановление – наоборот."""
+    там уже не мешает). Восстановление – наоборот. У записи журнала (этап 66) тип – всегда
+    первым: от него зависит, какие поля у записи есть."""
+    if ref.entity == "moves":
+        return -1 if field == "item_type" else 0
+
     phase = {"created": 1, "parent_id": 2}.get(field, 0) if ref.entity == "locations" else 0
     return phase if cancel else -phase
 
@@ -165,6 +180,9 @@ def field_kind(entity, field):
     if entity == "printers":
         return "value" if field in PRINTER_EDITABLE_KEYS or field in ("archived", "location_id") else "info"
 
+    if entity == "moves":
+        return "value" if field in MOVE_VALUE_FIELDS else "info"
+
     if field in ("archived", "location_id") or field.startswith("extra."):
         return "value"
 
@@ -189,6 +207,10 @@ def field_label(session, entity, field):
     if entity == "printers":
         column = PRINTER_COLUMNS_BY_KEY.get(field)
         return column.card if column is not None else PRINTER_HISTORY_LABELS.get(field, field)
+
+    if entity == "moves":
+        column = MOVE_COLUMNS_BY_KEY.get(field)
+        return column.card if column is not None else MOVE_HISTORY_LABELS.get(field, field)
 
     if entity == "locations":
         return LOCATION_LABELS.get(field, HISTORY_LABELS.get(field, field))
@@ -221,7 +243,7 @@ def find_object(session, ref, lock=True):
         obj = session.get(ColumnStyle, ref.entity_key)
         return obj or ColumnStyle(field=ref.entity_key, **{name: False for name in STYLE_FLAGS})
 
-    models = {"computers": Computer, "locations": Location, "printers": Printer}
+    models = {"computers": Computer, "locations": Location, "printers": Printer, "moves": Move}
     model = models.get(ref.entity) or SIMPLE[ref.entity]["model"]
     query = session.query(model).filter(model.id == ref.entity_id)
 
@@ -249,6 +271,9 @@ def object_title(session, obj, ref):
 
     if entity == "printers":
         return obj.name or f"Принтер #{obj.id}"
+
+    if entity == "moves":
+        return move_names(session, [obj.id]).get(obj.id) or f"#{obj.id}"
 
     if entity == "printer_models":
         return model_title(obj)
@@ -338,6 +363,10 @@ class Values:
         if entity == "printers" and field == "model":
             return change.get(side + "_id")
 
+        # Запись журнала (этап 66): тип, модель, «Куда», «Установил» – по номерам
+        if entity == "moves":
+            return move_change_value(field, change, side)
+
         if (entity, field) in LINK_FIELDS and side + "_ids" in change:
             return change[side + "_ids"]
 
@@ -353,6 +382,9 @@ class Values:
 
         if entity == "printers":
             return printer_value(self.session, obj, field)
+
+        if entity == "moves":
+            return move_value(self.session, obj, field)
 
         if field == "archived":
             return obj.archived
@@ -383,6 +415,9 @@ class Values:
         """Значение для показа (у расположения – путь)."""
         if entity == "printers" and field == "model":
             return printer_display(self.session, field, value)
+
+        if entity == "moves":
+            return move_display(self.session, field, value)
 
         if (entity, field) in LINK_FIELDS and isinstance(value, list):
             return links_display(self.session, entity, value)
@@ -441,6 +476,9 @@ def set_value(session, entity, obj, field, value, batch, user, check=True):
 
     if entity == "printers":
         return set_printer_value(session, obj, field, value, batch)
+
+    if entity == "moves":
+        return set_move_value(session, obj, field, value)
 
     if field == "archived":
         value = bool(value)
@@ -675,7 +713,7 @@ def set_simple_value(session, entity, obj, field, value, user, batch=None):
 def touch(entity, obj):
     """ПК или принтер изменился без новой записи истории – версия +1 (правка из
     таблицы со старой версией получит «обнови таблицу»)."""
-    if entity in ("computers", "printers"):
+    if entity in ("computers", "printers", "moves"):
         obj.version = (obj.version or 1) + 1
         obj.updated_at = datetime.now(timezone.utc)
 

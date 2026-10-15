@@ -29,8 +29,14 @@ export default {
 
         // Адрес в строке браузера – как у открытой страницы (без записи в журнал переходов)
         syncHash() {
-            const page = this.view === "scan" ? "scan/" + this.scanTab
-                : (this.view === "choices" && this.choicesTab !== "styles" ? "choices/" + this.choicesTab : this.view);
+            let page = this.view;
+            if (this.view === "scan") {
+                page = "scan/" + this.scanTab;
+            } else if (this.view === "journals") {
+                page = "journals/" + this.journalTab;
+            } else if (this.view === "choices" && this.choicesTab !== "styles") {
+                page = "choices/" + this.choicesTab;
+            }
             const hash = pageLink(page);
             if (window.location.hash !== hash) {
                 try {

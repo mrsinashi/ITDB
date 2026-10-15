@@ -158,12 +158,14 @@ export default {
             this.closeWebEdit();
             this.hideWebShown();
             this.closeLinkPick();
-            // Таблица показывает ПК или принтеры (этап 44): её настройки – меняются местами
-            this.switchTableKind(view === "printers" ? "printer" : "pc");
+            // Таблица показывает ПК, принтеры или журнал (этапы 44, 66): её настройки – меняются местами
+            this.switchTableKind(view === "printers" ? "printer" : (view === "journals" ? "moves" : "pc"));
             this.view = view;
             this.scanPop = null;
             if (view === "table") {
                 this.loadDiffs();
+            } else if (view === "journals") {
+                this.openJournals();
             } else if (view === "printers") {
                 this.loadPrinters();
                 this.loadPrinterModels();

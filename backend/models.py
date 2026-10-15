@@ -240,6 +240,60 @@ class PrinterComputer(Base):
     usb = Column(Boolean, nullable=False, server_default="false")
 
 
+class ItemType(Base):
+    """Тип техники или компонента для журналов (этап 66): «Компьютер», «Диск»… kind – tech
+    (техника) или part (компонент); form – из каких полей складывается «Понятное название»
+    (computer, printer, monitor, disk, ram; info – одно поле «Информация»). Название – без
+    повторов без учёта регистра (индекс uq_item_types_name_lower)."""
+    __tablename__ = "item_types"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
+    kind = Column(Text, nullable=False)
+    form = Column(Text, nullable=False, server_default="info")
+    sort = Column(Integer, nullable=False, server_default="0")
+
+
+class Move(Base):
+    """Запись журнала «Движение» (этап 66): техника или компонент – откуда и когда получены,
+    куда и кем установлены. specs – поля «Понятного названия» по виду типа ({"cpu": …});
+    у принтеров и МФУ вместо них – модель из справочника (printer_model_id). Даты – текстом
+    «ГГГГ», «ГГГГ-ММ» или «ГГГГ-ММ-ДД» (день и месяц можно не знать). Куда – узел дерева или
+    ПК (ПК – только у компонентов); установил – пользователь программы или вписанное имя."""
+    __tablename__ = "moves"
+
+    id = Column(Integer, primary_key=True)
+    type_id = Column(Integer, ForeignKey("item_types.id"), nullable=False)
+    name_1c = Column(Text, nullable=True)
+    model = Column(Text, nullable=True)
+    printer_model_id = Column(Integer, ForeignKey("printer_models.id"), nullable=True)
+    specs = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+
+    inv_no = Column(Text, nullable=True)
+    serial = Column(Text, nullable=True)
+    country = Column(Text, nullable=True)
+    made = Column(Text, nullable=True)
+    bought = Column(Text, nullable=True)
+    supplier = Column(Text, nullable=True)
+    source = Column(Text, nullable=True)
+    received = Column(Text, nullable=True)
+
+    dest_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    dest_computer_id = Column(Integer, ForeignKey("computers.id"), nullable=True)
+    installed = Column(Text, nullable=True)
+    installer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    installer = Column(Text, nullable=True)
+
+    status = Column(Text, nullable=True)
+    note = Column(Text, nullable=True)
+
+    # Удаления нет – только архив, как у ПК и принтеров
+    archived = Column(Boolean, nullable=False, server_default="false")
+
+    version = Column(Integer, nullable=False, server_default="1")
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class History(Base):
     __tablename__ = "history"
 

@@ -289,6 +289,10 @@ export default {
         // Строка пустой таблицы (этап 61): поиск или фильтры ничего не нашли, архив пуст;
         // пока строк нет вовсе (не загрузились) – ничего
         emptyTableText() {
+            // Журнал (этап 66) начинается пустым – так и сказать, когда загрузился
+            if (this.tableKind === "moves" && this.movesLoaded && !this.tableRows.length) {
+                return "Записей нет.";
+            }
             if (this.displayRows.length || !this.tableRows.length) {
                 return "";
             }
@@ -355,6 +359,9 @@ export default {
                 setIfChanged(this, "printerColumns", (data.printer_columns || []).map(toColumnDef));
                 setIfChanged(this, "printerCardGroups", data.printer_card_groups || []);
                 setIfChanged(this, "printerHistoryLabels", data.printer_history_labels || {});
+                // Журнал «Движение» (этап 66)
+                setIfChanged(this, "moveColumns", (data.move_columns || []).map(toColumnDef));
+                setIfChanged(this, "moveHistoryLabels", data.move_history_labels || {});
                 this.applyDefaultHidden();
             } catch (e) {
                 this.tableError = String(e.message || e);
@@ -418,7 +425,9 @@ export default {
             }
             this.tableRefreshing = true;
             try {
-                if (this.tableKind === "printer") {
+                if (this.tableKind === "moves") {
+                    await Promise.all([this.loadMoves(), this.loadItemTypes()]);
+                } else if (this.tableKind === "printer") {
                     await Promise.all([this.loadPrinters(), this.loadPrinterDiffs()]);
                 } else {
                     await Promise.all([this.loadTable(), this.loadDiffs(), this.loadVacuumOnline(true), this.loadPrinters()]);
@@ -594,7 +603,8 @@ export default {
         cellClass(row, col, editing) {
             const cls = {
                 center: col.center,
-                link: col.link,
+                // Название записи журнала (этап 66) открывает окно записи – только у редактора
+                link: col.link && (!row._move || this.canEdit),
                 sticky: col.sticky
             };
             if (col.note) {
@@ -739,7 +749,7 @@ export default {
             if (row.archived) {
                 return overdue ? { overdue: true } : null;
             }
-            const dup = !!col.dup && isDuplicateLine(line, col.field, row._printer ? "printer" : "pc");
+            const dup = !!col.dup && isDuplicateLine(line, col.field, this.rowKind(row));
             let gone = false;
             let stale;
             let host = null;
@@ -1315,7 +1325,8 @@ export default {
         setHoverRow(tr) {
         // Открыта карточка – подсвечена её строка, куда бы ни ушёл курсор (карточка ПК – в
         // таблице ПК, принтера – в таблице принтеров)
-        const cardId = this.tableKind === "printer" ? (this.pcard ? this.pcard.id : null) : (this.card ? this.card.id : null);
+        const cardId = this.tableKind === "printer" ? (this.pcard ? this.pcard.id : null)
+            : (this.tableKind === "pc" && this.card ? this.card.id : null);
         if (cardId !== null) {
             const wrap = this.$refs.tableWrap;
             tr = wrap ? wrap.querySelector('tbody tr[data-id="' + cardId + '"]') : null;

@@ -245,10 +245,13 @@ export default {
                 !(target && target.closest && target.closest("button, .dropdown, .cf-menu, .scan-pop, .add-bar, .card-overlay")) &&
                 !this.editingRowId && !this.cardEditKey && !this.editingHostname && !this.openMenu && !this.scanPop &&
                 !this.namePop && !this.actionBar && !this.newComputer && !this.newPrinter && !this.showArchive &&
-                !this.pcard && !this.printerPop && !this.webAsk && !this.webEdit && !this.linkPick;
+                !this.pcard && !this.printerPop && !this.webAsk && !this.webEdit && !this.linkPick && !this.moveWinOpen;
             if (row && free) {
                 event.preventDefault();
-                if (row._printer) {
+                if (row._move) {
+                    // Запись журнала (этап 66) – её окно
+                    this.openMoveRecord(row, null);
+                } else if (row._printer) {
                     this.openPrinterWeb(row);
                 } else {
                     this.vncConnect(row, null);
@@ -263,6 +266,10 @@ export default {
         // ПК для Alt+P / Alt+R: открытая карточка, иначе последняя нажатая строка, иначе
         // единственная выбранная. На странице «Принтеры» – принтер (Alt+P – ping, этап 44)
         activePc() {
+            // В журнале (этап 66) подключаться не к чему
+            if (this.tableKind === "moves") {
+                return null;
+            }
             if (this.tableKind === "printer" && this.pcard) {
                 return this.pcard;
             }

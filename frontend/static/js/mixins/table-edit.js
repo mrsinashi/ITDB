@@ -37,6 +37,12 @@ export default {
                 this.toast("Меняется в справочнике моделей");
                 return;
             }
+            // Журнал (этап 66): тип, «Понятное название», даты, «Куда», «Установил» – в окне записи
+            if (col.moveWin && row._move) {
+                this.cancelEdit();
+                this.openMoveRecord(row, col.field);
+                return;
+            }
             if (!this.canEdit || !(col.editable || col.location)) {
                 return;
             }
@@ -237,9 +243,13 @@ export default {
             }
         },
 
-        // Ответ – сохранилось ли (true / false). Строка принтера (этап 44) – в его таблицу.
+        // Ответ – сохранилось ли (true / false). Строка принтера (этап 44) – в его таблицу,
+        // записи журнала (этап 66) – в журнал.
         // sendValue – на сервер другое, чем в ячейке до ответа (связи ПК – принтер номерами, этап 45)
         async saveCellValue(row, col, value, sendValue) {
+            if (row._move) {
+                return this.saveMoveCell(row, col, value);
+            }
             const printer = !!row._printer;
             const pendingKey = this.rowKey(row) + ":" + col.field;
             // По ключу, а не новым объектом: иначе перерисуются все строки таблицы (этап 52)

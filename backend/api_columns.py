@@ -5,7 +5,7 @@
 Новый встроенный столбец – одна строка в COLUMNS (и, если нужно, в CARD_GROUPS).
 Пользовательские поля сюда не входят: они в field_defs и добавляются к
 встроенным перед «Статус». Столбцы таблицы принтеров (этап 44) – здесь же,
-PRINTER_COLUMNS и PRINTER_CARD_GROUPS."""
+PRINTER_COLUMNS и PRINTER_CARD_GROUPS; журнала «Движение» (этап 66) – MOVE_COLUMNS."""
 import re
 from typing import Literal, Optional
 
@@ -38,9 +38,16 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #               (точками; показ – по паролю, этап 45)
 #   cartridges – картриджи модели принтера (этап 47): строками; правка ячейки
 #               меняет модель (cartridges.py)
+# Журнал «Движение» (этап 66, api_moves.py) – правятся в окне записи, не в ячейке:
+#   mtype     – тип техники или компонента (справочник item_types)
+#   mtitle    – «Понятное название»: складывается из полей типа или модели принтера
+#   pdate     – дата, где день и месяц можно не знать: «02.08.2026», «08.2026», «2026»
+#   mdest     – куда: узел дерева или ПК, строками («Терапия», «[326] Ординаторская», имя ПК)
+#   muser     – кто установил: пользователь программы («Фамилия И.О.») или вписанное имя
 Kind = Literal[
     "text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan",
     "printers", "computers", "pmodel", "pattr", "flag", "secret", "cartridges",
+    "mtype", "mtitle", "pdate", "mdest", "muser",
 ]
 
 
@@ -213,6 +220,59 @@ BULK_EXCLUDED = {"location_id"} | {column.key for column in COLUMNS if not colum
 EXTRA_FIELDS = {column.key: column.extra_key for column in COLUMNS if column.kind == "extra"}
 
 
+# ---------- Журнал «Движение» (этап 66) ----------
+
+# Порядок и названия – как в журнале пользователя (Excel); закреплены, как там, «Тип» и
+# «Название (1С)». Ключи тип и статус – свои (item_type, move_status): у ПК есть свои
+# «Тип» и «Статус» со справочниками и оформлением, общий ключ смешал бы их значения
+MOVE_COLUMNS = [
+    col("item_type", "Тип", kind="mtype", sticky=True, center=True, bulk=False, export_width=12),
+    col("name_1c", "Название (1С)", card="Название (1С)", sticky=True, export_width=36),
+    col("title", "Понятное название", kind="mtitle", link=True, values="no", bulk=False, export_width=55),
+    col("inv_no", "Инвентарный", values="no", bulk=False, export_width=12),
+    col("serial", "Серийный номер", values="no", dup=True, bulk=False, export_width=16),
+    col("country", "Страна производства", export_width=18),
+    col("made", "Дата производства", kind="pdate", center=True, values="no", bulk=False, export_width=12),
+    col("bought", "Дата закупки", kind="pdate", center=True, values="no", bulk=False, export_width=12),
+    col("supplier", "Поставщик", export_width=18),
+    col("source", "Откуда", export_width=12),
+    col("received", "Дата получения", kind="pdate", center=True, values="no", bulk=False, export_width=12),
+    col("dest", "Куда", kind="mdest", multiline=True, values="no", bulk=False, export_width=24),
+    col("installed", "Дата установки", kind="pdate", center=True, values="no", bulk=False, export_width=12),
+    col("installer", "Установил", kind="muser", values="no", bulk=False, export_width=16),
+    col("move_status", "Статус", center=True, export_width=12),
+    col("note", "Примечание", kind="multiline", multiline=True, note=True, max_width=200, values="no", export_width=30),
+]
+
+MOVE_COLUMNS_BY_KEY = {column.key: column for column in MOVE_COLUMNS}
+
+# Поля «Понятного названия» (в specs записи) – подписи для окна записи и Истории
+MOVE_SPEC_LABELS = {
+    "pc_kind": "Тип компьютера",
+    "cpu": "Процессор",
+    "ram": "ОЗУ",
+    "disk_kind": "Тип диска",
+    "disk_size": "Объём диска",
+    "gpu": "Видеокарта",
+    "diagonal": "Диагональ",
+    "resolution": "Разрешение",
+    "interface": "Интерфейс",
+    "ram_kind": "Тип памяти",
+    "freq": "Частота",
+    "size": "Объём",
+    "info": "Информация",
+}
+
+# Подписи в Истории записи журнала для полей, которые не столбцы
+MOVE_HISTORY_LABELS = dict(
+    MOVE_SPEC_LABELS,
+    model="Модель",
+    printer_model="Модель принтера",
+    archived="Архив",
+    created="Создан",
+)
+
+
 class CardGroup(BaseModel):
     title: Optional[str]
     fields: list[str]
@@ -226,6 +286,9 @@ class ColumnsInfo(BaseModel):
     printer_columns: list[Column]
     printer_card_groups: list[CardGroup]
     printer_history_labels: dict[str, str]
+    # Журнал «Движение» (этап 66)
+    move_columns: list[Column]
+    move_history_labels: dict[str, str]
 
 
 @router.get("/columns", response_model=ColumnsInfo)
@@ -237,4 +300,6 @@ def list_columns():
         printer_columns=PRINTER_COLUMNS,
         printer_card_groups=[CardGroup(title=title, fields=fields) for title, fields in PRINTER_CARD_GROUPS],
         printer_history_labels=PRINTER_HISTORY_LABELS,
+        move_columns=MOVE_COLUMNS,
+        move_history_labels=MOVE_HISTORY_LABELS,
     )

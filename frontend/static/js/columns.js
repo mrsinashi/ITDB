@@ -9,8 +9,8 @@ export function normalizeKey(value) {
 
 // Дубли: поле → множество значений, встречающихся больше одного раза.
 // Какие поля проверять и какие из них многострочные – из описания столбцов.
-// У таблицы ПК и таблицы принтеров (этап 44) – свои: { pc: {…}, printer: {…} }
-const duplicateSets = { pc: {}, printer: {} };
+// У таблицы ПК, принтеров (этап 44) и журнала «Движение» (этап 66) – свои
+const duplicateSets = { pc: {}, printer: {}, moves: {} };
 
 export function buildDuplicateSets(rows, columns) {
     const dupColumns = (columns || []).filter(function (col) { return col.dup; });
@@ -40,7 +40,7 @@ export function buildDuplicateSets(rows, columns) {
     return sets;
 }
 
-// Одно значение (строка многострочной ячейки) – повтор? kind – pc / printer
+// Одно значение (строка многострочной ячейки) – повтор? kind – pc / printer / moves
 export function isDuplicateLine(line, field, kind) {
     const set = duplicateSets[kind || "pc"][field];
     return !!set && set.has(normalizeKey(line));
@@ -71,6 +71,9 @@ export const kindLabels = {
 // Определения столбцов таблицы
 // ============================================================
 
+// Столбцы журнала, которые правятся в окне записи, а не в ячейке (этап 66)
+const MOVE_WINDOW_KINDS = ["mtype", "mtitle", "pdate", "mdest", "muser"];
+
 // Встроенные столбцы описаны на сервере (backend/api_columns.py, GET /api/columns).
 // Здесь описание переводится в вид, который ждут таблица, карточка и Справочники.
 // values: false – значения почти всегда уникальны, в «Справочниках»
@@ -90,7 +93,12 @@ export function toColumnDef(c) {
         location: c.kind === "location",
         // scan: только из сканера (антивирусы, этап 26д) – не правится; у принтера (этап 44)
         // значения модели и вход Web в ячейке тоже не правятся
-        editable: ["location", "scan", "pattr", "secret"].indexOf(c.kind) === -1,
+        editable: ["location", "scan", "pattr", "secret"].concat(MOVE_WINDOW_KINDS).indexOf(c.kind) === -1,
+        // Журнал «Движение» (этап 66): тип, «Понятное название», даты, «Куда», «Установил» –
+        // правятся в окне записи (двойной клик по ячейке открывает его на этом поле)
+        moveWin: MOVE_WINDOW_KINDS.indexOf(c.kind) !== -1,
+        // Дата, где день и месяц можно не знать («08.2025», «2026»): сортировка по дате
+        pdate: c.kind === "pdate",
         // Значение модели у принтера (этап 61): двойной клик говорит, где оно меняется
         fromModel: c.kind === "pattr",
         scanOnly: c.kind === "scan",
@@ -188,7 +196,9 @@ export const ENTITY_LABELS = {
     naming: "Своё имя",
     printers: "Принтер",
     printer_models: "Модель принтера",
-    cartridges: "Картридж"
+    cartridges: "Картридж",
+    moves: "Движение",
+    item_types: "Тип техники"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -307,10 +317,14 @@ export const NAME_RULE_COLUMN = {
     editable: false
 };
 
-// Ключ в браузере для таблицы принтеров (этап 44): у неё свои столбцы, ширины,
-// порядок, закрепление и виды – «itdb.hiddenColumns.v1» → «itdb.printers.hiddenColumns.v1»
+// Ключ в браузере для таблицы принтеров (этап 44) и журнала «Движение» (этап 66): у них свои
+// столбцы, ширины, порядок, закрепление и виды – «itdb.hiddenColumns.v1» →
+// «itdb.printers.hiddenColumns.v1», «itdb.moves.hiddenColumns.v1»
 export function tableStoreKey(key, kind) {
-    return kind === "printer" ? key.replace(/^itdb\./, "itdb.printers.") : key;
+    if (kind === "printer") {
+        return key.replace(/^itdb\./, "itdb.printers.");
+    }
+    return kind === "moves" ? key.replace(/^itdb\./, "itdb.moves.") : key;
 }
 
 export const HIDDEN_COLUMNS_KEY = "itdb.hiddenColumns.v1";
@@ -491,6 +505,13 @@ export function dateKey(value) {
     return m ? Number(m[3] + m[2] + m[1]) : null;
 }
 
+// Дата журнала (этап 66): «02.08.2026» → 20260802, «08.2026» → 20260800, «2026» →
+// 20260000 – год раньше своих месяцев, месяц раньше своих дней; не дата – null
+export function pdateKey(value) {
+    const m = /^(?:(?:(\d{2})\.)?(\d{2})\.)?(\d{4})$/.exec(String(value || "").trim());
+    return m ? Number(m[3]) * 10000 + Number(m[2] || 0) * 100 + Number(m[1] || 0) : null;
+}
+
 // Сегодня – ключом, как dateKey
 export function todayKey() {
     const d = new Date();
@@ -521,6 +542,9 @@ export function compareCellValues(a, b, col) {
     }
     if (col && col.date) {
         return (dateKey(a) || 0) - (dateKey(b) || 0);
+    }
+    if (col && col.pdate) {
+        return (pdateKey(a) || 0) - (pdateKey(b) || 0);
     }
     const sa = String(a).split("\n")[0];
     const sb = String(b).split("\n")[0];

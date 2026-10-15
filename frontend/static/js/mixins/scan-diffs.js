@@ -56,6 +56,10 @@ function avKey(name) {
     return String(name || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 }
 
+// У журнала «Движение» (этап 66) значений сканера нет: номера его записей совпадают с номерами ПК
+const NO_DIFFS = Object.freeze({ items: [], count: 0, rejected: 0 });
+const NO_DIFF_INDEX = new Map();
+
 const KEY_TEXT = { id: "ID", mac: "MAC", serial: "серийному", ip: "IP", name: "имени", reserve: "привязке DHCP" };
 const KEY_ORDER = ["mac", "serial", "id", "ip", "name", "reserve"];
 // Поля-названия: «своё» значение – соответствие «одно и то же» (как NAME_FIELDS на сервере)
@@ -88,8 +92,11 @@ export default {
             return !!this.avSettings && this.avSettings.statuses.some(function (st) { return !!st.bg_color && st.chip === false; });
         },
 
-        // Предложения таблицы на экране: ПК или принтеров (этап 47)
+        // Предложения таблицы на экране: ПК или принтеров (этап 47); у журнала (этап 66) – нет
         tableDiffs() {
+            if (this.tableKind === "moves") {
+                return NO_DIFFS;
+            }
             return this.tableKind === "printer" ? this.printerDiffs : this.diffs;
         },
 
@@ -226,6 +233,9 @@ export default {
         // Расхождения таблицы на экране: id строки → { поле → расхождение } (без отклонённых).
         // На странице «Принтеры» – предложения принтеров (этап 47; до него – пусто)
         diffIndex() {
+            if (this.tableKind === "moves") {
+                return NO_DIFF_INDEX;
+            }
             return this.tableKind === "printer" ? this.printerDiffIndex : this.pcDiffIndex;
         },
 

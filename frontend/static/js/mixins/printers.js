@@ -6,7 +6,8 @@
 // сортировка, фильтры, поиск, выделение…), при переходе на «Принтеры» и обратно меняется
 // местами (TABLE_STATE, switchTableKind); в браузере у принтеров – свои ключи
 // (tableStoreKey). Строки ПК (rows) и принтеров (printerRows) лежат порознь всегда:
-// код ПК (карточка, сканер, имена) работает с rows и на странице принтеров.
+// код ПК (карточка, сканер, имена) работает с rows и на странице принтеров. С этапа 66
+// так же – журнал «Движение» (tableKind = "moves", строки – moveRows, mixins/moves.js).
 //
 // Принтеры у ПК и ПК у принтера – ссылками (linkParts): нажатие на принтер – окошко с
 // его данными (как у значения сканера), на ПК – карточка ПК; значок таблицы рядом –
@@ -28,15 +29,15 @@ const TABLE_STATE = [
     "nameCheck", "nameOnlyRows", "scanOverlay", "scanOnlyRows"
 ];
 
-// Таблица принтеров при первом входе – из браузера
-function printerTableState() {
-    const views = loadViews("printer");
-    const view = loadViewNumber("printer", views);
+// Таблица принтеров или журнала (kind) при первом входе – из браузера
+function freshTableState(kind) {
+    const views = loadViews(kind);
+    const view = loadViewNumber(kind, views);
     return {
-        hiddenColumns: loadJson(tableStoreKey(HIDDEN_COLUMNS_KEY, "printer"), []),
-        pinnedColumns: loadJson(tableStoreKey(PINNED_COLUMNS_KEY, "printer"), null),
-        columnOrder: loadJson(tableStoreKey(COLUMN_ORDER_KEY, "printer"), null),
-        manualWidths: loadManualWidths(tableStoreKey(TABLE_WIDTHS_KEY, "printer")),
+        hiddenColumns: loadJson(tableStoreKey(HIDDEN_COLUMNS_KEY, kind), []),
+        pinnedColumns: loadJson(tableStoreKey(PINNED_COLUMNS_KEY, kind), null),
+        columnOrder: loadJson(tableStoreKey(COLUMN_ORDER_KEY, kind), null),
+        manualWidths: loadManualWidths(tableStoreKey(TABLE_WIDTHS_KEY, kind)),
         autoWidths: {},
         tableViews: views,
         tableView: view,
@@ -60,7 +61,8 @@ function firstIp(value) {
 export default {
     data() {
         return {
-            // Таблица на экране: pc – ПК (страница «Таблица»), printer – «Принтеры»
+            // Таблица на экране: pc – ПК (страница «Таблица»), printer – «Принтеры», moves –
+            // журнал «Движение» (этап 66)
             tableKind: "pc",
             printerRows: [],
             printersLoading: false,
@@ -83,10 +85,16 @@ export default {
 
     computed: {
         tableRows() {
+            if (this.tableKind === "moves") {
+                return this.moveRows;
+            }
             return this.tableKind === "printer" ? this.printerRows : this.rows;
         },
 
         tableBuiltinColumns() {
+            if (this.tableKind === "moves") {
+                return this.moveColumns;
+            }
             return this.tableKind === "printer" ? this.printerColumns : this.builtinColumns;
         },
 
@@ -101,12 +109,32 @@ export default {
 
         // Пользовательские поля – только у ПК
         tableUserDefs() {
-            return this.tableKind === "printer" ? [] : this.tableFieldDefs;
+            return this.tableKind === "pc" ? this.tableFieldDefs : [];
         },
 
-        // Имя строки – HOSTNAME у ПК, «Имя» у принтера («По правилу» – справа от него)
+        // Имя строки – HOSTNAME у ПК, «Имя» у принтера («По правилу» – справа от него); у
+        // журнала имён по правилам нет
         tableNameField() {
+            if (this.tableKind === "moves") {
+                return "title";
+            }
             return this.tableKind === "printer" ? "name" : "hostname";
+        },
+
+        // Ошибка загрузки строк таблицы на экране – на панели
+        tableErrorText() {
+            if (this.tableKind === "moves") {
+                return this.movesError;
+            }
+            return this.tableKind === "printer" ? this.printersError : this.tableError;
+        },
+
+        // Адрес API строк таблицы на экране: архив, «Изменить значения…»
+        tableApi() {
+            if (this.tableKind === "moves") {
+                return "/api/moves";
+            }
+            return this.tableKind === "printer" ? "/api/printers" : "/api/computers";
         },
 
         printerModelById() {
@@ -152,14 +180,25 @@ export default {
     },
 
     methods: {
-        // Страница с таблицей: «Таблица» или «Принтеры»
+        // Страница с таблицей: «Таблица», «Принтеры» или журнал «Движение» (этап 66)
         isTablePage() {
-            return this.view === "table" || this.view === "printers";
+            return this.view === "table" || this.view === "printers" || this.view === "journals";
         },
 
-        // Ключ строки для вспышки и «сохраняется»: id ПК и принтера могут совпасть
+        // Ключ строки для вспышки и «сохраняется»: id ПК, принтера и записи журнала могут совпасть
         rowKey(row) {
+            if (row._move) {
+                return "m" + row.id;
+            }
             return row._printer ? "p" + row.id : row.id;
+        },
+
+        // Чья строка: pc / printer / moves (повторы у каждой таблицы свои)
+        rowKind(row) {
+            if (row._move) {
+                return "moves";
+            }
+            return row._printer ? "printer" : "pc";
         },
 
         // ---------- Таблица ПК ↔ таблица принтеров ----------
@@ -189,7 +228,7 @@ export default {
             saved.scrollTop = wrap ? wrap.scrollTop : 0;
             saved.scrollLeft = wrap ? wrap.scrollLeft : 0;
             states[this.tableKind] = saved;
-            const next = states[kind] || printerTableState();
+            const next = states[kind] || freshTableState(kind);
             TABLE_STATE.forEach((key) => { this[key] = next[key]; });
             this.tableKind = kind;
             this.activeRowEl = null;
@@ -256,6 +295,9 @@ export default {
 
         // Таблица на экране – перечитать её строки
         reloadTableRows() {
+            if (this.tableKind === "moves") {
+                return this.loadMoves();
+            }
             return this.tableKind === "printer" ? this.loadPrinters() : this.loadTable();
         },
 

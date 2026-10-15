@@ -167,7 +167,8 @@ export default {
             const onPick = s.onPick;
             this.closeSuggest();
             if (onPick) {
-                onPick(option.value);
+                // Сам вариант – вторым: у одинаковых подписей разное за ними (пользователь, этап 66)
+                onPick(option.value, option);
             }
         },
 

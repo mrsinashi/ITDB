@@ -29,12 +29,14 @@ const ENTITY_FILTERS = {
     app_settings: "Настройки",
     naming: "Имена ПК: своё имя",
     printer_models: "Модели принтеров",
-    cartridges: "Картриджи"
+    cartridges: "Картриджи",
+    moves: "Журнал «Движение»",
+    item_types: "Типы техники"
 };
 // Только администратор видит эти записи
 const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule"];
 // Отмены нет (только просмотр)
-const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_schedule", "scan_marks", "scan_antivirus", "table_marks", "app_settings", "naming"];
+const NO_UNDO_ENTITIES = ["scan_sources", "scan_subnets", "scan_schedule", "scan_marks", "scan_antivirus", "table_marks", "app_settings", "naming", "item_types"];
 // Решения сканера (этап 53): отменяются целиком, «Истории значения» у них нет
 const DECISION_ENTITIES = ["scan_records", "scan_aliases"];
 
@@ -318,6 +320,10 @@ export default {
             tasks.push(this.loadPrinters());
             if (this.printerModels.length || this.view === "printers" || this.choicesTab === "models") {
                 tasks.push(this.loadPrinterModels());
+            }
+            // Журнал «Движение» (этап 66) – если открывали
+            if (this.movesLoaded) {
+                tasks.push(this.loadMoves());
             }
             if (this.view === "users" && this.isAdmin) {
                 tasks.push(this.loadUsers());

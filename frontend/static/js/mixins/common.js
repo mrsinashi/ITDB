@@ -20,6 +20,11 @@ export default {
         printerFieldLabelMap() {
             return buildFieldLabels(this.printerColumns, this.printerHistoryLabels);
         },
+
+        // То же у записей журнала «Движение» (этап 66)
+        moveFieldLabelMap() {
+            return buildFieldLabels(this.moveColumns, this.moveHistoryLabels);
+        },
     },
 
     methods: {
@@ -92,6 +97,9 @@ export default {
             }
             if (entity === "printers") {
                 return this.printerFieldLabelMap[field] || field;
+            }
+            if (entity === "moves") {
+                return this.moveFieldLabelMap[field] || field;
             }
             // У модели принтера color – не цвет текста, а печать
             if (entity === "printer_models" && field === "color") {

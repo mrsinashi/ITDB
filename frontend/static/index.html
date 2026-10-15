@@ -16,9 +16,14 @@
             <a href="#printers" @click="navClick($event, () => setView('printers'))" :class="{ active: view === 'printers' }">Принтеры</a>
             <a href="#tree" @click="navClick($event, () => setView('tree'))" :class="{ active: view === 'tree' }">Структура</a>
             <a v-if="canEdit" href="#vacuum" @click="navClick($event, () => setView('vacuum'))" :class="{ active: view === 'vacuum' }">Vacuum</a>
-            <a v-if="canEdit" href="#scan" @click="navClick($event, () => setView('scan'))" :class="{ active: view === 'scan' }">Сканер</a>
             <span class="menu-right">
-                <!-- Значки справа: Справочники, История, Пользователи, Настройки -->
+                <!-- Значки справа: Журналы, Сканер (этап 66 – снова значком), Справочники, История, Пользователи, Настройки -->
+                <a href="#journals/moves" class="nav-icon nav-tab" @click="navClick($event, () => setView('journals'))" :class="{ active: view === 'journals' }" title="Журналы">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></svg>
+                </a>
+                <a v-if="canEdit" href="#scan" class="nav-icon nav-tab" @click="navClick($event, () => setView('scan'))" :class="{ active: view === 'scan' }" title="Сканер">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/></svg>
+                </a>
                 <a href="#choices" class="nav-icon nav-tab" @click="navClick($event, () => setView('choices'))" :class="{ active: view === 'choices' }" title="Справочники">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
                 </a>
@@ -125,11 +130,15 @@
             <span class="tb-left">Сервер не отвечает.&nbsp;<a href="/" @click.prevent="reloadPage">Обновить</a></span>
         </div>
 
-        <!-- ================= Таблица (с этапа 44 – и «Принтеры»: та же таблица, tableKind) ================= -->
-        <section v-if="user" v-show="view === 'table' || view === 'printers'" class="view">
+        <!-- ================= Таблица (с этапа 44 – и «Принтеры», с этапа 66 – журнал «Движение»: та же таблица, tableKind) ================= -->
+        <section v-if="user" v-show="view === 'table' || view === 'printers' || view === 'journals'" class="view">
 
             <div class="toolbar tb-with-refresh" v-tb-fit>
                 <div class="tb-left">
+                    <!-- Журналы (этап 66): вкладки страницы, как у «Сканера»; пока одна -->
+                    <nav v-if="tableKind === 'moves'" class="tb-tabs">
+                        <a href="#journals/moves" :class="{ active: journalTab === 'moves' }" @click="navClick($event, () => setView('journals'))" title="Получение и установка техники и компонентов">Движение</a>
+                    </nav>
                     <span class="tb-count">{{ countText }}</span>
                     <!-- Фильтры: по дереву и по столбцам. Не помещаются – сжимаются, полный текст в подсказке -->
                     <span v-if="locationFilter || activeColFilters.length" class="tb-chips">
@@ -162,8 +171,18 @@
                             Выбрано: {{ selectedRows.length }}
                         </button>
                         <div v-if="openMenu === 'selection'" class="dropdown attached">
+                            <!-- Журнал (этап 66): изменить значения, архив -->
+                            <template v-if="canEdit && tableKind === 'moves'">
+                                <template v-if="!showArchive">
+                                    <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить значения…</button>
+                                    <div class="dd-sep"></div>
+                                    <button @click="setArchived(selectedRows.slice(), true)">В архив</button>
+                                </template>
+                                <button v-else @click="setArchived(selectedRows.slice(), false)">Вернуть из архива</button>
+                                <div class="dd-sep"></div>
+                            </template>
                             <!-- Принтеры (этап 44): изменить значения, имена по правилу, архив -->
-                            <template v-if="canEdit && tableKind === 'printer'">
+                            <template v-else-if="canEdit && tableKind === 'printer'">
                                 <template v-if="!showArchive">
                                     <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить значения…</button>
                                     <button @click="renameSelectedByRule" :disabled="!selectedNameFixes.length" :title="selectedNameFixes.length ? 'Имена по правилам узлов' : 'Имена уже по правилу'">Переименовать по правилу<span v-if="selectedNameFixes.length" class="dd-count">{{ selectedNameFixes.length }}</span></button>
@@ -194,7 +213,7 @@
                 <span class="tb-search">
                     <!-- Обновить (этап 47): изменения, значения сканера; у ПК – и кто в сети из VACUUM -->
                     <button class="btn icon-only tb-refresh" :disabled="tableRefreshing" @click="refreshTablePage" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
-                    <input id="quickFilter" v-model="quickFilter" :placeholder="tableKind === 'printer' ? 'Поиск по принтерам' : 'Поиск по компьютерам'" autocomplete="off"
+                    <input id="quickFilter" v-model="quickFilter" :placeholder="tableKind === 'moves' ? 'Поиск по журналу' : (tableKind === 'printer' ? 'Поиск по принтерам' : 'Поиск по компьютерам')" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'quickFilter')">
                     <span v-if="quickFilter" class="clear" title="Очистить (Esc)" @click="quickFilter = ''">×</span>
                 </span>
@@ -212,7 +231,7 @@
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                     </button>
                     <span class="tb-view-gap"></span>
-                    <span v-if="tableKind === 'printer' ? printersError : tableError" class="tb-error" :title="tableKind === 'printer' ? printersError : tableError">{{ tableKind === "printer" ? printersError : tableError }}</span>
+                    <span v-if="tableErrorText" class="tb-error" :title="tableErrorText">{{ tableErrorText }}</span>
                     <!-- Появляются слева от постоянных кнопок: остальное не сдвигается -->
                     <button v-if="activeColFilters.length" class="btn icon-only" @click="clearAllColFilters" title="Сбросить фильтры по столбцам"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.013 3H2l8 9.46V19l4 2v-8.54l.9-1.055"/><path d="m22 3-5 5"/><path d="m17 3 5 5"/></svg></button>
                     <button v-if="sortField" class="btn icon-only" @click="resetSort" title="Сбросить сортировку"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></button>
@@ -238,6 +257,8 @@
                         </div>
                     </span>
                     <span class="tb-divider"></span>
+                    <!-- У журнала (этап 66) значений сканера и имён по правилам нет -->
+                    <template v-if="tableKind !== 'moves'">
                     <!-- Значения сканера (этапы 26б, 26в): кнопка дописывает в ячейки блочки с тем,
                          что предлагают GLPI / GSIT; у включённой при наведении – что значат цвета -->
                     <span class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
@@ -260,6 +281,7 @@
                         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg><span v-if="nameCheck && nameBadCount > 0 && buttonCounts" class="btn-badge">{{ nameBadBadge }}</span>
                     </button>
                     <span v-if="nameCheck" class="scan-only" :class="{ on: nameOnlyRows }" :title="nameOnlyRows ? 'Показать все строки' : 'Только не по правилу'" @click="nameOnlyRows = !nameOnlyRows"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg></span>
+                    </template>
                     <!-- Архив: без выбранных строк – показать архив / вернуться к таблице,
                          с выбранными – убрать их в архив (в архиве – вернуть) -->
                     <button class="btn icon-only" :class="{ active: showArchive }" :disabled="archiveSaving" @click="onArchiveButton" :title="archiveButtonTitle">
@@ -274,15 +296,21 @@
                             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
                         </button>
                         <div v-if="openMenu === 'add'" class="dropdown right attached">
-                            <button v-if="tableKind === 'pc'" @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
+                            <!-- Журнал (этап 66): запись о технике или компоненте – в окне -->
+                            <template v-if="tableKind === 'moves'">
+                                <button @click="openMoveAdd('tech')" title="Компьютер, монитор, принтер…"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Техника</button>
+                                <button @click="openMoveAdd('part')" title="Диск, память…"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>Компонент</button>
+                            </template>
+                            <button v-else-if="tableKind === 'pc'" @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
                             <!-- Принтер (этап 44): расположение, модель, №, имя, IP -->
                             <button v-else @click="toggleNewPrinter" title="Расположение, модель, №, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Принтер</button>
                             <!-- Вид таблицы (этап 43): набор столбцов для кнопки вида – копия текущего, сразу в окне «Виды таблицы» -->
                             <button @click="addTableView" :disabled="tableViews.length >= viewsMax" :title="tableViews.length >= viewsMax ? 'Видов – не больше ' + viewsMax : 'Набор столбцов'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>Вид</button>
                         </div>
                     </span>
-                    <span v-if="canEdit" class="tb-divider"></span>
-                    <span class="dropdown-wrap" ref="exportWrap">
+                    <!-- Выгрузка – у Компьютеров и Принтеров (у журнала не просили) -->
+                    <span v-if="canEdit && tableKind !== 'moves'" class="tb-divider"></span>
+                    <span v-if="tableKind !== 'moves'" class="dropdown-wrap" ref="exportWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'export' }" @click="toggleMenu('export')" title="Выгрузить">
                             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
                         </button>
@@ -2367,6 +2395,169 @@
                     <button class="btn" @click="closePrint">Закрыть</button>
                     <button class="btn btn-primary" @click="doPrint">Печать</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- ================= Окно записи журнала «Движение» (этап 66, mixins/moves.js) =================
+             Затемнение – пока окно не свёрнуто; свёрнутое – полоска заголовка (тянуть мышью, нажатие –
+             развернуть), видна на всех страницах. Без типа – посередине экрана, с типом – выше -->
+        <div v-if="moveWinOpen" class="mw-overlay"></div>
+        <div v-if="moveWin" ref="moveWin" class="dialog mw" :class="{ min: moveWin.min, typed: !!moveWin.form.type_id }" :style="moveWinStyle" role="dialog">
+            <div class="vh-head mw-head" @mousedown="onMoveBarDown">
+                <span class="vh-title"><b>{{ moveWinTitle }}</b><template v-if="moveTitlePreview && (moveWin.min || moveWin.mode === 'edit')"> · {{ moveTitlePreview }}</template></span>
+                <span class="vh-close mw-min" :title="moveWin.min ? 'Развернуть' : 'Свернуть'" @click="toggleMoveWinMin">
+                    <svg v-if="moveWin.min" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                </span>
+                <span class="vh-close" title="Закрыть (Esc)" @click="closeMoveWin">×</span>
+            </div>
+            <div v-show="!moveWin.min" ref="moveWinBody" class="mw-body" tabindex="-1">
+                <table class="mw-form">
+                    <tr>
+                        <th>Тип</th>
+                        <td data-mf="type">
+                            <location-picker input-class="input" :value="moveWin.form.type_id" :options="moveTypeOptions" add-text="новый тип"
+                                :empty-text="moveWin.kind === 'part' ? 'Компонентов пока нет' : 'Типов пока нет'"
+                                :placeholder="moveWin.kind === 'part' ? 'Диск, ОЗУ… или новый' : 'Компьютер, монитор… или новый'"
+                                @pick="onMoveType" @add="onMoveTypeAdd"></location-picker>
+                        </td>
+                    </tr>
+                    <template v-if="moveWinType">
+                        <tr>
+                            <th>Название (1С)</th>
+                            <td><input class="input" data-mf="name_1c" v-model="moveWin.form.name_1c" spellcheck="false" autocomplete="off"
+                                @focus="openMoveSuggest($event, 'name_1c')" @click="!suggest && openMoveSuggest($event, 'name_1c')"
+                                @input="onMoveSuggestInput($event, 'name_1c')" @keydown="onMoveFieldKeydown" @blur="closeSuggest()"></td>
+                        </tr>
+                        <!-- «Понятное название» – из полей ниже; справа – как получится в таблице -->
+                        <tr class="mw-group">
+                            <td colspan="2"><span class="mw-gname">Понятное название</span><span class="mw-preview" :title="moveTitlePreview || null">{{ moveTitlePreview }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Модель</th>
+                            <td v-if="moveWinForm === 'printer'" data-mf="model" class="mw-pick">
+                                <location-picker input-class="input" :value="moveWin.form.printer_model_id" :options="printerModelOptions" add-text="новая модель"
+                                    empty-text="Моделей пока нет" placeholder="Из справочника или новая" @pick="onMovePrinterModel" @add="openMoveNewModel"></location-picker>
+                                <span v-if="moveWin.form.printer_model_id" class="mw-clear" title="Очистить" @click="onMovePrinterModel(null)">×</span>
+                            </td>
+                            <td v-else><input class="input" data-mf="model" v-model="moveWin.form.model" spellcheck="false" autocomplete="off"
+                                @focus="openMoveSuggest($event, 'model')" @click="!suggest && openMoveSuggest($event, 'model')"
+                                @input="onMoveSuggestInput($event, 'model')" @keydown="onMoveFieldKeydown" @blur="closeSuggest()"></td>
+                        </tr>
+                        <!-- Новая модель принтера: «＋ новая модель» в списке моделей -->
+                        <tr v-if="moveWin.newModel" class="mw-sub">
+                            <th>Новая модель</th>
+                            <td @keydown="onMoveNewModelKeydown">
+                                <span class="mw-line">
+                                    <select class="input mw-kind" v-model="moveWin.newModel.kind" title="Тип">
+                                        <option v-for="k in printerKinds" :key="k.key" :value="k.key">{{ k.label }}</option>
+                                    </select>
+                                    <input ref="mw-nm-maker" class="input mw-maker" data-mf="nm-maker" v-model="moveWin.newModel.maker" placeholder="Производитель" spellcheck="false" autocomplete="off"
+                                        @focus="openMakerSuggest($event.target, moveWin.newModel, 'mw-nm-model')" @click="!suggest && openMakerSuggest($event.target, moveWin.newModel, 'mw-nm-model')"
+                                        @input="onSuggestInput($event.target.value)" @blur="closeSuggest()">
+                                    <input ref="mw-nm-model" class="input mw-grow" data-mf="nm-model" v-model="moveWin.newModel.model" placeholder="Модель" spellcheck="false" autocomplete="off">
+                                </span>
+                                <span class="mw-line">
+                                    <label class="ab-check"><input type="checkbox" v-model="moveWin.newModel.color">цветной</label>
+                                    <label class="ab-check"><input type="checkbox" v-model="moveWin.newModel.duplex">дуплекс</label>
+                                    <span class="mw-gap"></span>
+                                    <button class="btn btn-primary icon-only" :disabled="moveWin.newModel.saving" @click="submitMoveNewModel" title="Добавить модель (Enter)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                                    <button class="btn icon-only" @click="moveWin.newModel = null" title="Закрыть (Esc)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                                </span>
+                                <span v-if="moveWin.newModel.error" class="mw-error">{{ moveWin.newModel.error }}</span>
+                            </td>
+                        </tr>
+                        <!-- Поля типа: компьютер, монитор, диск, ОЗУ; другой тип – «Информация» -->
+                        <tr v-for="r in moveFormRows" :key="'mf-' + r.key">
+                            <th>{{ r.label }}</th>
+                            <td>
+                                <span class="mw-line">
+                                    <input class="input" :class="r.short || r.key2 ? 'mw-short' : 'mw-grow'" :data-mf="r.key" :value="moveSpec(r.key)" :placeholder="r.key2 ? 'Тип' : null" spellcheck="false" autocomplete="off"
+                                        @focus="openMoveSuggest($event, r.key)" @click="!suggest && openMoveSuggest($event, r.key)"
+                                        @input="setMoveSpec(r.key, $event.target.value); onMoveSuggestInput($event, r.key)" @keydown="onMoveFieldKeydown" @blur="closeSuggest()">
+                                    <input v-if="r.key2" class="input mw-short" :data-mf="r.key2" :value="moveSpec(r.key2)" placeholder="Объём" spellcheck="false" autocomplete="off"
+                                        @input="setMoveSpec(r.key2, $event.target.value)" @keydown="onMoveFieldKeydown">
+                                    <span v-if="r.unit" class="mw-unit">{{ r.unit }}</span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr class="mw-group"><td colspan="2"><span class="mw-gname">Учёт</span></td></tr>
+                        <tr>
+                            <th>Инвентарный</th>
+                            <td><input class="input" data-mf="inv_no" v-model="moveWin.form.inv_no" spellcheck="false" autocomplete="off" @keydown="onMoveFieldKeydown"></td>
+                        </tr>
+                        <tr>
+                            <th>Серийный номер</th>
+                            <td><input class="input" data-mf="serial" v-model="moveWin.form.serial" spellcheck="false" autocomplete="off" @keydown="onMoveFieldKeydown"></td>
+                        </tr>
+                        <tr class="mw-group"><td colspan="2"><span class="mw-gname">Производство и закупка</span></td></tr>
+                        <tr>
+                            <th>Страна производства</th>
+                            <td><input class="input" data-mf="country" v-model="moveWin.form.country" spellcheck="false" autocomplete="off"
+                                @focus="openMoveSuggest($event, 'country')" @click="!suggest && openMoveSuggest($event, 'country')"
+                                @input="onMoveSuggestInput($event, 'country')" @keydown="onMoveFieldKeydown" @blur="closeSuggest()"></td>
+                        </tr>
+                        <tr v-for="key in ['made', 'bought']" :key="'md-' + key">
+                            <th>{{ key === 'made' ? 'Дата производства' : 'Дата закупки' }}</th>
+                            <td :data-mf="key"><date-parts :value="moveWin.form[key]" :parts="moveDateParts(key)" @update="setMoveDate(key, $event)"></date-parts></td>
+                        </tr>
+                        <tr>
+                            <th>Поставщик</th>
+                            <td><input class="input" data-mf="supplier" v-model="moveWin.form.supplier" spellcheck="false" autocomplete="off"
+                                @focus="openMoveSuggest($event, 'supplier')" @click="!suggest && openMoveSuggest($event, 'supplier')"
+                                @input="onMoveSuggestInput($event, 'supplier')" @keydown="onMoveFieldKeydown" @blur="closeSuggest()"></td>
+                        </tr>
+                        <tr class="mw-group"><td colspan="2"><span class="mw-gname">Получение</span></td></tr>
+                        <tr>
+                            <th>Откуда</th>
+                            <td><input class="input" data-mf="source" v-model="moveWin.form.source" spellcheck="false" autocomplete="off"
+                                @focus="openMoveSuggest($event, 'source')" @click="!suggest && openMoveSuggest($event, 'source')"
+                                @input="onMoveSuggestInput($event, 'source')" @keydown="onMoveFieldKeydown" @blur="closeSuggest()"></td>
+                        </tr>
+                        <tr>
+                            <th>Дата получения</th>
+                            <td data-mf="received"><date-parts :value="moveWin.form.received" parts="dmy" @update="setMoveDate('received', $event)"></date-parts></td>
+                        </tr>
+                        <tr class="mw-group"><td colspan="2"><span class="mw-gname">Установка</span></td></tr>
+                        <tr>
+                            <th>Куда</th>
+                            <td data-mf="dest" class="mw-pick">
+                                <location-picker input-class="input" :value="moveWin.form.dest" :options="moveDestOptions"
+                                    :placeholder="moveWin.kind === 'part' ? 'Отделение, кабинет или ПК' : 'Отделение или кабинет'" @pick="onMoveDest"></location-picker>
+                                <span v-if="moveWin.form.dest" class="mw-clear" title="Очистить" @click="onMoveDest(null)">×</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Дата установки</th>
+                            <td data-mf="installed"><date-parts :value="moveWin.form.installed" parts="dmy" @update="setMoveDate('installed', $event)"></date-parts></td>
+                        </tr>
+                        <tr>
+                            <th>Установил</th>
+                            <td><input class="input" data-mf="installer" :value="moveWin.installerText" placeholder="Пользователь или имя" spellcheck="false" autocomplete="off"
+                                :title="moveWin.form.installer_user_id ? 'Пользователь программы' : null"
+                                @focus="openMoveInstallerList($event.target)" @click="!suggest && openMoveInstallerList($event.target)"
+                                @input="onMoveInstallerInput" @keydown="onMoveFieldKeydown" @blur="closeSuggest()"></td>
+                        </tr>
+                        <tr class="mw-group"><td colspan="2"><span class="mw-gname">Прочее</span></td></tr>
+                        <tr>
+                            <th>Статус</th>
+                            <td><input class="input" data-mf="move_status" v-model="moveWin.form.move_status" spellcheck="false" autocomplete="off"
+                                @focus="openMoveSuggest($event, 'move_status')" @click="!suggest && openMoveSuggest($event, 'move_status')"
+                                @input="onMoveSuggestInput($event, 'move_status')" @keydown="onMoveFieldKeydown" @blur="closeSuggest()"></td>
+                        </tr>
+                        <tr>
+                            <th>Примечание</th>
+                            <td><textarea class="input mw-note" data-mf="note" v-model="moveWin.form.note" rows="2" @keydown="onMoveFieldKeydown"></textarea></td>
+                        </tr>
+                    </template>
+                </table>
+            </div>
+            <div v-show="!moveWin.min" class="dialog-buttons mw-foot">
+                <span v-if="moveWin.error" class="vh-error">{{ moveWin.error }}</span>
+                <!-- Один / Несколько – как у строки «Новый компьютер»: после добавления окно закрывается или остаётся -->
+                <button v-if="moveWin.mode === 'add'" class="btn ab-many" :class="{ on: moveWin.many }" :title="moveWin.many ? 'После добавления – не закрывать' : 'После добавления – закрыть'" @click="moveWin.many = !moveWin.many">{{ moveWin.many ? "Несколько" : "Один" }}</button>
+                <button class="btn" @click="closeMoveWin">Отмена</button>
+                <button class="btn btn-primary" :disabled="moveWin.saving || !moveWin.form.type_id" :title="moveWin.form.type_id ? null : 'Сначала тип'" @click="submitMoveWin">{{ moveWin.mode === "add" ? "Добавить" : "Сохранить" }}</button>
             </div>
         </div>
 

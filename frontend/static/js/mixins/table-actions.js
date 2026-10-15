@@ -525,9 +525,9 @@ export default {
             this.newComputerSaving = false;
         },
 
-        // id строки таблицы на экране (ПК или принтера)
+        // id строки таблицы на экране (ПК, принтера или записи журнала)
         flashRow(id) {
-            const key = this.tableKind === "printer" ? "p" + id : id;
+            const key = this.tableKind === "moves" ? "m" + id : (this.tableKind === "printer" ? "p" + id : id);
             this.allColumns.forEach((col) => this.flashCell(key, col.field));
         },
 
@@ -576,13 +576,14 @@ export default {
             }
             this.archiveSaving = true;
             const printers = this.tableKind === "printer";
+            const moves = this.tableKind === "moves";
             try {
-                await this.apiSend(printers ? "/api/printers/archive" : "/api/computers/archive", "POST", { ids: ids, archived: archived });
+                await this.apiSend(this.tableApi + "/archive", "POST", { ids: ids, archived: archived });
                 let text;
                 if (ids.length === 1) {
-                    text = (archived ? "В архиве: " : "Возвращён из архива: ") + this.rowName(ids[0]);
+                    text = (archived ? "В архиве: " : (moves ? "Возвращена из архива: " : "Возвращён из архива: ")) + this.rowName(ids[0]);
                 } else {
-                    text = (archived ? "В архив убрано " : "Возвращено из архива ") + (printers ? "принтеров: " : "ПК: ") + ids.length;
+                    text = (archived ? "В архив убрано " : "Возвращено из архива ") + (moves ? "записей: " : (printers ? "принтеров: " : "ПК: ")) + ids.length;
                 }
                 this.selectedRows = [];
                 this.selectAnchorId = null;
@@ -591,7 +592,7 @@ export default {
                     if (this.pcard && ids.indexOf(this.pcard.id) !== -1) {
                         this.reloadCardHistory(this.pcard.id, true);
                     }
-                } else if (this.card && ids.indexOf(this.card.id) !== -1) {
+                } else if (!moves && this.card && ids.indexOf(this.card.id) !== -1) {
                     this.refreshCardRow();
                     this.reloadCardHistory(this.card.id);
                 }
@@ -613,6 +614,10 @@ export default {
         },
 
         rowName(id) {
+            if (this.tableKind === "moves") {
+                const m = this.moveRows.find(function (r) { return r.id === id; });
+                return (m && (m.title || m.item_type)) || "запись";
+            }
             if (this.tableKind === "printer") {
                 const p = this.printerRows.find(function (r) { return r.id === id; });
                 return (p && p.name) || "принтер без имени";
@@ -665,7 +670,8 @@ export default {
             if (!bar) {
                 return "";
             }
-            const what = bar.ids.length === 1 ? "«" + this.rowName(bar.ids[0]) + "»" : bar.ids.length + (this.tableKind === "printer" ? " принтеров" : " ПК");
+            const many = this.tableKind === "moves" ? " записей" : (this.tableKind === "printer" ? " принтеров" : " ПК");
+            const what = bar.ids.length === 1 ? "«" + this.rowName(bar.ids[0]) + "»" : bar.ids.length + many;
             if (bar.kind === "move") {
                 return "Переместить " + what + " в:";
             }
@@ -743,7 +749,7 @@ export default {
                     bar.error = "Выбери поле.";
                     return;
                 }
-                url = this.tableKind === "printer" ? "/api/printers/bulk-update" : "/api/computers/bulk-update";
+                url = this.tableApi + "/bulk-update";
                 body = { ids: bar.ids, field: bar.field, value: bar.value };
             }
             bar.error = "";
@@ -755,7 +761,8 @@ export default {
                 if (bar.kind === "replace") {
                     return "Заменён: " + this.rowName(bar.ids[0]) + " → " + this.rowName(bar.new_id);
                 }
-                return "Изменено у " + (this.tableKind === "printer" ? "принтеров: " : "ПК: ") + data.changed.length + " из " + bar.ids.length;
+                const whose = this.tableKind === "moves" ? "записей: " : (this.tableKind === "printer" ? "принтеров: " : "ПК: ");
+                return "Изменено у " + whose + data.changed.length + " из " + bar.ids.length;
             }, (message) => { bar.error = message; });
             bar.saving = false;
             if (done) {

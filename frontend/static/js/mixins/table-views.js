@@ -28,7 +28,7 @@ function viewOf(v) {
 }
 
 // Виды из браузера; до этапа 43 – основной и второй (его столбцы, порядок; масштаб
-// по ширине окна был общий – достаётся второму). У принтеров сначала – один основной
+// по ширине окна был общий – достаётся второму). У принтеров и журнала сначала – один основной
 export function loadViews(kind) {
     const saved = loadJson(tableStoreKey(TABLE_VIEWS_KEY, kind), null);
     if (Array.isArray(saved) && saved.length && saved[0]) {
@@ -36,7 +36,7 @@ export function loadViews(kind) {
             return i ? viewOf(v || {}) : { name: String(saved[0].name || "") };
         });
     }
-    if (kind === "printer") {
+    if (kind !== "pc") {
         return [{ name: "Основной" }];
     }
     const hidden2 = loadJson(HIDDEN_COLUMNS2_KEY, null);

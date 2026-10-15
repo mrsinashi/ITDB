@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import desc, func, text
 
 from api_computers import ChangeBatch
+from api_moves import move_names
 from auth import get_current_user, require_editor
 from db import get_db
 from history_search import search, search_words
@@ -90,6 +91,9 @@ def entry_titles(session, items):
         names[entity] = {
             row.id: name_of(row) for row in (session.query(model.id, column).filter(model.id.in_(ids)).all() if ids else [])
         }
+
+    # Запись журнала «Движение» (этап 66) – «Понятное название» сейчас (из нескольких полей)
+    names["moves"] = move_names(session, {item.entity_id for item in items if item.entity == "moves"})
 
     simple_titles = {}
     simple_refs = {Ref(item.entity, item.entity_id, item.entity_key) for item in items if item.entity in SIMPLE}
@@ -327,7 +331,8 @@ def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor)
 
     # Последним могло быть то, что не отменяется: настройка (вид выделений, сканер),
     # создание, удаление, смена пароля – тогда не отменяется ничего (а не то, что было раньше)
-    if any(record.entity not in allowed for record in records):
+    # Только создание или удаление объекта без отмены (новый тип техники, этап 66) – не «настройка»
+    if any(record.entity not in allowed and not set(record.changes or {}) <= {"created", "deleted"} for record in records):
         raise HTTPException(status_code=400, detail="Последнее действие – настройка: она не отменяется.")
 
     if any(

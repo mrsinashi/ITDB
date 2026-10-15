@@ -16,6 +16,7 @@ from api_import import router as import_router
 from api_locations import router as locations_router
 from api_naming import router as naming_router
 from api_printers import router as printers_router
+from api_moves import router as moves_router
 from cartridges import router as cartridges_router
 from auth import get_current_user
 from db import engine
@@ -169,6 +170,11 @@ app.include_router(
 # Картриджи (этап 47): смотреть – все, менять – редактор и администратор
 app.include_router(
     cartridges_router,
+    dependencies=[Depends(get_current_user)],
+)
+# Журнал «Движение» и типы техники (этап 66): смотреть – все, менять – редактор и администратор
+app.include_router(
+    moves_router,
     dependencies=[Depends(get_current_user)],
 )
 

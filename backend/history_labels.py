@@ -23,6 +23,8 @@ ENTITY_LABELS = {
     "printers": "Принтер",
     "printer_models": "Модель принтера",
     "cartridges": "Картридж",
+    "moves": "Движение",
+    "item_types": "Тип техники",
 }
 
 SIMPLE_FIELD_LABELS = {

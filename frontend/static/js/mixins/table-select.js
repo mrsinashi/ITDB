@@ -55,11 +55,16 @@ export default {
             if (event.ctrlKey || event.metaKey) {
                 return;
             }
-            if (col.field === "hostname" || (col.link && row._printer)) {
+            if (col.field === "hostname" || (col.link && (row._printer || row._move))) {
                 // Протянули мышью, чтобы выделить кусок имени, – карточку не открываем
                 const sel = window.getSelection ? String(window.getSelection()) : "";
                 if (!sel) {
-                    if (row._printer) {
+                    if (row._move) {
+                        // Запись журнала (этап 66) – её окно; второй клик двойного – не повтор
+                        if (event.detail === 1) {
+                            this.openMoveRecord(row, null);
+                        }
+                    } else if (row._printer) {
                         this.openPrinterCard(row);
                     } else {
                         this.openCard(row);

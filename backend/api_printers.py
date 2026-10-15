@@ -32,7 +32,7 @@ from auth import get_current_user, require_editor, verify_password
 from cartridges import cartridges_by_model, names_text, set_model_cartridges, set_printer_cartridges
 from db import get_db
 from history_log import PASSWORD_SET, log_change
-from models import History, Location, Printer, PrinterModel, PrinterModelCartridge, User
+from models import History, Location, Move, Printer, PrinterModel, PrinterModelCartridge, User
 from printer_links import computer_title, computers_by_printer, links_ids, links_refs, links_text, set_printer_computers
 from secret_box import decrypt, encrypt
 
@@ -860,6 +860,12 @@ def delete_model(model_id: int, user=Depends(require_editor), session=Depends(ge
 
     if count:
         raise HTTPException(status_code=400, detail=f"У модели есть принтеры: {count}.")
+
+    # Журнал «Движение» (этап 66) ссылается на модель принтера – с записями её не удалить
+    moves = session.query(func.count(Move.id)).filter(Move.printer_model_id == model.id).scalar()
+
+    if moves:
+        raise HTTPException(status_code=400, detail=f"Модель есть в журнале «Движение»: записей – {moves}.")
 
     log_change(session, "printer_models", model.id, user["login"],
                {"deleted": {"old": model_title(model), "new": None}}, title=model_title(model))
