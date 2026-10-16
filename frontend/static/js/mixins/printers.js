@@ -518,6 +518,12 @@ export default {
                 this.closeNewPrinter();
                 return;
             }
+            this.openNewPrinter(null);
+        },
+
+        // Строка «Новый принтер». from – из журнала «Движение» («Установить», этап 67):
+        // { location_id, model_id, number, ip, fields – ИНВ и серийный, tip – подсказка }
+        openNewPrinter(from) {
             this.setArchiveView(false);
             this.actionBar = null;
             this.hideWebShown();
@@ -525,13 +531,18 @@ export default {
             if (!this.printerModels.length) {
                 this.loadPrinterModels();
             }
-            const locationId = this.locationFilter ? this.locationFilter.id : null;
+            const locationId = from ? from.location_id : (this.locationFilter ? this.locationFilter.id : null);
+            const modelId = from ? from.model_id : null;
             // autoName – имя по правилу в поле «Имя», пока его не поменяли руками; many – после
             // добавления строка не закрывается (кнопка «Один» / «Несколько», этап 45)
-            this.newPrinter = { location_id: locationId, model_id: null, number: "", name: "", ip: "", autoName: "", error: "", saving: false, many: false };
+            this.newPrinter = { location_id: locationId, model_id: modelId, number: "", name: "", ip: from ? from.ip : "", autoName: "", error: "", saving: false, many: false, from: from };
             this.newRoom = null;
             this.newModel = null;
-            this.$nextTick(() => this.focusNewPrinter(locationId ? "model" : "location"));
+            // Строка уже была открыта с тем же местом и моделью – наблюдатели молчат: № и имя сразу
+            if (from) {
+                this.refreshNewPrinterNumber();
+            }
+            this.$nextTick(() => this.focusNewPrinter(locationId ? (modelId ? "name" : "model") : "location"));
         },
 
         closeNewPrinter() {
@@ -591,7 +602,13 @@ export default {
             if (!form) {
                 return;
             }
-            form.number = form.location_id ? this.nextPrinterNumber(form.location_id, this.newPrinterKind) : "";
+            // № из журнала (вместо выбранного или после него) – пока место и модель те же
+            const from = form.from;
+            if (from && from.number && form.location_id === from.location_id && form.model_id === from.model_id) {
+                form.number = String(from.number);
+            } else {
+                form.number = form.location_id ? this.nextPrinterNumber(form.location_id, this.newPrinterKind) : "";
+            }
             this.refreshNewPrinterName();
         },
 
@@ -622,7 +639,10 @@ export default {
             form.error = "";
             form.saving = true;
             try {
-                const response = await this.apiSend("/api/printers", "POST", { location_id: form.location_id, model_id: form.model_id, number: form.number, name: form.name, ip: form.ip });
+                const response = await this.apiSend("/api/printers", "POST", {
+                    location_id: form.location_id, model_id: form.model_id, number: form.number, name: form.name, ip: form.ip,
+                    fields: form.from ? form.from.fields : undefined
+                });
                 const data = await response.json();
                 await this.loadPrinters();
                 this.flashRow(data.id);
@@ -635,10 +655,12 @@ export default {
                 this.toast("Добавлен: " + (form.name.trim() || "принтер без имени") +
                     (data.shifted && data.shifted.length ? ". № был занят – следующие сдвинуты: " + data.shifted.length : ""), "success");
                 // Добавили – строка закрывается; «Несколько» – остаётся: следующий в тот же кабинет
+                // (без данных записи журнала – они были у этого)
                 if (!form.many) {
                     this.closeNewPrinter();
                     return;
                 }
+                form.from = null;
                 form.name = "";
                 form.ip = "";
                 form.autoName = "";

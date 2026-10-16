@@ -235,6 +235,8 @@ MOVE_COLUMNS = [
     col("name_1c", "Название по 1С", sticky=True, export_width=36),
     col("title", "Своё название", kind="mtitle", link=True, values="no", bulk=False, export_width=55),
     col("kit", "Комплект", kind="mkit", max_width=150, values="no", bulk=False, export_width=18),
+    # IP компьютера, принтера и МФУ (этап 67): свой ключ – оформление подсетей ПК не смешивается
+    col("move_ip", "IP", multiline=True, values="no", bulk=False, export_width=16),
     col("inv_no", "Инвентарный", values="no", bulk=False, export_width=12),
     col("serial", "Серийный номер", values="no", dup=True, bulk=False, export_width=16),
     col("country", "Страна производства", export_width=18),
@@ -252,7 +254,8 @@ MOVE_COLUMNS = [
 
 MOVE_COLUMNS_BY_KEY = {column.key: column for column in MOVE_COLUMNS}
 
-# Поля «Понятного названия» (в specs записи) – подписи для окна записи и Истории
+# Поля типа (в specs записи; в «Понятном названии» – все, кроме комплекта и IP) – подписи для
+# окна записи и Истории
 MOVE_SPEC_LABELS = {
     "pc_kind": "Тип компьютера",
     "cpu": "Процессор",
@@ -268,6 +271,7 @@ MOVE_SPEC_LABELS = {
     "size": "Объём",
     "info": "Информация",
     "kit": "Комплект",
+    "move_ip": "IP",
 }
 
 # Подписи в Истории записи журнала для полей, которые не столбцы. model – «Своё название»

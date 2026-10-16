@@ -332,9 +332,10 @@
                 </div>
             </div>
 
-            <!-- Новый компьютер: строка под панелью. Остальные поля – потом в таблице или карточке -->
+            <!-- Новый компьютер: строка под панелью. Остальные поля – потом в таблице или карточке
+                 (из журнала «Движение», этап 67, – ИНВ, серийный, тип… сразу; что именно – в подсказке) -->
             <div v-if="newComputer" class="add-bar">
-                <span class="ab-title">Новый компьютер:</span>
+                <span class="ab-title" :title="newComputer.from ? newComputer.from.tip : null">Новый компьютер{{ newComputer.from ? " из журнала" : "" }}:</span>
                 <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions" can-add-room
                     placeholder="Расположение" @pick="onNewComputerLocation" @add-room="openNewRoom"></location-picker>
                 <input ref="nc-seat" class="input ab-seat" v-model="newComputer.seat_no" placeholder="№ места" title="№ места – только число" @keydown.enter="submitNewComputer">
@@ -349,7 +350,7 @@
             </div>
             <!-- Новый принтер (этап 44): строка под панелью, как «Новый компьютер» -->
             <div v-if="newPrinter" class="add-bar">
-                <span class="ab-title">Новый принтер:</span>
+                <span class="ab-title" :title="newPrinter.from ? newPrinter.from.tip : null">Новый принтер{{ newPrinter.from ? " из журнала" : "" }}:</span>
                 <location-picker ref="np-location" class="ab-loc" input-class="input" :value="newPrinter.location_id" :options="locationOptions" can-add-room
                     placeholder="Расположение" @pick="onNewPrinterLocation" @add-room="openNewRoom"></location-picker>
                 <location-picker ref="np-model" class="ab-loc ab-model" input-class="input" :value="newPrinter.model_id" :options="printerModelOptions" add-text="новая модель"
@@ -2508,6 +2509,12 @@
                                     @input="setMoveSpec(r.key, $event.target.value); onMoveSuggestInput($event, r.key)" @keydown="onMoveFieldKeydown($event, r.key)" @blur="closeSuggest()">
                             </td>
                         </tr>
+                        <!-- IP – у компьютера, принтера и МФУ (этап 67): ввод – как у нового ПК -->
+                        <tr v-if="moveWinHasIp">
+                            <td class="ct-label">IP</td>
+                            <td class="ct-value mw-cell"><input class="mw-in" data-mf="move_ip" :value="moveSpec('move_ip')" spellcheck="false" autocomplete="off"
+                                @input="onMoveIpInput" @keydown="onMoveFieldKeydown($event)" @blur="closeIpSuggest()"></td>
+                        </tr>
                         <tr class="ct-group"><td colspan="2">Учёт</td></tr>
                         <tr>
                             <td class="ct-label">Инвентарный</td>
@@ -2563,7 +2570,7 @@
                             <td class="ct-value mw-cell"><input class="mw-in" data-mf="installer" :value="moveWin.installerText" placeholder="Пользователь или имя" spellcheck="false" autocomplete="off"
                                 :title="moveWin.form.installer_user_id ? 'Пользователь программы' : null"
                                 @click="!suggest && openMoveInstallerList($event.target)"
-                                @input="onMoveInstallerInput" @keydown="onMoveFieldKeydown($event, 'installer')" @blur="closeSuggest()"></td>
+                                @input="onMoveInstallerInput($event)" @keydown="onMoveFieldKeydown($event, 'installer')" @blur="closeSuggest()"></td>
                         </tr>
                         <tr class="ct-group"><td colspan="2">Прочее</td></tr>
                         <tr>
@@ -2580,6 +2587,9 @@
                 </table>
             </div>
             <div v-show="!moveWin.min" class="dialog-buttons mw-foot">
+                <!-- Установить (этап 67): у записи, не из архива – окошко установки (слева, как «Один») -->
+                <button v-if="moveWin.mode === 'edit' && !moveWin.archived" class="btn mw-install" :disabled="moveWin.saving || !moveWinType"
+                    :title="moveWinType ? null : 'Сначала тип'" @click="openMoveInstall">Установить</button>
                 <span v-if="moveWin.error" class="vh-error">{{ moveWin.error }}</span>
                 <!-- Один / Несколько – как у строки «Новый компьютер»: после добавления окно закрывается или остаётся -->
                 <button v-if="moveWin.mode === 'add'" class="btn ab-many" :class="{ on: moveWin.many }" :title="moveWin.many ? 'После добавления – не закрывать' : 'После добавления – закрыть'" @click="moveWin.many = !moveWin.many">{{ moveWin.many ? "Несколько" : "Один" }}</button>
@@ -2587,6 +2597,60 @@
                 <button v-if="moveWin.mode === 'edit'" class="btn icon-only" :disabled="moveWin.saving" title="Скопировать в новую запись" @click="copyMoveWin"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
                 <button class="btn" @click="closeMoveWin">Отмена</button>
                 <button class="btn btn-primary" :disabled="moveWin.saving || !moveWin.form.type_id" :title="moveWin.form.type_id ? null : 'Сначала тип'" @click="submitMoveWin">{{ moveWin.mode === "add" ? "Добавить" : "Сохранить" }}</button>
+            </div>
+        </div>
+
+        <!-- ================= «Установить» у записи журнала (этап 67, mixins/moves.js) =================
+             Поверх окна записи, со своим затемнением (нажатие мимо – закрыть). Кабинет; у компьютера и
+             компонента – ПК, у принтера и МФУ – принтер (у техники – «Заменить»: выбранный – в архив,
+             без него – новый после выбранного); дата и кто установил; «В архив» – запись тоже -->
+        <div v-if="moveInstall && moveWin && !moveWin.min" class="dialog-overlay mi-overlay" @mousedown.self.prevent="closeMoveInstall">
+            <div ref="moveInstall" class="dialog mi" role="dialog" @keydown="onMoveInstallKeydown">
+                <div class="vh-head mw-head">
+                    <span class="vh-title"><b>Установка</b><template v-if="moveTitlePreview"> · {{ moveTitlePreview }}</template></span>
+                    <span class="vh-close" title="Закрыть (Esc)" @click="closeMoveInstall">×</span>
+                </div>
+                <table class="card-table mw-form">
+                    <tr>
+                        <td class="ct-label">Кабинет</td>
+                        <td class="ct-value mw-cell mw-pick" data-mi="place">
+                            <location-picker input-class="mw-in" quiet fit :value="moveInstall.place" :options="locationOptions" placeholder="Кабинет или отделение" @pick="onMoveInstallPlace"></location-picker>
+                            <span v-if="moveInstall.place" class="mw-clear" title="Очистить" @click="onMoveInstallPlace(null)">×</span>
+                        </td>
+                    </tr>
+                    <tr v-if="moveInstallKind">
+                        <td class="ct-label">{{ moveInstallKind === "pc" ? "Компьютер" : "Принтер / МФУ" }}</td>
+                        <td class="ct-value mw-cell">
+                            <span class="mw-split">
+                                <span class="mw-rest mw-pick" data-mi="device">
+                                    <location-picker input-class="mw-in" quiet fit :value="moveInstall.device" :options="moveInstallDevices"
+                                        :empty-text="moveInstallKind === 'pc' ? 'Компьютеров нет' : 'Принтеров нет'"
+                                        :placeholder="moveInstallCanReplace ? 'Последним номером' : 'Без компьютера'" @pick="onMoveInstallDevice"></location-picker>
+                                    <span v-if="moveInstall.device" class="mw-clear" title="Очистить" @click="onMoveInstallDevice(null)">×</span>
+                                </span>
+                                <label v-if="moveInstall.device && moveInstallCanReplace" class="mw-part mw-check mi-replace"
+                                    :title="moveInstall.replace ? 'Выбранный – в архив, новый – на его №' : 'Новый – после выбранного'"><input type="checkbox" v-model="moveInstall.replace">Заменить</label>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="ct-label">Дата установки</td>
+                        <td class="ct-value mw-cell" data-mi="installed"><date-parts :value="moveInstall.installed" parts="dmy" @update="moveInstall.installed = $event; moveInstall.error = ''"></date-parts></td>
+                    </tr>
+                    <tr>
+                        <td class="ct-label">Установил</td>
+                        <td class="ct-value mw-cell"><input class="mw-in" data-mi="installer" :value="moveInstall.installerText" placeholder="Пользователь или имя" spellcheck="false" autocomplete="off"
+                            :title="moveInstall.installer_user_id ? 'Пользователь программы' : null"
+                            @click="!suggest && openMoveInstallerList($event.target, 'install')"
+                            @input="onMoveInstallerInput($event, 'install')" @keydown="onMoveInstallerKeydown" @blur="closeSuggest()"></td>
+                    </tr>
+                </table>
+                <div class="dialog-buttons mw-foot">
+                    <label class="mw-check mi-archive" title="Запись журнала – тоже в архив"><input type="checkbox" v-model="moveInstall.archive">В архив</label>
+                    <span v-if="moveInstall.error" class="vh-error">{{ moveInstall.error }}</span>
+                    <button class="btn" @click="closeMoveInstall">Отмена</button>
+                    <button ref="moveInstallOk" class="btn btn-primary" :disabled="moveInstall.saving" @click="submitMoveInstall">Установить</button>
+                </div>
             </div>
         </div>
 

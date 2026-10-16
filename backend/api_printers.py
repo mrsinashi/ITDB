@@ -25,7 +25,7 @@ from sqlalchemy import func
 from api_columns import PRINTER_BULK_EXCLUDED, PRINTER_EDITABLE_KEYS
 from api_computer_actions import parse_ids
 from api_computers import (
-    LOCATION_PART_FIELDS, ChangeBatch, get_active_location, load_locations, location_parts, location_path,
+    LOCATION_PART_FIELDS, ChangeBatch, get_active_location, journal_fields, load_locations, location_parts, location_path,
     location_sort_keys, lock_rows, normalize_ip, normalize_mac, normalize_multiline, normalize_single, save_changes,
 )
 from auth import get_current_user, require_editor, verify_password
@@ -449,8 +449,10 @@ def lock_printers(session, ids):
 @router.post("/printers")
 def create_printer(payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
     """Новый принтер: расположение обязательно; №, имя, IP, модель – по желанию.
-    Без № – следующий свободный в кабинете (у МФУ и принтеров – свой счёт)."""
+    Без № – следующий свободный в кабинете (у МФУ и принтеров – свой счёт). Из журнала
+    «Движение» – ещё ИНВ и серийный (fields)."""
     location = get_active_location(session, payload.get("location_id"))
+    fields = journal_fields(payload, ("inv_no", "serial"))
 
     if payload.get("model_id") not in (None, ""):
         model = session.get(PrinterModel, int(payload["model_id"]))
@@ -487,6 +489,7 @@ def create_printer(payload: dict = Body(...), user=Depends(require_editor), sess
     if model:
         changes["model"] = {"old": None, "new": model_title(model), "old_id": None, "new_id": model.id}
 
+    changes.update(apply_printer_fields(session, printer, fields, batch))
     session.add(History(entity="printers", entity_id=printer.id, user_name=user["login"], changes=changes))
     session.commit()
 

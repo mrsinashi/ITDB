@@ -760,6 +760,21 @@ def computer_rows(session, archived="no"):
     }
 
 
+def journal_fields(payload, allowed):
+    """fields нового ПК или принтера – данные записи журнала «Движение» («Установить»,
+    этап 67): только поля из allowed."""
+    fields = payload.get("fields") or {}
+
+    if not isinstance(fields, dict) or set(fields) - set(allowed):
+        raise HTTPException(status_code=400, detail="Эти поля при добавлении не принимаются.")
+
+    return fields
+
+
+# Что новый ПК берёт из записи журнала, кроме места, имени и IP
+JOURNAL_PC_FIELDS = ("inv_no", "serial", "type", "model", "cpu", "ram", "drive", "gpu")
+
+
 @router.post("/computers")
 def create_computer(
     payload: dict = Body(...),
@@ -767,12 +782,14 @@ def create_computer(
     session=Depends(get_db),
 ):
     """Новый ПК: расположение обязательно, № места, HOSTNAME, IP – по желанию.
-    Остальное заполняется потом в таблице или карточке."""
+    Остальное заполняется потом в таблице или карточке; из журнала «Движение» – сразу
+    (fields: ИНВ, серийный, тип, модель, CPU, RAM, DRIVE, GPU)."""
     location = get_active_location(session, payload.get("location_id"))
 
     seat_no = parse_seat_no(payload.get("seat_no"))
     hostname = normalize_single(payload.get("hostname"))
     ip = normalize_ip(payload.get("ip"))
+    fields = journal_fields(payload, JOURNAL_PC_FIELDS)
 
     # Место занято – ПК на нём и дальше подряд сдвигаются на +1
     batch = ChangeBatch(user["login"])
@@ -803,6 +820,8 @@ def create_computer(
     for field, value in (("seat_no", seat_no), ("hostname", hostname), ("ip", ip)):
         if value is not None:
             changes[field] = {"old": None, "new": value}
+
+    changes.update(apply_fields(session, computer, fields, set(), batch))
 
     session.add(
         History(

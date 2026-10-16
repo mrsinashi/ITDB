@@ -5,7 +5,8 @@
   название» (поле model, у любого типа) и в скобках – поля типа через «; »; у принтеров и
   МФУ в скобках – модель из справочника моделей принтеров. Новый тип из окна записи – с
   одним полем «Информация». Сменили тип – поля, которых у нового нет, очищаются. У
-  компьютера ещё «Комплект» (мышь, клавиатура…) – своим столбцом, не в названии.
+  компьютера ещё «Комплект» (мышь, клавиатура…) – своим столбцом, не в названии; у
+  компьютера, принтера и МФУ – IP (этап 67), тоже своим столбцом.
 - Строки – новые сверху (правки этапа 66); одинаковый инвентарный рядом – это делает фронт.
 - Даты – день и месяц можно не знать: в базе «ГГГГ», «ГГГГ-ММ», «ГГГГ-ММ-ДД» (так они и
   сортируются), в API и Истории – «ДД.ММ.ГГГГ», «ММ.ГГГГ», «ГГГГ».
@@ -14,9 +15,14 @@
   («Фамилия И.О.», без ФИО – логин) или вписанное имя.
 - История – entity "moves" (правки отменяются, как у принтеров: history_undo.py), типы –
   "item_types" (только «Создан»).
+- «Установить» (этап 67, install_move): куда, дата, кто, статус «Установлен» одним действием
+  (с несохранёнными правками окна записи); заменённый ПК или принтер – в архив, запись – по
+  галочке тоже. Всё одной транзакцией: у записей Истории одно время – Ctrl+Z отменяет разом.
 """
 import calendar
 import re
+from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
@@ -25,25 +31,25 @@ from sqlalchemy.exc import IntegrityError
 
 from api_columns import MOVE_COLUMNS, MOVE_COLUMNS_BY_KEY, MOVE_SPEC_LABELS
 from api_computer_actions import parse_ids
-from api_computers import load_locations, location_chain, location_path, location_title, lock_rows, normalize_multiline, normalize_single, save_changes
+from api_computers import load_locations, location_chain, location_path, location_title, lock_rows, normalize_ip, normalize_multiline, normalize_single, save_changes
 from api_printers import model_title
 from auth import require_editor
 from db import get_db
 from history_log import log_change
-from models import Computer, History, ItemType, Location, Move, PrinterModel, User
+from models import Computer, History, ItemType, Location, Move, Printer, PrinterModel, User
 
 router = APIRouter(prefix="/api", tags=["moves"])
 
 KINDS = {"tech": "техника", "part": "компонент"}
 
 # Поля каждого вида типа («Своё название» – у всех, у принтеров ещё модель из справочника).
-# В «Понятное название» идут все, кроме комплекта компьютера (KIT – свой столбец)
+# В «Понятное название» идут все, кроме комплекта компьютера и IP (KIT, IP – свои столбцы)
 FORM_FIELDS = {
-    "computer": ("pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu", "kit"),
+    "computer": ("pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu", "kit", "move_ip"),
     "monitor": ("diagonal", "resolution"),
     "disk": ("disk_kind", "interface", "size"),
     "ram": ("ram_kind", "freq", "size"),
-    "printer": (),
+    "printer": ("move_ip",),
     "info": ("info",),
 }
 SPEC_FIELDS = set(MOVE_SPEC_LABELS)
@@ -67,6 +73,8 @@ YEAR_MAX = 2100
 
 KIT = "kit"
 KIT_SPLIT = re.compile(r"[,;\n]")
+# IP в журнале – свой ключ (у ПК и принтеров «ip» – с оформлением подсетей)
+IP = "move_ip"
 
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 ISO_DATE = re.compile(r"([0-9]{4})(?:-([0-9]{1,2})(?:-([0-9]{1,2}))?)?")
@@ -308,15 +316,16 @@ def dest_path(session, location_id, computer_id, locations_by_id):
     return location_path(location_id, locations_by_id) if location_id is not None else None
 
 
-def parse_installer(session, user_id, text):
-    """Пользователь программы (id) или вписанное имя → (id, имя)."""
+def parse_installer(session, user_id, text, current=None):
+    """Пользователь программы (id) или вписанное имя → (id, имя). Отключённого можно только
+    оставить (current – «Установил» записи сейчас: «Установить» шлёт его же, этап 67)."""
     if user_id not in (None, ""):
         try:
             user = session.get(User, int(user_id))
         except (TypeError, ValueError):
             user = None
 
-        if user is None or user.archived:
+        if user is None or (user.archived and user.id != current):
             raise HTTPException(status_code=400, detail="Установил: пользователь не найден или отключён.")
 
         return user.id, None
@@ -451,7 +460,12 @@ def apply_move_fields(session, move, payload, tidy=True):
             continue
 
         if field in SPEC_FIELDS:
-            new_value = kit_text(value) if field == KIT else normalize_single(value)
+            if field == KIT:
+                new_value = kit_text(value)
+            elif field == IP:
+                new_value = normalize_ip(value)
+            else:
+                new_value = normalize_single(value)
 
             if tidy and new_value is not None and field not in FORM_FIELDS[form]:
                 raise HTTPException(status_code=400, detail=f"У типа «{item_type.name}» нет поля «{label_of(field)}».")
@@ -484,7 +498,7 @@ def apply_move_fields(session, move, payload, tidy=True):
             setattr(move, column, new_value)
 
     if "installer" in payload or "installer_user_id" in payload:
-        user_id, text = parse_installer(session, payload.get("installer_user_id"), payload.get("installer"))
+        user_id, text = parse_installer(session, payload.get("installer_user_id"), payload.get("installer"), move.installer_user_id)
 
         if (user_id, text) != (move.installer_user_id, move.installer):
             # Номер – пользователь или вписанное имя; одно на двоих имя различает пометка
@@ -674,6 +688,7 @@ def move_rows(session, archived="no", ids=None):
             "printer_model_id": move.printer_model_id,
             "specs": dict(move.specs or {}),
             "kit": (move.specs or {}).get(KIT),
+            IP: (move.specs or {}).get(IP),
             "inv_no": move.inv_no,
             "serial": move.serial,
             "country": move.country,
@@ -733,24 +748,29 @@ def create_move(payload: dict = Body(...), user=Depends(require_editor), session
     return {"ok": True, "id": move.id, "row": one_row(session, move.id)}
 
 
+def check_version(move, expected_version):
+    """Окно записи открыто давно, а запись успели поменять – 409 (правку другого не затереть)."""
+    if expected_version is None:
+        return
+
+    try:
+        expected_version = int(expected_version)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="_version должен быть числом.")
+
+    if expected_version != move.version:
+        raise HTTPException(
+            status_code=409,
+            detail="Эту запись уже изменил другой пользователь. Таблица будет обновлена – проверь значение и повтори правку.",
+        )
+
+
 @router.patch("/moves/{move_id}")
 def update_move(move_id: int, payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
     payload = dict(payload)
     expected_version = payload.pop("_version", None)
     move = lock_move(session, move_id)
-
-    if expected_version is not None:
-        try:
-            expected_version = int(expected_version)
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail="_version должен быть числом.")
-
-        if expected_version != move.version:
-            raise HTTPException(
-                status_code=409,
-                detail="Эту запись уже изменил другой пользователь. Таблица будет обновлена – проверь значение и повтори правку.",
-            )
-
+    check_version(move, expected_version)
     changes = apply_move_fields(session, move, payload)
 
     if changes:
@@ -805,6 +825,90 @@ def bulk_update_moves(payload: dict = Body(...), user=Depends(require_editor), s
 
     session.commit()
     return {"ok": True, "ids": ids, "changed": changed}
+
+
+# ---------- Установить (этап 67) ----------
+
+
+INSTALLED = "Установлен"
+
+
+class InstallIn(BaseModel):
+    version: Optional[int] = None
+    # Несохранённые правки окна записи – сохраняются вместе с установкой
+    edits: dict = {}
+    dest: Optional[str] = None
+    installed: Optional[str] = None
+    installer_user_id: Optional[int] = None
+    installer: Optional[str] = None
+    # «Заменить»: этот ПК (у компьютера) или принтер (у принтера и МФУ) уходит в архив
+    replace_pc: Optional[int] = None
+    replace_printer: Optional[int] = None
+    # «В архив»: запись журнала – тоже
+    archive: bool = False
+
+
+def archive_replaced(session, model, item_id, what, node_id, login):
+    """Заменённый ПК или принтер (в узле «Куда» или под ним) – в архив, с Историей у него."""
+    item = session.query(model).filter(model.id == item_id).with_for_update().first()
+
+    if item is None or item.archived:
+        raise HTTPException(status_code=400, detail=f"{what} уже нет среди рабочих. Обнови таблицу.")
+
+    if node_id not in {location.id for location in location_chain(item.location_id, load_locations(session))}:
+        raise HTTPException(status_code=400, detail=f"{what} нет в выбранном кабинете. Обнови таблицу.")
+
+    save_changes(session, item, {"archived": {"old": False, "new": True}}, login)
+    item.archived = True
+
+
+@router.post("/moves/{move_id}/install")
+def install_move(move_id: int, payload: InstallIn, user=Depends(require_editor), session=Depends(get_db)):
+    """«Установить»: куда (узел; компоненту – и ПК), дата установки, кто установил и статус
+    «Установлен» – вместе с несохранёнными правками окна записи. Заменить – выбранный ПК или
+    принтер в архив; archive – запись тоже."""
+    move = lock_move(session, move_id)
+    check_version(move, payload.version)
+
+    if move.archived:
+        raise HTTPException(status_code=400, detail="Запись в архиве.")
+
+    if normalize_single(payload.dest) is None:
+        raise HTTPException(status_code=400, detail="Выбери кабинет.")
+
+    fields = dict(payload.edits or {})
+    fields.update({
+        "dest": payload.dest,
+        # Дата не указана – сегодня (как в окошке)
+        "installed": normalize_single(payload.installed) or date.today().strftime("%d.%m.%Y"),
+        "installer_user_id": payload.installer_user_id,
+        "installer": payload.installer,
+        "move_status": INSTALLED,
+    })
+    changes = apply_move_fields(session, move, fields)
+    item_type = session.get(ItemType, move.type_id)
+    form = item_type.form if item_type else "info"
+
+    if payload.replace_pc is not None:
+        if form != "computer":
+            raise HTTPException(status_code=400, detail="Заменить ПК можно только компьютером.")
+
+        archive_replaced(session, Computer, payload.replace_pc, "Этого ПК", move.dest_location_id, user["login"])
+
+    if payload.replace_printer is not None:
+        if form != "printer":
+            raise HTTPException(status_code=400, detail="Заменить принтер можно только принтером или МФУ.")
+
+        archive_replaced(session, Printer, payload.replace_printer, "Этого принтера", move.dest_location_id, user["login"])
+
+    if payload.archive:
+        changes["archived"] = {"old": False, "new": True}
+        move.archived = True
+
+    save_changes(session, move, changes, user["login"])
+    session.commit()
+
+    return {"ok": True, "id": move_id, "changes": changes, "updated": one_row(session, move_id)}
 
 
 @router.get("/moves/installers")

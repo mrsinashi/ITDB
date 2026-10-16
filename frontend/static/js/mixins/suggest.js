@@ -181,7 +181,7 @@ export default {
                 return;
             }
             const room = Math.min(200, this.suggestShown.length * SUGGEST_ITEM_HEIGHT + 8);
-            s.pos = placeList(s.el, { width: 180, room: room, height: 300, maxWidth: s.el.closest(".mw") ? 0 : 420 });
+            s.pos = placeList(s.el, { width: 180, room: room, height: 300, maxWidth: s.el.closest(".mw, .mi") ? 0 : 420 });
         },
 
         scrollSuggestTo(index, center) {

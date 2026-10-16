@@ -13,17 +13,20 @@
 // Правки этапа 66: тело – как таблица карточки (значения прямо в ячейках); списки подсказок – по
 // клику, вводу или ↓, не по фокусу; фокус после типа – на «Название по 1С». Правки 2: без
 // анимаций; нажатие мимо окна – свернуть (есть несохранённое) или закрыть; копия записи.
+// Этап 67: IP у компьютера, принтера и МФУ; «Установить» у записи – окошко поверх окна записи
+// (кабинет, ПК или принтер – заменить или после него, дата, кто установил, «В архив»); у
+// компьютера, принтера и МФУ после него – своя вкладка со строкой добавления из записи.
 
-import { apiFetch, searchNorm, setIfChanged } from "../util.js";
+import { apiFetch, fixIpTyping, searchNorm, setIfChanged } from "../util.js";
 import { keepSameRows, refreshDuplicates } from "../columns.js";
 
-// Поля по виду типа – как FORM_FIELDS в api_moves.py (комплект – не в названии, свой столбец)
+// Поля по виду типа – как FORM_FIELDS в api_moves.py (комплект и IP – не в названии, свои столбцы)
 const FORM_FIELDS = {
-    computer: ["pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu", "kit"],
+    computer: ["pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu", "kit", "move_ip"],
     monitor: ["diagonal", "resolution"],
     disk: ["disk_kind", "interface", "size"],
     ram: ["ram_kind", "freq", "size"],
-    printer: [],
+    printer: ["move_ip"],
     info: ["info"]
 };
 
@@ -68,6 +71,19 @@ const PRESETS = {
 const SAME_TYPE = ["name_1c", "model"];
 // Комплект – через запятую: список дописывает, а не заменяет (как картриджи, этап 47)
 const KIT = "kit";
+// IP (этап 67) – свой ключ: у ПК и принтеров «ip» оформляется подсетями
+const IP = "move_ip";
+// Что новый ПК берёт из записи («Установить», этап 67), кроме места и IP: поле ПК → как взять
+const PC_FROM_MOVE = {
+    inv_no: function (row) { return row.inv_no; },
+    serial: function (row) { return row.serial; },
+    type: function (row) { return row.specs.pc_kind; },
+    model: function (row) { return row.model; },
+    cpu: function (row) { return row.specs.cpu; },
+    ram: function (row) { return row.specs.ram; },
+    drive: function (row) { return [row.specs.disk_kind, row.specs.disk_size].filter(Boolean).join(" "); },
+    gpu: function (row) { return row.specs.gpu; }
+};
 // У полей компьютера – ещё значения Таблицы ПК (справочник и данные)
 const PC_FIELDS = { pc_kind: "type", cpu: "cpu", gpu: "gpu" };
 
@@ -123,6 +139,11 @@ function dateParts(text) {
     return { d: d || null, m: m || null, y: y || null };
 }
 
+function todayParts() {
+    const now = new Date();
+    return { d: now.getDate(), m: now.getMonth() + 1, y: now.getFullYear() };
+}
+
 function pad(n) {
     return n < 10 ? "0" + n : String(n);
 }
@@ -164,6 +185,10 @@ function formOf(row) {
     TEXT_FIELDS.forEach(function (key) { form[key] = row[key] || ""; });
     form.printer_model_id = row.printer_model_id || null;
     form.specs = Object.assign({}, row.specs || {});
+    // Несколько IP – в базе строками, в поле окна (одна строка) – через запятую
+    if (form.specs[IP]) {
+        form.specs[IP] = String(form.specs[IP]).split("\n").join(", ");
+    }
     Object.keys(DATE_PARTS).forEach(function (key) { form[key] = dateParts(row[key]); });
     form.dest = row.dest_ref || null;
     form.installer_user_id = row.installer_user_id || null;
@@ -185,9 +210,12 @@ export default {
             itemTypes: [],
             // Кого можно выбрать в «Установил» (/api/moves/installers, редактору)
             moveInstallers: [],
-            // Окно записи: { mode: add / edit, kind: tech / part, id, version, min, form,
+            // Окно записи: { mode: add / edit, kind: tech / part, id, version, archived, min, form,
             // orig, installerText, error, saving, many, newModel }
             moveWin: null,
+            // «Установить» (этап 67): { place – id узла, device – id ПК или принтера, replace,
+            // installed – { d, m, y }, installer_user_id, installer, installerText, archive, error, saving }
+            moveInstall: null,
             // Где свёрнутое окно (перетащили – там и остаётся до перезагрузки страницы): { x, y }
             moveBarPos: null
         };
@@ -212,6 +240,51 @@ export default {
 
         moveFormRows() {
             return this.moveWinType ? FORM_ROWS[this.moveWinForm] : [];
+        },
+
+        // IP – у компьютера, принтера и МФУ (этап 67)
+        moveWinHasIp() {
+            return !!this.moveWinType && FORM_FIELDS[this.moveWinForm].indexOf(IP) !== -1;
+        },
+
+        // «Установить»: кроме кабинета – ПК (у компьютера и компонента) или принтер (у принтера и
+        // МФУ); другая техника ставится только в узел
+        moveInstallKind() {
+            const type = this.moveWinType;
+            if (!type) {
+                return null;
+            }
+            if (type.kind === "part" || this.moveWinForm === "computer") {
+                return "pc";
+            }
+            return this.moveWinForm === "printer" ? "printer" : null;
+        },
+
+        // «Заменить» – у компьютера, принтера и МФУ; компонент в ПК просто ставится
+        moveInstallCanReplace() {
+            return !!this.moveWinType && this.moveWinType.kind === "tech" && !!this.moveInstallKind;
+        },
+
+        // ПК или принтеры для «Установить»: рабочие, в выбранном узле и под ним – «№2 buh-3»; где
+        // стоит – если не в самом выбранном узле
+        moveInstallDevices() {
+            const inst = this.moveInstall;
+            const pc = this.moveInstallKind === "pc";
+            if (!inst || !this.moveInstallKind) {
+                return [];
+            }
+            const list = [];
+            (pc ? this.rows : this.printerRows).forEach((row) => {
+                if (row.archived || (inst.place && !this.inLocation(row.location_id, inst.place))) {
+                    return;
+                }
+                const entry = this.treeIndex[row.location_id];
+                const number = pc ? row.seat_no : row.number;
+                const name = pc ? row.hostname || "ПК без имени" : row.name || row.model_title || "Принтер без имени";
+                const path = (number ? "№" + number + " " : "") + name + (entry && row.location_id !== inst.place ? " – " + entry.path : "");
+                list.push({ id: row.id, kind: pc ? "pc" : "printer", path: path, search: searchNorm([path, entry && entry.path, row.inv_no, row.ip].filter(Boolean).join(" ")) });
+            });
+            return list;
         },
 
         moveWinTitle() {
@@ -395,7 +468,7 @@ export default {
             this.prepareMoveWin();
             const form = formOf(row);
             this.moveWin = {
-                mode: "edit", kind: row.type_kind || "tech", id: row.id, version: row.version, min: false,
+                mode: "edit", kind: row.type_kind || "tech", id: row.id, version: row.version, archived: !!row.archived, min: false,
                 form: form, orig: formOf(row), installerText: row.installer || "", error: "", saving: false, many: false, newModel: null
             };
             this.$nextTick(() => this.focusMoveField(field));
@@ -477,7 +550,7 @@ export default {
         },
 
         // Копия записи (кнопка у «Отмены», правки 2 этапа 66): новая запись с теми же полями, что на
-        // экране, без инвентарного и серийного номеров, «Куда», даты установки и «Установил»
+        // экране, без инвентарного и серийного номеров, IP, «Куда», даты установки и «Установил»
         async copyMoveWin() {
             const win = this.moveWin;
             if (!win || win.mode !== "edit" || win.saving) {
@@ -491,6 +564,7 @@ export default {
             }
             const form = JSON.parse(JSON.stringify(win.form));
             Object.assign(form, { inv_no: "", serial: "", dest: null, installed: dateParts(null), installer_user_id: null, installer: "" });
+            delete form.specs[IP];
             this.closeSuggest();
             this.moveWin = {
                 mode: "add", kind: win.kind, id: null, version: null, min: false,
@@ -647,31 +721,57 @@ export default {
             }
         },
 
-        // «Установил»: набранное – вписанное имя (не пользователь)
-        onMoveInstallerInput(event) {
-            const win = this.moveWin;
-            if (!win) {
+        // IP (этап 67): «ю», «/», «,» – точка; «15.12» – список полных адресов, как у нового ПК
+        onMoveIpInput(event) {
+            const el = event.target;
+            const fixed = fixIpTyping(el, event);
+            const value = fixed !== null ? fixed : el.value;
+            this.setMoveSpec(IP, value);
+            const options = this.ipFullOptions(value);
+            if (!options.length) {
+                this.closeIpSuggest();
                 return;
             }
-            win.installerText = event.target.value;
-            win.form.installer_user_id = null;
-            win.form.installer = event.target.value;
+            this.openSuggestList(el, "ip-full", options, (picked) => {
+                this.setMoveSpec(IP, picked);
+                this.$nextTick(() => this.focusMoveField(IP));
+            });
+        },
+
+        // «Установил» – в окне записи и в «Установить» (где: win / install): текст поля
+        // (installerText) и что сохранится (installer_user_id или вписанное installer)
+        moveInstallerTarget(where) {
+            if (where === "install") {
+                return this.moveInstall ? { box: this.moveInstall, form: this.moveInstall } : null;
+            }
+            return this.moveWin ? { box: this.moveWin, form: this.moveWin.form } : null;
+        },
+
+        // Набранное – вписанное имя (не пользователь)
+        onMoveInstallerInput(event, where) {
+            const target = this.moveInstallerTarget(where);
+            if (!target) {
+                return;
+            }
+            target.box.installerText = event.target.value;
+            target.form.installer_user_id = null;
+            target.form.installer = event.target.value;
             if (!this.suggest) {
-                this.openMoveInstallerList(event.target);
+                this.openMoveInstallerList(event.target, where);
             }
             this.onSuggestInput(event.target.value);
         },
 
-        openMoveInstallerList(el) {
+        openMoveInstallerList(el, where) {
             const options = this.moveInstallers.map(function (u) {
                 return { key: "u" + u.id, value: u.name, count: u.full_name && u.full_name !== u.name ? u.full_name : "", countTitle: "", userId: u.id };
             });
             this.openSuggestList(el, "installer", options, (value, option) => {
-                const win = this.moveWin;
-                if (win && option) {
-                    win.installerText = option.value;
-                    win.form.installer_user_id = option.userId;
-                    win.form.installer = "";
+                const target = this.moveInstallerTarget(where);
+                if (target && option) {
+                    target.box.installerText = option.value;
+                    target.form.installer_user_id = option.userId;
+                    target.form.installer = "";
                 }
             });
         },
@@ -831,7 +931,7 @@ export default {
 
         // ---------- Сохранить ----------
 
-        // Что отправить на сервер: поля окна по виду типа (у принтера – модель справочника)
+        // Что отправить на сервер: поля окна по виду типа (у принтера – ещё модель справочника)
         movePayload(form, typeForm) {
             const payload = { type_id: form.type_id };
             TEXT_FIELDS.forEach(function (key) {
@@ -839,11 +939,10 @@ export default {
             });
             if (typeForm === "printer") {
                 payload.printer_model_id = form.printer_model_id || null;
-            } else {
-                FORM_FIELDS[typeForm].forEach(function (key) {
-                    payload[key] = String(form.specs[key] || "").trim();
-                });
             }
+            FORM_FIELDS[typeForm].forEach(function (key) {
+                payload[key] = String(form.specs[key] || "").trim();
+            });
             Object.keys(DATE_PARTS).forEach(function (key) {
                 payload[key] = dateText(form[key]);
             });
@@ -857,6 +956,38 @@ export default {
             return payload;
         },
 
+        // Правка записи: что в окне изменено (только это уходит на сервер)
+        moveWinEdits(win) {
+            const payload = this.movePayload(win.form, this.moveWinForm);
+            const origType = this.itemTypes.find(function (t) { return t.id === win.orig.type_id; });
+            const before = this.movePayload(win.orig, origType && FORM_FIELDS[origType.form] ? origType.form : "info");
+            const changed = {};
+            Object.keys(payload).forEach(function (key) {
+                if (JSON.stringify(payload[key]) !== JSON.stringify(before[key])) {
+                    changed[key] = payload[key];
+                }
+            });
+            if ("installer" in changed || "installer_user_id" in changed) {
+                changed.installer_user_id = payload.installer_user_id;
+                if ("installer" in payload) {
+                    changed.installer = payload.installer;
+                }
+            }
+            return changed;
+        },
+
+        // Чего не хватает датам окна («Дата получения: нет месяца.»); всё хорошо – пусто. skip –
+        // дата, которую не проверять (у «Установить» дата установки – своя, из окошка)
+        moveWinDateError(win, skip) {
+            for (const key of Object.keys(DATE_PARTS)) {
+                const problem = key === skip ? null : dateProblem(win.form[key]);
+                if (problem) {
+                    return { key: key, text: DATE_LABELS[key] + ": " + problem + "." };
+                }
+            }
+            return null;
+        },
+
         async submitMoveWin() {
             const win = this.moveWin;
             if (!win || win.saving) {
@@ -868,32 +999,16 @@ export default {
                 this.focusMoveField("type");
                 return;
             }
-            for (const key of Object.keys(DATE_PARTS)) {
-                const problem = dateProblem(form[key]);
-                if (problem) {
-                    win.error = DATE_LABELS[key] + ": " + problem + ".";
-                    this.focusMoveField(key);
-                    return;
-                }
+            const dateError = this.moveWinDateError(win);
+            if (dateError) {
+                win.error = dateError.text;
+                this.focusMoveField(dateError.key);
+                return;
             }
-            const typeForm = this.moveWinForm;
-            let payload = this.movePayload(form, typeForm);
+            let payload = this.movePayload(form, this.moveWinForm);
             if (win.mode === "edit") {
                 // Только изменённое (и версия: правку другого пользователя не затереть)
-                const origType = this.itemTypes.find(function (t) { return t.id === win.orig.type_id; });
-                const before = this.movePayload(win.orig, origType && FORM_FIELDS[origType.form] ? origType.form : "info");
-                const changed = {};
-                Object.keys(payload).forEach(function (key) {
-                    if (JSON.stringify(payload[key]) !== JSON.stringify(before[key])) {
-                        changed[key] = payload[key];
-                    }
-                });
-                if ("installer" in changed || "installer_user_id" in changed) {
-                    changed.installer_user_id = payload.installer_user_id;
-                    if ("installer" in payload) {
-                        changed.installer = payload.installer;
-                    }
-                }
+                const changed = this.moveWinEdits(win);
                 if (!Object.keys(changed).length) {
                     this.moveWin = null;
                     return;
@@ -966,7 +1081,7 @@ export default {
         },
 
         // Сохранили: строка – вспышкой (видна, если на экране журнал); «Несколько» – окно
-        // остаётся с теми же полями, кроме инвентарного и серийного
+        // остаётся с теми же полями, кроме инвентарного, серийного и IP
         afterMoveWinSave(win, id, changes) {
             const onPage = this.view === "journals";
             if (onPage) {
@@ -989,6 +1104,9 @@ export default {
                 if (win.many) {
                     win.form.inv_no = "";
                     win.form.serial = "";
+                    const specs = Object.assign({}, win.form.specs);
+                    delete specs[IP];
+                    win.form.specs = specs;
                     win.orig = JSON.parse(JSON.stringify(win.form));
                     this.$nextTick(() => this.focusMoveField("serial"));
                     return;
@@ -999,9 +1117,272 @@ export default {
             }
         },
 
+        // ---------- «Установить» (этап 67) ----------
+
+        // Кнопка внизу слева у записи: окошко поверх окна – кабинет (и ПК или принтер) из «Куда»,
+        // дата установки (пусто – сегодня), кто установил (пусто – тот, кто ставит)
+        openMoveInstall() {
+            const win = this.moveWin;
+            if (!win || win.mode !== "edit" || win.archived || win.saving || !this.moveWinType) {
+                return;
+            }
+            this.closeSuggest();
+            this.ensureTree();
+            if (this.moveInstallKind === "printer" && !this.printerRows.length) {
+                this.loadPrinters();
+            }
+            if (!this.moveInstallers.length) {
+                this.loadMoveInstallers();
+            }
+            const form = win.form;
+            const dest = String(form.dest || "");
+            const id = Number(dest.slice(2));
+            let place = dest.indexOf("l:") === 0 ? id : null;
+            let device = null;
+            if (dest.indexOf("c:") === 0) {
+                const pc = this.rows.find(function (r) { return r.id === id; });
+                if (pc) {
+                    place = pc.location_id;
+                    device = pc.archived ? null : pc.id;
+                }
+            }
+            const own = !form.installer_user_id && !String(form.installer || "").trim();
+            this.moveInstall = {
+                place: place, device: device, replace: false,
+                installed: form.installed && form.installed.y ? Object.assign({}, form.installed) : todayParts(),
+                installer_user_id: own ? this.user.id : form.installer_user_id,
+                installer: own ? "" : form.installer,
+                installerText: own ? this.navUserName : win.installerText,
+                archive: false, error: "", saving: false
+            };
+            this.$nextTick(() => this.focusMoveInstall(place ? null : "place"));
+        },
+
+        // Фокус в окошке: поле (place, device, installer) или – всё заполнено – «Установить» (Enter)
+        focusMoveInstall(field) {
+            const box = this.$refs.moveInstall;
+            if (!box) {
+                return;
+            }
+            const el = field ? box.querySelector('[data-mi="' + field + '"]') : this.$refs.moveInstallOk;
+            const target = el && (el.matches("input, button") ? el : el.querySelector("input"));
+            if (target) {
+                target.focus({ preventScroll: true });
+            }
+        },
+
+        closeMoveInstall() {
+            if (!this.moveInstall || this.moveInstall.saving) {
+                return;
+            }
+            this.closeSuggest();
+            this.moveInstall = null;
+            this.$nextTick(() => this.focusMoveField(null));
+        },
+
+        // Узел locationId – это nodeId или он под ним
+        inLocation(locationId, nodeId) {
+            for (let e = this.treeIndex[locationId]; e; e = this.treeIndex[e.node.parent_id]) {
+                if (e.node.id === nodeId) {
+                    return true;
+                }
+            }
+            return false;
+        },
+
+        // Выбранный в «Установить» ПК или принтер
+        moveInstallRow(id) {
+            if (!id) {
+                return null;
+            }
+            const rows = this.moveInstallKind === "printer" ? this.printerRows : this.rows;
+            return rows.find(function (r) { return r.id === id; }) || null;
+        },
+
+        onMoveInstallPlace(id) {
+            const inst = this.moveInstall;
+            if (!inst) {
+                return;
+            }
+            inst.place = id;
+            inst.error = "";
+            // Выбранный ПК или принтер не в этом узле – выбор снимается
+            const row = this.moveInstallRow(inst.device);
+            if (row && !(id && this.inLocation(row.location_id, id))) {
+                inst.device = null;
+                inst.replace = false;
+            }
+        },
+
+        // ПК или принтер выбран – кабинет его
+        onMoveInstallDevice(id) {
+            const inst = this.moveInstall;
+            if (!inst) {
+                return;
+            }
+            inst.device = id;
+            inst.error = "";
+            const row = this.moveInstallRow(id);
+            if (row) {
+                inst.place = row.location_id;
+            } else {
+                inst.replace = false;
+            }
+        },
+
+        // Enter в окошке – «Установить» (открытый список забирает Enter себе; на кнопке – её нажатие)
+        onMoveInstallKeydown(event) {
+            if (event.key === "Enter" && !event.defaultPrevented && !event.shiftKey && event.target.tagName !== "BUTTON") {
+                event.preventDefault();
+                this.submitMoveInstall();
+            }
+        },
+
+        // «Установил» в окошке: ↓ – список, Esc при открытом списке закрывает только его
+        onMoveInstallerKeydown(event) {
+            const listOpen = !!this.suggest;
+            if (this.suggestKeydown(event)) {
+                return;
+            }
+            if (event.key === "ArrowDown" && !listOpen) {
+                event.preventDefault();
+                this.openMoveInstallerList(event.target, "install");
+            } else if (event.key === "Escape" && listOpen) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        },
+
+        async submitMoveInstall() {
+            const win = this.moveWin;
+            const inst = this.moveInstall;
+            if (!win || !inst || inst.saving) {
+                return;
+            }
+            if (!inst.place) {
+                inst.error = "Выбери кабинет.";
+                this.focusMoveInstall("place");
+                return;
+            }
+            const problem = dateProblem(inst.installed);
+            const dateError = problem ? { text: "Дата установки: " + problem + "." } : this.moveWinDateError(win, "installed");
+            if (dateError) {
+                inst.error = dateError.text;
+                return;
+            }
+            const kind = this.moveInstallKind;
+            const device = this.moveInstallRow(inst.device);
+            const replace = !!device && inst.replace && this.moveInstallCanReplace;
+            const location = device ? device.location_id : inst.place;
+            // Несохранённые правки окна – вместе с установкой; куда, когда и кто – из окошка
+            const edits = this.moveWinEdits(win);
+            ["dest", "installed", "installer", "installer_user_id", "move_status"].forEach(function (key) { delete edits[key]; });
+            const body = {
+                version: win.version,
+                edits: edits,
+                dest: device && this.moveWinType.kind === "part" ? "c:" + device.id : "l:" + location,
+                installed: dateText(inst.installed) || dateText(todayParts()),
+                installer_user_id: inst.installer_user_id || null,
+                installer: inst.installer_user_id ? "" : String(inst.installer || "").trim(),
+                replace_pc: replace && kind === "pc" ? device.id : null,
+                replace_printer: replace && kind === "printer" ? device.id : null,
+                archive: inst.archive
+            };
+            // Компьютер, принтер или МФУ – потом строка добавления на своей вкладке
+            const ctx = { tech: this.moveInstallCanReplace ? this.moveWinForm : null, device: device, replace: replace, location: location };
+            inst.saving = true;
+            inst.error = "";
+            try {
+                const response = await apiFetch("/api/moves/" + win.id + "/install", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                if (response.status === 409) {
+                    await this.loadMoves();
+                    inst.error = this.mergeFreshMove(win) ? "Запись изменили – значения обновлены, нажми ещё раз." : "Записи больше нет.";
+                    inst.saving = false;
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
+                await this.afterMoveInstall(await response.json(), ctx);
+            } catch (e) {
+                inst.error = String(e.message || e);
+                inst.saving = false;
+            }
+        },
+
+        // Установили: окна закрываются. Компьютер, принтер или МФУ – своя вкладка и строка
+        // добавления с данными записи: место, № (вместо выбранного или после него), IP, ИНВ…
+        async afterMoveInstall(data, ctx) {
+            const row = data.updated;
+            const title = (row && (row.title || row.item_type)) || "запись";
+            const device = ctx.device;
+            const pc = ctx.tech === "computer";
+            this.closeSuggest();
+            this.moveInstall = null;
+            this.moveWin = null;
+            await this.loadMoves();
+            const gone = ctx.replace ? "; в архив: " + (pc ? device.hostname || "ПК без имени" : device.name || device.model_title || "принтер без имени") : "";
+            this.toast("Установлено: " + title + gone, "success");
+            if (!row || !ctx.tech) {
+                if (row && !row.archived && this.view === "journals") {
+                    Object.keys(data.changes || {}).forEach((field) => this.flashCell("m" + row.id, this.moveChangeColumn(field)));
+                }
+                return;
+            }
+            const ip = String(row[IP] || "").split("\n").join(", ");
+            if (pc) {
+                if (ctx.replace) {
+                    await this.loadTable();
+                }
+                const fields = {};
+                Object.keys(PC_FROM_MOVE).forEach(function (key) {
+                    const value = String(PC_FROM_MOVE[key](row) || "").trim();
+                    if (value) {
+                        fields[key] = value;
+                    }
+                });
+                const seat = device && device.seat_no ? Number(device.seat_no) + (ctx.replace ? 0 : 1) : null;
+                this.setView("table");
+                this.openNewComputer({ location_id: ctx.location, seat_no: seat, ip: ip, fields: fields, tip: this.moveFromTip(title, fields, this.builtinColumns) });
+                return;
+            }
+            if (ctx.replace) {
+                await this.loadPrinters();
+            }
+            const fields = {};
+            ["inv_no", "serial"].forEach(function (key) {
+                if (row[key]) {
+                    fields[key] = row[key];
+                }
+            });
+            // № – вместо выбранного или после него; у МФУ и принтеров свой счёт – другого вида не в счёт
+            const model = row.printer_model_id ? this.printerModelById.get(row.printer_model_id) : null;
+            const same = device && device.number && (device.kind_key || null) === (model ? model.kind : null);
+            this.setView("printers");
+            this.openNewPrinter({
+                location_id: ctx.location, model_id: row.printer_model_id || null, ip: ip, fields: fields,
+                number: same ? Number(device.number) + (ctx.replace ? 0 : 1) : null,
+                tip: this.moveFromTip(title, fields, this.printerColumns)
+            });
+        },
+
+        // Подсказка у строки «Новый компьютер / принтер из журнала»: что ещё запишется
+        moveFromTip(title, fields, columns) {
+            const lines = ["Запись журнала: " + title];
+            Object.keys(fields).forEach(function (key) {
+                const col = columns.find(function (c) { return c.field === key; });
+                lines.push((col ? col.headerName : key) + ": " + fields[key]);
+            });
+            return lines.join("\n");
+        },
+
         // Поле Истории → столбец журнала (для вспышки)
         moveChangeColumn(field) {
-            if (field === KIT) {
+            if (field === KIT || field === IP) {
                 return field;
             }
             if (FORM_FIELDS.computer.concat(FORM_FIELDS.monitor, FORM_FIELDS.disk, FORM_FIELDS.ram, FORM_FIELDS.info).indexOf(field) !== -1 ||

@@ -84,11 +84,16 @@ window.addEventListener("keydown", function (event) {
         return;
     }
     // Окно записи журнала (этап 66): Esc – закрыть (открытые списки закрываются своим Esc
-    // раньше); сочетания страницы за окном не работают
+    // раньше; окошко «Установить» поверх окна – первым, этап 67); сочетания страницы за окном не
+    // работают
     if (vm.moveWinOpen) {
         if (event.key === "Escape" && !event.defaultPrevented) {
             event.preventDefault();
-            vm.closeMoveWin();
+            if (vm.moveInstall) {
+                vm.closeMoveInstall();
+            } else {
+                vm.closeMoveWin();
+            }
         }
         return;
     }

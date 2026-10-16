@@ -222,6 +222,12 @@ export default {
                 this.closeNewComputer();
                 return;
             }
+            this.openNewComputer(null);
+        },
+
+        // Строка «Новый компьютер». from – из журнала «Движение» («Установить», этап 67):
+        // { location_id, seat_no, ip, fields – ИНВ, серийный, тип…, tip – подсказка }
+        openNewComputer(from) {
             this.closeNewPrinter();
             this.hideWebShown();
             // Новый ПК появится среди рабочих – из архива уходим
@@ -229,14 +235,18 @@ export default {
             this.actionBar = null;
             this.ensureTree();
             // По умолчанию – узел, выбранный фильтром из дерева
-            const locationId = this.locationFilter ? this.locationFilter.id : null;
+            const locationId = from ? from.location_id : (this.locationFilter ? this.locationFilter.id : null);
             // autoName – имя по правилу в поле HOSTNAME (пока его не поменяли руками, этап 35);
             // many – после добавления строка не закрывается (кнопка «Один» / «Несколько», этап 45)
-            this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: "", autoName: "", many: false };
+            this.newComputer = { location_id: locationId, seat_no: "", hostname: "", ip: from ? from.ip : "", autoName: "", many: false, from: from };
             this.newComputerError = "";
             this.newRoom = null;
             if (locationId) {
-                this.newComputer.seat_no = this.nextSeatNo(locationId);
+                this.newComputer.seat_no = from && from.seat_no ? String(from.seat_no) : this.nextSeatNo(locationId);
+            }
+            // Строка уже была открыта с тем же местом и № – наблюдатели молчат: имя по правилу сразу
+            if (from) {
+                this.refreshNewComputerName();
             }
             this.$nextTick(() => this.focusNewComputer(locationId ? "hostname" : "location"));
         },
@@ -496,7 +506,8 @@ export default {
                     location_id: form.location_id,
                     seat_no: form.seat_no,
                     hostname: form.hostname,
-                    ip: form.ip
+                    ip: form.ip,
+                    fields: form.from ? form.from.fields : undefined
                 });
                 const data = await response.json();
                 await this.loadTable();
@@ -510,9 +521,11 @@ export default {
                 this.toast("Добавлен: " + (form.hostname.trim() || "компьютер без имени") +
                     (data.shifted && data.shifted.length ? ". № места был занят – следующие сдвинуты: " + data.shifted.length : ""), "success");
                 // Добавили – строка закрывается; «Несколько» – остаётся: следующий в тот же узел
+                // (без данных записи журнала – они были у этого)
                 if (!form.many) {
                     this.closeNewComputer();
                 } else {
+                    form.from = null;
                     form.hostname = "";
                     form.ip = "";
                     form.seat_no = this.nextSeatNo(form.location_id);

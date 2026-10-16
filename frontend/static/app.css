@@ -7199,6 +7199,28 @@ select.mw-in {
     width: 15px;
     height: 15px;
 }
+/* «Установить» у записи и «В архив» в окошке установки (этап 67) – слева, как «Один» */
+.mw-foot .btn.mw-install,
+.mw-foot .mw-check.mi-archive {
+    order: -1;
+    margin-right: auto;
+}
+.mw-foot .mw-check.mi-archive {
+    padding-left: 0;
+}
+
+/* Окошко «Установить» (этап 67): поверх окна записи (своё затемнение), тело – та же таблица
+   карточки; «Заменить» – справа в ячейке ПК или принтера через линию таблицы */
+.dialog-overlay.mi-overlay {
+    z-index: 190;
+}
+.dialog.mi {
+    width: 520px;
+}
+.mw-part.mi-replace {
+    border-right: none;
+    border-left: 1px solid var(--border);
+}
 
 /* Дата (components/date-parts.js): день, месяц, год – части одной ячейки окна записи через
    линию таблицы (правки этапа 66), без календаря и стрелок; в правке – рамка цвета схемы */
