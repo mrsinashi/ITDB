@@ -79,6 +79,8 @@ export const CHIP_PAD = 10;
 export const ONLINE_DOT = 11;
 // Значок «показать в таблице» справа от ссылки на принтер / ПК (этап 44, .obj-tbl): 12px и отступ 4px
 export const LINK_ICON = 16;
+// Скобка комплекта справа у инвентарного журнала (правки этапа 66, td.kit-*): запас в отступе ячейки
+export const KIT_PAD = 10;
 
 function chipWidth(probe, text) {
     probe.style.fontWeight = "400";

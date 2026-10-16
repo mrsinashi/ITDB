@@ -13,6 +13,8 @@
 // такого кабинета нет, – кнопка «＋ <кабинет>» (клик по строке – как всегда, просто в отделение).
 // Кнопка – окошко «Что перенести?» (только ПК / весь кабинет), у всего кабинета – «Удалить
 // старый кабинет?»: событие move-room { parentId, whole, keepOld }.
+// quiet – список не открывается на фокусе, только по клику, вводу или ↓ (окно записи журнала,
+// правки этапа 66); fit – список шириной ровно с поле.
 
 import { listPosStyle, placeList, scrollToItem, searchWordsIn } from "../util.js";
 
@@ -55,7 +57,9 @@ export default {
         emptyText: { type: String, default: "Загрузка дерева…" },
         canAddRoom: Boolean,
         addText: { type: String, default: "" },
-        moveRoom: { type: Object, default: null }
+        moveRoom: { type: Object, default: null },
+        quiet: Boolean,
+        fit: Boolean
     },
     emits: ["pick", "cancel", "add-room", "add", "move-room"],
     data() {
@@ -189,7 +193,7 @@ export default {
             if (!this.open || !this.$refs.input) {
                 return;
             }
-            this.pos = placeList(this.$refs.input, { width: 420, room: 220, height: 360 });
+            this.pos = placeList(this.$refs.input, this.fit ? { width: 0, maxWidth: 1, room: 220, height: 360 } : { width: 420, room: 220, height: 360 });
         },
         scrollActive(center) {
             const list = this.$refs.list;
@@ -203,7 +207,7 @@ export default {
             }
         },
         onFocus() {
-            if (!this.editor) {
+            if (!this.editor && !this.quiet) {
                 this.show();
             }
         },

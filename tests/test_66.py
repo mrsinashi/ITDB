@@ -1,10 +1,12 @@
 """Этап 66: журнал «Движение» – типы техники и компонентов, записи, даты без дня и месяца,
-«Куда» (узел или ПК), «Установил», архив, массовая правка, История и отмена."""
+«Куда» (узел или ПК), «Установил», архив, массовая правка, История и отмена. Правки после
+проверки: «Своё название», комплект, новые сверху, удаление насовсем из архива."""
 import pytest
 
-from conftest import add_computer, add_location, add_model, history, ok
+from conftest import add_computer, add_location, add_model, add_pc, get_row, history, ok, set_vacuum
 from db import SessionLocal
 from models import ItemType, User
+from test_53 import add_record
 
 # Типы из миграции (clean_data их стирает – перед каждым тестом заново)
 TYPES = [
@@ -94,21 +96,24 @@ def test_titles(editor, types, models):
     ram = add_move(editor, types["ОЗУ"], model="ОЗУ Kingston FURY", ram_kind="DDR4/SO-DIMM", freq="3200", size="8")
     assert row_of(editor, ram)["title"] == "ОЗУ Kingston FURY (DDR4/SO-DIMM; 3200 Мгц; 8 Гб)"
 
-    # Без модели – только поля; принтер – модель из справочника
+    # Без своего названия – только поля; принтер – модель из справочника, своё название – перед
+    # ней (правки этапа 66)
     bare = add_move(editor, types["Диск"], size="1000")
     assert row_of(editor, bare)["title"] == "1000 Гб"
     printer = add_move(editor, types["Принтер"], printer_model_id=models["printer"]["id"])
     row = row_of(editor, printer)
     assert (row["title"], row["form"], row["type_kind"]) == ("HP LaserJet M404", "printer", "tech")
+    named = add_move(editor, types["Принтер"], model="Принтер бухгалтерии", printer_model_id=models["printer"]["id"])
+    assert row_of(editor, named)["title"] == "Принтер бухгалтерии (HP LaserJet M404)"
+    assert row_of(editor, add_move(editor, types["МФУ"], model="Samsung"))["title"] == "Samsung"
 
     other = ok(editor.post("/api/item-types", json={"name": "ИБП", "kind": "tech"}))
     ups = add_move(editor, other["id"], model="APC Back-UPS", info="650 ВА")
     assert row_of(editor, ups)["title"] == "APC Back-UPS (650 ВА)"
 
-    # Поля чужого вида и модель не туда – отказ
+    # Поля чужого вида и модель справочника не принтеру – отказ
     response = editor.post("/api/moves", json={"type_id": types["Монитор"], "cpu": "i5"})
     assert response.status_code == 400 and "нет поля «Процессор»" in response.json()["detail"]
-    assert editor.post("/api/moves", json={"type_id": types["Принтер"], "model": "Canon"}).status_code == 400
     assert editor.post("/api/moves", json={"type_id": types["Диск"], "printer_model_id": models["mfu"]["id"]}).status_code == 400
     assert editor.post("/api/moves", json={"name_1c": "Без типа"}).status_code == 400
     assert editor.post("/api/moves", json={"type_id": 999}).status_code == 400
@@ -198,11 +203,11 @@ def test_type_change_and_undo(editor, types):
     ok(editor.post("/api/history/cancel", json={"items": [{"id": record["id"]}], "cancel": False}))
     assert row_of(editor, pc)["specs"] == {"diagonal": "24"}
 
-    # Принтер: модель текстом стирается, у не-принтера – модель справочника
+    # Принтер: своё название остаётся (правки этапа 66), у не-принтера стирается модель справочника
     model = add_model(editor, "LBP226", maker="Canon")
     ok(patch(editor, pc, type_id=types["Принтер"], printer_model_id=model["id"]))
     row = row_of(editor, pc)
-    assert (row["model"], row["title"], row["specs"]) == (None, "Canon LBP226", {})
+    assert (row["model"], row["title"], row["specs"]) == ("DEXP", "DEXP (Canon LBP226)", {})
     # Модель с записями журнала из справочника не удалить
     response = editor.delete(f"/api/printer-models/{model['id']}")
     assert response.status_code == 400 and "журнале" in response.json()["detail"]
@@ -215,7 +220,7 @@ def test_type_change_and_undo(editor, types):
     undone = ok(editor.post("/api/history/undo-last"))
     assert undone["text"].startswith("ADATA – ")
     assert row_of(editor, pc)["printer_model_id"] == model["id"]
-    assert history(editor, "moves", pc)[0]["title"] == "Canon LBP226"
+    assert history(editor, "moves", pc)[0]["title"] == "DEXP (Canon LBP226)"
 
 
 def test_same_labels_and_partial_undo(editor, room, types):
@@ -312,8 +317,113 @@ def test_history_page(editor, types):
 def test_columns(reader):
     info = ok(reader.get("/api/columns"))
     assert [c["short"] for c in info["move_columns"]] == [
-        "Тип", "Название (1С)", "Понятное название", "Инвентарный", "Серийный номер", "Страна производства",
-        "Дата производства", "Дата закупки", "Поставщик", "Откуда", "Дата получения", "Куда", "Дата установки",
-        "Установил", "Статус", "Примечание",
+        "Тип", "Название по 1С", "Понятное название", "Комплект", "Инвентарный", "Серийный номер",
+        "Страна производства", "Дата производства", "Дата закупки", "Поставщик", "Откуда", "Дата получения", "Куда",
+        "Дата установки", "Установил", "Статус", "Примечание",
     ]
     assert info["move_history_labels"]["cpu"] == "Процессор"
+    assert info["move_history_labels"]["model"] == "Своё название"
+
+
+# ---------- Правки после проверки (15.10) ----------
+
+
+def test_kit_and_order(editor, types):
+    """Комплект компьютера – своим столбцом, не в названии; новые записи – сверху."""
+    pc = add_move(editor, types["Компьютер"], model="DEXP", cpu="i3", kit=" мышь,Клавиатура ; Мышь,, ")
+    row = row_of(editor, pc)
+    assert (row["kit"], row["specs"]["kit"], row["title"]) == ("мышь, Клавиатура", "мышь, Клавиатура", "DEXP (i3)")
+    ok(patch(editor, pc, kit="Мышь\nКоврик"))
+    assert row_of(editor, pc)["kit"] == "Мышь, Коврик"
+    assert history(editor, "moves", pc)[0]["changes"] == {"kit": {"old": "мышь, Клавиатура", "new": "Мышь, Коврик"}}
+    assert ok(editor.get("/api/columns"))["move_history_labels"]["kit"] == "Комплект"
+
+    # У монитора комплекта нет; сменили тип – комплект очищается
+    response = editor.post("/api/moves", json={"type_id": types["Монитор"], "kit": "Кабель"})
+    assert response.status_code == 400 and "нет поля «Комплект»" in response.json()["detail"]
+    monitor = add_move(editor, types["Монитор"], diagonal="24")
+    assert [row["id"] for row in rows(editor)] == [monitor, pc]
+    ok(patch(editor, pc, type_id=types["Монитор"]))
+    assert row_of(editor, pc)["kit"] is None
+    assert history(editor, "moves", pc)[0]["changes"]["kit"] == {"old": "Мышь, Коврик", "new": None}
+
+
+def test_delete_computers(admin, editor, room, types, models):
+    """Насовсем – только из архива и только администратор; связи уходят, у другой стороны – История."""
+    pc = add_pc(editor, room["room"], "ter-ord-1", user="Иванов И.И.")
+    other = add_pc(editor, room["room"], "ter-ord-2")
+    set_vacuum(editor, pc, "u1")
+    pid = ok(editor.post("/api/printers", json={"location_id": room["room"], "name": "pr-1", "model": "HP LaserJet M404"}))["id"]
+    version = ok(editor.get("/api/printers", params={"archived": "all"}))["rows"][0]["version"]
+    ok(editor.patch(f"/api/printers/{pid}", json={"computers": "ter-ord-1\nter-ord-2 [usb]", "_version": version}))
+    disk = add_move(editor, types["Диск"], dest=f"c:{pc}")
+    # Решение сканера о ПК, отменённое в Истории (восстановить после удаления – нельзя)
+    add_record("glpi", 157, "DESKTOP-157")
+    ok(admin.post("/api/scan/records/glpi/157/reject", json={"computer_id": pc}))
+    decision = history(admin, "scan_records")[0]
+    ok(admin.post("/api/history/cancel", json={"items": [{"id": decision["id"]}]}))
+
+    ok(editor.post("/api/computers/archive", json={"ids": [pc], "archived": True}))
+    assert editor.post("/api/computers/delete", json={"ids": [pc]}).status_code == 403
+    response = admin.post("/api/computers/delete", json={"ids": [pc, other]})
+    assert response.status_code == 400 and "из архива" in response.json()["detail"]
+    assert admin.post("/api/computers/delete", json={"ids": [pc, 99999]}).status_code == 404
+    assert admin.post("/api/computers/delete", json={"ids": []}).status_code == 400
+
+    ok(admin.post("/api/computers/delete", json={"ids": [pc]}))
+    assert get_row(admin, pc) is None and get_row(admin, other) is not None
+
+    # Принтер остался подключённым к другому ПК; в его Истории – без удалённого
+    rows_p = ok(editor.get("/api/printers", params={"archived": "all"}))["rows"]
+    assert rows_p[0]["computers"] == "ter-ord-2 [usb]"
+    change = history(editor, "printers", pid)[0]["changes"]["computers"]
+    assert (change["old"], change["new"], change["new_ids"]) == ("ter-ord-1\nter-ord-2 [usb]", "ter-ord-2 [usb]", [[other, True]])
+
+    # Диск, стоявший в ПК, – в его кабинете
+    row = row_of(editor, disk)
+    assert (row["dest_ref"], row["dest"]) == (f"l:{room['room']}", "Терапия\n[201] Ординаторская")
+    assert history(editor, "moves", disk)[0]["changes"]["dest"]["new_id"] == f"l:{room['room']}"
+
+    # История ПК осталась, с названием; «Удалено» не отменяется
+    items = history(editor, "computers", pc)
+    assert items[0]["changes"] == {"deleted": {"old": "ter-ord-1", "new": None}}
+    assert {item["title"] for item in items} == {"ter-ord-1"}
+    response = admin.post("/api/history/undo-last")
+    assert response.status_code == 400 and "удаление" in response.json()["detail"]
+    # Прежнюю правку удалённого ПК не вернуть; решение сканера о нём – тоже (400, а не 500)
+    archived = next(item for item in items if "archived" in item["changes"])
+    response = editor.post("/api/history/cancel", json={"items": [{"id": archived["id"]}], "cancel": True})
+    assert response.status_code == 404
+    response = admin.post("/api/history/cancel", json={"items": [{"id": decision["id"]}], "cancel": False})
+    assert response.status_code == 400 and "удалён насовсем" in response.json()["detail"]
+    # В поиске Истории удалённый – по имени
+    assert any(item["entity_id"] == pc for item in ok(editor.get("/api/history", params={"q": "ter-ord-1"}))["items"])
+
+
+def test_delete_printers_and_moves(admin, editor, reader, room, types, models):
+    pc = add_computer(editor, room["room"], hostname="ter-ord-1")
+    pid = ok(editor.post("/api/printers", json={"location_id": room["room"], "name": "pr-1", "model": "HP LaserJet M404"}))["id"]
+    version = ok(editor.get("/api/printers", params={"archived": "all"}))["rows"][0]["version"]
+    ok(editor.patch(f"/api/printers/{pid}", json={"computers": "ter-ord-1", "_version": version}))
+    assert reader.post("/api/printers/delete", json={"ids": [pid]}).status_code == 403
+    assert admin.post("/api/printers/delete", json={"ids": [pid]}).status_code == 400
+
+    ok(editor.post("/api/printers/archive", json={"ids": [pid], "archived": True}))
+    ok(admin.post("/api/printers/delete", json={"ids": [pid]}))
+    assert ok(editor.get("/api/printers", params={"archived": "all"}))["rows"] == []
+    assert get_row(editor, pc)["printers"] is None
+    assert history(editor, "computers", pc)[0]["changes"]["printers"]["new"] is None
+    assert history(editor, "printers", pid)[0]["title"] == "pr-1"
+
+    # Запись журнала; модель из справочника теперь можно удалить
+    move = add_move(editor, types["Принтер"], model="Старый", printer_model_id=models["printer"]["id"])
+    keep = add_move(editor, types["Диск"], size="480")
+    assert admin.post("/api/moves/delete", json={"ids": [move]}).status_code == 400
+    ok(editor.post("/api/moves/archive", json={"ids": [move], "archived": True}))
+    assert editor.post("/api/moves/delete", json={"ids": [move]}).status_code == 403
+    ok(admin.post("/api/moves/delete", json={"ids": [move]}))
+    assert [row["id"] for row in rows(editor)] == [keep]
+    items = history(editor, "moves", move)
+    assert items[0]["changes"] == {"deleted": {"old": "Старый (HP LaserJet M404)", "new": None}}
+    assert {item["title"] for item in items} == {"Старый (HP LaserJet M404)"}
+    ok(editor.delete(f"/api/printer-models/{models['printer']['id']}"))

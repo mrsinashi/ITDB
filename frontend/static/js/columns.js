@@ -71,8 +71,8 @@ export const kindLabels = {
 // Определения столбцов таблицы
 // ============================================================
 
-// Столбцы журнала, которые правятся в окне записи, а не в ячейке (этап 66)
-const MOVE_WINDOW_KINDS = ["mtype", "mtitle", "pdate", "mdest", "muser"];
+// Столбцы журнала, которые правятся в окне записи, а не в ячейке (этап 66; комплект – правки)
+const MOVE_WINDOW_KINDS = ["mtype", "mtitle", "mkit", "pdate", "mdest", "muser"];
 
 // Встроенные столбцы описаны на сервере (backend/api_columns.py, GET /api/columns).
 // Здесь описание переводится в вид, который ждут таблица, карточка и Справочники.
@@ -94,8 +94,8 @@ export function toColumnDef(c) {
         // scan: только из сканера (антивирусы, этап 26д) – не правится; у принтера (этап 44)
         // значения модели и вход Web в ячейке тоже не правятся
         editable: ["location", "scan", "pattr", "secret"].concat(MOVE_WINDOW_KINDS).indexOf(c.kind) === -1,
-        // Журнал «Движение» (этап 66): тип, «Понятное название», даты, «Куда», «Установил» –
-        // правятся в окне записи (двойной клик по ячейке открывает его на этом поле)
+        // Журнал «Движение» (этап 66): тип, «Понятное название», комплект, даты, «Куда»,
+        // «Установил» – правятся в окне записи (двойной клик по ячейке открывает его на этом поле)
         moveWin: MOVE_WINDOW_KINDS.indexOf(c.kind) !== -1,
         // Дата, где день и месяц можно не знать («08.2025», «2026»): сортировка по дате
         pdate: c.kind === "pdate",
@@ -412,6 +412,75 @@ function sameRow(prev, row) {
         }
     }
     return true;
+}
+
+// Комплект в журнале (правки этапа 66, просьба пользователя): записи с одним инвентарным.
+// Номер без цифр («б/н», «-», «нет») – заглушка, а не комплект
+export function kitKey(row) {
+    const key = row._move && row.inv_no ? String(row.inv_no).trim().toLowerCase() : "";
+    return /\d/.test(key) ? key : "";
+}
+
+// Номера, которые есть у нескольких записей, – для запаса ширины под скобку
+export function kitKeys(rows) {
+    const seen = new Set();
+    const kits = new Set();
+    rows.forEach(function (row) {
+        const key = kitKey(row);
+        if (key) {
+            if (seen.has(key)) {
+                kits.add(key);
+            }
+            seen.add(key);
+        }
+    });
+    return kits;
+}
+
+// Записи с одним инвентарным – подряд, на месте первой из них; внутри – по порядку добавления
+// (byAddition, без сортировки по столбцу) или как отсортированы. Комплектов нет – тот же массив
+export function groupKits(rows, byAddition) {
+    const groups = new Map();
+    let any = false;
+    rows.forEach(function (row) {
+        const key = kitKey(row);
+        if (key) {
+            const list = groups.get(key);
+            if (list) {
+                list.push(row);
+                any = true;
+            } else {
+                groups.set(key, [row]);
+            }
+        }
+    });
+    if (!any) {
+        return rows;
+    }
+    const result = [];
+    rows.forEach(function (row) {
+        const list = groups.get(kitKey(row));
+        if (!list || list.length < 2) {
+            result.push(row);
+        } else if (list[0] === row) {
+            (byAddition ? list.slice().sort(function (a, b) { return a.id - b.id; }) : list).forEach(function (r) { result.push(r); });
+        }
+    });
+    return result;
+}
+
+// Скобка комплекта у инвентарного по строкам подряд (на экране – показанным, на листе печати –
+// напечатанным): top – первая, mid – средние, bot – последняя, "" – не в комплекте
+export function kitMarksOf(rows) {
+    return rows.map(function (row, i) {
+        const key = kitKey(row);
+        if (!key) {
+            return "";
+        }
+        const up = i > 0 && kitKey(rows[i - 1]) === key;
+        const down = i + 1 < rows.length && kitKey(rows[i + 1]) === key;
+        return up && down ? "mid" : (down ? "top" : (up ? "bot" : ""));
+    });
 }
 
 // Строки с сервера (этап 59): у строки, где всё то же, что сейчас на экране, остаётся прежний

@@ -9,7 +9,7 @@
 const ROW_TEMPLATE = `
     <tr :data-id="row.id" :class="{ 'row-selected': selected }">
         <td v-for="col in root.viewColumns" :key="col.field"
-            :class="root.cellClass(row, col, editField === col.field)"
+            :class="[root.cellClass(row, col, editField === col.field), kit && col.field === 'inv_no' ? 'kit-' + kit : null]"
             :style="root.cellTdStyle(row, col, fills, belowFills)"
             @mousedown="root.onCellMouseDown($event, row)"
             @click="root.onCellClick($event, row, col)"
@@ -67,7 +67,8 @@ export default {
         row: Object,
         below: Object,       // следующая строка на экране; null – эта последняя
         selected: Boolean,
-        editField: String    // поле, которое правится в этой строке; null – никакое
+        editField: String,   // поле, которое правится в этой строке; null – никакое
+        kit: String          // журнал: скобка комплекта у инвентарного – top / mid / bot
     },
     computed: {
         // Заливка ячеек этой строки и строки ниже – для линий сетки (cellTdStyle)
@@ -94,6 +95,7 @@ export default {
             row: this.row,
             selected: this.selected,
             editField: this.editField,
+            kit: this.kit,
             fills: this.fills,
             belowFills: this.belowFills
         }, cache);

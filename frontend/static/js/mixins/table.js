@@ -4,8 +4,8 @@
 // строки – tableRows, столбцы – tableBuiltinColumns, всё, что запоминается, – под своими ключами
 
 import { apiFetch, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, setIfChanged, wrapLine } from "../util.js";
-import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, isDuplicateLine, isOverdue, keepSameRows, refreshDuplicates, styleKey, todayKey } from "../columns.js";
-import { CHIP_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths, sameWidths } from "../widths.js";
+import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, groupKits, isDuplicateLine, isOverdue, keepSameRows, kitKey, kitKeys, kitMarksOf, refreshDuplicates, styleKey, todayKey } from "../columns.js";
+import { CHIP_PAD, KIT_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths, sameWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE – антивирусов нет
@@ -13,6 +13,8 @@ const AV_RANK = { on: 0, old: 1, off: 2 };
 const AV_NONE = 9;
 // Строка подсказки с группами VACUUM – не длиннее (≈ столбец «Группы» на странице Vacuum, 320px)
 const VACUUM_TITLE_WIDTH = 48;
+// Не журнал – скобок комплекта нет (kitMarks)
+const NO_KIT_MARKS = [];
 
 export default {
     computed: {
@@ -237,6 +239,12 @@ export default {
         // Все строки режима по порядку сортировки – их рисует таблица; поиск и фильтры
         // строки прячут, а не удаляют (этап 65): очистка поиска не создаёт 600 строк заново
         sortedRows() {
+            const rows = this.columnSortedRows;
+            // Журнал: записи с одним инвентарным – подряд (правки этапа 66)
+            return this.tableKind === "moves" ? groupKits(rows, rows === this.modeRows) : rows;
+        },
+
+        columnSortedRows() {
             const rows = this.modeRows;
             if (!this.sortField || !this.sortDir) {
                 return rows;
@@ -280,6 +288,30 @@ export default {
                 }
             }
             return below;
+        },
+
+        // Скобка комплекта у инвентарного (журнал, правки этапа 66; свойство kit у table-row) – по
+        // индексу в sortedRows, по показанным строкам: top – первая, mid – средние, bot – последняя
+        kitMarks() {
+            if (this.tableKind !== "moves") {
+                return NO_KIT_MARKS;
+            }
+            const rows = this.sortedRows;
+            const shown = this.shownRowIds;
+            if (!shown) {
+                return kitMarksOf(rows);
+            }
+            const marks = new Array(rows.length).fill("");
+            const at = [];
+            rows.forEach(function (row, i) {
+                if (shown.has(row.id)) {
+                    at.push(i);
+                }
+            });
+            kitMarksOf(at.map(function (i) { return rows[i]; })).forEach(function (mark, j) {
+                marks[at[j]] = mark;
+            });
+            return marks;
         },
 
         displayedCount() {
@@ -576,7 +608,12 @@ export default {
             const avBold = !!this.avSettings && this.avSettings.statuses.some(function (st) { return st.bold; });
             // Кружок «в сети» слева от логина VACUUM (этап 41) – ещё ONLINE_DOT
             const dots = this.vacuumDots;
+            // Журнал: у инвентарного комплекта справа скобка (правки этапа 66)
+            const kits = this.tableKind === "moves" ? kitKeys(this.tableRows) : null;
             const lineInfo = (row, col, line) => {
+                if (kits && col.field === "inv_no") {
+                    return kits.has(kitKey(row)) ? { pad: KIT_PAD, bold: false } : null;
+                }
                 if (col.field === "antivirus") {
                     return { pad: CHIP_PAD, bold: avBold };
                 }

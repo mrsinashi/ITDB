@@ -75,7 +75,8 @@ class Computer(Base):
     extra = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     note = Column(Text, nullable=True)
 
-    # Удаления нет: ПК убирается в архив (скрыт из таблицы, дерева, выгрузки)
+    # ПК убирается в архив (скрыт из таблицы, дерева, выгрузки); из архива администратор
+    # может удалить насовсем (api_delete.py)
     archived = Column(Boolean, nullable=False, server_default="false")
 
     version = Column(Integer, nullable=False, server_default="1")
@@ -220,7 +221,7 @@ class Printer(Base):
     serial = Column(Text, nullable=True)
     note = Column(Text, nullable=True)
 
-    # Удаления нет – только архив, как у ПК
+    # Архив, как у ПК (из архива администратор может удалить насовсем)
     archived = Column(Boolean, nullable=False, server_default="false")
 
     version = Column(Integer, nullable=False, server_default="1")
@@ -256,8 +257,9 @@ class ItemType(Base):
 
 class Move(Base):
     """Запись журнала «Движение» (этап 66): техника или компонент – откуда и когда получены,
-    куда и кем установлены. specs – поля «Понятного названия» по виду типа ({"cpu": …});
-    у принтеров и МФУ вместо них – модель из справочника (printer_model_id). Даты – текстом
+    куда и кем установлены. model – «Своё название» (до правок этапа 66 – «Модель»), specs –
+    поля по виду типа ({"cpu": …}, у компьютера и «kit» – комплект); у принтеров и МФУ –
+    модель из справочника (printer_model_id). Даты – текстом
     «ГГГГ», «ГГГГ-ММ» или «ГГГГ-ММ-ДД» (день и месяц можно не знать). Куда – узел дерева или
     ПК (ПК – только у компонентов); установил – пользователь программы или вписанное имя."""
     __tablename__ = "moves"
@@ -287,7 +289,7 @@ class Move(Base):
     status = Column(Text, nullable=True)
     note = Column(Text, nullable=True)
 
-    # Удаления нет – только архив, как у ПК и принтеров
+    # Архив, как у ПК и принтеров (из архива администратор может удалить насовсем)
     archived = Column(Boolean, nullable=False, server_default="false")
 
     version = Column(Integer, nullable=False, server_default="1")

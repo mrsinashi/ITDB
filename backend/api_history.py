@@ -95,6 +95,20 @@ def entry_titles(session, items):
     # Запись журнала «Движение» (этап 66) – «Понятное название» сейчас (из нескольких полей)
     names["moves"] = move_names(session, {item.entity_id for item in items if item.entity == "moves"})
 
+    # Удалённые насовсем (api_delete.py, правки этапа 66) – название из их записи «Удалено»
+    gone = {(item.entity, item.entity_id) for item in items if item.entity in names and item.entity_id not in names[item.entity]}
+    deleted = {
+        (entity, entity_id): title
+        for entity, entity_id, title in (
+            session.query(History.entity, History.entity_id, History.title).filter(
+                History.entity.in_({entity for entity, _ in gone}),
+                History.entity_id.in_({entity_id for _, entity_id in gone}),
+                History.changes.has_key("deleted"),
+            ).all() if gone else []
+        )
+        if (entity, entity_id) in gone
+    }
+
     simple_titles = {}
     simple_refs = {Ref(item.entity, item.entity_id, item.entity_key) for item in items if item.entity in SIMPLE}
 
@@ -104,7 +118,7 @@ def entry_titles(session, items):
 
     def title_of(item):
         if item.entity in names:
-            return names[item.entity].get(item.entity_id)
+            return names[item.entity].get(item.entity_id) or deleted.get((item.entity, item.entity_id)) or item.title
 
         if item.entity in SIMPLE:
             return simple_titles.get(Ref(item.entity, item.entity_id, item.entity_key)) or item.title

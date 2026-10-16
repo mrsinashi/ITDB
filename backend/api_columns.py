@@ -40,14 +40,16 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #               меняет модель (cartridges.py)
 # Журнал «Движение» (этап 66, api_moves.py) – правятся в окне записи, не в ячейке:
 #   mtype     – тип техники или компонента (справочник item_types)
-#   mtitle    – «Понятное название»: складывается из полей типа или модели принтера
+#   mtitle    – «Понятное название»: «Своё название (поля типа; …)», у принтера в скобках –
+#               модель из справочника
+#   mkit      – комплект компьютера («Мышь, Клавиатура»; правки этапа 66)
 #   pdate     – дата, где день и месяц можно не знать: «02.08.2026», «08.2026», «2026»
 #   mdest     – куда: узел дерева или ПК, строками («Терапия», «[326] Ординаторская», имя ПК)
 #   muser     – кто установил: пользователь программы («Фамилия И.О.») или вписанное имя
 Kind = Literal[
     "text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan",
     "printers", "computers", "pmodel", "pattr", "flag", "secret", "cartridges",
-    "mtype", "mtitle", "pdate", "mdest", "muser",
+    "mtype", "mtitle", "mkit", "pdate", "mdest", "muser",
 ]
 
 
@@ -144,6 +146,7 @@ HISTORY_LABELS = {
     "replaced": "Заменил",
     "replaced_by": "Заменён на",
     "created": "Создан",
+    "deleted": "Удалено",
     "temp_note": "Временно до",  # до этапа 16 – текстовое поле
 }
 
@@ -203,6 +206,7 @@ PRINTER_HISTORY_LABELS = {
     "web_password": "Пароль Web",
     "archived": "Архив",
     "created": "Создан",
+    "deleted": "Удалено",
 }
 
 # Поля принтера, которые правятся в PATCH (кроме location_id): значения модели – нет
@@ -223,12 +227,14 @@ EXTRA_FIELDS = {column.key: column.extra_key for column in COLUMNS if column.kin
 # ---------- Журнал «Движение» (этап 66) ----------
 
 # Порядок и названия – как в журнале пользователя (Excel); закреплены, как там, «Тип» и
-# «Название (1С)». Ключи тип и статус – свои (item_type, move_status): у ПК есть свои
-# «Тип» и «Статус» со справочниками и оформлением, общий ключ смешал бы их значения
+# «Название по 1С». Ключи тип и статус – свои (item_type, move_status): у ПК есть свои
+# «Тип» и «Статус» со справочниками и оформлением, общий ключ смешал бы их значения.
+# «Комплект» (мышь, клавиатура…) – у компьютера, перед инвентарным (правки этапа 66)
 MOVE_COLUMNS = [
     col("item_type", "Тип", kind="mtype", sticky=True, center=True, bulk=False, export_width=12),
-    col("name_1c", "Название (1С)", card="Название (1С)", sticky=True, export_width=36),
+    col("name_1c", "Название по 1С", sticky=True, export_width=36),
     col("title", "Понятное название", kind="mtitle", link=True, values="no", bulk=False, export_width=55),
+    col("kit", "Комплект", kind="mkit", max_width=150, values="no", bulk=False, export_width=18),
     col("inv_no", "Инвентарный", values="no", bulk=False, export_width=12),
     col("serial", "Серийный номер", values="no", dup=True, bulk=False, export_width=16),
     col("country", "Страна производства", export_width=18),
@@ -261,15 +267,18 @@ MOVE_SPEC_LABELS = {
     "freq": "Частота",
     "size": "Объём",
     "info": "Информация",
+    "kit": "Комплект",
 }
 
-# Подписи в Истории записи журнала для полей, которые не столбцы
+# Подписи в Истории записи журнала для полей, которые не столбцы. model – «Своё название»
+# (до правок этапа 66 – «Модель»): у любого типа, в «Понятном названии» – перед скобками
 MOVE_HISTORY_LABELS = dict(
     MOVE_SPEC_LABELS,
-    model="Модель",
+    model="Своё название",
     printer_model="Модель принтера",
     archived="Архив",
     created="Создан",
+    deleted="Удалено",
 )
 
 

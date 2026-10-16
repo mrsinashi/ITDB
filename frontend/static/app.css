@@ -189,6 +189,9 @@
     --cb-off-line: rgb(189 189 189 / 70%);
     --cb-off-bg: rgb(245 245 245 / 68%);
     --cb-off-checked: rgb(196 196 196 / 78%);
+    /* Скобка комплекта у инвентарного журнала (правки этапа 66): подсветка строки её не
+       перекрашивает – иначе у строки под курсором отрезок другого тона */
+    --kit-line: #555;
     /* Тени */
     --shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.25);
     --shadow-nav-menu: 0 4px 10px rgba(0, 0, 0, 0.2), -1px 1px 0 rgba(0, 0, 0, 0.12);
@@ -7026,110 +7029,135 @@ a.pr-web:hover {
     overflow-y: auto;
     outline: none;
 }
-/* Подпись | поле – как в карточке ПК; группы – серой строкой */
-.mw-form {
-    width: 100%;
-    border-collapse: collapse;
-}
-.mw-form th,
-.mw-form td {
-    padding: 2px 10px;
-    border-bottom: 1px solid var(--border);
-    text-align: left;
+/* Тело – таблица карточки ПК (.card-table: подписи 152px на --surface-alt, группы серой
+   строкой; правки этапа 66, просьба пользователя): значение вводится прямо в ячейку – поле
+   без рамки во всю ячейку, текст там же, где текст карточки; в правке – рамка цвета схемы
+   по краю ячейки (как у ячейки таблицы). Части одной ячейки (диск, даты, новая модель) –
+   через линию таблицы */
+.mw-form td.mw-cell {
+    padding: 0;
     vertical-align: middle;
 }
-.mw-form th {
-    width: 140px;
-    font-weight: 400;
-    color: var(--text-strong);
-    background: var(--surface-alt);
-    border-right: 1px solid var(--border);
-    white-space: nowrap;
-}
-.mw-form tr:last-child th,
-.mw-form tr:last-child td {
-    border-bottom: none;
-}
-.mw-form tr.mw-group td {
-    padding: 4px 10px;
-    background: var(--gray-group);
-    border-top: 1px solid var(--gray-line);
-    border-bottom: 1px solid var(--gray-line);
-    color: var(--text-strong);
-    font-weight: 600;
-}
-.mw-form tr.mw-group .mw-gname {
-    margin-right: 10px;
-}
-/* «Понятное название», как получится в таблице */
-.mw-form tr.mw-group .mw-preview {
-    font-weight: 400;
-    color: var(--text);
-}
-.mw-form td .input {
-    width: 100%;
+.mw-in {
+    display: block;
     box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    font: inherit;
+    color: var(--text);
+    outline: none;
+}
+.mw-in::placeholder {
+    color: var(--text-muted);
+}
+.mw-in:focus,
+.mw-unitbox:focus-within,
+.mw-check:focus-within {
+    box-shadow: inset 0 0 0 1px var(--brand);
 }
 .mw-form .loc-pick {
     display: block;
 }
-.mw-form .loc-pick input {
-    width: 100%;
-    box-sizing: border-box;
-}
-.mw-line {
+.mw-split {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: stretch;
 }
-.mw-line + .mw-line {
-    margin-top: 4px;
+.mw-split-line {
+    border-top: 1px solid var(--border);
 }
-.mw-form td .input.mw-short {
+.mw-in.mw-part,
+.mw-part {
     flex: none;
-    width: 84px;
+    width: auto;
+    border-right: 1px solid var(--border);
 }
-.mw-form td .input.mw-grow {
-    flex: 1 1 auto;
+.mw-in.mw-kind {
+    width: 110px;
+}
+.mw-in.mw-maker {
+    width: 140px;
+}
+/* Остаток ячейки; ширина 0 – иначе поле своей обычной шириной раздвигало бы окно вбок */
+.mw-part.mw-rest,
+.mw-rest {
+    flex: 1 1 0;
+    width: 0;
     min-width: 0;
+    border-right: none;
 }
-.mw-form td .input.mw-kind {
-    flex: none;
-    width: 90px;
+select.mw-in {
+    padding: 3px 6px;
+    cursor: pointer;
 }
-.mw-form td .input.mw-maker {
+/* Число с единицей: единица – сразу за числом (поле по ширине текста), клик по ячейке – в поле */
+.mw-unitbox {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    padding: 4px 10px;
+    cursor: text;
+}
+.mw-unitbox .mw-in.mw-num {
     flex: none;
-    width: 130px;
+    width: 5em;
+    padding: 0;
+}
+.mw-unitbox .mw-in.mw-num:focus {
+    box-shadow: none;
+}
+@supports (field-sizing: content) {
+    .mw-unitbox .mw-in.mw-num {
+        width: auto;
+        min-width: 1ch;
+        max-width: 100%;
+        field-sizing: content;
+    }
 }
 .mw-unit {
+    margin-left: 4px;
     color: var(--text-secondary);
+    white-space: nowrap;
 }
-.mw-gap {
-    flex: 1 1 auto;
-}
-.mw-form .ab-check {
+.mw-check {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    padding: 4px 10px;
     cursor: pointer;
     user-select: none;
 }
-.mw-form .ab-check input {
+.mw-check input {
     margin: 0;
 }
-.mw-form .btn {
-    padding: 2px 9px;
+.mw-btns {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 2px 6px;
 }
-/* Выбор с крестиком «очистить» справа в поле */
+.mw-form .btn.icon-only {
+    padding: 2px 6px;
+    line-height: 0;
+}
+.mw-form .btn .ico {
+    width: 14px;
+    height: 14px;
+}
+/* Выбор с крестиком «очистить» справа в ячейке */
 .mw-pick {
     position: relative;
 }
 .mw-pick .loc-pick input {
-    padding-right: 22px;
+    padding-right: 28px;
 }
 .mw-clear {
     position: absolute;
-    right: 16px;
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
     font-size: 15px;
@@ -7140,14 +7168,13 @@ a.pr-web:hover {
 .mw-clear:hover {
     color: var(--text);
 }
-.mw-form textarea.mw-note {
-    display: block;
-    min-height: 36px;
+.mw-in.mw-note {
+    min-height: 42px;
     resize: vertical;
 }
 .mw-error {
     display: block;
-    margin-top: 4px;
+    padding: 0 10px 4px;
     color: var(--danger);
 }
 /* Один / Несколько – слева, как справа у строки «Новый компьютер» */
@@ -7166,44 +7193,36 @@ a.pr-web:hover {
     margin-right: 0;
 }
 
-/* Дата блоками (components/date-parts.js): день, месяц, год – без календаря и стрелок */
+/* Дата (components/date-parts.js): день, месяц, год – части одной ячейки окна записи через
+   линию таблицы (правки этапа 66), без календаря и стрелок; в правке – рамка цвета схемы */
 .dp {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
+    display: flex;
+    align-items: stretch;
 }
 .dp-part {
     box-sizing: border-box;
-    padding: 3px 0;
-    font-size: 12px;
-    line-height: 15px;
-    text-align: center;
+    padding: 4px 10px;
     font-variant-numeric: tabular-nums;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    background: var(--bg);
+    white-space: nowrap;
+    border-right: 1px solid var(--border);
     color: var(--text);
     cursor: pointer;
     user-select: none;
+    outline: none;
 }
 .dp-part.dp-d,
 .dp-part.dp-m {
-    width: 34px;
+    width: 48px;
 }
 .dp-part.dp-y {
-    width: 48px;
+    width: 60px;
 }
 .dp-part.empty {
     color: var(--text-muted);
 }
 .dp-part:focus,
 .dp-part.open {
-    outline: none;
-    border-color: var(--input-focus);
-    box-shadow: 0 0 0 2px var(--focus-ring);
-}
-.dp-dot {
-    color: var(--text-secondary);
+    box-shadow: inset 0 0 0 1px var(--brand);
 }
 .dp-list .ll-item {
     text-align: center;
@@ -7212,4 +7231,39 @@ a.pr-web:hover {
 .dp-list .ll-item:hover {
     background: var(--menu-hover-bg);
     color: var(--menu-hover-text);
+}
+
+/* Комплект в журнале (правки этапа 66, просьба пользователя): записи с одним инвентарным –
+   подряд, справа у инвентарного скобка ┐ │ ┘ – линиями, а не знаками шрифта: между строками
+   без разрывов. ::before – ::after у ячейки занят рамкой под курсором; на время зелёной вспышки
+   (тоже ::before) скобки нет. Справа в ячейке – место под скобку (ширина столбца – с тем же
+   запасом, KIT_PAD в widths.js) */
+.data-table td.kit-top,
+.data-table td.kit-mid,
+.data-table td.kit-bot {
+    padding-right: 16px;
+}
+.data-table td.kit-top:not(.cell-saved)::before,
+.data-table td.kit-mid:not(.cell-saved)::before,
+.data-table td.kit-bot:not(.cell-saved)::before {
+    content: "";
+    position: absolute;
+    right: 6px;
+    width: 5px;
+    border-right: var(--px) solid var(--kit-line);
+    pointer-events: none;
+}
+.data-table td.kit-top:not(.cell-saved)::before {
+    top: 50%;
+    bottom: 0;
+    border-top: var(--px) solid var(--kit-line);
+}
+.data-table td.kit-mid:not(.cell-saved)::before {
+    top: 0;
+    bottom: 0;
+}
+.data-table td.kit-bot:not(.cell-saved)::before {
+    top: 0;
+    height: 50%;
+    border-bottom: var(--px) solid var(--kit-line);
 }

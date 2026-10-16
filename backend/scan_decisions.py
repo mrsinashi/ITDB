@@ -17,7 +17,7 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy import text
 
-from models import ScanAlias, ScanLink
+from models import Computer, ScanAlias, ScanLink
 
 DECISION_ENTITIES = ("scan_records", "scan_aliases")
 
@@ -54,6 +54,13 @@ def links_state(session, kind, source_id):
 
 
 def set_links(session, kind, source_id, rows):
+    # ПК из снимка удалили насовсем (правки этапа 66) – решение не вернуть
+    wanted = {row["computer_id"] for row in rows}
+    found = {computer_id for (computer_id,) in session.query(Computer.id).filter(Computer.id.in_(wanted))} if wanted else set()
+
+    if wanted - found:
+        raise HTTPException(status_code=400, detail=f"ПК №{min(wanted - found)} удалён насовсем – решение не вернуть.")
+
     for link in link_query(session, kind, source_id).with_for_update():
         session.delete(link)
 

@@ -5,7 +5,7 @@
 // Таблица вписывается в ширину листа: шрифт и столбцы уменьшаются вместе.
 
 import { loadJson, saveJson } from "../util.js";
-import { columnTitle } from "../columns.js";
+import { columnTitle, kitMarksOf } from "../columns.js";
 
 export const PRINT_KEY = "itdb.print.v1";
 
@@ -249,11 +249,15 @@ export default {
             return { css: out.join(";"), bg: bg };
         },
 
-        // Ячейка листа – как в таблице: заливка ячейки, блочки значений, выделения
-        printCell(row, col, opt) {
+        // Ячейка листа – как в таблице: заливка ячейки, блочки значений, выделения; kit – скобка
+        // комплекта у инвентарного журнала (top / mid / bot)
+        printCell(row, col, opt, kit) {
             const cls = [];
             if (col.center) {
                 cls.push("c");
+            }
+            if (kit && col.field === "inv_no") {
+                cls.push("kit-" + kit);
             }
             const look = col.scanOnly ? null : this.cellLook(row, col);
             const td = this.printStyle({
@@ -323,6 +327,13 @@ export default {
                 ".l.chip{width:fit-content;max-width:100%;box-sizing:border-box;border-radius:3px;padding:0 .42em}",
                 ".l.chip+.l.chip{margin-top:1px}",
                 "td.c .l.chip{margin-left:auto;margin-right:auto}",
+                // Комплект журнала – скобка ┐ │ ┘ справа у инвентарного, как на экране
+                // (overflow:visible – у ячеек листа overflow:hidden срезал бы концы на линиях сетки)
+                "td.kit-top,td.kit-mid,td.kit-bot{position:relative;overflow:visible;padding-right:1.2em}",
+                "td.kit-top::before,td.kit-mid::before,td.kit-bot::before{content:'';position:absolute;right:.4em;width:.4em;border-right:1px solid #000}",
+                "td.kit-top::before{top:50%;bottom:-1px;border-top:1px solid #000}",
+                "td.kit-mid::before{top:-1px;bottom:-1px}",
+                "td.kit-bot::before{top:-1px;height:calc(50% + 1px);border-bottom:1px solid #000}",
                 "@media screen{html{background:#8f8f8f}body{padding:14px}" +
                     ".sheet{box-sizing:border-box;width:" + paperW + "mm;min-height:" + paperH + "mm;padding:" + margin + "mm;margin:0 auto;" +
                     "background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}}"
@@ -330,8 +341,9 @@ export default {
             const head = (numW ? "<th>#</th>" : "") + cols.map(function (col) { return "<th>" + esc(col.headerName) + "</th>"; }).join("");
             const widths = (numW ? "<col style=\"width:" + (numW * scale).toFixed(2) + "px\">" : "") +
                 cols.map(function (col) { return "<col style=\"width:" + (printWidth(col) * scale).toFixed(2) + "px\">"; }).join("");
+            const kits = kitMarksOf(dlg.rows);
             const body = dlg.rows.map((row, i) => {
-                return "<tr>" + (numW ? "<td class=\"num\">" + (i + 1) + "</td>" : "") + cols.map((col) => this.printCell(row, col, opt)).join("") + "</tr>";
+                return "<tr>" + (numW ? "<td class=\"num\">" + (i + 1) + "</td>" : "") + cols.map((col) => this.printCell(row, col, opt, kits[i])).join("") + "</tr>";
             }).join("\n");
             return "<!doctype html><html lang=\"ru\"><head><meta charset=\"utf-8\"><title>ITDB</title><style>" + css + "</style></head>" +
                 "<body><div class=\"sheet\"><table><colgroup>" + widths + "</colgroup><thead><tr>" + head + "</tr></thead><tbody>\n" +

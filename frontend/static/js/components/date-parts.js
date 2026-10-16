@@ -1,10 +1,10 @@
-// Дата блоками (этап 66, окно записи журнала «Движение», просьба пользователя): день, месяц и
-// год – отдельными полями, без календаря и без стрелок. Пустые по умолчанию; нажатие на пустой
-// блок ставит значение сегодняшнего дня и открывает список (длинный – с прокруткой), на
-// заполненный – только список. Колёсико над блоком листает значения (вниз – дальше по списку,
-// вверх – к «–» в его начале, это «пусто»); годы – с 1990 по нынешний. Клавиши на блоке: ↑↓ –
-// соседнее значение, цифры – ввод (набрал – следующий блок), Backspace / Delete – очистить,
-// Enter / Esc – закрыть список.
+// Дата частями (этап 66, окно записи журнала «Движение», просьба пользователя): день, месяц и
+// год – части одной ячейки через линию таблицы, без календаря и без стрелок. Пустые по
+// умолчанию; первое нажатие на часть – только она (пустая – значение сегодняшнего дня), второе
+// – список (длинный – с прокруткой; правки этапа 66). Колёсико над частью: вверх – больше,
+// вниз – меньше, до «–» («пусто», в начале списка); годы – с 1990 по нынешний. Клавиши: ↑ –
+// больше, ↓ – меньше (в открытом списке – по списку), цифры – ввод (набрал – следующая часть),
+// Backspace / Delete – очистить, Enter / Esc – закрыть список.
 // value – { d, m, y } (числа или null), parts – "dmy" или "my" (месяц и год); событие update –
 // новый { d, m, y }. Дни – по месяцу и году: 31 марта → февраль – станет 28 (29).
 
@@ -122,29 +122,32 @@ export default {
             const ref = this.$refs["p-" + k];
             return Array.isArray(ref) ? ref[0] : ref;
         },
+        // Первое нажатие – только выбрать часть (пустой – сегодняшнее значение), второе – список
         onPress(k, event) {
             if (this.disabled || event.button !== 0) {
                 return;
             }
             const el = this.el(k);
-            if (el) {
+            const second = !!el && document.activeElement === el;
+            if (el && !second) {
+                this.hide();
                 el.focus({ preventScroll: true });
             }
             if (this.cur[k] === null) {
                 this.fillToday(k);
-                this.show(k);
             } else if (this.open === k) {
                 this.hide();
-            } else {
+            } else if (second) {
                 this.show(k);
             }
         },
+        // Колёсико: вверх – больше, вниз – меньше (просьба пользователя)
         onWheel(k, event) {
             if (this.disabled || !event.deltaY || Date.now() - lastScrollAt < SCROLL_LATCH_MS) {
                 return;
             }
             event.preventDefault();
-            this.step(k, event.deltaY > 0 ? 1 : -1);
+            this.step(k, event.deltaY < 0 ? 1 : -1);
         },
         onKey(k, event) {
             if (this.disabled) {
@@ -153,7 +156,9 @@ export default {
             const key = event.key;
             if (key === "ArrowDown" || key === "ArrowUp") {
                 event.preventDefault();
-                this.step(k, key === "ArrowDown" ? 1 : -1);
+                // Открытый список – по списку (вниз – дальше), закрытый – как колёсико (вверх – больше)
+                const down = key === "ArrowDown";
+                this.step(k, this.open === k ? (down ? 1 : -1) : (down ? -1 : 1));
             } else if (key === "Backspace" || key === "Delete") {
                 event.preventDefault();
                 this.typed = "";
@@ -260,8 +265,7 @@ export default {
     },
     template: `
         <span class="dp" :class="{ disabled: disabled }">
-            <template v-for="(k, i) in keys" :key="k">
-                <span v-if="i" class="dp-dot">.</span>
+            <template v-for="k in keys" :key="k">
                 <span :ref="'p-' + k" class="dp-part" :class="['dp-' + k, { empty: cur[k] === null, open: open === k }]"
                     :tabindex="disabled ? -1 : 0" :title="partTitle(k)"
                     @mousedown.prevent="onPress(k, $event)" @wheel="onWheel(k, $event)" @keydown="onKey(k, $event)" @blur="onBlur">{{ cur[k] === null ? holder(k) : text(k, cur[k]) }}</span>

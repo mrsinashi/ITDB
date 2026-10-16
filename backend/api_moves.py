@@ -1,9 +1,12 @@
 """Журналы (этап 66): «Движение» – получение и установка техники и компонентов.
 
 - Тип записи – из справочника item_types: техника (tech) или компонент (part). Вид полей
-  типа (form) решает, из чего складывается «Понятное название» (move_title); у принтеров
-  и МФУ – модель из справочника моделей принтеров. Новый тип из окна записи – с одним полем
-  «Информация». Сменили тип – поля, которых у нового нет, очищаются.
+  типа (form) решает, из чего складывается «Понятное название» (move_title): «Своё
+  название» (поле model, у любого типа) и в скобках – поля типа через «; »; у принтеров и
+  МФУ в скобках – модель из справочника моделей принтеров. Новый тип из окна записи – с
+  одним полем «Информация». Сменили тип – поля, которых у нового нет, очищаются. У
+  компьютера ещё «Комплект» (мышь, клавиатура…) – своим столбцом, не в названии.
+- Строки – новые сверху (правки этапа 66); одинаковый инвентарный рядом – это делает фронт.
 - Даты – день и месяц можно не знать: в базе «ГГГГ», «ГГГГ-ММ», «ГГГГ-ММ-ДД» (так они и
   сортируются), в API и Истории – «ДД.ММ.ГГГГ», «ММ.ГГГГ», «ГГГГ».
 - Куда – узел дерева (любой: адрес, отделение, этаж, кабинет) или ПК; в ПК ставят только
@@ -33,10 +36,10 @@ router = APIRouter(prefix="/api", tags=["moves"])
 
 KINDS = {"tech": "техника", "part": "компонент"}
 
-# Поля «Понятного названия» у каждого вида типа (кроме модели – она у всех, а у
-# принтеров вместо неё модель из справочника)
+# Поля каждого вида типа («Своё название» – у всех, у принтеров ещё модель из справочника).
+# В «Понятное название» идут все, кроме комплекта компьютера (KIT – свой столбец)
 FORM_FIELDS = {
-    "computer": ("pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu"),
+    "computer": ("pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu", "kit"),
     "monitor": ("diagonal", "resolution"),
     "disk": ("disk_kind", "interface", "size"),
     "ram": ("ram_kind", "freq", "size"),
@@ -61,6 +64,9 @@ MOVES_MISSING = "Часть записей не найдена. Обнови т�
 
 YEAR_MIN = 1990
 YEAR_MAX = 2100
+
+KIT = "kit"
+KIT_SPLIT = re.compile(r"[,;\n]")
 
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 ISO_DATE = re.compile(r"([0-9]{4})(?:-([0-9]{1,2})(?:-([0-9]{1,2}))?)?")
@@ -142,19 +148,34 @@ def with_unit(value, unit, space=True):
     return value + (" " if space else "") + unit
 
 
-def move_title(form, model, specs, printer_model=None):
-    """«Понятное название», как в журнале пользователя:
-    компьютер – «DEXP (ПК; Intel i3-10100; 8 Гб; SSD 240; GT 1030)»,
-    монитор – «Asus VA249HG (23.8"; 1920x1080)», диск – «ADATA SU650 (SSD; SATA; 480 Гб)»,
-    ОЗУ – «Kingston FURY (DDR4; 3200 Мгц; 16 Гб)», прочее – «модель (информация)»,
-    принтер и МФУ – модель из справочника. Пустые части пропускаются."""
-    if form == "printer":
-        return model_title(printer_model)
+def kit_text(value):
+    """Комплект: «мышь,  Клавиатура; мышь» → «мышь, Клавиатура» (повтор – один раз); пусто – None."""
+    items = []
+    seen = set()
 
+    for part in KIT_SPLIT.split(str(value or "")):
+        part = " ".join(part.split())
+
+        if part and part.lower() not in seen:
+            seen.add(part.lower())
+            items.append(part)
+
+    return ", ".join(items) or None
+
+
+def move_title(form, model, specs, printer_model=None):
+    """«Понятное название», как в журнале пользователя: «Своё название» и в скобках поля
+    типа через «; »: компьютер – «DEXP (ПК; Intel i3-10100; 8 Гб; SSD 240; GT 1030)»,
+    монитор – «Asus VA249HG (23.8"; 1920x1080)», диск – «ADATA SU650 (SSD; SATA; 480 Гб)»,
+    ОЗУ – «Kingston FURY (DDR4; 3200 Мгц; 16 Гб)», прочее – «название (информация)»,
+    принтер и МФУ – «название (модель из справочника)». Пустые части пропускаются; без
+    своего названия – одни поля без скобок."""
     def get(key):
         return (specs or {}).get(key) or None
 
-    if form == "computer":
+    if form == "printer":
+        parts = [model_title(printer_model)]
+    elif form == "computer":
         disk = " ".join(part for part in (get("disk_kind"), get("disk_size")) if part)
         parts = [get("pc_kind"), get("cpu"), with_unit(get("ram"), "Гб"), disk, get("gpu")]
     elif form == "monitor":
@@ -430,7 +451,7 @@ def apply_move_fields(session, move, payload, tidy=True):
             continue
 
         if field in SPEC_FIELDS:
-            new_value = normalize_single(value)
+            new_value = kit_text(value) if field == KIT else normalize_single(value)
 
             if tidy and new_value is not None and field not in FORM_FIELDS[form]:
                 raise HTTPException(status_code=400, detail=f"У типа «{item_type.name}» нет поля «{label_of(field)}».")
@@ -455,10 +476,6 @@ def apply_move_fields(session, move, payload, tidy=True):
             continue
 
         new_value = normalize_multiline(value) if field == "note" else normalize_single(value)
-
-        if tidy and field == "model" and new_value is not None and form == "printer":
-            raise HTTPException(status_code=400, detail=f"У типа «{item_type.name}» модель – из справочника моделей принтеров.")
-
         column = COLUMN_OF.get(field, field)
         old_value = getattr(move, column)
 
@@ -486,10 +503,6 @@ def apply_move_fields(session, move, payload, tidy=True):
     if tidy and type_changed:
         for key in [key for key in specs if key not in FORM_FIELDS[form]]:
             record(changes, key, specs.pop(key), None)
-
-        if form == "printer" and move.model is not None:
-            record(changes, "model", move.model, None)
-            move.model = None
 
         if form != "printer" and move.printer_model_id is not None:
             old_model = session.get(PrinterModel, move.printer_model_id)
@@ -623,7 +636,7 @@ def move_names(session, ids):
 
 
 def move_rows(session, archived="no", ids=None):
-    """Строки журнала по порядку добавления (как в журнале на бумаге и в Excel)."""
+    """Строки журнала: новые сверху (правки этапа 66, просьба пользователя)."""
     query = session.query(Move)
 
     if archived == "no":
@@ -634,7 +647,7 @@ def move_rows(session, archived="no", ids=None):
     if ids is not None:
         query = query.filter(Move.id.in_(list(ids) or [0]))
 
-    moves = query.order_by(Move.id).all()
+    moves = query.order_by(Move.id.desc()).all()
     types = {item.id: item for item in session.query(ItemType).all()}
     models = {model.id: model for model in session.query(PrinterModel).all()}
     locations_by_id = load_locations(session)
@@ -660,6 +673,7 @@ def move_rows(session, archived="no", ids=None):
             "model": move.model,
             "printer_model_id": move.printer_model_id,
             "specs": dict(move.specs or {}),
+            "kit": (move.specs or {}).get(KIT),
             "inv_no": move.inv_no,
             "serial": move.serial,
             "country": move.country,

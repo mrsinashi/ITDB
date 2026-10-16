@@ -603,6 +603,41 @@ export default {
             this.archiveSaving = false;
         },
 
+        // Удалить насовсем выбранные в архиве (правки этапа 66, просьба пользователя): только
+        // администратор, с вопросом; в Истории – «Удалено», вернуть нельзя
+        async deleteSelected() {
+            this.closeMenus();
+            const ids = this.selectedRows.slice();
+            if (!ids.length || this.archiveSaving || !this.isAdmin || !this.showArchive) {
+                return;
+            }
+            const printers = this.tableKind === "printer";
+            const moves = this.tableKind === "moves";
+            const what = ids.length === 1 ? "«" + this.rowName(ids[0]) + "»" : (moves ? "записей: " : (printers ? "принтеров: " : "ПК: ")) + ids.length;
+            if (!(await this.confirmDialog("Удалить насовсем " + what + "?\nВернуть будет нельзя.", { okText: "Удалить", danger: true }))) {
+                return;
+            }
+            this.archiveSaving = true;
+            try {
+                await this.apiSend(this.tableApi + "/delete", "POST", { ids: ids });
+                this.selectedRows = [];
+                this.selectAnchorId = null;
+                // Карточка или окно удалённого – закрыть
+                if (printers && this.pcard && ids.indexOf(this.pcard.id) !== -1) {
+                    this.closePrinterCard();
+                } else if (!printers && !moves && this.card && ids.indexOf(this.card.id) !== -1) {
+                    this.closeCard();
+                } else if (moves && this.moveWin && this.moveWin.mode === "edit" && ids.indexOf(this.moveWin.id) !== -1) {
+                    this.moveWin = null;
+                }
+                await this.reloadTableRows();
+                this.toast("Удалено насовсем " + what, "success");
+            } catch (e) {
+                this.toastError("Не удалось: " + (e.message || e));
+            }
+            this.archiveSaving = false;
+        },
+
         // ---------- Действия с выбранными строками ----------
 
         // Выбранные ПК в порядке таблицы (так они и встанут при перемещении)

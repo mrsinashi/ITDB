@@ -6,16 +6,18 @@
 // в полоску заголовка, которую можно двигать мышью (видна на всех страницах), и разворачивается
 // обратно по центру с затемнением. Пока тип не выбран – окно посередине экрана; с типом – выше и
 // растёт вниз по мере содержимого. Тип – из справочника техники или компонентов (что выбрали в
-// «Добавить») или новый. «Понятное название» складывается из полей типа (moveTitle – так же, как
-// move_title в api_moves.py). Даты – блоками (components/date-parts.js). Простые поля записи
-// правятся и в самой таблице; тип, название, даты, «Куда», «Установил» – в этом окне.
+// «Добавить») или новый. «Понятное название» – «Своё название (поля типа; …)» (moveTitle – так же,
+// как move_title в api_moves.py). Даты – частями (components/date-parts.js). Простые поля записи
+// правятся и в самой таблице; тип, название, комплект, даты, «Куда», «Установил» – в этом окне.
+// Правки этапа 66: тело – как таблица карточки (значения прямо в ячейках); списки подсказок – по
+// клику, вводу или ↓, не по фокусу; фокус после типа – на «Название по 1С».
 
 import { apiFetch, searchNorm, setIfChanged } from "../util.js";
 import { keepSameRows, refreshDuplicates } from "../columns.js";
 
-// Поля «Понятного названия» по виду типа – как FORM_FIELDS в api_moves.py
+// Поля по виду типа – как FORM_FIELDS в api_moves.py (комплект – не в названии, свой столбец)
 const FORM_FIELDS = {
-    computer: ["pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu"],
+    computer: ["pc_kind", "cpu", "ram", "disk_kind", "disk_size", "gpu", "kit"],
     monitor: ["diagonal", "resolution"],
     disk: ["disk_kind", "interface", "size"],
     ram: ["ram_kind", "freq", "size"],
@@ -23,29 +25,30 @@ const FORM_FIELDS = {
     info: ["info"]
 };
 
-// Строки окна для полей типа: подпись, поле (key2 – второе поле в той же строке), единица –
-// подписью справа у короткого поля
+// Строки окна для полей типа: подпись, поле (key2 – вторая часть той же ячейки), единица –
+// сразу за числом
 const FORM_ROWS = {
     computer: [
         { label: "Тип", key: "pc_kind" },
         { label: "Процессор", key: "cpu" },
-        { label: "ОЗУ", key: "ram", unit: "Гб", short: true },
+        { label: "ОЗУ", key: "ram", unit: "Гб" },
         { label: "Диск", key: "disk_kind", key2: "disk_size", unit: "Гб" },
-        { label: "Видеокарта", key: "gpu" }
+        { label: "Видеокарта", key: "gpu" },
+        { label: "Комплект", key: "kit" }
     ],
     monitor: [
-        { label: "Диагональ", key: "diagonal", unit: "дюйм.", short: true },
+        { label: "Диагональ", key: "diagonal", unit: "дюйм." },
         { label: "Разрешение", key: "resolution" }
     ],
     disk: [
         { label: "Тип", key: "disk_kind" },
         { label: "Интерфейс", key: "interface" },
-        { label: "Объём", key: "size", unit: "Гб", short: true }
+        { label: "Объём", key: "size", unit: "Гб" }
     ],
     ram: [
         { label: "Тип", key: "ram_kind" },
-        { label: "Частота", key: "freq", unit: "Мгц", short: true },
-        { label: "Объём", key: "size", unit: "Гб", short: true }
+        { label: "Частота", key: "freq", unit: "Мгц" },
+        { label: "Объём", key: "size", unit: "Гб" }
     ],
     printer: [],
     info: [{ label: "Информация", key: "info" }]
@@ -56,8 +59,13 @@ const PRESETS = {
     disk_kind: ["SSD", "HDD"],
     interface: ["SATA", "M2/NVME"],
     ram_kind: ["DDR3", "DDR4", "DDR5"],
-    source: ["Склад"]
+    source: ["Склад"],
+    kit: ["Мышь", "Клавиатура"]
 };
+// Подсказки только из записей того же типа (просьба пользователя: «Название по 1С» – по типу)
+const SAME_TYPE = ["name_1c", "model"];
+// Комплект – через запятую: список дописывает, а не заменяет (как картриджи, этап 47)
+const KIT = "kit";
 // У полей компьютера – ещё значения Таблицы ПК (справочник и данные)
 const PC_FIELDS = { pc_kind: "type", cpu: "cpu", gpu: "gpu" };
 
@@ -78,14 +86,14 @@ function withUnit(value, unit, space) {
     return NUMBER.test(value) ? value + (space === false ? "" : " ") + unit : value;
 }
 
-// «Понятное название» – как move_title в api_moves.py
+// «Понятное название» – как move_title в api_moves.py: своё название и в скобках поля типа
+// (у принтера – модель из справочника)
 export function moveTitle(form, model, specs, printerTitle) {
-    if (form === "printer") {
-        return printerTitle || "";
-    }
     const get = function (key) { return String((specs || {})[key] || "").trim(); };
     let parts;
-    if (form === "computer") {
+    if (form === "printer") {
+        parts = [printerTitle || ""];
+    } else if (form === "computer") {
         parts = [get("pc_kind"), get("cpu"), withUnit(get("ram"), "Гб"), [get("disk_kind"), get("disk_size")].filter(Boolean).join(" "), get("gpu")];
     } else if (form === "monitor") {
         parts = [withUnit(get("diagonal"), "\"", false), get("resolution")];
@@ -402,9 +410,9 @@ export default {
             }
         },
 
-        // Фокус на поле окна: type, model, поле типа, дата (первый блок), dest, installer…; без
-        // поля – тип, пока его нет, а с типом – само окно: у полей на фокусе открываются
-        // подсказки, и первый Esc закрыл бы их, а не окно
+        // Фокус на поле окна: type, model (своё название), printer_model, поле типа, kit, дата
+        // (первая часть), dest, installer…; без поля – тип, пока его нет, а с типом – само окно
+        // (развернули свёрнутое – Esc сразу закрывает окно, а не уходит в поле)
         focusMoveField(field) {
             const box = this.$refs.moveWinBody;
             if (!box || !this.moveWin) {
@@ -466,6 +474,14 @@ export default {
             if (this.moveWin && this.moveWin.min) {
                 this.moveWin.min = false;
                 this.$nextTick(() => this.focusMoveField(null));
+            }
+        },
+
+        // Окно доехало до места (выбрали тип – оно встаёт выше): открытые списки – под свои поля.
+        // Списки следят за прокруткой – ею и сказать (иначе список остался бы там, где было поле)
+        onMoveWinMoved(event) {
+            if (event.target === this.$refs.moveWin && this.$refs.moveWinBody) {
+                this.$refs.moveWinBody.dispatchEvent(new Event("scroll"));
             }
         },
 
@@ -624,22 +640,25 @@ export default {
         },
 
         // Подсказки у текстового поля окна: готовые варианты, значения Таблицы ПК (у полей
-        // компьютера), потом – что уже вписывали в журнал (с числом записей)
+        // компьютера), потом – что уже вписывали в журнал (с числом записей; название по 1С и
+        // своё название – только у записей того же типа, комплект – по частям)
         moveSuggestOptions(key) {
             const counts = new Map();
             const spec = TEXT_FIELDS.indexOf(key) === -1;
             const typeId = this.moveWin ? this.moveWin.form.type_id : null;
             this.moveRows.forEach(function (row) {
-                // Модели – только того же типа
-                if (row.archived || (key === "model" && row.type_id !== typeId)) {
+                if (row.archived || (SAME_TYPE.indexOf(key) !== -1 && row.type_id !== typeId)) {
                     return;
                 }
-                const value = String((spec ? (row.specs || {})[key] : row[key]) || "").trim();
-                if (value) {
-                    const k = value.toLowerCase();
-                    const was = counts.get(k);
-                    counts.set(k, { value: was ? was.value : value, n: (was ? was.n : 0) + 1 });
-                }
+                const text = String((spec ? (row.specs || {})[key] : row[key]) || "");
+                (key === KIT ? text.split(",") : [text]).forEach(function (part) {
+                    const value = part.trim();
+                    if (value) {
+                        const k = value.toLowerCase();
+                        const was = counts.get(k);
+                        counts.set(k, { value: was ? was.value : value, n: (was ? was.n : 0) + 1 });
+                    }
+                });
             });
             const list = [];
             const seen = new Set();
@@ -672,6 +691,10 @@ export default {
             }
             const el = event.target;
             const spec = TEXT_FIELDS.indexOf(key) === -1;
+            if (key === KIT) {
+                this.openTokenSuggest(el, key, this.moveSuggestOptions(key));
+                return;
+            }
             this.openSuggestList(el, key, this.moveSuggestOptions(key), (value) => {
                 if (spec) {
                     this.setMoveSpec(key, value);
@@ -688,10 +711,20 @@ export default {
             this.onSuggestInput(event.target.value);
         },
 
-        // Enter в поле окна – добавить / сохранить (открытый список забирает Enter себе)
-        onMoveFieldKeydown(event) {
+        // Enter в поле окна – добавить / сохранить (открытый список забирает Enter себе); ↓ без
+        // списка – открыть подсказки поля key
+        onMoveFieldKeydown(event, key) {
             const listOpen = !!this.suggest;
             if (this.suggestKeydown(event)) {
+                return;
+            }
+            if (event.key === "ArrowDown" && key && !listOpen) {
+                event.preventDefault();
+                if (key === "installer") {
+                    this.openMoveInstallerList(event.target);
+                } else {
+                    this.openMoveSuggest(event, key);
+                }
                 return;
             }
             // Esc при открытом списке закрывает только список, не окно
@@ -765,9 +798,7 @@ export default {
         movePayload(form, typeForm) {
             const payload = { type_id: form.type_id };
             TEXT_FIELDS.forEach(function (key) {
-                if (key !== "model" || typeForm !== "printer") {
-                    payload[key] = String(form[key] || "").trim();
-                }
+                payload[key] = String(form[key] || "").trim();
             });
             if (typeForm === "printer") {
                 payload.printer_model_id = form.printer_model_id || null;
@@ -933,6 +964,9 @@ export default {
 
         // Поле Истории → столбец журнала (для вспышки)
         moveChangeColumn(field) {
+            if (field === KIT) {
+                return field;
+            }
             if (FORM_FIELDS.computer.concat(FORM_FIELDS.monitor, FORM_FIELDS.disk, FORM_FIELDS.ram, FORM_FIELDS.info).indexOf(field) !== -1 ||
                 field === "model" || field === "printer_model") {
                 return "title";
