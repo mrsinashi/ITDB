@@ -258,6 +258,23 @@ export function rowPlate(rowEl, wrapSel, data) {
     return Object.assign(data, { top: r.top - w.top, height: r.height });
 }
 
+let measureCtx = null;
+
+// Ширина самого длинного из текстов шрифтом элемента el (canvas, без разметки); weight – своё
+// начертание вместо начертания элемента
+export function maxTextWidth(texts, el, weight) {
+    if (!measureCtx) {
+        measureCtx = document.createElement("canvas").getContext("2d");
+    }
+    const style = window.getComputedStyle(el || document.body);
+    measureCtx.font = style.fontStyle + " " + (weight || style.fontWeight) + " " + style.fontSize + " " + style.fontFamily;
+    let width = 0;
+    texts.forEach(function (text) {
+        width = Math.max(width, measureCtx.measureText(String(text || "")).width);
+    });
+    return width;
+}
+
 // Список под полем el; снизу меньше opt.room и сверху больше места – над ним; за край окна
 // не уходит. opt: width – наименьшая ширина, height – наибольшая высота, maxWidth –
 // наибольшая ширина (нет – до края окна). Ответ – для listPosStyle

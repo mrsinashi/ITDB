@@ -40,8 +40,8 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #               меняет модель (cartridges.py)
 # Журнал «Движение» (этап 66, api_moves.py) – правятся в окне записи, не в ячейке:
 #   mtype     – тип техники или компонента (справочник item_types)
-#   mtitle    – «Понятное название»: «Своё название (поля типа; …)», у принтера в скобках –
-#               модель из справочника
+#   mtitle    – столбец «Своё название» (до правок 2 этапа 66 – «Понятное название»): поле
+#               «Своё название» и в скобках поля типа, у принтера – модель из справочника
 #   mkit      – комплект компьютера («Мышь, Клавиатура»; правки этапа 66)
 #   pdate     – дата, где день и месяц можно не знать: «02.08.2026», «08.2026», «2026»
 #   mdest     – куда: узел дерева или ПК, строками («Терапия», «[326] Ординаторская», имя ПК)
@@ -233,7 +233,7 @@ EXTRA_FIELDS = {column.key: column.extra_key for column in COLUMNS if column.kin
 MOVE_COLUMNS = [
     col("item_type", "Тип", kind="mtype", sticky=True, center=True, bulk=False, export_width=12),
     col("name_1c", "Название по 1С", sticky=True, export_width=36),
-    col("title", "Понятное название", kind="mtitle", link=True, values="no", bulk=False, export_width=55),
+    col("title", "Своё название", kind="mtitle", link=True, values="no", bulk=False, export_width=55),
     col("kit", "Комплект", kind="mkit", max_width=150, values="no", bulk=False, export_width=18),
     col("inv_no", "Инвентарный", values="no", bulk=False, export_width=12),
     col("serial", "Серийный номер", values="no", dup=True, bulk=False, export_width=16),

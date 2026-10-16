@@ -7,10 +7,12 @@
 // обратно по центру с затемнением. Пока тип не выбран – окно посередине экрана; с типом – выше и
 // растёт вниз по мере содержимого. Тип – из справочника техники или компонентов (что выбрали в
 // «Добавить») или новый. «Понятное название» – «Своё название (поля типа; …)» (moveTitle – так же,
-// как move_title в api_moves.py). Даты – частями (components/date-parts.js). Простые поля записи
-// правятся и в самой таблице; тип, название, комплект, даты, «Куда», «Установил» – в этом окне.
+// как move_title в api_moves.py; столбец – «Своё название»). Даты – частями
+// (components/date-parts.js). Запись правится только в этом окне: клик по названию, двойной
+// клик по любой ячейке строки (правки 2), Enter.
 // Правки этапа 66: тело – как таблица карточки (значения прямо в ячейках); списки подсказок – по
-// клику, вводу или ↓, не по фокусу; фокус после типа – на «Название по 1С».
+// клику, вводу или ↓, не по фокусу; фокус после типа – на «Название по 1С». Правки 2: без
+// анимаций; нажатие мимо окна – свернуть (есть несохранённое) или закрыть; копия записи.
 
 import { apiFetch, searchNorm, setIfChanged } from "../util.js";
 import { keepSameRows, refreshDuplicates } from "../columns.js";
@@ -260,11 +262,15 @@ export default {
             return list;
         },
 
-        // Окно с записью: на экране что-то поменяли (у новой записи один выбранный тип – не в счёт)
+        // Окно с записью: на экране что-то поменяли (у новой записи один выбранный тип – не в счёт;
+        // набранная новая модель принтера – в счёт)
         moveWinDirty() {
             const win = this.moveWin;
             if (!win) {
                 return false;
+            }
+            if (win.newModel && (win.newModel.maker.trim() || win.newModel.model.trim())) {
+                return true;
             }
             const form = win.mode === "add" ? Object.assign({}, win.form, { type_id: win.orig.type_id }) : win.form;
             return JSON.stringify(form) !== JSON.stringify(win.orig);
@@ -454,6 +460,45 @@ export default {
             this.moveWin = null;
         },
 
+        // Нажатие мимо окна (по затемнению; правки 2 этапа 66): есть несохранённое – окно
+        // сворачивается, нет – закрывается. Второе нажатие двойного клика, которым окно открыли
+        // (клик по названию в таблице), – не в счёт
+        onMoveOverlayDown(event) {
+            const win = this.moveWin;
+            if (!win || win.min || win.saving || event.button !== 0 || event.detail > 1) {
+                return;
+            }
+            if (this.moveWinDirty) {
+                this.toggleMoveWinMin();
+            } else {
+                this.closeSuggest();
+                this.moveWin = null;
+            }
+        },
+
+        // Копия записи (кнопка у «Отмены», правки 2 этапа 66): новая запись с теми же полями, что на
+        // экране, без инвентарного и серийного номеров, «Куда», даты установки и «Установил»
+        async copyMoveWin() {
+            const win = this.moveWin;
+            if (!win || win.mode !== "edit" || win.saving) {
+                return;
+            }
+            if (this.moveWinDirty && !(await this.confirmDialog("Правки записи не сохранятся. Скопировать?", { okText: "Скопировать" }))) {
+                return;
+            }
+            if (this.moveWin !== win) {
+                return;
+            }
+            const form = JSON.parse(JSON.stringify(win.form));
+            Object.assign(form, { inv_no: "", serial: "", dest: null, installed: dateParts(null), installer_user_id: null, installer: "" });
+            this.closeSuggest();
+            this.moveWin = {
+                mode: "add", kind: win.kind, id: null, version: null, min: false,
+                form: form, orig: emptyForm(), installerText: "", error: "", saving: false, many: false, newModel: null
+            };
+            this.$nextTick(() => this.focusMoveField("inv_no"));
+        },
+
         // Свернуть в полоску заголовка / развернуть по центру
         toggleMoveWinMin() {
             if (!this.moveWin) {
@@ -474,14 +519,6 @@ export default {
             if (this.moveWin && this.moveWin.min) {
                 this.moveWin.min = false;
                 this.$nextTick(() => this.focusMoveField(null));
-            }
-        },
-
-        // Окно доехало до места (выбрали тип – оно встаёт выше): открытые списки – под свои поля.
-        // Списки следят за прокруткой – ею и сказать (иначе список остался бы там, где было поле)
-        onMoveWinMoved(event) {
-            if (event.target === this.$refs.moveWin && this.$refs.moveWinBody) {
-                this.$refs.moveWinBody.dispatchEvent(new Event("scroll"));
             }
         },
 
@@ -972,44 +1009,6 @@ export default {
                 return "title";
             }
             return field;
-        },
-
-        // Сохранили ячейку журнала в таблице (saveCellValue): строка – на месте, вспышка
-        async saveMoveCell(row, col, value) {
-            const pendingKey = "m" + row.id + ":" + col.field;
-            this.pendingCells[pendingKey] = value;
-            try {
-                const response = await apiFetch("/api/moves/" + row.id, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ [col.field]: value, _version: row.version })
-                });
-                delete this.pendingCells[pendingKey];
-                if (response.status === 409) {
-                    this.toastError(await this.errorText(response));
-                    await this.loadMoves();
-                    return false;
-                }
-                if (!response.ok) {
-                    this.toastError("Не удалось сохранить: " + (await this.errorText(response)));
-                    return false;
-                }
-                const data = await response.json();
-                const index = this.moveRows.findIndex((r) => r.id === row.id);
-                if (index !== -1 && data.updated) {
-                    Object.assign(this.moveRows[index], data.updated, { _move: true });
-                    if (refreshDuplicates(this.moveRows, this.moveColumns, "moves")) {
-                        this.dupVersion++;
-                    }
-                    this.recalcWidths();
-                }
-                this.flashCell("m" + row.id, col.field);
-                return true;
-            } catch (e) {
-                delete this.pendingCells[pendingKey];
-                this.toastError("Не удалось сохранить: " + e);
-                return false;
-            }
         }
     }
 };

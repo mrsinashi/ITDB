@@ -6975,7 +6975,8 @@ a.pr-web:hover {
 /* ============================================================
    Окно записи журнала «Движение» (этап 66, просьба пользователя): с затемнением, без типа –
    посередине, с типом – выше (top – из moveWinStyle) и растёт вниз; свёрнутое – полоска
-   заголовка (тянется мышью), видна на всех страницах
+   заголовка (тянется мышью), видна на всех страницах. Без анимаций: встаёт на место сразу
+   (правки 2 этапа 66: «отвлекают и отнимают время»)
    ============================================================ */
 .mw-overlay {
     position: fixed;
@@ -6992,7 +6993,6 @@ a.pr-web:hover {
     width: 560px;
     display: flex;
     flex-direction: column;
-    transition: top 0.15s ease-out, transform 0.15s ease-out;
 }
 .dialog.mw.typed {
     transform: translate(-50%, 0);
@@ -7003,7 +7003,6 @@ a.pr-web:hover {
     bottom: 16px;
     width: 340px;
     transform: none;
-    transition: none;
 }
 .mw.min .mw-head {
     cursor: move;
@@ -7191,6 +7190,14 @@ select.mw-in {
 }
 .dialog-buttons.mw-foot .vh-error {
     margin-right: 0;
+}
+/* Копия записи – значком у «Отмены», высотой с кнопки с текстом */
+.mw-foot .btn.icon-only {
+    padding: 3px 6px;
+}
+.mw-foot .btn.icon-only .ico {
+    width: 15px;
+    height: 15px;
 }
 
 /* Дата (components/date-parts.js): день, месяц, год – части одной ячейки окна записи через

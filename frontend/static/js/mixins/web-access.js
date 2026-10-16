@@ -6,23 +6,14 @@
 // пароль – точками); пока они открыты, столбец шире. Показанное прячут Esc и уход в другую
 // часть интерфейса (правка другой ячейки, карточка, другая страница); клик мимо – нет.
 
+import { maxTextWidth } from "../util.js";
+
 // Логин и пароль заданы – столько точек, какой бы длины ни был пароль
 export const SECRET_DOTS = "••••••";
 // Ширина столбца, пока в ячейке два поля
 const EDIT_WIDTH = 176;
 // Справа от показанных значений – ✎ и поля ячейки
 const SHOWN_PAD = 34;
-
-let measureCtx = null;
-
-function textWidth(text, el) {
-    if (!measureCtx) {
-        measureCtx = document.createElement("canvas").getContext("2d");
-    }
-    const style = window.getComputedStyle(el || document.body);
-    measureCtx.font = style.fontWeight + " " + style.fontSize + " " + style.fontFamily;
-    return measureCtx.measureText(String(text || "")).width;
-}
 
 export default {
     data() {
@@ -193,7 +184,7 @@ export default {
             this.webShown = { id: row.id, login: login, password: password, where: where };
             if (where === "cell") {
                 const font = el && (el.querySelector(".cell-lines, span") || el);
-                const w = Math.max(textWidth(login || "без логина", font), textWidth(password || "без пароля", font));
+                const w = maxTextWidth([login || "без логина", password || "без пароля"], font);
                 this.setCellWiden("web_auth", w + SHOWN_PAD);
             }
         },

@@ -14,9 +14,11 @@
 // Кнопка – окошко «Что перенести?» (только ПК / весь кабинет), у всего кабинета – «Удалить
 // старый кабинет?»: событие move-room { parentId, whole, keepOld }.
 // quiet – список не открывается на фокусе, только по клику, вводу или ↓ (окно записи журнала,
-// правки этапа 66); fit – список шириной ровно с поле.
+// правки этапа 66); fit – список шириной с поле, а если пункт не влезает – шире, чтобы влезали
+// все (правки 2: в «Куда» не было видно путей целиком). Ширина – по всем пунктам, не только
+// найденным: при вводе список не прыгает.
 
-import { listPosStyle, placeList, scrollToItem, searchWordsIn } from "../util.js";
+import { listPosStyle, maxTextWidth, placeList, scrollToItem, searchWordsIn } from "../util.js";
 
 const ROOM_PARENTS = ["department", "floor"];
 // Сколько мест для нового кабинета предлагать
@@ -190,10 +192,45 @@ export default {
             this.$nextTick(() => this.scrollActive(true));
         },
         place() {
-            if (!this.open || !this.$refs.input) {
+            const input = this.$refs.input;
+            if (!this.open || !input) {
                 return;
             }
-            this.pos = placeList(this.$refs.input, this.fit ? { width: 0, maxWidth: 1, room: 220, height: 360 } : { width: 420, room: 220, height: 360 });
+            if (!this.fit) {
+                this.pos = placeList(input, { width: 420, room: 220, height: 360 });
+                return;
+            }
+            // Пока списка нет – по полю; появился (следующим проходом) – по самому длинному пункту
+            const list = this.$refs.list;
+            const need = list ? Math.min(this.fitWidth(list), window.innerWidth - 8) : 0;
+            this.pos = placeList(input, { width: need, maxWidth: 1, room: 220, height: 360 });
+            if (!list) {
+                this.$nextTick(() => {
+                    if (this.$refs.list) {
+                        this.place();
+                    }
+                });
+            }
+        },
+        // Ширина, в которую влезает самый длинный пункт: текст (текущий и «＋ …» – полужирные),
+        // поля пункта и списка, рамка и полоса прокрутки. Текст меряется раз на набор пунктов
+        fitWidth(list) {
+            const item = list.querySelector(".ll-item");
+            if (!item) {
+                return 0;
+            }
+            if (this._fitFor !== this.options || this._fitValue !== this.value) {
+                const current = this.current;
+                const plain = this.options.filter(function (o) { return o !== current; }).map(function (o) { return o.path; });
+                const bold = (current ? [current.path] : []).concat(this.addText ? ["＋ " + this.addText] : []);
+                this._fitFor = this.options;
+                this._fitValue = this.value;
+                this._fitText = Math.max(maxTextWidth(plain, item, 400), maxTextWidth(bold, item, 600));
+            }
+            const ls = getComputedStyle(list);
+            const is = getComputedStyle(item);
+            const pads = parseFloat(ls.paddingLeft) + parseFloat(ls.paddingRight) + parseFloat(is.paddingLeft) + parseFloat(is.paddingRight);
+            return Math.ceil(this._fitText + pads + list.offsetWidth - list.clientWidth + 1);
         },
         scrollActive(center) {
             const list = this.$refs.list;

@@ -173,14 +173,15 @@ export default {
         },
 
         // Список под полем (или над ним, если снизу мало места); за краем окна не уходит.
-        // Короткому списку хватает места по его высоте, а не по 200px (этап 61)
+        // Короткому списку хватает места по его высоте, а не по 200px (этап 61). В окне записи
+        // журнала – шире 420px, если значение не влезает (правки 2 этапа 66: названия по 1С длинные)
         placeSuggest() {
             const s = this.suggest;
             if (!s || !s.el || !s.el.isConnected) {
                 return;
             }
             const room = Math.min(200, this.suggestShown.length * SUGGEST_ITEM_HEIGHT + 8);
-            s.pos = placeList(s.el, { width: 180, room: room, height: 300, maxWidth: 420 });
+            s.pos = placeList(s.el, { width: 180, room: room, height: 300, maxWidth: s.el.closest(".mw") ? 0 : 420 });
         },
 
         scrollSuggestTo(index, center) {

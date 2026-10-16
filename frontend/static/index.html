@@ -2412,9 +2412,10 @@
              Затемнение – пока окно не свёрнуто; свёрнутое – полоска заголовка (тянуть мышью, нажатие –
              развернуть), видна на всех страницах. Без типа – посередине экрана, с типом – выше.
              Тело – как таблица карточки ПК (правки этапа 66): значения вводятся прямо в ячейку, списки –
-             по клику или вводу, не по фокусу -->
-        <div v-if="moveWinOpen" class="mw-overlay"></div>
-        <div v-if="moveWin" ref="moveWin" class="dialog mw" :class="{ min: moveWin.min, typed: !!moveWin.form.type_id }" :style="moveWinStyle" role="dialog" @transitionend="onMoveWinMoved">
+             по клику или вводу, не по фокусу. Нажатие мимо окна (правки 2): с несохранённым – свернуть,
+             без – закрыть -->
+        <div v-if="moveWinOpen" class="mw-overlay" @mousedown.self="onMoveOverlayDown"></div>
+        <div v-if="moveWin" ref="moveWin" class="dialog mw" :class="{ min: moveWin.min, typed: !!moveWin.form.type_id }" :style="moveWinStyle" role="dialog">
             <div class="vh-head mw-head" @mousedown="onMoveBarDown">
                 <span class="vh-title"><b>{{ moveWinTitle }}</b><template v-if="moveTitlePreview"> · {{ moveTitlePreview }}</template></span>
                 <span class="vh-close mw-min" :title="moveWin.min ? 'Развернуть' : 'Свернуть'" @click="toggleMoveWinMin">
@@ -2582,6 +2583,8 @@
                 <span v-if="moveWin.error" class="vh-error">{{ moveWin.error }}</span>
                 <!-- Один / Несколько – как у строки «Новый компьютер»: после добавления окно закрывается или остаётся -->
                 <button v-if="moveWin.mode === 'add'" class="btn ab-many" :class="{ on: moveWin.many }" :title="moveWin.many ? 'После добавления – не закрывать' : 'После добавления – закрыть'" @click="moveWin.many = !moveWin.many">{{ moveWin.many ? "Несколько" : "Один" }}</button>
+                <!-- Копия (правки 2): новая запись с теми же полями, без номеров, «Куда» и установки -->
+                <button v-if="moveWin.mode === 'edit'" class="btn icon-only" :disabled="moveWin.saving" title="Скопировать в новую запись" @click="copyMoveWin"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
                 <button class="btn" @click="closeMoveWin">Отмена</button>
                 <button class="btn btn-primary" :disabled="moveWin.saving || !moveWin.form.type_id" :title="moveWin.form.type_id ? null : 'Сначала тип'" @click="submitMoveWin">{{ moveWin.mode === "add" ? "Добавить" : "Сохранить" }}</button>
             </div>
