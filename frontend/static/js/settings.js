@@ -1,4 +1,7 @@
 // Варианты оформления и цветовые схемы
+
+import { applyFavicon } from "./favicon.js";
+
 // ============================================================
 // Варианты оформления. Спорные решения можно вернуть, поставив false.
 // ============================================================
@@ -13,13 +16,13 @@ document.body.classList.toggle("ui-light-toolbar", UI_OPTIONS.lightToolbar);
 document.body.classList.toggle("ui-dark-hostname", UI_OPTIONS.darkHostname);
 
 // Цветовые схемы (личная настройка, шестерёнка в меню). Цвета – в app.css,
-// здесь только список для выбора и цвет кружка.
+// здесь только список для выбора и цвет кружка (= --nav-bg схемы).
 export const THEMES = [
-    { key: "red", label: "Красная", color: "#8a2828" },
+    { key: "red", label: "Красная", color: "#903A34" },
     { key: "green", label: "Зелёная", color: "#2e5e3e" },
-    { key: "blue", label: "Синяя", color: "#233d66" },
-    { key: "graphite", label: "Тёмно-серая", color: "#31363c" },
-    { key: "teal", label: "Бирюзовая", color: "#1f5c63" }
+    { key: "blue", label: "Синяя", color: "#2c4e73" },
+    { key: "graphite", label: "Тёмно-серая", color: "#505254" },
+    { key: "teal", label: "Бирюзовая", color: "#225D64" }
 ];
 export const THEME_KEY = "itdb.theme";
 
@@ -28,6 +31,7 @@ export function applyTheme(key) {
         key = "red";
     }
     document.documentElement.dataset.theme = key;
+    applyFavicon();
     try {
         localStorage.setItem(THEME_KEY, key);
     } catch (e) {

@@ -8,7 +8,7 @@
        html[data-theme="..."], переопределяют только этот блок. */
     --brand: #A73636;
     --brand-dark: #7a2222;
-    --brand-rgb: 138, 40, 40;       /* для полупрозрачных подсветок */
+    --brand-rgb: 144, 58, 52;       /* для полупрозрачных подсветок (= --nav-bg) */
     --brand-accent: #A73636;        /* линия режима правки, значки */
     --brand-focus: #b98080;         /* рамка поля в фокусе */
     --cb-brand-hover: #7d2828;       /* флажок цвета схемы без «Закруглений»: под курсором */
@@ -40,10 +40,11 @@
     --badge-bg: #8a8a8a;            /* счётчик в углу кнопки панели – серый */
     --copy-ico: #b98a4e;            /* значок копирования – в тон бежевой подсветки строки */
 
-    /* Верхнее меню */
-    --nav-bg: #8a2828;
-    --nav-hover-bg: #993636;
-    --nav-active-bg: #a84848;
+    /* Верхнее меню. --nav-bg схем, кроме зелёной, – от автора (20.10); наведение и
+       выбранная вкладка светлее на столько же, как было. Он же – цвет значка вкладки (favicon.js) */
+    --nav-bg: #903A34;
+    --nav-hover-bg: #9f4842;
+    --nav-active-bg: #ae5a54;
     --nav-text: #f1d7d7;
     --nav-text-strong: #fff;
     --nav-load-bar: var(--nav-text);
@@ -223,40 +224,40 @@ html[data-theme="green"] {
 html[data-theme="blue"] {
     --brand: #345485;
     --brand-dark: #1b3154;
-    --brand-rgb: 35, 61, 102;
+    --brand-rgb: 44, 78, 115;
     --brand-accent: #345485;
     --brand-focus: #7890b8;
     --cb-brand-hover: #243b5d;
     --cb-brand-press: #446dad;
-    --nav-bg: #233d66;
-    --nav-hover-bg: #2e4b77;
-    --nav-active-bg: #3d5a87;
+    --nav-bg: #2c4e73;
+    --nav-hover-bg: #375c84;
+    --nav-active-bg: #466b94;
     --nav-text: #d3ddee;
 }
 html[data-theme="graphite"] {
     --brand: #4A5057;
     --brand-dark: #272b30;
-    --brand-rgb: 49, 54, 60;
+    --brand-rgb: 80, 82, 84;
     --brand-accent: #4A5057;
     --brand-focus: #8f98a2;
     --cb-brand-hover: #303439;
     --cb-brand-press: #646c75;
-    --nav-bg: #31363c;
-    --nav-hover-bg: #3d434a;
-    --nav-active-bg: #4c535b;
+    --nav-bg: #505254;
+    --nav-hover-bg: #5c5f62;
+    --nav-active-bg: #6b6f73;
     --nav-text: #dcdfe3;
 }
 html[data-theme="teal"] {
     --brand: #317A83;
     --brand-dark: #184b51;
-    --brand-rgb: 31, 92, 99;
+    --brand-rgb: 34, 93, 100;
     --brand-accent: #3f8a92;
     --brand-focus: #317A83;
     --cb-brand-hover: #22545a;
     --cb-brand-press: #40a0ac;
-    --nav-bg: #1f5c63;
-    --nav-hover-bg: #2a6a72;
-    --nav-active-bg: #3a7b83;
+    --nav-bg: #225D64;
+    --nav-hover-bg: #2d6b73;
+    --nav-active-bg: #3d7c84;
     --nav-text: #d3eaec;
 }
 
