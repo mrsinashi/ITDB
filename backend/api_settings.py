@@ -10,7 +10,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from auth import get_current_user, require_editor
+from auth import get_current_user, require_page
 from db import get_db
 from history_log import log_change
 from models import AppSetting
@@ -42,7 +42,7 @@ def get_settings(me=Depends(get_current_user), session=Depends(get_db)):
 
 
 @router.patch("", response_model=SettingsOut)
-def update_settings(payload: SettingsUpdate, me=Depends(require_editor), session=Depends(get_db)):
+def update_settings(payload: SettingsUpdate, me=Depends(require_page("choices/styles", "edit")), session=Depends(get_db)):
     old = vnc_default(session)
     new = payload.vnc_default
 

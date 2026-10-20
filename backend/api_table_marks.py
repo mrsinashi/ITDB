@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from auth import get_current_user, require_editor
+from auth import get_current_user, require_page
 from db import get_db
 from history_log import log_change
 from models import AppSetting
@@ -90,7 +90,7 @@ def list_marks(me=Depends(get_current_user), session=Depends(get_db)):
 
 
 @router.patch("/{kind}", response_model=MarkOut)
-def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), session=Depends(get_db)):
+def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_page("choices/styles", "edit")), session=Depends(get_db)):
     if kind not in MARKS:
         raise HTTPException(status_code=404, detail="Нет такого выделения.")
 

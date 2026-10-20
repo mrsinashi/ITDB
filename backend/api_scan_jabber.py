@@ -31,7 +31,7 @@ import scan_collect
 import scan_jabber
 from api_computers import load_locations, location_path
 from api_scan import SOURCES, RunOut, connection_params, fresh_days_of, last_run_of, load_source, online_settings
-from auth import get_current_user, require_editor
+from auth import get_current_user, require_page
 from db import get_db
 from models import Computer, ScanJabberUser, ScanRecord
 from scan_http import SourceError
@@ -147,7 +147,7 @@ def live_online(session, source):
 
 
 @router.get("", response_model=JabberOut)
-def list_jabber(me=Depends(require_editor), session=Depends(get_db)):
+def list_jabber(me=Depends(require_page("vacuum")), session=Depends(get_db)):
     source = load_source(session, "jabber")
     computers, by_ip, records = address_index(session)
     rows = session.query(ScanJabberUser).order_by(ScanJabberUser.login).all()

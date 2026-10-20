@@ -74,6 +74,9 @@ class Computer(Base):
 
     extra = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     note = Column(Text, nullable=True)
+    # Логин и пароль от компьютера (этап 69, столбец «Доступ» – как у принтеров),
+    # зашифрованные ключом ITDB_SECRET_KEY (secret_box.py): {"login", "password"}
+    secrets = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
 
     # ПК убирается в архив (скрыт из таблицы, дерева, выгрузки); из архива администратор
     # может удалить насовсем (api_delete.py)
@@ -332,6 +335,8 @@ class User(Base):
     archived = Column(Boolean, nullable=False, server_default="false")
     # Личные настройки интерфейса: {"theme": "blue"}
     prefs = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    # Права по страницам (этап 69): только то, что меньше роли – {"table": "view"} (auth.py)
+    perms = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 

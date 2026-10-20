@@ -4,7 +4,11 @@
 
 Свою роль и отключение себя администратор менять не может – так в системе
 всегда остаётся хотя бы один работающий администратор (он сам). Изменения
-пишутся в Историю (видит только администратор); пароль – только «задан новый»."""
+пишутся в Историю (видит только администратор); пароль – только «задан новый».
+
+Права по страницам (этап 69, auth.py): у пользователя – только ограничения роли;
+свои права не меняются, «Пользователи» у администратора – тоже. В Историю – словами,
+без отмены (как пароль)."""
 import re
 from datetime import datetime
 from typing import Optional
@@ -13,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
 
-from auth import hash_password, require_admin
+from auth import FIXED_PAGES, LEVELS, PAGE_INFO, PAGE_TITLES, PAGES, ROLE_PAGES, hash_password, page_levels, require_admin
 from db import get_db
 from history_log import PASSWORD_SET, log_change
 from models import User, UserSession
@@ -37,6 +41,7 @@ class UserOut(BaseModel):
     full_name: Optional[str]
     position: Optional[str]
     role: str
+    perms: dict[str, str]           # страница → none / view / edit (с учётом роли)
     archived: bool
     created_at: datetime
     is_self: bool
@@ -57,6 +62,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     password: Optional[str] = None
     archived: Optional[bool] = None
+    perms: Optional[dict[str, str]] = None     # страница → none / view / edit; только названные
 
 
 def check_password(password):
@@ -144,6 +150,43 @@ def check_role(role):
         raise HTTPException(status_code=400, detail="Неизвестная роль.")
 
 
+LEVEL_WORDS = {"none": "нет доступа", "view": "просмотр", "edit": "правка"}
+
+
+def perms_text(levels, pages):
+    """«Компьютеры: просмотр, Принтеры: нет доступа» – для Истории."""
+    return ", ".join(f"{PAGE_TITLES[page]}: {LEVEL_WORDS[levels[page]]}" for page in pages)
+
+
+def apply_perms(user, wanted):
+    """Права по страницам: хранится только то, что меньше границы роли (больше роли –
+    то же, что «как у роли»). Возвращает изменения для Истории."""
+    for page, level in wanted.items():
+        if page not in PAGES or level not in LEVELS:
+            raise HTTPException(status_code=400, detail="Неизвестная страница или уровень доступа.")
+
+        if page in FIXED_PAGES.get(user.role, ()):
+            raise HTTPException(status_code=400, detail=f"У администратора «{PAGE_TITLES[page]}» не ограничивается.")
+
+    before = page_levels(user.role, user.perms)
+    own = dict(user.perms or {})
+
+    for page, level in wanted.items():
+        if LEVELS.index(level) < LEVELS.index(ROLE_PAGES[user.role][page]):
+            own[page] = level
+        else:
+            own.pop(page, None)
+
+    user.perms = own
+    after = page_levels(user.role, own)
+    changed = [page for page in PAGES if before[page] != after[page]]
+
+    if not changed:
+        return {}
+
+    return {"perms": {"old": perms_text(before, changed), "new": perms_text(after, changed)}}
+
+
 def end_sessions(session, user_id, keep_token=None):
     """Завершить входы пользователя (кроме текущего, если он указан)."""
     query = session.query(UserSession).filter(UserSession.user_id == user_id)
@@ -161,6 +204,7 @@ def user_out(user, me):
         full_name=user.full_name,
         position=user.position,
         role=user.role,
+        perms=page_levels(user.role, user.perms),
         archived=user.archived,
         created_at=user.created_at,
         is_self=user.id == me["id"],
@@ -172,6 +216,22 @@ def list_users(me=Depends(require_admin), session=Depends(get_db)):
     # Сначала работающие, потом отключённые; внутри – по логину
     users = session.query(User).order_by(User.archived, func.lower(User.login)).all()
     return [user_out(user, me) for user in users]
+
+
+@router.get("/pages")
+def list_pages(me=Depends(require_admin)):
+    """Страницы для окошка прав (этап 69): раздел меню, название, граница каждой роли;
+    fixed – роли, у которых страница не ограничивается."""
+    return [
+        {
+            "key": key,
+            "group": group,
+            "label": label,
+            "roles": {role: ROLE_PAGES[role][key] for role in ROLES},
+            "fixed": [role for role in ROLES if key in FIXED_PAGES.get(role, ())],
+        }
+        for key, group, label in PAGE_INFO
+    ]
 
 
 @router.post("", response_model=UserOut)
@@ -210,7 +270,8 @@ def update_user(
     me=Depends(require_admin),
     session=Depends(get_db),
 ):
-    user = session.get(User, user_id)
+    # С замком: два администратора, меняющие права одной учётки, не затирают друг друга
+    user = session.query(User).filter(User.id == user_id).with_for_update().first()
 
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден.")
@@ -228,6 +289,21 @@ def update_user(
 
         check_role(payload.role)
         user.role = payload.role
+        # Ограничения не ниже новой роли больше ничего не значат – не хранить, иначе при
+        # возврате прежней роли они молча вернутся (этап 69)
+        user.perms = {
+            page: level for page, level in (user.perms or {}).items()
+            if page in PAGES and level in LEVELS and LEVELS.index(level) < LEVELS.index(ROLE_PAGES[user.role][page])
+        }
+
+    if payload.perms:
+        if is_self:
+            raise HTTPException(
+                status_code=400,
+                detail="Свои права изменить нельзя – это может сделать другой администратор.",
+            )
+
+        changes.update(apply_perms(user, payload.perms))
 
     if payload.archived is not None and payload.archived != user.archived:
         if is_self:

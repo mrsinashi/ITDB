@@ -70,8 +70,8 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+import access_secrets  # noqa: E402
 import api_auth  # noqa: E402
-import api_printers  # noqa: E402
 import api_scan_jabber  # noqa: E402
 from auth import hash_password  # noqa: E402
 from db import SessionLocal, engine  # noqa: E402
@@ -300,9 +300,9 @@ def ssh_port():
 @pytest.fixture(autouse=True)
 def fresh_memory():
     """Перед каждым тестом – поддельные источники и память процесса (попытки входа и
-    показа пароля Web, «кто в сети» Jabber) с чистого листа: тест не видит чужое."""
+    показа пароля – «Доступ», «кто в сети» Jabber) с чистого листа: тест не видит чужое."""
     from fakes import reset_fakes
     reset_fakes()
     api_auth.login_attempts.clear()
-    api_printers.show_attempts.clear()
+    access_secrets.show_attempts.clear()
     api_scan_jabber._online.update(when=None, at=None, logins=None, error=None, key=None)

@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 import scan_collect
 import scan_schedule
 from api_scan import SOURCES, RunOut, last_run_of
-from auth import require_admin
+from auth import require_page
 from db import get_db
 from history_log import log_change
 from models import AppSetting
@@ -84,7 +84,7 @@ def item_out(session, kind, conf):
 
 
 @router.get("", response_model=ScheduleList)
-def get_schedule(me=Depends(require_admin), session=Depends(get_db)):
+def get_schedule(me=Depends(require_page("scan/schedule")), session=Depends(get_db)):
     return ScheduleList(
         items=[item_out(session, kind, conf) for kind, conf in scan_schedule.load(session).items()],
         minutes=list(scan_schedule.MINUTES),
@@ -92,7 +92,7 @@ def get_schedule(me=Depends(require_admin), session=Depends(get_db)):
 
 
 @router.patch("/{kind}", response_model=ScheduleOut)
-def update_schedule(kind: str, payload: ScheduleUpdate, me=Depends(require_admin), session=Depends(get_db)):
+def update_schedule(kind: str, payload: ScheduleUpdate, me=Depends(require_page("scan/schedule", "edit")), session=Depends(get_db)):
     if kind not in scan_collect.COLLECTORS:
         raise HTTPException(status_code=404, detail="Нет такого источника.")
 

@@ -3,7 +3,7 @@ import re
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
 from api_computers import is_reserved_field_key
-from auth import require_editor
+from auth import require_page
 from db import get_db
 from history_log import log_change
 from models import FieldDef
@@ -57,7 +57,7 @@ def list_field_defs(session=Depends(get_db)):
 @router.post("")
 def create_field_def(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("choices/styles", "edit")),
     session=Depends(get_db),
 ):
     key = (payload.get("key") or "").strip().lower()
@@ -89,7 +89,7 @@ def create_field_def(
 def update_field_def(
     field_def_id: int,
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("choices/styles", "edit")),
     session=Depends(get_db),
 ):
     fd = session.get(FieldDef, field_def_id)
@@ -114,7 +114,7 @@ def update_field_def(
 @router.post("/{field_def_id}/archive")
 def archive_field_def(
     field_def_id: int,
-    user=Depends(require_editor),
+    user=Depends(require_page("choices/styles", "edit")),
     session=Depends(get_db),
 ):
     fd = session.get(FieldDef, field_def_id)

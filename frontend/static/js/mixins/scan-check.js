@@ -592,7 +592,7 @@ export default {
 
         checkCanEditValue(row, f) {
             const col = this.allColumns.find(function (x) { return x.field === f.field; });
-            return this.canEdit && !!row.pcId && (row.state === "ok" || row.state === "diff") && !!col && !!col.editable;
+            return this.canEdit && this.canEditPc && !!row.pcId && (row.state === "ok" || row.state === "diff") && !!col && !!col.editable;
         },
 
         startCheckEdit(row, f) {
@@ -693,13 +693,13 @@ export default {
             const list = [];
             const host = row.name;
             const takeable = row.diffs.filter(function (d) { return d.can_take; });
-            if (takeable.length && this.canEdit) {
+            if (takeable.length && this.canEdit && this.canEditPc) {
                 list.push({ key: "take", title: "Взять всё (" + takeable.length + ")", icon: ICONS.ok, run: () => this.checkTake(takeable) });
             }
-            if (row.diffs.length && this.canEdit) {
+            if (row.diffs.length && this.canEdit && this.canEditPc) {
                 list.push({ key: "leave", title: "Оставить всё как есть", icon: ICONS.no, danger: true, run: () => this.checkLeave(row.diffs) });
             }
-            if (this.isAdmin && row.record) {
+            if (this.isAdmin && this.canEdit && row.record) {
                 const r = row.record;
                 if (r.state === "name" && row.pcId) {
                     list.push({ key: "yes", title: "Да, это " + host, icon: ICONS.ok, run: () => this.scanDecide(r, "link", row.pcId) });
@@ -709,7 +709,7 @@ export default {
                 }
                 list.push({ key: "link", title: "Привязать к ПК…", icon: ICONS.link, run: () => this.openScanLinkBar(r) });
             }
-            if (this.isAdmin && !row.record) {
+            if (this.isAdmin && this.canEdit && !row.record) {
                 // ПК, сопоставленный по признаку: если сканер ошибся – «это не он»
                 CHECK_SOURCES.forEach((kind) => {
                     const r = row.recs[kind];
@@ -718,7 +718,7 @@ export default {
                     }
                 });
             }
-            if (this.isAdmin) {
+            if (this.isAdmin && this.canEdit) {
                 this.checkRowDecided(row).forEach((r) => {
                     list.push({ key: "reset-" + r.kind, title: "Забыть решения по " + r.title + " №" + r.source_id, icon: ICONS.reset, run: () => this.scanDecide(r, "reset") });
                 });

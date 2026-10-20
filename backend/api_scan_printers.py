@@ -18,7 +18,7 @@ import scan_collect
 from api_computers import ChangeBatch, save_changes
 from api_printers import apply_printer_fields
 from api_scan_diffs import DiffItems, DiffSource, add_scan_changes, drop_rejects, host_observations, save_rejects
-from auth import get_current_user, require_editor
+from auth import get_current_user, require_page
 from db import get_db
 from models import Printer
 from scan_hostmatch import printer_rows
@@ -120,7 +120,7 @@ def check_field(field):
 
 
 @router.post("/accept")
-def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db)):
+def accept(payload: AcceptIn, me=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     """Записать значения сканера в принтеры. Пропускаются пропавшие и те, у кого значение
     в таблице уже не то, что было при просмотре (как у ПК – api_scan_diffs.accept)."""
     batch = ChangeBatch(me["login"])
@@ -161,7 +161,7 @@ def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db
 
 
 @router.post("/reject")
-def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
+def reject(payload: RejectIn, me=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     """Не предлагать этот MAC этому принтеру, пока сеть видит тот же."""
     added = save_rejects(session, Printer, "printer_id", payload.items, check_field, me["login"])
     session.commit()
@@ -169,7 +169,7 @@ def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db
 
 
 @router.post("/unreject")
-def unreject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
+def unreject(payload: RejectIn, me=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     """Вернуть отклонённое: снова предлагать."""
     removed = drop_rejects(session, "printer_id", payload.items)
     session.commit()

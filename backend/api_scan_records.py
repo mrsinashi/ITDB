@@ -25,7 +25,7 @@ from pydantic import BaseModel
 import scan_collect
 from api_computers import load_locations, location_path
 from api_scan import SOURCES, RunOut, load_source, run_out
-from auth import require_admin, require_editor
+from auth import check_page, require_admin, require_page
 from db import get_db
 from history_log import log_change
 from api_columns import COLUMNS_BY_KEY
@@ -44,6 +44,10 @@ RUNS_LIMIT = 50
 def check_collect_kind(kind):
     if kind not in scan_collect.COLLECTORS:
         raise HTTPException(status_code=404, detail="Нет такого источника.")
+
+
+# Где источник собирают (этап 69): сбор – с правкой там, в «Расписании» или в «Подключениях»
+COLLECT_PAGES = {"glpi": "scan/check", "gsit": "scan/check", "jabber": "vacuum", "dhcp": "scan/net", "net": "scan/net"}
 
 
 def check_record_kind(kind):
@@ -66,6 +70,7 @@ class CollectOnly(BaseModel):
 @router.post("/sources/{kind}/collect", response_model=RunOut)
 def collect(kind: str, payload: Optional[CollectOnly] = Body(None), me=Depends(require_admin), session=Depends(get_db)):
     check_collect_kind(kind)
+    check_page(me, (COLLECT_PAGES[kind], "edit"), ("scan/schedule", "edit"), ("scan/settings", "edit"))
 
     try:
         run = scan_collect.start(session, kind, me["login"], only=payload.model_dump(exclude_none=True) if payload else None)
@@ -171,7 +176,7 @@ def computer_brief(computer, locations):
 
 
 @router.get("/records", response_model=RecordsOut)
-def list_records(source: str, me=Depends(require_editor), session=Depends(get_db)):
+def list_records(source: str, me=Depends(require_page("scan/check")), session=Depends(get_db)):
     """Записи последнего сбора и их сопоставление. Смотреть – редактор и
     администратор (вкладка «Проверка», этап 26г); решать о сопоставлении – admin."""
     check_record_kind(source)
@@ -350,7 +355,7 @@ def save_reject(session, me, kind, record, computer):
 
 
 @router.post("/records/{kind}/{source_id}/link")
-def link_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_admin), session=Depends(get_db)):
+def link_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_page("scan/check", "edit", admin=True)), session=Depends(get_db)):
     """«Это этот ПК» (save_link)."""
     save_link(session, me, kind, load_record(session, kind, source_id), load_computer(session, payload.computer_id))
     session.commit()
@@ -358,7 +363,7 @@ def link_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(requi
 
 
 @router.post("/records/{kind}/{source_id}/reject")
-def reject_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_admin), session=Depends(get_db)):
+def reject_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(require_page("scan/check", "edit", admin=True)), session=Depends(get_db)):
     """«Это не этот ПК» (save_reject)."""
     save_reject(session, me, kind, load_record(session, kind, source_id), load_computer(session, payload.computer_id))
     session.commit()
@@ -366,7 +371,7 @@ def reject_record(kind: str, source_id: int, payload: DecisionIn, me=Depends(req
 
 
 @router.delete("/records/{kind}/{source_id}/decisions")
-def reset_record(kind: str, source_id: int, me=Depends(require_admin), session=Depends(get_db)):
+def reset_record(kind: str, source_id: int, me=Depends(require_page("scan/check", "edit", admin=True)), session=Depends(get_db)):
     """Забыть решения по записи: снова сопоставлять по признакам."""
     record = load_record(session, kind, source_id)
     before = links_state(session, kind, source_id)
@@ -419,7 +424,7 @@ def field_title(field):
 
 
 @router.get("/names", response_model=list[NameOut])
-def list_names(me=Depends(require_admin), session=Depends(get_db)):
+def list_names(me=Depends(require_page("scan/names")), session=Depends(get_db)):
     """Соответствия, заданные вручную, и выученные по таблице (как значения
     источников уже названы у сопоставленных ПК)."""
     result = [
@@ -504,7 +509,7 @@ def log_alias(session, me, field, title, change, old, new, undo):
 
 
 @router.post("/names")
-def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db)):
+def add_name(payload: NameIn, me=Depends(require_page("scan/check", "edit", ("scan/names", "edit"), ("table", "edit"))), session=Depends(get_db)):
     """Решение по паре «значение источника – значение таблицы»: same («одно и то
     же» – для всех ПК, одно на значение источника), differ («это разное»), keep
     («в таблице своё» – не расхождение, но и не одно и то же), board (название
@@ -516,7 +521,7 @@ def add_name(payload: NameIn, me=Depends(require_editor), session=Depends(get_db
 
 
 @router.delete("/names/{alias_id}")
-def delete_name(alias_id: int, me=Depends(require_admin), session=Depends(get_db)):
+def delete_name(alias_id: int, me=Depends(require_page("scan/names", "edit")), session=Depends(get_db)):
     alias = session.get(ScanAlias, alias_id)
 
     if alias is None:

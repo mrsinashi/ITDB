@@ -18,7 +18,7 @@ from api_computers import (
     shift_seats,
     user_field_keys_of,
 )
-from auth import require_editor
+from auth import require_page
 from db import get_db
 from models import Computer
 
@@ -73,7 +73,7 @@ def set_seat(batch, computer, seat_no):
 @router.post("/computers/move")
 def move_computers(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("table", "edit")),
     session=Depends(get_db),
 ):
     """{ids, location_id, seat_no, with_people}. ПК встают в узел по порядку ids
@@ -112,7 +112,7 @@ def move_computers(
 @router.post("/computers/swap")
 def swap_computers(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("table", "edit")),
     session=Depends(get_db),
 ):
     """{ids: [a, b]} – два ПК меняются местами (узел, № места, порядок строки).
@@ -141,7 +141,7 @@ def swap_computers(
 @router.post("/computers/replace")
 def replace_computer(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("table", "edit")),
     session=Depends(get_db),
 ):
     """{old_id, new_id, location_id, with_people}. Новый ПК встаёт на место
@@ -187,7 +187,7 @@ def replace_computer(
 @router.post("/computers/bulk-update")
 def bulk_update(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("table", "edit")),
     session=Depends(get_db),
 ):
     """{ids, field, value} – одно поле у всех выбранных ПК (пустое – очистить)."""

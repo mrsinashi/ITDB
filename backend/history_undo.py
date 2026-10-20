@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from api_column_styles import is_empty
+from auth import check_page
 from api_columns import (
     EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY, MOVE_COLUMNS_BY_KEY, MOVE_HISTORY_LABELS,
     PRINTER_COLUMNS_BY_KEY, PRINTER_EDITABLE_KEYS, PRINTER_HISTORY_LABELS,
@@ -99,7 +100,7 @@ SIMPLE = {
 SIMPLE_LABELS = {
     "value": "Значение", "color": "Цвет текста", "bg_color": "Фон", "bold": "Жирный",
     "italic": "Курсив", "underline": "Подчёркнутый", "strike": "Зачёркнутый", "chip": "Фон блочком",
-    "label": "Название", "archived": "Архив", "role": "Роль",
+    "label": "Название", "archived": "Архив", "role": "Роль", "perms": "Права",
     "password": "Пароль", "created": "Создан", "deleted": "Удалено",
     "login": "Логин", "full_name": "ФИО", "position": "Должность",
     "kind": "Тип", "maker": "Производитель", "model": "Модель", "duplex": "Дуплекс",
@@ -118,8 +119,8 @@ MOVE_VALUE_FIELDS = (
 )
 
 # Не отменяются: создание, удаление (удалённое не вернуть), смена пароля
-# (с этапа 44 – и логина и пароля Web у принтера)
-FIXED_FIELDS = {"created", "deleted", "password", "web_login", "web_password"}
+# (с этапа 44 – и логина и пароля Web у принтера, с этапа 69 – у ПК), права пользователя
+FIXED_FIELDS = {"created", "deleted", "password", "web_login", "web_password", "perms"}
 
 # Связи принтеров с ПК (этап 44): у ПК – «printers», у принтера – «computers»; в Истории –
 # и номерами записей (old_ids / new_ids), отмена ставит связи по ним
@@ -153,12 +154,34 @@ def undo_phase(ref, field, cancel):
     return phase if cancel else -phase
 
 
-def check_rights(entity, user):
+# Чья страница правит объект (этап 69): отмена и возврат – только с правкой на ней
+ENTITY_PAGES = {
+    "computers": "table", "printers": "printers", "locations": "tree", "moves": "journals/moves",
+    "choices": "choices/styles", "field_defs": "choices/styles", "column_styles": "choices/styles",
+    "users": "users", "printer_models": "choices/models", "cartridges": "choices/cartridges",
+}
+
+
+def entity_pages(entity, field=None):
+    """Страницы, откуда правят это поле: хватает правки на любой. Правила имён у узлов – в
+    «Справочниках → Имена ПК»; картриджи модели – ещё и ячейкой на «Принтерах» и в «Картриджах»."""
+    if entity == "locations" and field in RULE_FIELDS.values():
+        return ("choices/names",)
+
+    if entity == "printer_models" and field == "cartridges":
+        return ("choices/models", "printers", "choices/cartridges")
+
+    return (ENTITY_PAGES[entity],)
+
+
+def check_rights(entity, user, field=None):
     if entity not in ENTITIES:
         raise HTTPException(status_code=400, detail="Для этого объекта отмены нет.")
 
     if SIMPLE.get(entity, {}).get("admin") and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Это действие доступно только администратору.")
+
+    check_page(user, *((page, "edit") for page in entity_pages(entity, field)))
 
 
 def field_kind(entity, field):
@@ -750,12 +773,12 @@ def cancel_changes(session, items, cancel, user, batch):
             decisions.append((record, field))
             continue
 
-        check_rights(record.entity, user)
+        check_rights(record.entity, user, field)
 
         if field_kind(record.entity, field) == "fixed" and not moved_room(record, field):
             raise HTTPException(
                 status_code=400,
-                detail="Создание, удаление и смена пароля не отменяются.",
+                detail="Создание, удаление, смена пароля и прав не отменяются.",
             )
 
         groups.setdefault((ref_of(record), field), []).append(record.id)
@@ -835,7 +858,7 @@ def revert_value(session, record, field, initial, user, batch):
     («было» самого первого изменения). Новая запись – с пометкой revert."""
     entity = record.entity
     ref = ref_of(record)
-    check_rights(entity, user)
+    check_rights(entity, user, field)
 
     if field_kind(entity, field) != "value":
         raise HTTPException(status_code=400, detail="У этого поля нет значения, которое можно вернуть.")

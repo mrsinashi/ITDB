@@ -5,7 +5,7 @@ from io import BytesIO
 
 from openpyxl import load_workbook
 
-import api_printers
+import access_secrets
 from conftest import PASSWORDS, add_computer, add_location, add_model, get_row, history, ok
 
 
@@ -163,7 +163,7 @@ def test_web_auth(editor, reader, admin, room, models):
     for _ in range(5):
         reader.post(url, json={"login": "admin", "password": "wrong"})
     assert reader.post(url, json={"login": "admin", "password": PASSWORDS["admin"]}).status_code == 429
-    api_printers.show_attempts.clear()
+    access_secrets.show_attempts.clear()
 
     # Удалить пароль; логин остаётся
     ok(editor.put(f"/api/printers/{pid}/web-auth", json={"password": ""}))

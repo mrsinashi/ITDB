@@ -33,7 +33,7 @@ from api_columns import MOVE_COLUMNS, MOVE_COLUMNS_BY_KEY, MOVE_SPEC_LABELS
 from api_computer_actions import parse_ids
 from api_computers import load_locations, location_chain, location_path, location_title, lock_rows, normalize_ip, normalize_multiline, normalize_single, save_changes
 from api_printers import model_title
-from auth import require_editor
+from auth import check_page, require_page
 from db import get_db
 from history_log import log_change
 from models import Computer, History, ItemType, Location, Move, Printer, PrinterModel, User
@@ -718,7 +718,7 @@ def one_row(session, move_id):
 
 
 @router.get("/moves")
-def list_moves(archived: str = "no", session=Depends(get_db)):
+def list_moves(archived: str = "no", user=Depends(require_page("journals/moves")), session=Depends(get_db)):
     """archived: no – рабочие (по умолчанию), yes – архив, all – все (признак archived)."""
     if archived not in ARCHIVED_FILTERS:
         raise HTTPException(status_code=400, detail="archived: no, yes или all.")
@@ -727,7 +727,7 @@ def list_moves(archived: str = "no", session=Depends(get_db)):
 
 
 @router.post("/moves")
-def create_move(payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def create_move(payload: dict = Body(...), user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
     """Новая запись: тип обязателен, остальное – по желанию."""
     payload = dict(payload)
 
@@ -766,7 +766,7 @@ def check_version(move, expected_version):
 
 
 @router.patch("/moves/{move_id}")
-def update_move(move_id: int, payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def update_move(move_id: int, payload: dict = Body(...), user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
     payload = dict(payload)
     expected_version = payload.pop("_version", None)
     move = lock_move(session, move_id)
@@ -783,7 +783,7 @@ def update_move(move_id: int, payload: dict = Body(...), user=Depends(require_ed
 
 
 @router.post("/moves/archive")
-def archive_moves(payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def archive_moves(payload: dict = Body(...), user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
     """{"ids": [...], "archived": true/false}: в архив или обратно, запись Истории у каждой."""
     ids = parse_ids(payload.get("ids"))
     archived = payload.get("archived")
@@ -806,7 +806,7 @@ def archive_moves(payload: dict = Body(...), user=Depends(require_editor), sessi
 
 
 @router.post("/moves/bulk-update")
-def bulk_update_moves(payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def bulk_update_moves(payload: dict = Body(...), user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
     """{ids, field, value} – одно поле у всех выбранных записей (пустое – очистить)."""
     ids = parse_ids(payload.get("ids"))
     field = payload.get("field")
@@ -863,7 +863,7 @@ def archive_replaced(session, model, item_id, what, node_id, login):
 
 
 @router.post("/moves/{move_id}/install")
-def install_move(move_id: int, payload: InstallIn, user=Depends(require_editor), session=Depends(get_db)):
+def install_move(move_id: int, payload: InstallIn, user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
     """«Установить»: куда (узел; компоненту – и ПК), дата установки, кто установил и статус
     «Установлен» – вместе с несохранёнными правками окна записи. Заменить – выбранный ПК или
     принтер в архив; archive – запись тоже."""
@@ -893,12 +893,15 @@ def install_move(move_id: int, payload: InstallIn, user=Depends(require_editor),
         if form != "computer":
             raise HTTPException(status_code=400, detail="Заменить ПК можно только компьютером.")
 
+        # Старый ПК уходит в архив – это правка «Компьютеров» (этап 69)
+        check_page(user, ("table", "edit"))
         archive_replaced(session, Computer, payload.replace_pc, "Этого ПК", move.dest_location_id, user["login"])
 
     if payload.replace_printer is not None:
         if form != "printer":
             raise HTTPException(status_code=400, detail="Заменить принтер можно только принтером или МФУ.")
 
+        check_page(user, ("printers", "edit"))
         archive_replaced(session, Printer, payload.replace_printer, "Этого принтера", move.dest_location_id, user["login"])
 
     if payload.archive:
@@ -912,7 +915,7 @@ def install_move(move_id: int, payload: InstallIn, user=Depends(require_editor),
 
 
 @router.get("/moves/installers")
-def list_installers(user=Depends(require_editor), session=Depends(get_db)):
+def list_installers(user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
     """Кого можно выбрать в «Установил»: рабочие пользователи программы."""
     users = session.query(User).filter(User.archived == False).all()  # noqa: E712
     items = [
@@ -945,7 +948,7 @@ def list_types(session=Depends(get_db)):
 
 
 @router.post("/item-types")
-def create_type(payload: TypeIn, user=Depends(require_editor), session=Depends(get_db)):
+def create_type(payload: TypeIn, user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
     """Новый тип из окна записи – с одним полем «Информация»."""
     name = normalize_single(payload.name)
 

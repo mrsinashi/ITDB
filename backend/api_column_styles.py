@@ -2,7 +2,7 @@ import re
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from auth import require_editor
+from auth import require_page
 from db import get_db
 from history_log import column_label, log_change
 from models import ColumnStyle
@@ -49,7 +49,7 @@ def clean_color(value):
 def update_column_style(
     field: str,
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("choices/styles", "edit")),
     session=Depends(get_db),
 ):
     """Меняет только переданные свойства. Пустой стиль удаляется."""

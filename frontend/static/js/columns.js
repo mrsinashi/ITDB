@@ -209,6 +209,7 @@ export const SIMPLE_FIELD_LABELS = {
     label: "Название",
     archived: "Архив",
     role: "Роль",
+    perms: "Права",     // права по страницам, этап 69
     password: "Пароль",
     created: "Создан",
     deleted: "Удалено",
@@ -267,8 +268,9 @@ export const SIMPLE_FIELD_LABELS = {
     duplex: "Дуплекс",
     cartridges: "Картриджи"   // этап 47
 };
-// Не отменяются и не открывают «Историю значения» (логин и пароль Web – этап 44)
-export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password", "web_login", "web_password"];
+// Не отменяются и не открывают «Историю значения» (логин и пароль Web – этап 44, у ПК – 69;
+// права по страницам – 69)
+export const FIXED_HISTORY_FIELDS = ["created", "deleted", "password", "web_login", "web_password", "perms"];
 
 // Модели принтеров (этап 44): значения в Истории и справочнике – словами
 export const PRINTER_KINDS = [{ key: "mfu", label: "МФУ" }, { key: "printer", label: "Принтер" }];

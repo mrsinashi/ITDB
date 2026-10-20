@@ -260,9 +260,11 @@ export default {
             return this.moveWinForm === "printer" ? "printer" : null;
         },
 
-        // «Заменить» – у компьютера, принтера и МФУ; компонент в ПК просто ставится
+        // «Заменить» – у компьютера, принтера и МФУ; компонент в ПК просто ставится. Заменённый
+        // уходит в архив, потом – строка нового: нужна правка «Компьютеров» / «Принтеров» (этап 69)
         moveInstallCanReplace() {
-            return !!this.moveWinType && this.moveWinType.kind === "tech" && !!this.moveInstallKind;
+            const kind = this.moveInstallKind;
+            return !!this.moveWinType && this.moveWinType.kind === "tech" && !!kind && (kind === "pc" ? this.canEditPc : this.canEditPrinters);
         },
 
         // ПК или принтеры для «Установить»: рабочие, в выбранном узле и под ним – «№2 buh-3»; где

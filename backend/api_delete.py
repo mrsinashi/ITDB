@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from api_computers import COMPUTERS_MISSING, load_locations, lock_rows, save_changes
 from api_moves import MOVES_MISSING, dest_path, dest_ref, distinct, move_names, record, ref_note
 from api_printers import PRINTERS_MISSING
-from auth import require_admin
+from auth import require_page
 from db import get_db
 from models import (
     Computer, ComputerPerson, History, Move, Printer, PrinterComputer, ScanLink, ScanReject, VacuumAccountComputer,
@@ -71,7 +71,7 @@ def linked_ids(session, column, filter_column, ids):
 
 
 @router.post("/computers/delete")
-def delete_computers(payload: IdsIn, user=Depends(require_admin), session=Depends(get_db)):
+def delete_computers(payload: IdsIn, user=Depends(require_page("table", "edit", admin=True)), session=Depends(get_db)):
     computers = archived_rows(session, Computer, payload.ids, COMPUTERS_MISSING)
     ids = [computer.id for computer in computers]
     login = user["login"]
@@ -115,7 +115,7 @@ def delete_computers(payload: IdsIn, user=Depends(require_admin), session=Depend
 
 
 @router.post("/printers/delete")
-def delete_printers(payload: IdsIn, user=Depends(require_admin), session=Depends(get_db)):
+def delete_printers(payload: IdsIn, user=Depends(require_page("printers", "edit", admin=True)), session=Depends(get_db)):
     # Замки – как при удалении ПК: сначала ПК этих принтеров, потом сами принтеры
     computer_ids = linked_ids(session, PrinterComputer.computer_id, PrinterComputer.printer_id, sorted(set(payload.ids)))
     computers = lock_rows(session, Computer, computer_ids, COMPUTERS_MISSING) if computer_ids else []
@@ -137,7 +137,7 @@ def delete_printers(payload: IdsIn, user=Depends(require_admin), session=Depends
 
 
 @router.post("/moves/delete")
-def delete_moves(payload: IdsIn, user=Depends(require_admin), session=Depends(get_db)):
+def delete_moves(payload: IdsIn, user=Depends(require_page("journals/moves", "edit", admin=True)), session=Depends(get_db)):
     moves = archived_rows(session, Move, payload.ids, MOVES_MISSING)
     names = move_names(session, [move.id for move in moves])
 

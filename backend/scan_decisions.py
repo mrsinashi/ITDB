@@ -17,9 +17,16 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy import text
 
+from auth import check_page
 from models import Computer, ScanAlias, ScanLink
 
 DECISION_ENTITIES = ("scan_records", "scan_aliases")
+# Где такие решения принимают (этап 69): отменить можно с правкой на любой из этих страниц
+# (названия – и из Таблицы: «Своё», «для всех ПК», «Это материнская плата»)
+DECISION_PAGES = {
+    "scan_records": ("scan/check", "table"),
+    "scan_aliases": ("scan/check", "scan/names", "table"),
+}
 
 
 def iso(value):
@@ -136,6 +143,8 @@ def check_decision(record, field, user):
 
     if user["role"] != "admin" and record.user_name != user["login"]:
         raise HTTPException(status_code=403, detail="Чужое решение сканера отменяет только администратор.")
+
+    check_page(user, *((page, "edit") for page in DECISION_PAGES[record.entity]))
 
 
 def apply_decision(session, record, field, cancel):

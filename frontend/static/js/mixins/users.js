@@ -6,14 +6,31 @@
 // ниже, под «Логином»; ✓ ✕ – плашкой справа у строки. Отключение – архив: удаления нет.
 // Свою роль и отключение себя сервер не даёт (в системе всегда есть
 // администратор). Свои логин, ФИО и должность любой меняет в меню пользователя.
+//
+// Права по страницам (этап 69, просьба пользователя): столбец «Права» – роль и значок справа;
+// значок – окошко справа от таблицы: таблица «Страница | Доступ», доступ – выпадающим списком во
+// всю ячейку. Роль – верхняя граница (у читателя правки нет), ниже – свои ограничения учётки;
+// сохраняется сразу. Свои права не меняются, «Пользователи» у администратора – тоже.
 
 import { ROLE_LABELS } from "../settings.js";
 import { apiFetch, rowPlate } from "../util.js";
+import { PAGE_LEVELS } from "./auth.js";
 
 // Буквы и цифры без похожих друг на друга (l/1, O/0) – пароль диктуют голосом
 const PASSWORD_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
 
+const LEVEL_LABELS = { edit: "Правка", view: "Просмотр", none: "Нет доступа" };
+// Окошко прав – правее плашки действий строки (она – справа от таблицы)
+const PERMS_GAP = 64;
+
 export default {
+    data() {
+        return {
+            userPages: [],      // страницы для окошка прав: /api/users/pages
+            permsPop: null      // окошко прав: { userId, left, top, placed, saving }
+        };
+    },
+
     watch: {
         // Форма своего пароля живёт, пока открыто меню пользователя
         openMenu(name) {
@@ -53,6 +70,47 @@ export default {
             const text = "Пользователей: " + (this.users.length - off);
             return off ? text + ", отключено: " + off : text;
         },
+
+        permsUser() {
+            const pop = this.permsPop;
+            return pop ? this.users.find(function (u) { return u.id === pop.userId; }) || null : null;
+        },
+
+        // Строки окошка прав: разделы меню (Журналы, Сканер, Справочники) – строкой-группой,
+        // их вкладки – под ней; выбор – от границы роли вниз
+        permsRows() {
+            const u = this.permsUser;
+            if (!u) {
+                return [];
+            }
+            const rows = [];
+            let group = null;
+            this.userPages.forEach((p) => {
+                if (p.group && p.group !== group) {
+                    rows.push({ key: "g-" + p.group, group: p.group });
+                }
+                group = p.group;
+                const top = p.roles[u.role] || "none";
+                let fixed = null;
+                if (u.is_self) {
+                    fixed = "Свои права изменить нельзя";
+                } else if (p.fixed.indexOf(u.role) !== -1) {
+                    fixed = "У администратора не ограничивается";
+                } else if (top === "none") {
+                    fixed = "Роль «" + this.roleName(u.role) + "» не даёт";
+                }
+                rows.push({
+                    key: p.key,
+                    label: p.label,
+                    sub: !!p.group,
+                    level: u.perms[p.key] || "none",
+                    top: top,
+                    fixed: fixed,
+                    options: PAGE_LEVELS.slice(0, PAGE_LEVELS.indexOf(top) + 1).reverse()
+                });
+            });
+            return rows;
+        },
     },
 
     methods: {
@@ -60,16 +118,39 @@ export default {
             return ROLE_LABELS[role] || role;
         },
 
+        levelLabel(level) {
+            return LEVEL_LABELS[level] || level;
+        },
+
+        // Страницы, где у учётки меньше, чем даёт роль
+        userPermsOwn(u) {
+            return this.userPages.filter(function (p) { return (u.perms[p.key] || "none") !== (p.roles[u.role] || "none"); });
+        },
+
+        userPermsTitle(u) {
+            const own = this.userPermsOwn(u);
+            return own.length ? "Права: меньше роли – " + own.length : "Права по страницам";
+        },
+
         async loadUsers() {
             this.usersLoading = true;
             this.usersError = "";
             this.startLoading();
             try {
-                const response = await apiFetch("/api/users");
+                const [response, pages] = await Promise.all([
+                    apiFetch("/api/users"),
+                    this.userPages.length ? null : apiFetch("/api/users/pages")
+                ]);
                 if (!response.ok) {
                     throw new Error(await this.errorText(response));
                 }
+                if (pages && !pages.ok) {
+                    throw new Error(await this.errorText(pages));
+                }
                 this.users = await response.json();
+                if (pages) {
+                    this.userPages = await pages.json();
+                }
             } catch (e) {
                 this.usersError = "Не удалось загрузить пользователей: " + (e.message || e);
             } finally {
@@ -280,6 +361,46 @@ export default {
         // пока открыта строка правки, плашка – только её
         setUsersHover(u, rowEl) {
             this.usersHover = this.userBar ? null : rowPlate(rowEl, ".users-wrap", { id: u.id, user: u });
+        },
+
+        // ---------- Права по страницам (этап 69) ----------
+
+        // Значок в «Правах»: окошко справа от таблицы, у строки; тот же значок – закрыть
+        openUserPerms(u, event) {
+            if (this.permsPop && this.permsPop.userId === u.id) {
+                this.closePop("permsPop");
+                return;
+            }
+            const icon = event.currentTarget;
+            const frame = icon.closest(".history-frame");
+            const row = icon.closest("tr").getBoundingClientRect();
+            this.openAnchorPop("permsPop", frame, { userId: u.id, saving: false }, ".u-perms");
+            Object.assign(this.permsPop.anchor, { top: row.top, bottom: row.bottom, right: this.permsPop.anchor.right + PERMS_GAP });
+        },
+
+        async setUserPerm(r, event) {
+            const u = this.permsUser;
+            const pop = this.permsPop;
+            const level = event.target.value;
+            if (!u || !pop || level === r.level) {
+                return;
+            }
+            pop.saving = true;
+            try {
+                const response = await this.apiSend("/api/users/" + u.id, "PATCH", { perms: { [r.key]: level } });
+                const saved = await response.json();
+                const index = this.users.findIndex(function (item) { return item.id === saved.id; });
+                if (index !== -1) {
+                    this.users.splice(index, 1, saved);
+                }
+                this.flashCell("u" + u.id, r.key);
+            } catch (e) {
+                // Список – обратно на сохранённое
+                event.target.value = r.level;
+                this.toastError("Не удалось сохранить: " + (e.message || e));
+            } finally {
+                pop.saving = false;
+            }
         },
 
         // ---------- Свой пароль (меню пользователя) ----------

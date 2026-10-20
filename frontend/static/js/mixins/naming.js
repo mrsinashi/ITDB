@@ -664,6 +664,10 @@ export default {
             if (!pop) {
                 return;
             }
+            if (!this.canPage("choices/names")) {
+                this.toast("Нет доступа к «Именам ПК»");
+                return;
+            }
             this.closeNamePop();
             this.namesQuery = "";
             this.setView("choices");

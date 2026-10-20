@@ -412,10 +412,15 @@ export default {
                 this.toast(pc ? "Этого ПК нет в таблице" : "Этого принтера нет в таблице");
                 return;
             }
+            const view = pc ? "table" : "printers";
+            // Страница закрыта правами (этап 69)
+            if (!this.canOpenView(view)) {
+                this.toast(pc ? "Нет доступа к «Компьютерам»" : "Нет доступа к «Принтерам»");
+                return;
+            }
             this.closePrinterPop();
             this.closeCard();
             this.closePrinterCard();
-            const view = pc ? "table" : "printers";
             if (this.view !== view) {
                 this.setView(view);
             }

@@ -1,5 +1,6 @@
-// Доступ к веб-странице принтера (этап 45): столбец «Доступ» и строка карточки принтера.
-// Заданные логин и пароль – точками одной строкой. Двойной клик – окошко пароля прямо под
+// Доступ к веб-странице принтера (этап 45) и логин и пароль ПК (этап 69, так же): столбец
+// «Доступ» и строка карточки. Строка ПК и принтера – по признаку _printer (rowKey: id может
+// совпасть). Заданные логин и пароль – точками одной строкой. Двойной клик – окошко пароля прямо под
 // ячейкой (администратор вводит свой пароль, остальные – логин и пароль администратора);
 // после него логин и пароль – в самой ячейке строками: Alt+клик (в карточке – клик)
 // копирует, ✎ – изменить. Не заданы – двойной клик сразу открывает два поля (логин виден,
@@ -18,9 +19,12 @@ const SHOWN_PAD = 34;
 export default {
     data() {
         return {
-            webShown: null,     // показанные логин и пароль: { id, login, password, where }
+            webShown: null,     // показанные логин и пароль: { key, login, password, where }
+            // Показаны в ячейке – по ключу строки (этап 69): строка таблицы читает только свой
+            // ключ, показ и скрытие не перерисовывают остальные 600 строк
+            webShownKeys: {},
             webAsk: null,       // окошко пароля под ячейкой
-            webEdit: null,      // правка: { id, row, where, login, password, saving }
+            webEdit: null,      // правка: { key, id, row, where, login, password, saving }
             cellWiden: {}       // поле → ширина столбца, пока ячейка шире обычного
         };
     },
@@ -33,11 +37,21 @@ export default {
 
     methods: {
         webShownFor(row) {
-            return !!row && !!this.webShown && this.webShown.id === row.id;
+            return !!row && !!this.webShown && this.webShown.key === this.rowKey(row);
+        },
+
+        // Показаны в ячейке строки: открытые в карточке – не в ячейке таблицы за ней (этап 69)
+        webShownInCell(row) {
+            return !!this.webShownKeys[this.rowKey(row)];
         },
 
         webEditIn(row, where) {
-            return !!row && !!this.webEdit && this.webEdit.id === row.id && this.webEdit.where === where;
+            return !!row && !!this.webEdit && this.webEdit.key === this.rowKey(row) && this.webEdit.where === where;
+        },
+
+        // Адрес «Доступа» строки: /api/computers/12/web-auth, /api/printers/3/web-auth
+        webAuthUrl(row) {
+            return (row._printer ? "/api/printers/" : "/api/computers/") + row.id + "/web-auth";
         },
 
         // Подсказка у ячейки и строки карточки: что сделает двойной клик
@@ -46,12 +60,12 @@ export default {
                 return null;
             }
             if (this.webShownFor(row)) {
-                return this.canEdit ? "Двойной клик – изменить" : null;
+                return this.canEditRow(row) ? "Двойной клик – изменить" : null;
             }
             if (row.web_auth) {
                 return "Двойной клик – показать";
             }
-            return this.canEdit ? "Двойной клик – задать" : null;
+            return this.canEditRow(row) ? "Двойной клик – задать" : null;
         },
 
         // Двойной клик по ячейке «Доступ» или строке карточки; el – под ним окошко пароля
@@ -59,7 +73,7 @@ export default {
             // Двойной клик выделил кусок точек – снять
             this.clearTextSelection();
             if (this.webShownFor(row)) {
-                if (this.canEdit) {
+                if (this.canEditRow(row)) {
                     this.startWebEdit(row, where);
                 }
                 return;
@@ -67,7 +81,7 @@ export default {
             this.hideWebShown();
             if (row.web_auth) {
                 this.openWebAsk(row, el, where);
-            } else if (this.canEdit) {
+            } else if (this.canEditRow(row)) {
                 this.startWebEdit(row, where);
             }
         },
@@ -159,7 +173,7 @@ export default {
             ask.busy = true;
             ask.error = "";
             try {
-                const response = await this.apiSend("/api/printers/" + ask.row.id + "/web-auth/show", "POST", { login: this.isAdmin ? null : ask.login, password: ask.password });
+                const response = await this.apiSend(this.webAuthUrl(ask.row) + "/show", "POST", { login: this.isAdmin ? null : ask.login, password: ask.password });
                 const shown = await response.json();
                 if (this.webAsk !== ask) {
                     return;
@@ -181,8 +195,12 @@ export default {
         // ---------- Показанные логин и пароль ----------
 
         showWebValues(row, login, password, where, el) {
-            this.webShown = { id: row.id, login: login, password: password, where: where };
+            if (this.webShown) {
+                delete this.webShownKeys[this.webShown.key];
+            }
+            this.webShown = { key: this.rowKey(row), login: login, password: password, where: where };
             if (where === "cell") {
+                this.webShownKeys[this.webShown.key] = true;
                 const font = el && (el.querySelector(".cell-lines, span") || el);
                 const w = maxTextWidth([login || "без логина", password || "без пароля"], font);
                 this.setCellWiden("web_auth", w + SHOWN_PAD);
@@ -196,6 +214,7 @@ export default {
             if (!this.webShown) {
                 return;
             }
+            delete this.webShownKeys[this.webShown.key];
             this.webShown = null;
             if (!this.webEdit) {
                 this.setCellWiden("web_auth", 0);
@@ -205,13 +224,14 @@ export default {
         // ---------- Правка: два поля ----------
 
         startWebEdit(row, where) {
-            if (!this.canEdit) {
+            if (!this.canEditRow(row)) {
                 return;
             }
             const shown = this.webShownFor(row) ? this.webShown : null;
             this.closeWebAsk();
             this.closeSuggest();
             this.webEdit = {
+                key: this.rowKey(row),
                 id: row.id,
                 row: row,
                 where: where,
@@ -223,8 +243,10 @@ export default {
                 this.editingRowId = row.id;
                 this.editingField = "web_auth";
                 this.setCellWiden("web_auth", Math.max(EDIT_WIDTH, this.cellWiden.web_auth || 0));
-            } else {
+            } else if (row._printer) {
                 this.pcardEditKey = "web_auth";
+            } else {
+                this.cardEditKey = "web_auth";
             }
             this.$nextTick(() => {
                 const input = this.webEditLoginInput();
@@ -254,6 +276,9 @@ export default {
             }
             if (this.pcardEditKey === "web_auth") {
                 this.pcardEditKey = null;
+            }
+            if (this.cardEditKey === "web_auth") {
+                this.cardEditKey = null;
             }
             if (!this.webShown || this.webShown.where !== "cell") {
                 this.setCellWiden("web_auth", 0);
@@ -287,7 +312,8 @@ export default {
             if (!ed || ed.saving) {
                 return;
             }
-            const row = this.printerRows.find(function (r) { return r.id === ed.id; }) || ed.row;
+            const printer = !!ed.row._printer;
+            const row = (printer ? this.printerRows : this.rows).find(function (r) { return r.id === ed.id; }) || ed.row;
             const shown = this.webShownFor(row) ? this.webShown : { login: "", password: "" };
             const login = ed.login.trim();
             if (login === shown.login && ed.password === shown.password) {
@@ -297,7 +323,8 @@ export default {
             }
             ed.saving = true;
             if (!login && !ed.password && row.web_auth) {
-                const yes = await this.confirmDialog("Удалить логин и пароль Web у «" + (row.name || "принтера") + "»?", { okText: "Удалить", danger: true });
+                const what = printer ? "Web у «" + (row.name || "принтера") + "»" : "у «" + (row.hostname || "компьютера") + "»";
+                const yes = await this.confirmDialog("Удалить логин и пароль " + what + "?", { okText: "Удалить", danger: true });
                 if (!yes) {
                     ed.saving = false;
                     this.$nextTick(() => {
@@ -310,7 +337,7 @@ export default {
                 }
             }
             try {
-                const response = await this.apiSend("/api/printers/" + row.id + "/web-auth", "PUT", { login: login, password: ed.password });
+                const response = await this.apiSend(this.webAuthUrl(row), "PUT", { login: login, password: ed.password });
                 const data = await response.json();
                 if (data.updated) {
                     row.web_auth = data.updated.web_auth;
@@ -320,8 +347,8 @@ export default {
                     this.closeWebEdit();
                 }
                 this.hideWebShown();
-                this.flashCell("p" + row.id, "web_auth");
-                this.reloadCardHistory(row.id, true);
+                this.flashCell(this.rowKey(row), "web_auth");
+                this.reloadCardHistory(row.id, printer);
             } catch (e) {
                 ed.saving = false;
                 this.toastError("Не удалось сохранить: " + (e.message || e));

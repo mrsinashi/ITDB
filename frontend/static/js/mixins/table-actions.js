@@ -105,9 +105,10 @@ export default {
         },
 
         // Перенос кабинета (этап 58): только при правке «Каб» / «Кабинет» у ПК или принтера в
-        // кабинете – что показать на кнопке в списке и с чем сравнивать кабинеты отделения
+        // кабинете – что показать на кнопке в списке и с чем сравнивать кабинеты отделения; узлы
+        // меняются – нужна и правка «Структуры» (этап 69)
         roomMove(row, col) {
-            const entry = ROOM_FIELDS.indexOf(col.field) !== -1 && this.canEdit ? this.treeIndex[row.location_id] : null;
+            const entry = ROOM_FIELDS.indexOf(col.field) !== -1 && this.canEditRow(row) && this.canPage("tree", "edit") ? this.treeIndex[row.location_id] : null;
             const node = entry && entry.node.kind === "room" ? entry.node : null;
             if (!node) {
                 return null;
@@ -621,7 +622,7 @@ export default {
         async deleteSelected() {
             this.closeMenus();
             const ids = this.selectedRows.slice();
-            if (!ids.length || this.archiveSaving || !this.isAdmin || !this.showArchive) {
+            if (!ids.length || this.archiveSaving || !this.isAdmin || !this.canEdit || !this.showArchive) {
                 return;
             }
             const printers = this.tableKind === "printer";

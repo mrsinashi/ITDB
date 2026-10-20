@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
-from auth import require_editor
+from auth import require_page
 from db import get_db
 from history_log import choice_title, diff, log_change
 from models import Choice
@@ -39,7 +39,7 @@ def list_choices(session=Depends(get_db)):
 @router.post("")
 def create_choice(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("choices/styles", "edit")),
     session=Depends(get_db),
 ):
     field = (payload.get("field") or "").strip()
@@ -77,7 +77,7 @@ def create_choice(
 def update_choice(
     choice_id: int,
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("choices/styles", "edit")),
     session=Depends(get_db),
 ):
     choice = session.get(Choice, choice_id)
@@ -134,7 +134,7 @@ def update_choice(
 @router.delete("/{choice_id}")
 def delete_choice(
     choice_id: int,
-    user=Depends(require_editor),
+    user=Depends(require_page("choices/styles", "edit")),
     session=Depends(get_db),
 ):
     choice = session.get(Choice, choice_id)

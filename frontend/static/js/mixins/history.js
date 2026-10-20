@@ -112,6 +112,13 @@ export default {
         },
 
         closeCard() {
+            // Логин и пароль, показанные в карточке (этап 69), уходят вместе с ней – как у принтера
+            if (this.card) {
+                if (this.webEdit && this.webEdit.where === "card") {
+                    this.closeWebEdit();
+                }
+                this.hideWebShown();
+            }
             this.card = null;
             this.setHoverRow(null);
         },

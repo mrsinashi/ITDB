@@ -157,7 +157,7 @@ export default {
         },
 
         isPcardEditable(r) {
-            return this.canEdit && !!this.pcardEditCol(r);
+            return this.canEditPrinters && !!this.pcardEditCol(r);
         },
 
         pcardRowTitle(r) {
@@ -184,7 +184,7 @@ export default {
                 return;
             }
             const col = this.pcardEditCol(r);
-            if (!this.canEdit || !col || this.pcardEditKey === r.key) {
+            if (!this.canEditPrinters || !col || this.pcardEditKey === r.key) {
                 return;
             }
             this.hideWebShown();
@@ -243,7 +243,7 @@ export default {
 
         // Имя – в шапке, как HOSTNAME у ПК
         startPcardName() {
-            if (!this.canEdit || !this.pcard) {
+            if (!this.canEditPrinters || !this.pcard) {
                 return;
             }
             this.pcardNameEdit = { value: this.pcard.name || "" };

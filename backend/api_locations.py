@@ -7,7 +7,7 @@ from sqlalchemy import func
 
 from api_computers import ChangeBatch, apply_fields, load_locations, location_path, save_changes, user_field_keys_of
 from api_printers import apply_printer_fields
-from auth import require_editor
+from auth import check_page, require_page
 from db import get_db
 from models import Computer, History, Location, Printer
 
@@ -219,7 +219,7 @@ def locations_tree(session=Depends(get_db)):
 @router.post("/locations")
 def create_location(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("tree", "edit")),
     session=Depends(get_db),
 ):
     kind = payload.get("kind")
@@ -304,7 +304,7 @@ def create_location(
 def update_location(
     location_id: int,
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("tree", "edit")),
     session=Depends(get_db),
 ):
     location = session.get(Location, location_id)
@@ -384,7 +384,7 @@ def update_location(
 @router.post("/locations/{location_id}/archive")
 def archive_location(
     location_id: int,
-    user=Depends(require_editor),
+    user=Depends(require_page("tree", "edit")),
     session=Depends(get_db),
 ):
     location = session.get(Location, location_id)
@@ -589,13 +589,17 @@ def lock_moved(session, payload):
 def move_room_to(
     location_id: int,
     payload: RoomMoveIn,
-    user=Depends(require_editor),
+    user=Depends(require_page("tree", "edit")),
     session=Depends(get_db),
 ):
     """Перенос кабинета из ячейки «Кабинет» (схема пользователя 14.10). Весь кабинет – сам узел
     с ПК и принтерами; keep_old – на старом месте остаётся пустой такой же. Только ПК (принтер) –
     в новом отделении такой же кабинет (уже есть – этот), ПК – в него. Одно действие: Ctrl+Z
     отменяет всё, и созданный кабинет тоже."""
+    # Только ПК (принтер) – он сам меняет место: нужна и правка его таблицы (этап 69)
+    if not payload.whole:
+        check_page(user, ("printers" if payload.printer_id is not None else "table", "edit"))
+
     # Замки – в том же порядке, что у отмены в Истории: ПК (принтер), кабинет, место
     obj, what = lock_moved(session, payload) if not payload.whole else (None, None)
     room = session.query(Location).filter(Location.id == location_id).with_for_update().first()

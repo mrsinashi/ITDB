@@ -38,6 +38,7 @@ SIMPLE_FIELD_LABELS = {
     "label": "Название",
     "archived": "Архив",
     "role": "Роль",
+    "perms": "Права",  # права по страницам, этап 69
     "password": "Пароль",
     "created": "Создан",
     "deleted": "Удалено",

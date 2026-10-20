@@ -56,6 +56,12 @@ export default {
                         const room = F("room", "Кабинет", cardRoom, col && col.cardCopy, null);
                         room.always = !!(col && col.cardAlways);
                         rows.push(room);
+                    } else if (col && col.secret) {
+                        // «Доступ» (этап 69) – как у принтера: точки, показ по паролю
+                        const auth = F(field, col.cardLabel, c[field], false, null);
+                        auth.auth = true;
+                        auth.always = true;
+                        rows.push(auth);
                     } else if (col) {
                         const r = F(field, col.cardLabel, c[field], col.cardCopy);
                         r.always = !!col.cardAlways;
@@ -122,13 +128,23 @@ export default {
         },
 
         isCardEditable(r) {
-            return this.canEdit && !!this.cardEditCol(r);
+            return this.canEditPc && !!this.cardEditCol(r);
         },
 
         onCardRowDblclick(event, r) {
             // Двойной клик по самому значению – это два копирования, не правка (по ссылке на
             // принтер – два нажатия на неё)
             if (event.target.closest(".copy-val, a.obj-link, .obj-tbl")) {
+                return;
+            }
+            // «Доступ» (этап 69, как у принтера): показать по паролю – окошком под строкой, задать,
+            // изменить
+            if (r.auth) {
+                const td = event.currentTarget.querySelector("td.ct-value");
+                if (td && !event.target.closest("input, .secret-pen") && !this.webEditIn(this.card, "card")) {
+                    this.cardEditKey = null;
+                    this.openWebAccess(this.card, td, "card");
+                }
                 return;
             }
             this.hideWebShown();

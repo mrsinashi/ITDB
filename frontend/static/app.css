@@ -1632,12 +1632,14 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 .data-table td.cell-saved,
 .card-table tr.ct-saved td.ct-value,
-.card-sec-body.ct-saved {
+.card-sec-body.ct-saved,
+.pp-table td.pp-saved {
     isolation: isolate;
 }
 .data-table td.cell-saved::before,
 .card-table tr.ct-saved td.ct-value::before,
-.card-sec-body.ct-saved::before {
+.card-sec-body.ct-saved::before,
+.pp-table td.pp-saved::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -2714,6 +2716,17 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
     color: var(--text-muted);
     padding: 4px 2px;
 }
+/* Права закрыли все страницы (этап 69) – с отступами страницы */
+.empty-note.no-pages {
+    padding: 10px 12px;
+}
+/* Форма только для чтения («Подключения: просмотр», этап 69): fieldset без своего вида */
+fieldset.ro-set {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
 
 /* ---------- История: отмена, возврат, фильтры, выделение (этап 19) ---------- */
 
@@ -3015,17 +3028,54 @@ body.ui-dark-hostname .data-table.alt-copy td.link:hover span {
 }
 /* Столбцы постоянной ширины: строка добавления / правки их не раздвигает (этап 26д) */
 .users-table.users-list {
-    width: 786px;
+    width: 806px;
     table-layout: fixed;
 }
 .users-list col.uc-login { width: 150px; }
 .users-list col.uc-fio { width: 240px; }
 .users-list col.uc-position { width: 170px; }
-.users-list col.uc-role { width: 130px; }
+.users-list col.uc-role { width: 150px; }
 .users-list col.uc-created { width: 96px; }
 .users-list td {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+/* «Права» (этап 69): роль, справа – значок окошка прав по страницам (Lucide sliders-horizontal);
+   ограничена учётка ниже роли – значок тёмный */
+.u-role-box {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.u-role-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.u-role-box select.er-input {
+    flex: 1;
+    min-width: 0;
+}
+.u-perms {
+    display: inline-flex;
+    flex: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.u-perms svg {
+    width: 14px;
+    height: 14px;
+}
+.u-perms.on {
+    color: var(--text-secondary);
+}
+.u-perms:hover,
+.u-perms.open {
+    color: var(--text-strong);
+}
+.er-row .u-perms {
+    margin-right: 4px;
 }
 .users-list td.u-login,
 .users-list td.u-fio,
@@ -6603,6 +6653,85 @@ a.obj-link:hover::after {
 }
 .scan-pop.pr-pop .sp-values td.sp-v {
     overflow-wrap: anywhere;
+}
+
+/* Окошко прав учётки (этап 69, просьба пользователя): справа от таблицы «Пользователей», как
+   окошко принтера; таблица «Страница | Доступ» с сеткой; доступ – выпадающий список во всю
+   ячейку, без своей рамки (не «ячейка в ячейке»). Меньше роли – полужирным; разделы меню –
+   строками-группами, их вкладки – с отступом */
+.scan-pop.perms-pop {
+    width: 300px;
+}
+.pp-table {
+    width: calc(100% - 20px);
+    margin: 8px 10px 10px;
+    border-collapse: collapse;
+}
+.pp-table th,
+.pp-table td {
+    height: 22px;
+    box-sizing: border-box;
+    padding: 2px 6px;
+    border: 1px solid var(--gray-line);
+    line-height: 17px;
+    text-align: left;
+    white-space: nowrap;
+}
+.pp-table th {
+    background: var(--grid-head-bg);
+    color: var(--grid-head-text);
+    font-size: 12px;
+    font-weight: 600;
+}
+.pp-table th:last-child {
+    width: 118px;
+}
+.pp-table tr.pp-group td {
+    background: var(--gray-group);
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 600;
+}
+.pp-table td.pp-sub {
+    padding-left: 18px;
+}
+.pp-table td.pp-fixed {
+    color: var(--text-secondary);
+}
+.pp-table td.pp-level {
+    position: relative;
+    padding: 0;
+}
+.pp-select {
+    display: block;
+    width: 100%;
+    height: 20px;
+    margin: 0;
+    padding: 0 0 0 2px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    font: inherit;
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+}
+.pp-select:hover {
+    background: var(--row-hover-bg);
+}
+.pp-select:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--brand);
+}
+.pp-select:disabled {
+    cursor: default;
+}
+.pp-select.pp-own {
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.pp-table td.pp-fixed.pp-none,
+.pp-select.pp-none {
+    color: var(--text-muted);
 }
 a.pr-web {
     color: var(--host-color);

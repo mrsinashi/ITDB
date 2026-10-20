@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
 
-from auth import require_editor
+from auth import require_page
 from db import get_db
 from history_log import log_change
 from models import Cartridge, Printer, PrinterModel, PrinterModelCartridge
@@ -231,7 +231,7 @@ def list_cartridges(session=Depends(get_db)):
 
 
 @router.post("/cartridges")
-def create_cartridge(payload: CartridgeIn, user=Depends(require_editor), session=Depends(get_db)):
+def create_cartridge(payload: CartridgeIn, user=Depends(require_page("choices/cartridges", "edit")), session=Depends(get_db)):
     name = check_name(session, payload.name)
     cartridge = ensure_cartridge(session, name, user["login"])
 
@@ -243,7 +243,7 @@ def create_cartridge(payload: CartridgeIn, user=Depends(require_editor), session
 
 
 @router.patch("/cartridges/{cartridge_id}")
-def update_cartridge(cartridge_id: int, payload: CartridgeIn, user=Depends(require_editor), session=Depends(get_db)):
+def update_cartridge(cartridge_id: int, payload: CartridgeIn, user=Depends(require_page("choices/cartridges", "edit")), session=Depends(get_db)):
     """Переименовать (у всех моделей сразу – название одно) и (или) задать модели."""
     cartridge = session.query(Cartridge).filter(Cartridge.id == cartridge_id).with_for_update().first()
 
@@ -266,7 +266,7 @@ def update_cartridge(cartridge_id: int, payload: CartridgeIn, user=Depends(requi
 
 
 @router.delete("/cartridges/{cartridge_id}")
-def delete_cartridge(cartridge_id: int, user=Depends(require_editor), session=Depends(get_db)):
+def delete_cartridge(cartridge_id: int, user=Depends(require_page("choices/cartridges", "edit")), session=Depends(get_db)):
     """Картридж без моделей можно удалить, как значение справочника."""
     cartridge = session.get(Cartridge, cartridge_id)
 

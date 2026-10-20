@@ -19,7 +19,7 @@ import scan_glpi
 import scan_jabber
 import scan_net
 import scan_ssh
-from auth import require_admin
+from auth import require_admin, require_page
 from db import get_db
 from history_log import PASSWORD_SET, log_change
 from models import Computer, Location, ScanRun, ScanSource, ScanSubnet
@@ -514,7 +514,7 @@ def save_enabled(source, form, data, changes):
 
 
 @router.patch("/sources/{kind}", response_model=SourceOut)
-def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), session=Depends(get_db)):
+def update_source(kind: str, payload: SourceUpdate, me=Depends(require_page("scan/settings", "edit")), session=Depends(get_db)):
     check_kind(kind)
     form = SOURCES[kind]["form"]
     data = form_data(kind, payload)
@@ -548,7 +548,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_admin), s
 def check_source(
     kind: str,
     payload: Optional[SourceUpdate] = None,
-    me=Depends(require_admin),
+    me=Depends(require_page("scan/settings", "edit")),
     session=Depends(get_db),
 ):
     """Проверка подключения. Можно передать несохранённые значения формы – тогда
@@ -621,7 +621,7 @@ def ensure_key(session, kind, me):
 
 
 @router.post("/sources/{kind}/key", response_model=KeyOut)
-def source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_admin), session=Depends(get_db)):
+def source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_page("scan/settings", "edit")), session=Depends(get_db)):
     """Открытый ключ ITDB строкой для authorized_keys – поставить на сервер вручную."""
     check_ssh_kind(kind)
     source, created = ensure_key(session, kind, me)
@@ -638,7 +638,7 @@ def source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(req
 
 
 @router.post("/sources/{kind}/key/install", response_model=KeyInstallOut)
-def install_source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_admin), session=Depends(get_db)):
+def install_source_key(kind: str, payload: Optional[SourceUpdate] = None, me=Depends(require_page("scan/settings", "edit")), session=Depends(get_db)):
     """Поставить ключ ITDB на сервер: вход по паролю (из формы или сохранённому),
     дальше – по ключу, пароль можно не хранить."""
     check_ssh_kind(kind)
@@ -866,7 +866,7 @@ def list_subnets(me=Depends(require_admin), session=Depends(get_db)):
 
 
 @router.post("/subnets")
-def create_subnet(payload: SubnetCreate, me=Depends(require_admin), session=Depends(get_db)):
+def create_subnet(payload: SubnetCreate, me=Depends(require_page("scan/settings", "edit")), session=Depends(get_db)):
     network = parse_subnet(payload.cidr)
     check_unique(session, network)
     check_purpose(payload.purpose)
@@ -897,7 +897,7 @@ def create_subnet(payload: SubnetCreate, me=Depends(require_admin), session=Depe
 
 
 @router.patch("/subnets/{subnet_id}")
-def update_subnet(subnet_id: int, payload: SubnetUpdate, me=Depends(require_admin), session=Depends(get_db)):
+def update_subnet(subnet_id: int, payload: SubnetUpdate, me=Depends(require_page("scan/settings", "edit")), session=Depends(get_db)):
     subnet = session.query(ScanSubnet).filter(ScanSubnet.id == subnet_id).with_for_update().first()
 
     if subnet is None:
@@ -937,7 +937,7 @@ def update_subnet(subnet_id: int, payload: SubnetUpdate, me=Depends(require_admi
 
 
 @router.delete("/subnets/{subnet_id}")
-def delete_subnet(subnet_id: int, me=Depends(require_admin), session=Depends(get_db)):
+def delete_subnet(subnet_id: int, me=Depends(require_page("scan/settings", "edit")), session=Depends(get_db)):
     subnet = session.query(ScanSubnet).filter(ScanSubnet.id == subnet_id).with_for_update().first()
 
     if subnet is None:

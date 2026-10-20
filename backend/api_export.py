@@ -10,12 +10,14 @@ from api_columns import COLUMNS as BUILTIN_COLUMNS, PRINTER_COLUMNS
 from api_computers import computer_rows, is_reserved_field_key
 from api_printers import printer_rows
 from api_scan_diffs import av_name, av_settings, av_visible, computer_antivirus
+from auth import require_page
 from db import get_db
 from models import FieldDef
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
-# Встроенные столбцы – из общего описания (порядок и подписи как в таблице)
+# Встроенные столбцы – из общего описания (порядок и подписи как в таблице); логин и пароль
+# ПК (этап 69) – не выгружаются, как у принтеров
 COLUMNS = [
     {
         "field": column.key,
@@ -25,6 +27,7 @@ COLUMNS = [
         "date": column.kind == "date",
     }
     for column in BUILTIN_COLUMNS
+    if column.kind != "secret"
 ]
 
 
@@ -95,7 +98,7 @@ def fill_antivirus(session, rows):
 
 
 @router.get("/computers.xlsx")
-def export_computers(archive: bool = False, session=Depends(get_db)):
+def export_computers(archive: bool = False, user=Depends(require_page("table")), session=Depends(get_db)):
     """Рабочие ПК; archive=true – ещё лист «Архив» с ПК из архива."""
     columns = get_export_columns(session)
 
@@ -121,7 +124,7 @@ PRINTER_EXPORT_COLUMNS = [
 
 
 @router.get("/printers.xlsx")
-def export_printers(archive: bool = False, session=Depends(get_db)):
+def export_printers(archive: bool = False, user=Depends(require_page("printers")), session=Depends(get_db)):
     """Рабочие принтеры; archive=true – ещё лист «Архив»."""
     wb = Workbook()
     ws = wb.active

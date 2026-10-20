@@ -10,6 +10,15 @@
 import { apiFetch, clickSelect } from "../util.js";
 import { FIXED_HISTORY_FIELDS } from "../columns.js";
 
+// Чья страница правит объект (этап 69, как ENTITY_PAGES в history_undo.py); правила имён у
+// узлов – «Справочники → Имена ПК»
+const ENTITY_PAGES = {
+    computers: "table", printers: "printers", locations: "tree", moves: "journals/moves",
+    choices: "choices/styles", field_defs: "choices/styles", column_styles: "choices/styles",
+    users: "users", printer_models: "choices/models", cartridges: "choices/cartridges"
+};
+const RULE_FIELDS = ["name_part", "name_own", "name_single"];
+
 const ENTITY_FILTERS = {
     computers: "Компьютеры",
     printers: "Принтеры",
@@ -122,10 +131,12 @@ export default {
             return !!d && d.kind !== "gone" && this.vhSelectedRows.some(function (r) { return r.item && r.item.cancelled; });
         },
 
-        // Отменять и возвращать пользователей системы может только администратор
+        // Отменять и возвращать пользователей системы может только администратор; остальное –
+        // с правкой на странице объекта (этап 69), в Истории – ещё и с правкой Истории
         vhCanAct() {
             const vd = this.valueDialog;
-            return !!vd && !!vd.data && this.canEdit && (vd.entity !== "users" || this.isAdmin);
+            return !!vd && !!vd.data && this.canEditEntity(vd.entity, vd.field) && (this.view !== "history" || this.canEdit) &&
+                (vd.entity !== "users" || this.isAdmin);
         },
 
         vhCanRevert() {
@@ -148,6 +159,18 @@ export default {
     },
 
     methods: {
+        // Можно ли отменять и возвращать изменения объекта (этап 69): правка там, где такое правят
+        // (как entity_pages в history_undo.py; картриджи модели – ещё «Принтеры» и «Картриджи»)
+        canEditEntity(entity, field) {
+            let pages = [ENTITY_PAGES[entity]];
+            if (entity === "locations" && RULE_FIELDS.indexOf(field) !== -1) {
+                pages = ["choices/names"];
+            } else if (entity === "printer_models" && field === "cartridges") {
+                pages = ["choices/models", "printers", "choices/cartridges"];
+            }
+            return pages.some((page) => !!page && this.canPage(page, "edit"));
+        },
+
         // Поля записи для показа: «Создан» первым; отменённые – только с глазом
         shownChanges(changes) {
             const ordered = this.orderedChanges(changes) || {};

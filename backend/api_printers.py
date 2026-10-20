@@ -8,33 +8,32 @@
   дуплекс берутся из модели; правка модели меняет все её принтеры. Картриджи (этап 47) –
   тоже у модели (cartridges.py): правка ячейки «Картриджи» принтера меняет модель.
 - Веб-страница: есть / нет и адрес (пусто – http://IP); логин и пароль от неё –
-  зашифрованными (secret_box.py). Показать их можно только по логину и паролю
+  зашифрованными (access_secrets.py, общее с ПК). Показать их можно только по логину и паролю
   администратора ITDB – кто бы ни смотрел; сам администратор вводит свой пароль.
 - Подключение к ПК – printer_links.py; имя по правилам узлов считает фронт.
 - История – entity "printers", модели – "printer_models" (отменяются, как ПК и
   справочники); логин и пароль – без значений и без отмены.
 """
 from collections import defaultdict
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func
 
+from access_secrets import AdminCheck, SecretsUpdate, check_admin, has_secrets, shown_secrets, update_secrets
 from api_columns import PRINTER_BULK_EXCLUDED, PRINTER_EDITABLE_KEYS
 from api_computer_actions import parse_ids
 from api_computers import (
     LOCATION_PART_FIELDS, ChangeBatch, get_active_location, journal_fields, load_locations, location_parts, location_path,
     location_sort_keys, lock_rows, normalize_ip, normalize_mac, normalize_multiline, normalize_single, save_changes,
 )
-from auth import get_current_user, require_editor, verify_password
+from auth import require_page
 from cartridges import cartridges_by_model, names_text, set_model_cartridges, set_printer_cartridges
 from db import get_db
-from history_log import PASSWORD_SET, log_change
-from models import History, Location, Move, Printer, PrinterModel, PrinterModelCartridge, User
+from history_log import log_change
+from models import History, Location, Move, Printer, PrinterModel, PrinterModelCartridge
 from printer_links import computer_title, computers_by_printer, links_ids, links_refs, links_text, set_printer_computers
-from secret_box import decrypt, encrypt
 
 router = APIRouter(prefix="/api", tags=["printers"])
 
@@ -43,10 +42,6 @@ KINDS = {"mfu": "МФУ", "printer": "Принтер"}
 KIND_ORDER = {"mfu": 0, "printer": 1}
 YES_NO = {True: "есть", False: "нет"}
 COLOR = {True: "цветная", False: "ч/б"}
-
-# Логин и пароль Web: в таблице – только есть ли они
-SECRET_FIELDS = ("login", "password")
-SECRET_REMOVED = "удалён"
 
 FLAG_WORDS = {"есть": True, "да": True, "+": True, "нет": False, "-": False, "–": False}
 
@@ -225,7 +220,7 @@ def printer_row(printer, parts, model, links, cartridges=None):
             "cartridges": names_text((cartridges or {}).get(printer.model_id, [])) if model else None,
             "web": YES_NO.get(printer.web),
             "web_url": printer.web_url,
-            "web_auth": YES_NO[True] if any(printer.web_secrets.get(key) for key in SECRET_FIELDS) else None,
+            "web_auth": YES_NO[True] if has_secrets(printer.web_secrets) else None,
             "inv_no": printer.inv_no,
             "serial": printer.serial,
             "note": printer.note,
@@ -447,7 +442,7 @@ def lock_printers(session, ids):
 
 
 @router.post("/printers")
-def create_printer(payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def create_printer(payload: dict = Body(...), user=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     """Новый принтер: расположение обязательно; №, имя, IP, модель – по желанию.
     Без № – следующий свободный в кабинете (у МФУ и принтеров – свой счёт). Из журнала
     «Движение» – ещё ИНВ и серийный (fields)."""
@@ -497,7 +492,7 @@ def create_printer(payload: dict = Body(...), user=Depends(require_editor), sess
 
 
 @router.patch("/printers/{printer_id}")
-def update_printer(printer_id: int, payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def update_printer(printer_id: int, payload: dict = Body(...), user=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     payload = dict(payload)
     expected_version = payload.pop("_version", None)
     printer = lock_printer(session, printer_id)
@@ -545,7 +540,7 @@ def update_printer(printer_id: int, payload: dict = Body(...), user=Depends(requ
 
 
 @router.post("/printers/archive")
-def archive_printers(payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def archive_printers(payload: dict = Body(...), user=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     """{"ids": [...], "archived": true/false}: в архив или обратно, запись Истории у каждого."""
     ids = parse_ids(payload.get("ids"))
     archived = payload.get("archived")
@@ -568,7 +563,7 @@ def archive_printers(payload: dict = Body(...), user=Depends(require_editor), se
 
 
 @router.post("/printers/bulk-update")
-def bulk_update_printers(payload: dict = Body(...), user=Depends(require_editor), session=Depends(get_db)):
+def bulk_update_printers(payload: dict = Body(...), user=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     """{ids, field, value} – одно поле у всех выбранных принтеров (пустое – очистить)."""
     ids = parse_ids(payload.get("ids"))
     field = payload.get("field")
@@ -591,35 +586,14 @@ def bulk_update_printers(payload: dict = Body(...), user=Depends(require_editor)
     return {"ok": True, "ids": ids, "changed": changed}
 
 
-# ---------- Логин и пароль от веб-страницы ----------
-
-
-class WebAuthUpdate(BaseModel):
-    login: Optional[str] = None      # None – не менять, "" – удалить
-    password: Optional[str] = None
+# ---------- Логин и пароль от веб-страницы (access_secrets.py) ----------
 
 
 @router.put("/printers/{printer_id}/web-auth")
-def set_web_auth(printer_id: int, payload: WebAuthUpdate, user=Depends(require_editor), session=Depends(get_db)):
+def set_web_auth(printer_id: int, payload: SecretsUpdate, user=Depends(require_page("printers", "edit")), session=Depends(get_db)):
     """Задать или удалить логин и пароль Web; в Историю – без значений."""
     printer = lock_printer(session, printer_id)
-    secrets = dict(printer.web_secrets or {})
-    changes = {}
-
-    for key in SECRET_FIELDS:
-        value = getattr(payload, key)
-
-        if value is None:
-            continue
-
-        value = value.strip() if key == "login" else value
-
-        if value:
-            secrets[key] = encrypt(value)
-            changes["web_" + key] = {"old": None, "new": PASSWORD_SET}
-        elif key in secrets:
-            del secrets[key]
-            changes["web_" + key] = {"old": None, "new": SECRET_REMOVED}
+    secrets, changes = update_secrets(printer.web_secrets, payload)
 
     if changes:
         printer.web_secrets = secrets
@@ -629,58 +603,17 @@ def set_web_auth(printer_id: int, payload: WebAuthUpdate, user=Depends(require_e
     return {"ok": True, "updated": one_row(session, printer_id)}
 
 
-# Попытки показать логин и пароль с неверными данными администратора: как вход –
-# не больше 5 за 5 минут с одного адреса
-show_attempts = defaultdict(list)
-SHOW_MAX_ATTEMPTS = 5
-SHOW_WINDOW_SECONDS = 300
-
-
-class AdminCheck(BaseModel):
-    login: Optional[str] = None     # пусто – свой пароль (этап 45: администратору логин не нужен)
-    password: str
-
-
 @router.post("/printers/{printer_id}/web-auth/show")
-def show_web_auth(printer_id: int, payload: AdminCheck, request: Request, user=Depends(get_current_user), session=Depends(get_db)):
+def show_web_auth(printer_id: int, payload: AdminCheck, request: Request, user=Depends(require_page("printers")), session=Depends(get_db)):
     """Логин и пароль Web – по логину и паролю администратора ITDB; сам администратор
     вводит только свой пароль."""
-    ip = request.client.host if request.client else "unknown"
-    now = datetime.now(timezone.utc)
-    show_attempts[ip] = [at for at in show_attempts[ip] if (now - at).total_seconds() < SHOW_WINDOW_SECONDS]
-
-    if len(show_attempts[ip]) >= SHOW_MAX_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Слишком много попыток. Попробуй позже.")
-
-    login = (payload.login or "").strip()
-
-    if login:
-        admin = (
-            session.query(User)
-            .filter(func.lower(User.login) == login.lower(), User.archived == False)  # noqa: E712
-            .first()
-        )
-    elif user["role"] == "admin":
-        admin = session.get(User, user["id"])
-    else:
-        raise HTTPException(status_code=403, detail="Нужны логин и пароль администратора.")
-
-    if not admin or admin.role != "admin" or not verify_password(payload.password, admin.password_hash):
-        show_attempts[ip].append(now)
-        raise HTTPException(status_code=403, detail="Неверный пароль." if not login else "Нужны логин и пароль администратора.")
-
-    show_attempts.pop(ip, None)
+    check_admin(session, request, user, payload)
     printer = session.get(Printer, printer_id)
 
     if not printer:
         raise HTTPException(status_code=404, detail="Принтер не найден.")
 
-    secrets = printer.web_secrets or {}
-
-    return {
-        "login": decrypt(secrets["login"], "логин") if secrets.get("login") else None,
-        "password": decrypt(secrets["password"]) if secrets.get("password") else None,
-    }
+    return shown_secrets(printer.web_secrets)
 
 
 # ---------- Справочник моделей ----------
@@ -792,7 +725,7 @@ def model_cartridges(session, model):
 
 
 @router.post("/printer-models")
-def create_model(payload: ModelIn, user=Depends(require_editor), session=Depends(get_db)):
+def create_model(payload: ModelIn, user=Depends(require_page("printers", "edit", ("choices/models", "edit"), ("journals/moves", "edit"))), session=Depends(get_db)):
     model = PrinterModel(
         kind=payload.kind or "printer",
         maker=normalize_single(payload.maker),
@@ -818,7 +751,7 @@ def create_model(payload: ModelIn, user=Depends(require_editor), session=Depends
 
 
 @router.patch("/printer-models/{model_id}")
-def update_model(model_id: int, payload: ModelIn, user=Depends(require_editor), session=Depends(get_db)):
+def update_model(model_id: int, payload: ModelIn, user=Depends(require_page("choices/models", "edit")), session=Depends(get_db)):
     """Правка модели меняет все её принтеры (в Истории – у модели)."""
     model = session.query(PrinterModel).filter(PrinterModel.id == model_id).with_for_update().first()
 
@@ -852,7 +785,7 @@ def update_model(model_id: int, payload: ModelIn, user=Depends(require_editor), 
 
 
 @router.delete("/printer-models/{model_id}")
-def delete_model(model_id: int, user=Depends(require_editor), session=Depends(get_db)):
+def delete_model(model_id: int, user=Depends(require_page("choices/models", "edit")), session=Depends(get_db)):
     """Модель без принтеров (и в архиве) можно удалить, как значение справочника."""
     model = session.get(PrinterModel, model_id)
 

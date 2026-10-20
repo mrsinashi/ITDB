@@ -61,7 +61,7 @@ from api_computers import (
 )
 from api_scan import SOURCES, fresh_days_of, load_source
 from api_scan_records import load_computer, load_record, save_alias, save_link, save_reject, web_url_of
-from auth import get_current_user, require_editor
+from auth import get_current_user, require_page
 from db import get_db
 from history_log import log_change
 from models import (
@@ -934,7 +934,7 @@ def add_scan_changes(changes, field_changes, source):
 
 
 @router.post("/accept")
-def accept(payload: AcceptIn, me=Depends(require_editor), session=Depends(get_db)):
+def accept(payload: AcceptIn, me=Depends(require_page("table", "edit")), session=Depends(get_db)):
     """Записать значения сканера в ПК. Пропускаются ПК, у которых значение в
     таблице уже не то, что было при просмотре (кто-то успел поменять)."""
     user_field_keys = user_field_keys_of(session)
@@ -989,7 +989,7 @@ class LinkIn(BaseModel):
 
 
 @router.post("/link")
-def link(payload: LinkIn, me=Depends(require_editor), session=Depends(get_db)):
+def link(payload: LinkIn, me=Depends(require_page("table", "edit")), session=Depends(get_db)):
     """«Привязать» в Таблице (этап 38): запись – этому ПК («это этот ПК», как на
     «Проверке»), её номер – в столбец GLPI / GSIT обычной правкой (если номер в таблице
     за это время не поменяли). Дальше сканер предлагает этому ПК всё остальное."""
@@ -1019,7 +1019,7 @@ def link(payload: LinkIn, me=Depends(require_editor), session=Depends(get_db)):
 
 
 @router.post("/not-this")
-def not_this(payload: LinkIn, me=Depends(require_editor), session=Depends(get_db)):
+def not_this(payload: LinkIn, me=Depends(require_page("table", "edit")), session=Depends(get_db)):
     """«Не этот ПК» в Таблице (этап 38): запись этому ПК больше не предлагается."""
     record = load_record(session, payload.source, payload.source_id)
     save_reject(session, me, payload.source, record, load_computer(session, payload.computer_id))
@@ -1035,7 +1035,7 @@ class BoardIn(BaseModel):
 
 
 @router.post("/board")
-def to_board(payload: BoardIn, me=Depends(require_editor), session=Depends(get_db)):
+def to_board(payload: BoardIn, me=Depends(require_page("table", "edit")), session=Depends(get_db)):
     """«Это материнская плата»: название, которое источник отдаёт как модель ПК,
     записывается этому ПК в «Мат. плату» и закрепляется – у всех ПК оно будет
     предлагаться в этот столбец, а не в «Модель». Если в «Модели» этого ПК
@@ -1112,7 +1112,7 @@ def drop_rejects(session, owner, items):
 
 
 @router.post("/reject")
-def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
+def reject(payload: RejectIn, me=Depends(require_page("table", "edit")), session=Depends(get_db)):
     """Не предлагать это значение этому ПК, пока источник отдаёт то же."""
     added = save_rejects(session, Computer, "computer_id", payload.items, check_field, me["login"])
     session.commit()
@@ -1120,7 +1120,7 @@ def reject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db
 
 
 @router.post("/unreject")
-def unreject(payload: RejectIn, me=Depends(require_editor), session=Depends(get_db)):
+def unreject(payload: RejectIn, me=Depends(require_page("table", "edit")), session=Depends(get_db)):
     """Вернуть отклонённое: снова предлагать."""
     removed = drop_rejects(session, "computer_id", payload.items)
     session.commit()
@@ -1180,7 +1180,7 @@ def list_marks(me=Depends(get_current_user), session=Depends(get_db)):
 
 
 @marks_router.patch("/{kind}", response_model=MarkOut)
-def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_editor), session=Depends(get_db)):
+def update_mark(kind: str, payload: MarkUpdate, me=Depends(require_page("choices/styles", "edit")), session=Depends(get_db)):
     """Вид пометки – общий для всех, как оформление в Справочниках."""
     mark = session.get(ScanMark, kind)
 
@@ -1314,7 +1314,7 @@ def get_av_settings(me=Depends(get_current_user), session=Depends(get_db)):
 
 
 @av_router.patch("", response_model=AvSettingsOut)
-def update_av_settings(payload: AvUpdate, me=Depends(require_editor), session=Depends(get_db)):
+def update_av_settings(payload: AvUpdate, me=Depends(require_page("choices/styles", "edit")), session=Depends(get_db)):
     """Вид столбца – общий для всех, как оформление в Справочниках."""
     settings = av_settings(session)
     data = payload.model_dump(exclude_none=True)

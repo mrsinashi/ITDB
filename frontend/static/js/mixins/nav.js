@@ -4,9 +4,14 @@
 import { apiFetch } from "../util.js";
 import { pageLink, parseHash } from "../route.js";
 
-// Вкладки «Сканера»: какие есть у редактора (остальные – только администратор)
-const SCAN_TABS = ["check", "net", "names", "schedule", "settings"];
-const EDITOR_SCAN_TABS = ["check", "net"];
+// Страницы в порядке меню; вкладки страниц – слева направо; права у каждой вкладки свои
+// (этап 69: «scan/net», «choices/models»)
+const MENU_VIEWS = ["table", "printers", "tree", "journals", "vacuum", "scan", "choices", "history", "users"];
+const VIEW_TABS = {
+    journals: ["moves"],
+    scan: ["check", "net", "names", "schedule", "settings"],
+    choices: ["styles", "names", "models", "cartridges"]
+};
 // Ctrl+Y возвращает отменённое Ctrl+Z только столько после отмены (этап 47)
 const REDO_WINDOW_MS = 60 * 1000;
 
@@ -47,14 +52,22 @@ export default {
             }
         },
 
+        // Страница в меню и по адресу (этап 69): есть доступ хоть к одной её вкладке
         canOpenView(view) {
-            if (view === "users") {
-                return this.isAdmin;
+            if (view === "users" && !this.isAdmin) {
+                return false;
             }
-            if (view === "vacuum" || view === "scan") {
-                return this.canEdit;
-            }
-            return true;
+            return VIEW_TABS[view] ? !!this.firstTab(view) : this.canPage(view);
+        },
+
+        // Первая слева вкладка страницы, которую можно открыть; нет таких – null
+        firstTab(view) {
+            return (VIEW_TABS[view] || []).find((tab) => this.canPage(view + "/" + tab)) || null;
+        },
+
+        // Первая по меню страница, которую можно открыть («Компьютеры» закрыты – не они)
+        firstView() {
+            return MENU_VIEWS.find((view) => this.canOpenView(view)) || null;
         },
 
         // Открыть то, что названо в адресе (при загрузке страницы и при смене адреса)
@@ -74,12 +87,12 @@ export default {
             if (this.view !== route.view || route.view === "scan") {
                 this.setView(route.view);
             }
-            if (route.view === "scan" && route.tab && SCAN_TABS.indexOf(route.tab) !== -1 &&
-                (this.isAdmin || EDITOR_SCAN_TABS.indexOf(route.tab) !== -1)) {
+            if (route.view === "scan" && route.tab && VIEW_TABS.scan.indexOf(route.tab) !== -1 && this.canPage("scan/" + route.tab)) {
                 this.setScanTab(route.tab);
             }
             if (route.view === "choices") {
-                this.setChoicesTab(["names", "models", "cartridges"].indexOf(route.tab) !== -1 ? route.tab : "styles");
+                const tab = VIEW_TABS.choices.indexOf(route.tab) !== -1 ? route.tab : "styles";
+                this.setChoicesTab(this.canPage("choices/" + tab) ? tab : this.firstTab("choices"));
             }
             if (params.pc) {
                 this.openCardById(Number(params.pc));
@@ -132,7 +145,7 @@ export default {
         // Ctrl+Z: отменить своё последнее действие (как «Отменить изменения» в Истории).
         // Этап 47: только за 5 минут; сделанное больше минуты назад – с подтверждением
         async undoLast() {
-            if (!this.canEdit || this.undoBusy) {
+            if (!this.canEditAny || this.undoBusy) {
                 return;
             }
             this.undoBusy = true;
@@ -176,7 +189,7 @@ export default {
 
         // Ctrl+Y (Ctrl+Shift+Z): вернуть то, что отменил Ctrl+Z, – в течение минуты после отмены
         async redoLast() {
-            if (!this.canEdit || this.undoBusy) {
+            if (!this.canEditAny || this.undoBusy) {
                 return;
             }
             const last = this.undone[this.undone.length - 1];

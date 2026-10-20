@@ -34,8 +34,9 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #   pattr     – значение модели (тип, производитель, печать, дуплекс): у принтера
 #               не правится – меняется модель или сама модель в справочнике
 #   flag      – «есть» / «нет» (веб-страница)
-#   secret    – логин и пароль от веб-страницы: в таблице – только задан ли
-#               (точками; показ – по паролю, этап 45)
+#   secret    – логин и пароль (у принтера – от веб-страницы, этап 45; у ПК – от
+#               компьютера, этап 69): в таблице – только задан ли (точками; показ – по
+#               паролю, access_secrets.py)
 #   cartridges – картриджи модели принтера (этап 47): строками; правка ячейки
 #               меняет модель (cartridges.py)
 # Журнал «Движение» (этап 66, api_moves.py) – правятся в окне записи, не в ячейке:
@@ -110,6 +111,8 @@ COLUMNS = [
     col("mac", "MAC", "MAC адрес", kind="mac", multiline=True, values="no", card_copy=True, dup=True, bulk=False, export_width=20),
     col("vnc", "VNC", "Тип VNC", center=True, hidden=True, export_width=8),
     col("printers", "Принтеры", kind="printers", multiline=True, values="no", bulk=False, export_width=22),
+    # Этап 69: как «Доступ» у принтеров; в выгрузку не идёт
+    col("web_auth", "Доступ", "Доступ (логин и пароль)", kind="secret", center=True, values="no", bulk=False, export_width=8),
     col("antivirus", "Антивирус", "Антивирусы", kind="scan", center=True, multiline=True, values="no", bulk=False, export_width=30),
     col("inv_no", "ИНВ", "Инвентарный номер", values="no", card_copy=True, dup=True, bulk=False, export_width=10),
     col("serial", "Серийный", "Серийный номер", values="no", card_copy=True, hidden=True, dup=True, bulk=False, export_width=16),
@@ -132,7 +135,7 @@ COLUMNS_BY_KEY = {column.key: column for column in COLUMNS}
 CARD_GROUPS = [
     (None, ["status", "temp_until"]),
     ("Размещение", ["building", "department", "floor", "room_code", "seat_no"]),
-    ("Сеть", ["ip", "mac", "vnc", "printers"]),
+    ("Сеть", ["ip", "mac", "vnc", "printers", "web_auth"]),
     ("Оборудование", ["type", "model", "motherboard", "os", "cpu", "ram", "drive", "gpu", "antivirus"]),
     ("Учёт", ["inv_no", "serial", "glpi_id", "gsit_id", "gsit", "state", "label"]),
     ("Прочее", ["user_fields", "note"]),
@@ -148,6 +151,8 @@ HISTORY_LABELS = {
     "created": "Создан",
     "deleted": "Удалено",
     "temp_note": "Временно до",  # до этапа 16 – текстовое поле
+    "web_login": "Логин",  # «Доступ», этап 69
+    "web_password": "Пароль",
 }
 
 
@@ -155,8 +160,9 @@ def keys_of(*kinds):
     return {column.key for column in COLUMNS if column.kind in kinds}
 
 
-# Поля, которые правятся в PATCH (кроме location_id и пользовательских)
-EDITABLE_KEYS = {column.key for column in COLUMNS if column.kind not in ("location", "scan")}
+# Поля, которые правятся в PATCH (кроме location_id и пользовательских); логин и пароль –
+# своим запросом (/computers/{id}/web-auth)
+EDITABLE_KEYS = {column.key for column in COLUMNS if column.kind not in ("location", "scan", "secret")}
 
 
 # ---------- Принтеры (этап 44) ----------

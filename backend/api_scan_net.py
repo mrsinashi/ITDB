@@ -21,7 +21,7 @@ from pydantic import BaseModel
 import scan_collect
 from api_computers import load_locations, location_path
 from api_scan import SOURCES, RunOut, fresh_days_of, last_run_of, load_source
-from auth import require_editor
+from auth import require_page
 from db import get_db
 from models import Computer, ScanHost
 from scan_dhcp import CONF_SOURCE
@@ -190,7 +190,7 @@ def ip_key(ip):
 
 
 @router.get("", response_model=HostsOut)
-def list_hosts(me=Depends(require_editor), session=Depends(get_db)):
+def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
     locations = load_locations(session)
     computers, by_ip, by_mac = {}, {}, {}
 

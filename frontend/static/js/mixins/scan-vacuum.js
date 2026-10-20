@@ -150,7 +150,7 @@ export default {
 
         // «Сканировать»: собрать из Jabber заново (admin)
         refreshVacuum() {
-            if (this.isAdmin && !this.scanCollectBlock("jabber")) {
+            if (this.isAdmin && this.canEdit && !this.scanCollectBlock("jabber")) {
                 this.collectScan("jabber");
             }
         },

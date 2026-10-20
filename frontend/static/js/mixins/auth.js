@@ -3,11 +3,43 @@
 import { ROLE_LABELS, THEMES, applyNoRadius, applyTheme } from "../settings.js";
 import { apiFetch, shortName } from "../util.js";
 
+// Уровни доступа к странице по возрастанию (как LEVELS в auth.py)
+export const PAGE_LEVELS = ["none", "view", "edit"];
+
 export default {
     computed: {
-        // reader – только просмотр; правка у admin и editor
+        // Права по страницам (этап 69): user.perms – страница → none / view / edit (роль и
+        // свои ограничения пользователя, считает сервер). Страница – как адрес (#scan/check)
+        viewPage() {
+            if (this.view === "scan") {
+                return "scan/" + this.scanTab;
+            }
+            if (this.view === "journals") {
+                return "journals/" + this.journalTab;
+            }
+            if (this.view === "choices") {
+                return "choices/" + this.choicesTab;
+            }
+            return this.view;
+        },
+
+        // Правка на открытой странице (вкладке); карточки ПК и принтера – canEditPc / canEditPrinters
         canEdit() {
-            return !!this.user && (this.user.role === "admin" || this.user.role === "editor");
+            return this.canPage(this.viewPage, "edit");
+        },
+
+        canEditPc() {
+            return this.canPage("table", "edit");
+        },
+
+        canEditPrinters() {
+            return this.canPage("printers", "edit");
+        },
+
+        // Хоть где-то правка: Ctrl+Z / Ctrl+Y
+        canEditAny() {
+            const perms = (this.user && this.user.perms) || {};
+            return Object.keys(perms).some(function (page) { return perms[page] === "edit"; });
         },
 
         themes() {
@@ -40,12 +72,12 @@ export default {
         accentHeaderPages() {
             return [
                 { key: "tree", label: "Структура" },
-                { key: "vacuum", label: "Vacuum", edit: true },
-                { key: "scan", label: "Сканер", edit: true },
+                { key: "vacuum", label: "Vacuum" },
+                { key: "scan", label: "Сканер" },
                 { key: "choices", label: "Справочники" },
                 { key: "history", label: "История" },
-                { key: "users", label: "Пользователи", admin: true }
-            ].filter((p) => (!p.edit || this.canEdit) && (!p.admin || this.isAdmin));
+                { key: "users", label: "Пользователи" }
+            ].filter((p) => this.canOpenView(p.key));
         },
     },
 
@@ -59,6 +91,18 @@ export default {
     },
 
     methods: {
+        // canPage("scan/net") – можно открыть; canPage("table", "edit") – можно править
+        canPage(page, level) {
+            const perms = (this.user && this.user.perms) || {};
+            const have = PAGE_LEVELS.indexOf(perms[page] || "none");
+            return have > 0 && have >= PAGE_LEVELS.indexOf(level || "view");
+        },
+
+        // Строка ПК или принтера (в таблице и карточке): правка – по своей странице
+        canEditRow(row) {
+            return row && row._printer ? this.canEditPrinters : this.canEditPc;
+        },
+
         // ---------- Авторизация ----------
 
         // Без входа apiFetch сам уводит на страницу входа; ошибка здесь – сервер не ответил
@@ -154,10 +198,17 @@ export default {
         },
 
         setView(view) {
-            // Другая страница – показанные логин и пароль принтера прячутся (этап 45)
+            // Страница закрыта правами (этап 69): ссылки из других страниц («Принтеры модели»,
+            // «Показать в таблице») туда не ведут
+            if (!this.canOpenView(view)) {
+                this.toast("Нет доступа к этой странице");
+                return;
+            }
+            // Другая страница – показанные логин и пароль прячутся (этап 45)
             this.closeWebEdit();
             this.hideWebShown();
             this.closeLinkPick();
+            this.closePop("permsPop");
             // Таблица показывает ПК, принтеры или журнал (этапы 44, 66): её настройки – меняются местами
             this.switchTableKind(view === "printers" ? "printer" : (view === "journals" ? "moves" : "pc"));
             this.view = view;
@@ -176,6 +227,10 @@ export default {
             } else if (view === "history") {
                 this.loadHistory();
             } else if (view === "choices") {
+                // Вкладка, на которую нет прав (этап 69), – первая доступная
+                if (!this.canPage("choices/" + this.choicesTab)) {
+                    this.choicesTab = this.firstTab("choices") || "styles";
+                }
                 this.loadChoices();
                 this.loadColumnStyles();
                 this.loadFieldDefs();
@@ -196,13 +251,13 @@ export default {
                     this.loadScanSources();     // «обновить» запускает сбор из Jabber
                 }
             } else if (view === "scan") {
-                // «Сканер» всегда открывается на первой вкладке слева – «Проверке» (этап 28);
-                // редактору доступна только она
+                // «Сканер» всегда открывается на первой вкладке слева – «GLPI / GSIT» (этап 28);
+                // нет прав на неё (этап 69) – на первой доступной
                 this.scanMatchQuery = "";
                 if (this.isAdmin) {
                     this.loadScan();
                 }
-                this.setScanTab("check");
+                this.setScanTab(this.firstTab("scan") || "check");
             }
             this.syncHash();
         },

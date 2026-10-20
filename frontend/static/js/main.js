@@ -395,7 +395,11 @@ const app = Vue.createApp({
             this.watchTableFit();
             // Страница из адреса (#scan/net, #table?pc=12): ссылки открываются в новой вкладке
             window.addEventListener("hashchange", () => this.applyHash());
-            this.applyHash();
+            await this.applyHash();
+            // «Компьютеры» закрыты правами (этап 69) – первая доступная страница меню
+            if (!this.canOpenView(this.view) && this.firstView()) {
+                this.setView(this.firstView());
+            }
         }
     }
 });

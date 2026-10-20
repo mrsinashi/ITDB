@@ -3,12 +3,13 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 import re
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy import func
 
+from access_secrets import AdminCheck, SecretsUpdate, check_admin, has_secrets, shown_secrets, update_secrets
 from api_columns import COLUMNS, COLUMNS_BY_KEY, EDITABLE_KEYS, EXTRA_FIELDS, keys_of
 from api_import import split_vacuum_logins
-from auth import require_editor
+from auth import require_page
 from printer_links import model_titles, printer_cell, printers_by_computer, set_computer_printers
 
 from db import get_db
@@ -625,6 +626,9 @@ def column_values(computer, parts, user_name, vacuum, printers=(), models=None):
             values[column.key] = format_date(getattr(computer, column.key))
         elif column.kind == "scan":
             continue    # только из сканера: фронт берёт из /api/scan/diffs, выгрузка – сама
+        elif column.kind == "secret":
+            # Логин и пароль (этап 69) – только задан ли
+            values[column.key] = "есть" if has_secrets(computer.secrets) else None
         else:
             values[column.key] = getattr(computer, column.key)
 
@@ -778,7 +782,7 @@ JOURNAL_PC_FIELDS = ("inv_no", "serial", "type", "model", "cpu", "ram", "drive",
 @router.post("/computers")
 def create_computer(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("table", "edit")),
     session=Depends(get_db),
 ):
     """Новый ПК: расположение обязательно, № места, HOSTNAME, IP – по желанию.
@@ -840,7 +844,7 @@ def create_computer(
 @router.post("/computers/archive")
 def archive_computers(
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("table", "edit")),
     session=Depends(get_db),
 ):
     """В архив или обратно: {"ids": [...], "archived": true/false}.
@@ -1071,7 +1075,7 @@ def lock_rows(session, model, ids, missing):
 def update_computer(
     computer_id: int,
     payload: dict = Body(...),
-    user=Depends(require_editor),
+    user=Depends(require_page("table", "edit")),
     session=Depends(get_db),
 ):
     payload = dict(payload)
@@ -1148,6 +1152,36 @@ def update_computer(
         # Соседи, которым сдвинули № места: таблицу надо перечитать
         "shifted": batch.changed_ids(),
     }
+
+
+# ---------- «Доступ»: логин и пароль от компьютера (этап 69, access_secrets.py) ----------
+
+
+@router.put("/computers/{computer_id}/web-auth")
+def set_computer_auth(computer_id: int, payload: SecretsUpdate, user=Depends(require_page("table", "edit")), session=Depends(get_db)):
+    """Задать или удалить логин и пароль; в Историю – без значений."""
+    computer = lock_rows(session, Computer, [computer_id], "Компьютер не найден.")[0]
+    secrets, changes = update_secrets(computer.secrets, payload)
+
+    if changes:
+        computer.secrets = secrets
+        save_changes(session, computer, changes, user["login"])
+        session.commit()
+
+    return {"ok": True, "updated": {"web_auth": "есть" if has_secrets(computer.secrets) else None, "version": computer.version}}
+
+
+@router.post("/computers/{computer_id}/web-auth/show")
+def show_computer_auth(computer_id: int, payload: AdminCheck, request: Request, user=Depends(require_page("table")), session=Depends(get_db)):
+    """Логин и пароль – по логину и паролю администратора ITDB (как у принтера)."""
+    check_admin(session, request, user, payload)
+    computer = session.get(Computer, computer_id)
+
+    if not computer:
+        raise HTTPException(status_code=404, detail="Компьютер не найден.")
+
+    return shown_secrets(computer.secrets)
+
 
 @router.get("/computers/{computer_id}")
 def get_computer(computer_id: int, session=Depends(get_db)):

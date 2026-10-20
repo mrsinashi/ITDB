@@ -26,7 +26,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from api_computer_actions import lock_computers, parse_ids
 from api_computers import ChangeBatch, apply_fields, save_changes, user_field_keys_of
-from auth import require_editor
+from auth import check_page, get_current_user, require_page
 from db import get_db
 from history_log import log_change
 from api_printers import apply_printer_fields, lock_printers
@@ -91,7 +91,7 @@ class NodesUpdate(BaseModel):
 
 
 @router.patch("/nodes")
-def update_nodes(payload: NodesUpdate, me=Depends(require_editor), session=Depends(get_db)):
+def update_nodes(payload: NodesUpdate, me=Depends(require_page("choices/names", "edit")), session=Depends(get_db)):
     """Правила узлов: у каждого – только переданные поля. Одно действие – все
     узлы сразу («Взять из таблицы»), запись Истории у каждого изменённого.
     nodes – правила этих узлов после правки."""
@@ -158,11 +158,13 @@ class KeepUpdate(BaseModel):
 
 
 @router.post("/keep")
-def update_keep(payload: KeepUpdate, me=Depends(require_editor), session=Depends(get_db)):
+def update_keep(payload: KeepUpdate, me=Depends(get_current_user), session=Depends(get_db)):
     """keep – оставить ПК (принтерам) их нынешние имена (на их нынешнем месте); иначе –
     снова по правилу. В Истории – «Своё имя» (entity naming; у принтера – entity_key printer)."""
     setting_key, model, name_field, _ = keep_kind(payload.kind)
     printer = payload.kind == "printer"
+    # «Оставить своё» – у имени в таблице или в «Справочниках → Имена ПК» (этап 69)
+    check_page(me, ("printers" if printer else "table", "edit"), ("choices/names", "edit"))
     what = "Принтер" if printer else "Компьютер"
     ids = parse_ids(payload.ids)
     objects = session.query(model).filter(model.id.in_(ids)).all()
@@ -233,8 +235,9 @@ class RenameRequest(BaseModel):
 
 
 @router.post("/rename")
-def rename(payload: RenameRequest, me=Depends(require_editor), session=Depends(get_db)):
+def rename(payload: RenameRequest, me=Depends(get_current_user), session=Depends(get_db)):
     """Новые имена нескольким ПК (принтерам) одним действием – как правка имени в таблице."""
+    check_page(me, ("printers" if payload.kind == "printer" else "table", "edit"))
     ids = parse_ids([item.id for item in payload.items])
 
     if payload.kind == "printer":

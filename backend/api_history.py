@@ -8,7 +8,7 @@ from sqlalchemy import desc, func, text
 
 from api_computers import ChangeBatch
 from api_moves import move_names
-from auth import get_current_user, require_editor
+from auth import get_current_user, require_editor, require_page
 from db import get_db
 from history_search import search, search_words
 from history_undo import (
@@ -139,7 +139,7 @@ def history(
     entity_key: Optional[str] = None,
     cancelled: bool = False,
     q: str = "",
-    me=Depends(get_current_user),
+    me=Depends(require_page("history")),
     session=Depends(get_db),
 ):
     """Записи истории, новые сверху, порциями: limit (до 5000) начиная с offset.

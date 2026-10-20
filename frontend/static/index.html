@@ -12,23 +12,24 @@
         <nav class="top-menu" v-if="user">
             <span class="brand">ITDB<span v-if="user.label" class="brand-label" title="ITDB_LABEL из .env">{{ user.label }}</span></span>
             <!-- Вкладки (этап 46): «Компьютеры» – бывшая «Таблица», «Структура» – бывшее «Дерево» -->
-            <a href="#table" @click="navClick($event, () => setView('table'))" :class="{ active: view === 'table' }">Компьютеры</a>
-            <a href="#printers" @click="navClick($event, () => setView('printers'))" :class="{ active: view === 'printers' }">Принтеры</a>
-            <a href="#tree" @click="navClick($event, () => setView('tree'))" :class="{ active: view === 'tree' }">Структура</a>
-            <a href="#journals/moves" @click="navClick($event, () => setView('journals'))" :class="{ active: view === 'journals' }">Журналы</a>
+            <!-- Вкладки – по правам пользователя (этап 69, canOpenView) -->
+            <a v-if="canOpenView('table')" href="#table" @click="navClick($event, () => setView('table'))" :class="{ active: view === 'table' }">Компьютеры</a>
+            <a v-if="canOpenView('printers')" href="#printers" @click="navClick($event, () => setView('printers'))" :class="{ active: view === 'printers' }">Принтеры</a>
+            <a v-if="canOpenView('tree')" href="#tree" @click="navClick($event, () => setView('tree'))" :class="{ active: view === 'tree' }">Структура</a>
+            <a v-if="canOpenView('journals')" href="#journals/moves" @click="navClick($event, () => setView('journals'))" :class="{ active: view === 'journals' }">Журналы</a>
             <!-- Значки рядом с вкладками-подписями: Vacuum (лампочка), Сканер -->
-            <a v-if="canEdit" href="#vacuum" class="nav-icon nav-tab" @click="navClick($event, () => setView('vacuum'))" :class="{ active: view === 'vacuum' }" title="Vacuum">
+            <a v-if="canOpenView('vacuum')" href="#vacuum" class="nav-icon nav-tab" @click="navClick($event, () => setView('vacuum'))" :class="{ active: view === 'vacuum' }" title="Vacuum">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
             </a>
-            <a v-if="canEdit" href="#scan" class="nav-icon nav-tab" @click="navClick($event, () => setView('scan'))" :class="{ active: view === 'scan' }" title="Сканер">
+            <a v-if="canOpenView('scan')" href="#scan" class="nav-icon nav-tab" @click="navClick($event, () => setView('scan'))" :class="{ active: view === 'scan' }" title="Сканер">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/></svg>
             </a>
             <span class="menu-right">
                 <!-- Значки справа: Справочники, История, Пользователи, Настройки -->
-                <a href="#choices" class="nav-icon nav-tab" @click="navClick($event, () => setView('choices'))" :class="{ active: view === 'choices' }" title="Справочники">
+                <a v-if="canOpenView('choices')" href="#choices" class="nav-icon nav-tab" @click="navClick($event, () => setView('choices'))" :class="{ active: view === 'choices' }" title="Справочники">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
                 </a>
-                <a href="#history" class="nav-icon nav-tab" @click="navClick($event, () => setView('history'))" :class="{ active: view === 'history' }" title="История">
+                <a v-if="canOpenView('history')" href="#history" class="nav-icon nav-tab" @click="navClick($event, () => setView('history'))" :class="{ active: view === 'history' }" title="История">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
                 </a>
                 <a v-if="isAdmin" href="#users" class="nav-icon nav-tab" @click="navClick($event, () => setView('users'))" :class="{ active: view === 'users' }" title="Пользователи">
@@ -132,7 +133,7 @@
         </div>
 
         <!-- ================= Таблица (с этапа 44 – и «Принтеры», с этапа 66 – журнал «Движение»: та же таблица, tableKind) ================= -->
-        <section v-if="user" v-show="view === 'table' || view === 'printers' || view === 'journals'" class="view">
+        <section v-if="user" v-show="(view === 'table' || view === 'printers' || view === 'journals') && canOpenView(view)" class="view">
 
             <div class="toolbar tb-with-refresh" v-tb-fit>
                 <div class="tb-left">
@@ -336,7 +337,7 @@
                  (из журнала «Движение», этап 67, – ИНВ, серийный, тип… сразу; что именно – в подсказке) -->
             <div v-if="newComputer" class="add-bar">
                 <span class="ab-title" :title="newComputer.from ? newComputer.from.tip : null">Новый компьютер{{ newComputer.from ? " из журнала" : "" }}:</span>
-                <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions" can-add-room
+                <location-picker ref="nc-location" class="ab-loc" input-class="input" :value="newComputer.location_id" :options="locationOptions" :can-add-room="canPage('tree', 'edit')"
                     placeholder="Расположение" @pick="onNewComputerLocation" @add-room="openNewRoom"></location-picker>
                 <input ref="nc-seat" class="input ab-seat" v-model="newComputer.seat_no" placeholder="№ места" title="№ места – только число" @keydown.enter="submitNewComputer">
                 <input ref="nc-hostname" class="input ab-host" v-model="newComputer.hostname" placeholder="HOSTNAME" spellcheck="false" @keydown.enter="submitNewComputer"
@@ -351,7 +352,7 @@
             <!-- Новый принтер (этап 44): строка под панелью, как «Новый компьютер» -->
             <div v-if="newPrinter" class="add-bar">
                 <span class="ab-title" :title="newPrinter.from ? newPrinter.from.tip : null">Новый принтер{{ newPrinter.from ? " из журнала" : "" }}:</span>
-                <location-picker ref="np-location" class="ab-loc" input-class="input" :value="newPrinter.location_id" :options="locationOptions" can-add-room
+                <location-picker ref="np-location" class="ab-loc" input-class="input" :value="newPrinter.location_id" :options="locationOptions" :can-add-room="canPage('tree', 'edit')"
                     placeholder="Расположение" @pick="onNewPrinterLocation" @add-room="openNewRoom"></location-picker>
                 <location-picker ref="np-model" class="ab-loc ab-model" input-class="input" :value="newPrinter.model_id" :options="printerModelOptions" add-text="новая модель"
                     empty-text="Моделей пока нет" placeholder="Модель" @pick="onNewPrinterModel" @add="openNewModel"></location-picker>
@@ -472,6 +473,9 @@
                 :style="{ top: noteTooltip.top + 'px', left: noteTooltip.left + 'px', width: noteTooltip.width + 'px' }">{{ noteTooltip.text }}</div>
         </section>
 
+        <!-- Права закрыли все страницы (этап 69) -->
+        <section v-if="user && tableReady && !firstView()" class="view"><div class="empty-note no-pages">Нет доступа ни к одной странице.</div></section>
+
         <!-- ================= Дерево ================= -->
         <section v-if="user && view === 'tree'" class="view">
             <div class="toolbar" v-tb-fit>
@@ -556,10 +560,10 @@
                 <div class="tb-left">
                     <!-- Вкладки (этап 35): оформление таблицы и правила имён ПК; модели принтеров (этап 44) -->
                     <nav class="tb-tabs">
-                        <a href="#choices" :class="{ active: choicesTab === 'styles' }" @click="navClick($event, () => setChoicesTab('styles'))" title="Оформление столбцов и значений">Оформление</a>
-                        <a href="#choices/names" :class="{ active: choicesTab === 'names' }" @click="navClick($event, () => setChoicesTab('names'))" title="Правила имён компьютеров и принтеров">Имена ПК</a>
-                        <a href="#choices/models" :class="{ active: choicesTab === 'models' }" @click="navClick($event, () => setChoicesTab('models'))" title="Модели принтеров и МФУ">Модели принтеров</a>
-                        <a href="#choices/cartridges" :class="{ active: choicesTab === 'cartridges' }" @click="navClick($event, () => setChoicesTab('cartridges'))" title="Картриджи и модели, которым они подходят">Картриджи</a>
+                        <a v-if="canPage('choices/styles')" href="#choices" :class="{ active: choicesTab === 'styles' }" @click="navClick($event, () => setChoicesTab('styles'))" title="Оформление столбцов и значений">Оформление</a>
+                        <a v-if="canPage('choices/names')" href="#choices/names" :class="{ active: choicesTab === 'names' }" @click="navClick($event, () => setChoicesTab('names'))" title="Правила имён компьютеров и принтеров">Имена ПК</a>
+                        <a v-if="canPage('choices/models')" href="#choices/models" :class="{ active: choicesTab === 'models' }" @click="navClick($event, () => setChoicesTab('models'))" title="Модели принтеров и МФУ">Модели принтеров</a>
+                        <a v-if="canPage('choices/cartridges')" href="#choices/cartridges" :class="{ active: choicesTab === 'cartridges' }" @click="navClick($event, () => setChoicesTab('cartridges'))" title="Картриджи и модели, которым они подходят">Картриджи</a>
                     </nav>
                     <template v-if="choicesTab === 'styles'">
                         <span v-if="choicesQuery.trim()" class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter – следующий)</template></span>
@@ -825,7 +829,7 @@
                                     <tbody>
                                         <tr class="nr-sel-head">
                                             <td colspan="3"><span class="nr-sel-in"><span class="nr-sel-title" :title="(treeIndex[nameSelId] || {}).path">{{ nameSelTitle }}</span>
-                                                <button v-if="canEdit && nameSelFixes.length" class="btn nr-rename-all" @click="renameNodeByRule" title="Все ПК узла – по правилу">Переименовать: {{ nameSelFixes.length }}</button>
+                                                <button v-if="canEditPc && nameSelFixes.length" class="btn nr-rename-all" @click="renameNodeByRule" title="Все ПК узла – по правилу">Переименовать: {{ nameSelFixes.length }}</button>
                                                 <span class="icon-btn nr-sel-close" title="Закрыть (Esc)" @click="nameSelId = null"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></span></td>
                                         </tr>
                                         <tr v-if="!nameSelRows.length" class="h-empty"><td colspan="3">ПК нет.</td></tr>
@@ -1128,7 +1132,7 @@
                             <table v-if="users.length || userBar" class="history-table users-table users-list" :class="{ 'accent-head': accentHeaders.users }">
                                 <colgroup><col class="uc-login"><col class="uc-fio"><col class="uc-position"><col class="uc-role"><col class="uc-created"></colgroup>
                                 <thead>
-                                    <tr><th>Логин</th><th>ФИО</th><th>Должность</th><th>Роль</th><th class="u-created">Создан</th></tr>
+                                    <tr><th>Логин</th><th>ФИО</th><th>Должность</th><th>Права</th><th class="u-created">Создан</th></tr>
                                 </thead>
                                 <tbody>
                                     <template v-for="item in usersView" :key="item.key">
@@ -1139,10 +1143,11 @@
                                                 <td><input ref="ub-fio" class="input er-input" v-model="userBar.full_name" placeholder="ФИО" spellcheck="false" autocomplete="off"
                                                     title="Фамилия Имя Отчество"></td>
                                                 <td><input class="input er-input" v-model="userBar.position" placeholder="Должность" autocomplete="off"></td>
-                                                <td><select ref="ub-role" class="input er-input" v-model="userBar.role" :disabled="userBar.self"
+                                                <td><span class="u-role-box"><select ref="ub-role" class="input er-input" v-model="userBar.role" :disabled="userBar.self"
                                                     :title="userBar.self ? 'Свою роль изменить нельзя' : 'Роль'">
                                                     <option v-for="r in roleOptions" :key="r.key" :value="r.key">{{ r.label }}</option>
-                                                </select></td>
+                                                </select><span v-if="item.user" class="u-perms" :class="{ on: userPermsOwn(item.user).length, open: permsPop && permsPop.userId === item.user.id }"
+                                                    :title="userPermsTitle(item.user)" @click.stop="openUserPerms(item.user, $event)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg></span></span></td>
                                                 <td class="u-created">{{ item.user ? formatDate(item.user.created_at) : "" }}</td>
                                             </tr>
                                             <!-- Пароль скрыт (этап 22), повтор обязателен; глаз – показать оба поля -->
@@ -1171,7 +1176,9 @@
                                             <td class="u-login"><span class="u-name">{{ item.user.login }}</span><span v-if="item.user.is_self" class="u-self">это вы</span><span v-if="item.user.archived" class="u-off" title="Не может войти в систему">отключён</span></td>
                                             <td class="u-fio" :title="item.user.full_name || null">{{ item.user.full_name || "" }}</td>
                                             <td class="u-position" :title="item.user.position || null">{{ item.user.position || "" }}</td>
-                                            <td class="u-role">{{ roleName(item.user.role) }}</td>
+                                            <!-- «Права» (этап 69): роль и значок – окошко прав по страницам справа от таблицы -->
+                                            <td class="u-role"><span class="u-role-box"><span class="u-role-name">{{ roleName(item.user.role) }}</span><span class="u-perms" :class="{ on: userPermsOwn(item.user).length, open: permsPop && permsPop.userId === item.user.id }"
+                                                :title="userPermsTitle(item.user)" @click.stop="openUserPerms(item.user, $event)" @dblclick.stop><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg></span></span></td>
                                             <td class="u-created">{{ formatDate(item.user.created_at) }}</td>
                                         </tr>
                                     </template>
@@ -1204,18 +1211,18 @@
             </div>
         </section>
 
-        <!-- ================= Сканер (этап 24; редактору – только «Проверка», этап 26г) ================= -->
-        <section v-if="user && canEdit && view === 'scan'" class="view">
+        <!-- ================= Сканер (этап 24; вкладки – по правам, этап 69) ================= -->
+        <section v-if="user && canOpenView('scan') && view === 'scan'" class="view">
             <div class="toolbar" :class="{ 'tb-with-refresh': scanTab === 'check' || scanTab === 'names' || scanTab === 'net' }" v-tb-fit>
                 <div class="tb-left">
                     <nav class="tb-tabs">
-                        <a href="#scan/check" :class="{ active: scanTab === 'check' }" @click="navClick($event, () => setScanTab('check'))" title="Что сканер предлагает изменить">GLPI / GSIT</a>
+                        <a v-if="canPage('scan/check')" href="#scan/check" :class="{ active: scanTab === 'check' }" @click="navClick($event, () => setScanTab('check'))" title="Что сканер предлагает изменить">GLPI / GSIT</a>
                         <!-- «Сеть» (этап 28б): что собрали DHCP и проход подсетей -->
-                        <a href="#scan/net" :class="{ active: scanTab === 'net' }" @click="navClick($event, () => setScanTab('net'))" title="DHCP и проход подсетей">Сеть</a>
-                        <a v-if="isAdmin" href="#scan/names" :class="{ active: scanTab === 'names' }" @click="navClick($event, () => setScanTab('names'))" title="Как значения источников называются в таблице">Названия</a>
-                        <a v-if="isAdmin" href="#scan/schedule" :class="{ active: scanTab === 'schedule' }" @click="navClick($event, () => setScanTab('schedule'))" title="Когда собирать">Расписание</a>
+                        <a v-if="canPage('scan/net')" href="#scan/net" :class="{ active: scanTab === 'net' }" @click="navClick($event, () => setScanTab('net'))" title="DHCP и проход подсетей">Сеть</a>
+                        <a v-if="canPage('scan/names')" href="#scan/names" :class="{ active: scanTab === 'names' }" @click="navClick($event, () => setScanTab('names'))" title="Как значения источников называются в таблице">Названия</a>
+                        <a v-if="canPage('scan/schedule')" href="#scan/schedule" :class="{ active: scanTab === 'schedule' }" @click="navClick($event, () => setScanTab('schedule'))" title="Когда собирать">Расписание</a>
                         <!-- «Подключения» – последней, значком-шестерёнкой -->
-                        <a v-if="isAdmin" href="#scan/settings" class="tb-tab-ico" :class="{ active: scanTab === 'settings' }" @click="navClick($event, () => setScanTab('settings'))" title="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
+                        <a v-if="canPage('scan/settings')" href="#scan/settings" class="tb-tab-ico" :class="{ active: scanTab === 'settings' }" @click="navClick($event, () => setScanTab('settings'))" title="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
                     </nav>
                     <!-- С выделением на «Проверке» вместо счётчика – «Выбрано: N ▾» (места на панели мало) -->
                     <span v-if="!(scanTab === 'check' && check.selected.length)" class="tb-count">{{ scanTopCountText() }}</span>
@@ -1243,11 +1250,11 @@
                             Выбрано: {{ check.selected.length }}
                         </button>
                         <div v-if="openMenu === 'checkSel'" class="dropdown attached">
-                            <template v-if="canEdit">
+                            <template v-if="canEdit && canEditPc">
                                 <button :disabled="!checkSelTakeable.length" @click="checkTakeSelected" >Принять изменения<span class="dd-count">{{ checkSelTakeable.length }}</span></button>
                                 <button :disabled="!checkSelDiffs.length" @click="checkLeaveSelected" >Оставить как есть<span class="dd-count">{{ checkSelDiffs.length }}</span></button>
                             </template>
-                            <button v-if="isAdmin" :disabled="!checkSelNames.length" @click="checkConfirmSelected" >Да, это они<span class="dd-count">{{ checkSelNames.length }}</span></button>
+                            <button v-if="isAdmin && canEdit" :disabled="!checkSelNames.length" @click="checkConfirmSelected" >Да, это они<span class="dd-count">{{ checkSelNames.length }}</span></button>
                             <div class="dd-sep"></div>
                             <button @click="clearCheckSelection">Снять выделение</button>
                         </div>
@@ -1261,7 +1268,7 @@
                     <span v-if="scanMatchQuery" class="clear" title="Очистить (Esc)" @click="scanMatchQuery = ''">×</span>
                 </span>
                 <div class="tb-right">
-                    <button v-if="scanTab === 'settings'" class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
+                    <button v-if="scanTab === 'settings' && canEdit" class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
                     <!-- «Названия»: пояснение – по кнопке «?», а не текстом над таблицей (этап 26д) -->
                     <span v-if="scanTab === 'names'" class="dropdown-wrap" ref="namesHelpWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namesHelp' }" @click="toggleMenu('namesHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
@@ -1306,6 +1313,8 @@
                 <div class="scan-sources">
                     <template v-for="s in scanSources" :key="s.kind">
                         <div v-if="scanForms[s.kind]" class="st-block scan-src" @keydown.enter="saveScanSource(s.kind)">
+                            <!-- «Подключения: просмотр» (этап 69) – поля только для чтения -->
+                            <fieldset class="ro-set" :disabled="!canEdit">
                             <div class="st-head">
                                 <span class="st-title">{{ s.title }}<span v-if="scanSourceCount(s.kind)" class="st-count" :title="scanSourceCount(s.kind).title"> ({{ scanSourceCount(s.kind).n }})</span></span>
                                 <span class="st-tag scan-tag" :class="scanTag(s.kind).cls" :title="scanTagTitle(s.kind)">{{ scanTag(s.kind).text }}</span>
@@ -1414,7 +1423,8 @@
                             <div v-if="scanStatus(s.kind) && !scanStatus(s.kind).ok" class="scan-status bad"><span class="ss-text">{{ scanStatus(s.kind).text }}</span></div>
                             <div v-if="scanForms[s.kind].error" class="scan-status bad"><span class="ss-text">{{ scanForms[s.kind].error }}</span></div>
                             <div v-if="scanRunInfo(s.kind) && scanRunInfo(s.kind).bad" class="scan-status bad"><span class="ss-text">Сбор: {{ scanRunInfo(s.kind).text }}</span></div>
-                            <div class="scan-buttons">
+                            </fieldset>
+                            <div v-if="canEdit" class="scan-buttons">
                                 <button class="btn icon-only" :disabled="scanForms[s.kind].checking" @click="checkScanSource(s.kind)"
                                     :title="scanForms[s.kind].checking ? 'Проверяю…' : 'Проверить подключение'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></svg></button>
                                 <button class="btn" :disabled="!!scanCollectBlock(s.kind)" @click="collectScan(s.kind)" :title="scanCollectTitle(s.kind)">{{ scanCollecting(s.kind) ? "Собираю…" : "Собрать" }}</button>
@@ -1460,7 +1470,7 @@
                                             <tr v-if="subnetBar.error" class="er-row er-extra er-msg"><td colspan="6"><span class="er-error">{{ subnetBar.error }}</span></td></tr>
                                         </template>
                                         <tr v-else :class="{ 'is-hover': subnetHover && subnetHover.id === item.subnet.id }"
-                                            @mouseenter="setSubnetHover(item.subnet, $event.currentTarget)" @dblclick="openEditSubnet(item.subnet)">
+                                            @mouseenter="canEdit && setSubnetHover(item.subnet, $event.currentTarget)" @dblclick="canEdit && openEditSubnet(item.subnet)">
                                             <td class="sn-cidr" :title="subnetSizeText(item.subnet)">{{ item.subnet.cidr }}</td>
                                             <td>{{ purposeName(item.subnet.purpose) }}</td>
                                             <td>{{ buildingName(item.subnet.location_id) }}</td>
@@ -1491,7 +1501,7 @@
                             <span class="icon-btn" title="Закрыть (Esc)" @click="subnetBar = null"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
                         </span>
                     </div>
-                    <div class="side-add">
+                    <div v-if="canEdit" class="side-add">
                         <button class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
                     </div>
                 </div>
@@ -1501,8 +1511,8 @@
             <div v-else-if="scanTab === 'check'" class="page scan-match-page check-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <!-- Сбор – своей строкой над фильтрами (этап 43): «Собрать ▾» – меню с галочками, что собрать;
                      когда собирали – в подсказке; идёт сбор – полоса -->
-                <div v-if="isAdmin || checkProgress" class="sm-actions">
-                    <span v-if="isAdmin" class="dropdown-wrap" ref="collectWrap">
+                <div v-if="(isAdmin && canEdit) || checkProgress" class="sm-actions">
+                    <span v-if="isAdmin && canEdit" class="dropdown-wrap" ref="collectWrap">
                         <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'collect' }" @click="toggleMenu('collect')" :title="openMenu === 'collect' ? null : checkCollectTitle">{{ checkCollecting ? "Собираю…" : "Собрать" }}</button>
                         <div v-if="openMenu === 'collect'" class="dropdown attached collect-menu">
                             <div class="dd-title">Что собрать</div>
@@ -1603,7 +1613,7 @@
                                                                 <td v-if="!row.record" class="smc-v cmp-prop">
                                                                     <span v-if="f.prop" class="ck-prop">
                                                                         <span class="scan-chip" :class="{ off: f.prop.rejected_by }" :style="scanChipStyle(scanMarkByKind[f.prop.kind] || {})" :title="f.prop.rejected_by ? 'Оставлено: ' + f.prop.rejected_by + ', ' + formatTime(f.prop.rejected_at) : diffSourceTitle(f.prop)">{{ scanChipText(f.prop) }}</span>
-                                                                        <template v-if="canEdit">
+                                                                        <template v-if="canEdit && canEditPc">
                                                                             <template v-if="!f.prop.rejected_by">
                                                                                 <svg v-if="f.prop.can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click.stop="checkTake([f.prop])"><title>{{ f.prop.replace ? "Добавить" : f.prop.proposed ? "Взять из сканера" : "Убрать" }}</title><path d="M20 6 9 17l-5-5"/></svg>
                                                                                 <svg v-if="f.prop.can_take && f.prop.replace" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" @click.stop="checkTake([f.prop], true)"><title>Заменить: {{ f.prop.replace.split("\n").join(", ") }}</title><path d="M14 4a2 2 0 0 1 2-2"/><path d="M16 10a2 2 0 0 1-2-2"/><path d="M20 2a2 2 0 0 1 2 2"/><path d="M22 8a2 2 0 0 1-2 2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a3 3 0 0 1 3-3h1"/><rect x="2" y="14" width="8" height="8" rx="2"/></svg>
@@ -1660,8 +1670,8 @@
             <div v-else-if="scanTab === 'net'" class="page scan-match-page net-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <!-- «Сканировать» (этап 43) – своей строкой: DHCP и проход подсетей; с этапа 45 – меню, как «Собрать»:
                      сканер, Leases, DHCP Config и подсети («только» – как в фильтре; при каждом открытии – все) -->
-                <div v-if="isAdmin || netProgress" class="sm-actions">
-                    <span v-if="isAdmin" class="dropdown-wrap" ref="netScanWrap">
+                <div v-if="(isAdmin && canEdit) || netProgress" class="sm-actions">
+                    <span v-if="isAdmin && canEdit" class="dropdown-wrap" ref="netScanWrap">
                         <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'netScan' }" @click="toggleNetScanMenu" :title="openMenu === 'netScan' ? null : netCollectTitle">{{ netCollecting ? "Сканирую…" : "Сканировать" }}</button>
                         <div v-if="openMenu === 'netScan'" class="dropdown attached collect-menu net-scan-menu">
                             <div class="dd-title">Что сканировать</div>
@@ -1760,21 +1770,21 @@
                                 <tbody>
                                     <tr v-if="!schedule.items.length" class="h-empty"><td colspan="6">{{ schedule.loading ? "Загрузка…" : "Источников нет." }}</td></tr>
                                     <tr v-for="it in schedule.items" :key="it.kind" class="sd-row" :class="{ 'is-hover': schedule.hover && schedule.hover.kind === it.kind }"
-                                        @mouseenter="setScheduleHover(it, $event.currentTarget)">
+                                        @mouseenter="canEdit && setScheduleHover(it, $event.currentTarget)">
                                         <td class="sd-title"><span class="u-name">{{ it.title }}</span><span v-if="!it.available" class="u-off" title="Настраивается в «Подключениях»">{{ scheduleOffText(it) }}</span></td>
-                                        <td class="sd-cell"><select class="input er-input" :value="scheduleModeValue(it)" title="Как часто собирать" @change="setScheduleMode(it, $event.target.value)">
+                                        <td class="sd-cell"><select class="input er-input" :value="scheduleModeValue(it)" :disabled="!canEdit" title="Как часто собирать" @change="setScheduleMode(it, $event.target.value)">
                                             <option v-for="o in scheduleModeOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
                                         </select></td>
                                         <td class="sd-cell sd-times">
                                             <template v-if="it.mode === 'every'">
-                                                <span class="sd-word">с</span><input class="input er-input sd-t" :value="it.time_from" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Начало; одинаковое с концом – круглые сутки" @change="setScheduleTime(it, 'time_from', $event.target)" @keydown.enter="$event.target.blur()">
-                                                <span class="sd-word">до</span><input class="input er-input sd-t" :value="it.time_to" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Конец; одинаковое с началом – круглые сутки" @change="setScheduleTime(it, 'time_to', $event.target)" @keydown.enter="$event.target.blur()">
+                                                <span class="sd-word">с</span><input class="input er-input sd-t" :disabled="!canEdit" :value="it.time_from" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Начало; одинаковое с концом – круглые сутки" @change="setScheduleTime(it, 'time_from', $event.target)" @keydown.enter="$event.target.blur()">
+                                                <span class="sd-word">до</span><input class="input er-input sd-t" :disabled="!canEdit" :value="it.time_to" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Конец; одинаковое с началом – круглые сутки" @change="setScheduleTime(it, 'time_to', $event.target)" @keydown.enter="$event.target.blur()">
                                             </template>
                                             <template v-else-if="it.mode === 'daily'">
-                                                <span class="sd-word">в</span><input class="input er-input sd-t" :value="it.time_at" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Время запуска" @change="setScheduleTime(it, 'time_at', $event.target)" @keydown.enter="$event.target.blur()">
+                                                <span class="sd-word">в</span><input class="input er-input sd-t" :disabled="!canEdit" :value="it.time_at" maxlength="5" placeholder="ЧЧ:ММ" spellcheck="false" autocomplete="off" title="Время запуска" @change="setScheduleTime(it, 'time_at', $event.target)" @keydown.enter="$event.target.blur()">
                                             </template>
                                         </td>
-                                        <td class="sd-cell"><select v-if="it.mode !== 'off'" class="input er-input" :value="it.days" title="Дни" @change="saveSchedule(it, { days: $event.target.value })">
+                                        <td class="sd-cell"><select v-if="it.mode !== 'off'" class="input er-input" :value="it.days" :disabled="!canEdit" title="Дни" @change="saveSchedule(it, { days: $event.target.value })">
                                             <option value="all">каждый день</option>
                                             <option value="work">по будням</option>
                                         </select></td>
@@ -1831,7 +1841,7 @@
                                 <tbody>
                                     <tr v-if="!scanNamesShown.length" class="h-empty"><td colspan="5">{{ scanNames.loading ? "Загрузка…" : (scanNames.items.length ? "Ничего не найдено." : "Соответствий пока нет.") }}</td></tr>
                                     <tr v-for="n in scanNamesShown" :key="n.field + '|' + n.source + '|' + n.table + '|' + n.kind"
-                                        :class="{ 'is-hover': scanNames.hover && scanNames.hover.name === n }" @mouseenter="setScanNameHover(n, $event.currentTarget)">
+                                        :class="{ 'is-hover': scanNames.hover && scanNames.hover.name === n }" @mouseenter="canEdit && setScanNameHover(n, $event.currentTarget)">
                                         <td>{{ scanFieldLabel(n.field) }}</td>
                                         <td>{{ n.source }}</td>
                                         <td class="sm-c nm-kind" :class="{ differ: n.kind === 'differ' }" :title="scanNameKindTitle(n)">{{ n.kind === "differ" ? "≠" : (n.kind === "keep" ? "⇐" : (n.kind === "board" ? "→" : "=")) }}</td>
@@ -1853,7 +1863,7 @@
         </section>
 
         <!-- ================= Vacuum (этап 26д; с 26ж – вкладка меню): пользователи Jabber ================= -->
-        <section v-if="user && canEdit && view === 'vacuum'" class="view">
+        <section v-if="user && canOpenView('vacuum') && view === 'vacuum'" class="view">
             <div class="toolbar tb-with-refresh" v-tb-fit>
                 <div class="tb-left">
                     <span class="tb-count">{{ vacuumCountText }}</span>
@@ -1870,8 +1880,8 @@
             </div>
             <div class="page scan-match-page vacuum-page" :class="{ 'accent-head': accentHeaders.vacuum }">
                 <!-- Просканировать Vacuum заново (этап 31) – своей строкой (этап 43); идёт сбор – сколько пользователей просмотрено -->
-                <div v-if="isAdmin || vacuumProgress" class="sm-actions">
-                    <button v-if="isAdmin" class="btn ck-collect" :disabled="!!vacuumProgress || !!scanCollectBlock('jabber')" @click="refreshVacuum" :title="vacuumRefreshTitle">{{ vacuumProgress ? "Сканирую…" : "Сканировать" }}</button>
+                <div v-if="(isAdmin && canEdit) || vacuumProgress" class="sm-actions">
+                    <button v-if="isAdmin && canEdit" class="btn ck-collect" :disabled="!!vacuumProgress || !!scanCollectBlock('jabber')" @click="refreshVacuum" :title="vacuumRefreshTitle">{{ vacuumProgress ? "Сканирую…" : "Сканировать" }}</button>
                     <span v-if="vacuumProgress" class="scan-progress">
                         <span class="sp-bar"><span class="sp-fill" :style="{ width: vacuumProgress.percent + '%' }"></span></span>
                         <span class="sp-text">{{ vacuumProgress.text }}</span>
@@ -2032,8 +2042,9 @@
                     <tr><td class="sp-label">По правилу</td><td class="sp-v"><span class="scan-chip name-chip">{{ namePop.check.expected }}</span></td></tr>
                 </table>
                 <div class="sp-why">Правило: <a href="#choices/names" class="np-rule" title="Изменить правило" @click.prevent="namePopRule">{{ nameCheckRule(namePop.check) }}</a></div>
-                <div v-if="canEdit" class="sp-actions">
-                    <button class="btn btn-primary" :disabled="namePop.busy" @click="namePopRename">Переименовать</button>
+                <!-- Переименовать – правка таблицы ПК / принтера; «Оставить своё» – ещё и из «Имён ПК» (этап 69) -->
+                <div v-if="canEditRow(namePop.row) || canPage('choices/names', 'edit')" class="sp-actions">
+                    <button v-if="canEditRow(namePop.row)" class="btn btn-primary" :disabled="namePop.busy" @click="namePopRename">Переименовать</button>
                     <button class="btn" :disabled="namePop.busy || !namePop.row[tableNameField]" :title="namePop.row[tableNameField] ? 'Это имя не по правилу – так и надо' : 'Имени нет'" @click="namePopKeep">Оставить своё</button>
                 </div>
             </div>
@@ -2070,6 +2081,34 @@
             </div>
         </teleport>
 
+        <!-- ================= Права учётки по страницам: окошко справа от таблицы «Пользователей» (этап 69) ================= -->
+        <teleport to="body">
+            <div v-if="permsPop && permsUser" ref="permsPop" class="scan-pop perms-pop" :class="{ placed: permsPop.placed }" :style="{ left: permsPop.left + 'px', top: permsPop.top + 'px' }">
+                <div class="sp-head" @mousedown.prevent="startPopDrag('permsPop', $event)">
+                    <span class="sp-title">Права<span class="sp-host">{{ permsUser.login }} · {{ roleName(permsUser.role) }}</span></span>
+                    <span class="sp-close" title="Закрыть (Esc)" @mousedown.stop @click="closePop('permsPop')">✕</span>
+                </div>
+                <table class="pp-table">
+                    <thead><tr><th>Страница</th><th>Доступ</th></tr></thead>
+                    <tbody>
+                        <template v-for="r in permsRows" :key="r.key">
+                            <tr v-if="r.group" class="pp-group"><td colspan="2">{{ r.group }}</td></tr>
+                            <tr v-else>
+                                <td class="pp-page" :class="{ 'pp-sub': r.sub }">{{ r.label }}</td>
+                                <td v-if="r.fixed" class="pp-fixed" :class="{ 'pp-none': r.level === 'none' }" :title="r.fixed">{{ levelLabel(r.level) }}</td>
+                                <td v-else class="pp-level" :class="{ 'pp-saved': savedFlash['u' + permsUser.id + ':' + r.key] }">
+                                    <select class="pp-select" :class="{ 'pp-own': r.level !== r.top, 'pp-none': r.level === 'none' }" :value="r.level" :disabled="permsPop.saving"
+                                        :title="r.level !== r.top ? 'По роли – ' + levelLabel(r.top).toLowerCase() : null" @change="setUserPerm(r, $event)">
+                                        <option v-for="o in r.options" :key="o" :value="o">{{ levelLabel(o) }}</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </teleport>
+
         <!-- ================= Подключение принтеров к ПК: поиск и галочки под ячейкой (этап 45) ================= -->
         <teleport to="body">
             <div v-if="linkPick" ref="linkPick" class="link-pick" :class="{ placed: linkPick.placed, up: linkPick.up }" :style="{ left: linkPick.left + 'px', top: linkPick.top + 'px' }" @mousedown="$event.target.tagName !== 'INPUT' && $event.preventDefault()">
@@ -2097,7 +2136,7 @@
                 <div class="card-head">
                     <span v-if="!pcardNameEdit" class="card-hostname">
                         <span :class="{ 'copy-val': pcard.name }" :title="pcard.name ? 'Скопировать' : null" @click="pcard.name && copyText(pcard.name)">{{ pcard.name || "Без имени" }}<svg v-if="pcard.name" class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
-                        <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startPcardName"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
+                        <span v-if="canEditPrinters" class="card-edit" title="Изменить имя" @click="startPcardName"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                         <span v-if="pcard.archived" class="card-archived" title="Принтер в архиве: его нет в таблице и выгрузке">в архиве</span>
                     </span>
                     <span v-else class="card-hostname-edit">
@@ -2119,7 +2158,7 @@
                                     <span v-else-if="r.auth && webShownFor(pcard)" class="pc-auth-shown">
                                         <span class="copy-line"><span v-if="webShown.login" class="copy-val" title="Скопировать" @click="copyText(webShown.login)">{{ webShown.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без логина</span></span>
                                         <span class="copy-line"><span v-if="webShown.password" class="copy-val" title="Скопировать" @click="copyText(webShown.password)">{{ webShown.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без пароля</span></span>
-                                        <span v-if="canEdit" class="secret-pen" title="Изменить" @click.stop="startWebEdit(pcard, 'card')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
+                                        <span v-if="canEditPrinters" class="secret-pen" title="Изменить" @click.stop="startWebEdit(pcard, 'card')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
                                     </span>
                                     <span v-else-if="r.auth && r.value" class="secret-dots">{{ secretDots }}</span>
                                     <span v-else-if="r.empty" class="ct-empty">–</span>
@@ -2174,7 +2213,7 @@
                 <div class="card-head">
                     <span v-if="!editingHostname" class="card-hostname">
                         <span :class="{ 'copy-val': card.hostname }" :title="card.hostname ? 'Скопировать' : null" @click="card.hostname && copyText(card.hostname)">{{ card.hostname || "Без имени" }}<svg v-if="card.hostname" class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span>
-                        <span v-if="canEdit" class="card-edit" title="Изменить имя" @click="startEditHostname"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
+                        <span v-if="canEditPc" class="card-edit" title="Изменить имя" @click="startEditHostname"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></span>
                         <span v-if="card.archived" class="card-archived" title="Компьютер в архиве: его нет в таблице, дереве и выгрузке">в архиве</span>
                     </span>
                     <span v-else class="card-hostname-edit">
@@ -2189,10 +2228,18 @@
                             <tr v-if="r.group" class="ct-group"><td colspan="2">{{ r.group }}</td></tr>
                             <tr v-else :class="{ 'ct-editable': isCardEditable(r), 'ct-saved': isCardFlash(r) }"
                                 @dblclick="onCardRowDblclick($event, r)"
-                                :title="isCardEditable(r) && cardEditKey !== r.key ? 'Двойной клик – изменить' : null">
+                                :title="r.auth ? webAccessTitle(card) : (isCardEditable(r) && cardEditKey !== r.key ? 'Двойной клик – изменить' : null)">
                                 <td class="ct-label">{{ r.label }}</td>
                                 <td class="ct-value" :class="{ editing: cardEditKey === r.key }">
-                                    <template v-if="r.copy">
+                                    <!-- «Доступ» (этап 69, как у принтера): точки; двойной клик – пароль окошком под строкой; показанные – строками (клик – скопировать), ✎ – изменить -->
+                                    <span v-if="r.auth && webEditIn(card, 'card')" class="secret-edit card-secret" @focusout="onWebEditFocusOut($event)"><input ref="webEditLogin" v-model="webEdit.login" class="input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="webEdit.password" class="input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></span>
+                                    <span v-else-if="r.auth && webShownFor(card)" class="pc-auth-shown">
+                                        <span class="copy-line"><span v-if="webShown.login" class="copy-val" title="Скопировать" @click="copyText(webShown.login)">{{ webShown.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без логина</span></span>
+                                        <span class="copy-line"><span v-if="webShown.password" class="copy-val" title="Скопировать" @click="copyText(webShown.password)">{{ webShown.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без пароля</span></span>
+                                        <span v-if="canEditPc" class="secret-pen" title="Изменить" @click.stop="startWebEdit(card, 'card')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
+                                    </span>
+                                    <span v-else-if="r.auth && r.value" class="secret-dots">{{ secretDots }}</span>
+                                    <template v-else-if="r.copy">
                                         <span v-for="(line, i) in splitLines(r.value)" :key="i" class="copy-line"><span class="copy-val" title="Скопировать" @click="copyText(line)"><span :class="{ 'val-chip': !!(cardValueStyle(r, line) || {}).backgroundColor }" :style="cardValueStyle(r, line)">{{ line }}</span><svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><a v-if="idLink(r.field, line)" class="id-open" :href="idLink(r.field, line)" target="_blank" rel="noopener" :title="idLinkTitle(r.field)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></span>
                                     </template>
                                     <span v-else-if="r.empty" class="ct-empty">–</span>
@@ -2200,7 +2247,7 @@
                                     <span v-else-if="r.key === 'printers'" class="pc-links"><span v-for="ref in (card.printer_refs || [])" :key="ref.id" class="obj-line"><a class="obj-link" :href="pageHref('printers', { pr: ref.id })" draggable="false" :title="ref.name || 'Принтер без имени'" @click.prevent="onObjLinkClick($event, { kind: 'printer', id: ref.id, usb: ref.usb })">{{ ref.title }}{{ ref.usb ? " [usb]" : "" }}</a><span class="obj-tbl" title="Показать в Принтерах" @click.stop="showObjInTable({ kind: 'printer', id: ref.id })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span></span>
                                     <span v-else-if="r.key === 'antivirus'" class="av-cell"><span v-for="(a, ai) in avItems(card)" :key="ai" class="av-line" :class="{ 'av-chip': !!(avStyle(a) || {}).backgroundColor }" :style="avStyle(a)" :title="avTitle(a)">{{ a.title }}</span></span>
                                     <span v-else :class="{ 'val-chip': !!(cardValueStyle(r) || {}).backgroundColor }" :style="cardValueStyle(r)" @dblclick="onCardValueDblclick($event, r, r.value)">{{ r.value }}</span>
-                                    <template v-if="cardEditKey === r.key">
+                                    <template v-if="cardEditKey === r.key && !r.auth">
                                         <location-picker v-if="cardEditCol(r).location" editor input-class="cell-edit card-edit-input" :value="card.location_id" :options="locationOptions"
                                             :move-room="roomMove(card, { field: r.key })" placeholder="Расположение…" @pick="onCardLocationPick"
                                             @move-room="cardEditKey = null; onRoomMove(card, $event)" @cancel="cardEditKey = null"></location-picker>
@@ -2213,7 +2260,7 @@
                                     <div v-else-if="cardScanDiff(r)" class="ct-scan" :title="diffSourceTitle(cardScanDiff(r)) + '\n' + diffTrust(cardScanDiff(r)).map(t => t.text).join(' · ')" @dblclick.stop>
                                         <span class="scan-chip" :style="scanChipStyle(scanMarkByKind[cardScanDiff(r).kind] || {})">{{ scanChipText(cardScanDiff(r)) }}</span>
                                         <span class="cs-src">{{ diffSourceShort(cardScanDiff(r)) }}<template v-if="cardScanDiff(r).kind === 'unsure'"> · <span class="cs-unsure">неточно</span></template></span>
-                                        <template v-if="canEdit">
+                                        <template v-if="canEditPc">
                                             <svg v-if="cardScanDiff(r).can_take" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)])"><title>{{ cardScanDiff(r).kind === "link" ? "Привязать" : cardScanDiff(r).replace ? "Добавить" : "Взять из сканера" }}</title><path d="M20 6 9 17l-5-5"/></svg>
                                             <svg v-if="cardScanDiff(r).can_take && cardScanDiff(r).replace" class="act-ico act-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" @click="acceptDiffs([cardScanDiff(r)], true)"><title>Заменить: {{ cardScanDiff(r).replace.split("\n").join(", ") }}</title><path d="M14 4a2 2 0 0 1 2-2"/><path d="M16 10a2 2 0 0 1-2-2"/><path d="M20 2a2 2 0 0 1 2 2"/><path d="M22 8a2 2 0 0 1-2 2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a3 3 0 0 1 3-3h1"/><rect x="2" y="14" width="8" height="8" rx="2"/></svg>
                                             <svg class="act-ico act-no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" @click="rejectDiffs([cardScanDiff(r)])"><title>{{ cardScanDiff(r).kind === "link" ? "Не этот ПК" : "Оставить как есть" }}</title><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -2288,7 +2335,7 @@
                         </thead>
                         <tbody>
                             <tr v-for="r in vhRows" :key="r.key" :class="{ 'h-selected': valueDialog.selected.indexOf(r.key) !== -1, 'h-cancelled': r.item && r.item.cancelled, 'vh-initial': r.initial }"
-                                @mousedown="vhRowMouseDown($event)" @click="vhRowClick($event, r)" @dblclick="vhCanRevert && canEdit && vhRevert()">
+                                @mousedown="vhRowMouseDown($event)" @click="vhRowClick($event, r)" @dblclick="vhCanRevert && vhCanAct && vhRevert()">
                                 <template v-if="r.item">
                                     <td class="h-time">{{ formatTime(r.item.at) }}</td>
                                     <td class="h-user">{{ r.item.user_name }}</td>

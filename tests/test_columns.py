@@ -107,7 +107,9 @@ def test_export_has_new_columns(reader, editor, room):
     ws = load_workbook(BytesIO(response.content))["Компьютеры"]
 
     headers = [cell.value for cell in ws[1]]
-    assert headers[: len(COLUMNS)] == [column.short for column in COLUMNS]
+    # Логин и пароль («Доступ», этап 69) не выгружаются
+    exported = [column.short for column in COLUMNS if column.kind != "secret"]
+    assert headers[: len(exported)] == exported
 
     values = dict(zip(headers, [cell.value for cell in ws[2]]))
     assert values["Серийный"] == "SN-001"

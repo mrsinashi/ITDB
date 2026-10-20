@@ -1058,7 +1058,7 @@ export default {
 
         startValueEdit(key, computerId, field, value) {
             const col = this.allColumns.find(function (c) { return c.field === field; });
-            if (!this.canEdit || !col || !col.editable) {
+            if (!this.canEditPc || !col || !col.editable) {
                 return;
             }
             this.valueEdit = { key: key, computerId: computerId, field: field, value: value || "", multiline: !!col.multiline };

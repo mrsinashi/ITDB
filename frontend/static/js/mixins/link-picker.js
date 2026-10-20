@@ -90,7 +90,7 @@ export default {
     methods: {
         // Окошко у ячейки или строки карточки el; owner – ПК или принтер, col – его столбец
         openLinkPick(owner, col, el) {
-            if (!this.canEdit || !el) {
+            if (!this.canEditRow(owner) || !el) {
                 return;
             }
             this.closeLinkPick();

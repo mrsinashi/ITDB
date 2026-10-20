@@ -1405,7 +1405,7 @@ export default {
                 return d && !d.proposed ? null : this.lineUnderPointer(chip, y, tdBox.right);
             }
             // «Доступ» (этап 45): только показанные логин и пароль, точки – нет
-            if (col.secret && !this.webShownFor(row)) {
+            if (col.secret && !this.webShownInCell(row)) {
                 return null;
             }
             const value = row[col.field];
