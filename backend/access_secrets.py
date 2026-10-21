@@ -1,11 +1,13 @@
-"""Столбец «Доступ» – логин и пароль у принтера (от веб-страницы, этап 45) и у ПК (этап 69).
+"""Столбец «Доступ» принтера – логин и пароль от веб-страницы (этап 45) – и «Пароль» у ПК
+(этап 69; с этапа 70 – несколько записей: учётная запись и / или пароль).
 
-Хранятся зашифрованными ключом ITDB_SECRET_KEY (secret_box.py) в JSONB {"login", "password"}:
-у принтера – web_secrets, у ПК – secrets. В таблице – только задан ли. Показать можно только
-по логину и паролю администратора ITDB – кто бы ни смотрел; сам администратор вводит свой
-пароль. В Историю (web_login / web_password) – без значений и без отмены; показ не пишется.
+Хранятся зашифрованными ключом ITDB_SECRET_KEY (secret_box.py) в JSONB: у принтера –
+web_secrets {"login", "password"}, у ПК – secrets [{"login", "password"}, …]. В таблице –
+только задан ли. Показать можно только по логину и паролю администратора ITDB – кто бы ни
+смотрел; сам администратор вводит свой пароль. В Историю (web_login / web_password) – без
+значений и без отмены; показ не пишется.
 """
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -20,6 +22,12 @@ from secret_box import decrypt, encrypt
 
 SECRET_FIELDS = ("login", "password")
 SECRET_REMOVED = "удалён"
+# Учётная запись у ПК (этап 70); пароли поменялись местами между записями – «изменён»
+ACCOUNT_SET = "задана новая"
+ACCOUNT_REMOVED = "удалена"
+PASSWORD_CHANGED = "изменён"
+ENTRIES_MAX = 20
+VALUE_MAX = 200
 
 
 class SecretsUpdate(BaseModel):
@@ -101,3 +109,93 @@ def shown_secrets(secrets):
         "login": decrypt(secrets["login"], "логин") if secrets.get("login") else None,
         "password": decrypt(secrets["password"]) if secrets.get("password") else None,
     }
+
+
+# ---------- Несколько записей у ПК (этап 70) ----------
+
+
+class SecretEntry(BaseModel):
+    login: str = ""
+    password: str = ""
+
+
+class EntriesUpdate(BaseModel):
+    entries: list[SecretEntry]      # все записи целиком; пустые отбрасываются
+    # Записи, которые пользователь видел, начиная правку (не показывал – пусто): с тех пор их
+    # изменили – 409, иначе чужие записи пропали бы молча (ревью этапа 70). None – не сверять
+    before: Optional[list[SecretEntry]] = None
+
+
+def clean_entries(items):
+    """[(учётная запись без пробелов по краям, пароль)] без пустых записей."""
+    pairs = [(item.login.strip(), item.password) for item in items]
+    return [(login, password) for login, password in pairs if login or password]
+
+
+def has_entries(entries):
+    return any(has_secrets(entry) for entry in entries or [])
+
+
+def plain_entries(entries, strict=False):
+    """Записи расшифрованными: [(учётная запись, пароль)]. Не расшифровать (сменился ключ) –
+    strict: ошибка; иначе – значение, не равное никакому (при правке оно просто заменится)."""
+    def plain(token, what):
+        if not token:
+            return ""
+
+        if strict:
+            return decrypt(token, what)
+
+        try:
+            return decrypt(token, what)
+        except HTTPException:
+            return object()
+
+    return [(plain(entry.get("login"), "логин"), plain(entry.get("password"), "пароль")) for entry in entries or []]
+
+
+def update_entries(entries, payload):
+    """Записать записи целиком: (новый список, изменения для Истории). В Историю – только что
+    задано или удалено: учётная запись, пароль; пары поменялись местами – «Пароль: изменён»;
+    одна перестановка записей – без записи."""
+    wanted = clean_entries(payload.entries)
+
+    if len(wanted) > ENTRIES_MAX:
+        raise HTTPException(status_code=400, detail=f"Не больше {ENTRIES_MAX} записей.")
+
+    if any(len(login) > VALUE_MAX or len(password) > VALUE_MAX for login, password in wanted):
+        raise HTTPException(status_code=400, detail=f"Учётная запись и пароль – до {VALUE_MAX} знаков.")
+
+    before = plain_entries(entries)
+    readable = all(isinstance(value, str) for entry in before for value in entry)
+
+    # Не расшифровать (сменился ключ) – показать их нельзя, сверять не с чем: записать поверх
+    if payload.before is not None and readable and clean_entries(payload.before) != before:
+        raise HTTPException(status_code=409, detail="Пароли этого ПК уже изменили – таблица обновлена, покажи их заново.")
+
+    if before == wanted:
+        return entries, {}
+
+    changes = {}
+
+    for index, key, words in ((0, "web_login", (ACCOUNT_SET, ACCOUNT_REMOVED)), (1, "web_password", (PASSWORD_SET, SECRET_REMOVED))):
+        old = Counter(entry[index] for entry in before if entry[index])
+        new = Counter(entry[index] for entry in wanted if entry[index])
+
+        if new - old:
+            changes[key] = {"old": None, "new": words[0]}
+        elif old - new:
+            changes[key] = {"old": None, "new": words[1]}
+
+    if not changes and Counter(before) != Counter(wanted):
+        changes["web_password"] = {"old": None, "new": PASSWORD_CHANGED}
+
+    stored = [
+        {key: encrypt(value) for key, value in zip(SECRET_FIELDS, entry) if value}
+        for entry in wanted
+    ]
+    return stored, changes
+
+
+def shown_entries(entries):
+    return [{"login": login or None, "password": password or None} for login, password in plain_entries(entries, strict=True)]

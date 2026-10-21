@@ -50,9 +50,14 @@ export default {
     },
 
     methods: {
+        // Источники и подсети – по правам (этап 70; как на сервере: api_scan.py)
         loadScan() {
-            this.loadScanSources();
-            this.loadScanSubnets();
+            if (this.canSeeSources) {
+                this.loadScanSources();
+            }
+            if (this.canPage("scan/settings") || this.canPage("scan/net", "run")) {
+                this.loadScanSubnets();
+            }
         },
 
         scanTopCountText() {

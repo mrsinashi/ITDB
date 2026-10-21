@@ -52,11 +52,9 @@ export default {
             }
         },
 
-        // Страница в меню и по адресу (этап 69): есть доступ хоть к одной её вкладке
+        // Страница в меню и по адресу (этап 69): есть доступ хоть к одной её вкладке;
+        // «Пользователи» с этапа 70 – по правам, как все
         canOpenView(view) {
-            if (view === "users" && !this.isAdmin) {
-                return false;
-            }
             return VIEW_TABS[view] ? !!this.firstTab(view) : this.canPage(view);
         },
 

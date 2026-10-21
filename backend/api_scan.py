@@ -1,6 +1,6 @@
 """Сканирование, этап 24: подключения к источникам (GLPI, GSIT, Jabber; с этапа 28 –
 DHCP по SSH и «Сеть» – проход подсетей) и подсети для сетевого сканирования.
-Только администратор.
+По правам «Подключений» (этап 70: смотреть, проверить подключение – «запуск», менять – «правка»).
 
 У каждого источника одна строка настроек; строки в базе появляются при
 первом сохранении, до этого отдаются значения по умолчанию. Пароли и токены
@@ -19,7 +19,7 @@ import scan_glpi
 import scan_jabber
 import scan_net
 import scan_ssh
-from auth import require_admin, require_page
+from auth import check_page, require_page
 from db import get_db
 from history_log import PASSWORD_SET, log_change
 from models import Computer, Location, ScanRun, ScanSource, ScanSubnet
@@ -345,8 +345,14 @@ def remember_host(source, seen):
         source.options = dict(source.options or {}, host_key=seen["host_key"])
 
 
+# Настройки источников (этап 70) видят: «Подключения» – просмотр, страницы, откуда собирают, –
+# запуск (кнопкам сбора нужны источники и ход сбора); запуски – ещё и «Расписание» (журнал)
+SOURCES_VIEW = (("scan/schedule", "run"), ("scan/check", "run"), ("scan/net", "run"), ("vacuum", "run"))
+RUNS_VIEW = (("scan/schedule", "view"),) + SOURCES_VIEW
+
+
 @router.get("/sources", response_model=SourcesOut)
-def list_sources(me=Depends(require_admin), session=Depends(get_db)):
+def list_sources(me=Depends(require_page("scan/settings", "view", *SOURCES_VIEW)), session=Depends(get_db)):
     rows = {source.kind: source for source in session.query(ScanSource).all()}
     return SourcesOut(
         key_ready=key_ready(),
@@ -548,13 +554,18 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_page("sca
 def check_source(
     kind: str,
     payload: Optional[SourceUpdate] = None,
-    me=Depends(require_page("scan/settings", "edit")),
+    me=Depends(require_page("scan/settings", "run")),
     session=Depends(get_db),
 ):
     """Проверка подключения. Можно передать несохранённые значения формы – тогда
-    результат не запоминается (он про форму, а не про сохранённые настройки)."""
+    результат не запоминается (он про форму, а не про сохранённые настройки). С «запуском»
+    без правки (этап 70) – только сохранённые: иначе сохранённый пароль ушёл бы на чужой адрес."""
     check_kind(kind)
     unsaved = payload is not None and bool(payload.model_dump(exclude_none=True))
+
+    if unsaved:
+        check_page(me, ("scan/settings", "edit"))
+
     source = load_source(session, kind)
 
     params = {}
@@ -813,7 +824,7 @@ def check_unique(session, network, skip_id=None):
 
 
 @router.get("/subnets", response_model=SubnetsOut)
-def list_subnets(me=Depends(require_admin), session=Depends(get_db)):
+def list_subnets(me=Depends(require_page("scan/settings", "view", ("scan/net", "run"))), session=Depends(get_db)):
     subnets = session.query(ScanSubnet).all()
     networks = {subnet.id: ipaddress.ip_network(subnet.cidr) for subnet in subnets}
     by_network = {network: subnet_id for subnet_id, network in networks.items()}

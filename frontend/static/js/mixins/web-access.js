@@ -1,30 +1,35 @@
-// Доступ к веб-странице принтера (этап 45) и логин и пароль ПК (этап 69, так же): столбец
-// «Доступ» и строка карточки. Строка ПК и принтера – по признаку _printer (rowKey: id может
-// совпасть). Заданные логин и пароль – точками одной строкой. Двойной клик – окошко пароля прямо под
-// ячейкой (администратор вводит свой пароль, остальные – логин и пароль администратора);
-// после него логин и пароль – в самой ячейке строками: Alt+клик (в карточке – клик)
-// копирует, ✎ – изменить. Не заданы – двойной клик сразу открывает два поля (логин виден,
-// пароль – точками); пока они открыты, столбец шире. Показанное прячут Esc и уход в другую
-// часть интерфейса (правка другой ячейки, карточка, другая страница); клик мимо – нет.
+// Доступ к веб-странице принтера (этап 45) и пароли ПК (этап 69, так же; с этапа 70 – столбец
+// «Пароль», записей несколько: учётная запись и / или пароль): столбец и строка карточки.
+// Строка ПК и принтера – по признаку _printer (rowKey: id может совпасть). Заданные – точками
+// одной строкой. Двойной клик – окошко пароля прямо под ячейкой (администратор вводит свой
+// пароль, остальные – логин и пароль администратора); после него записи – в самой ячейке
+// строками (у каждой – учётная запись и пароль): Alt+клик (в карточке – клик) копирует, ✎ –
+// изменить, у ПК ＋ справа от пароля – ещё запись. Не заданы – двойной клик сразу открывает
+// два поля (учётная запись видна, пароль – точками); у ПК ＋ справа от заполненного пароля –
+// ещё два поля; пока поля открыты, столбец шире. Показанное прячут Esc и уход в другую часть
+// интерфейса (правка другой ячейки, карточка, другая страница); клик мимо – нет. У принтера
+// запись одна (логин и пароль Web).
 
-import { maxTextWidth } from "../util.js";
+import { apiFetch, maxTextWidth } from "../util.js";
 
 // Логин и пароль заданы – столько точек, какой бы длины ни был пароль
 export const SECRET_DOTS = "••••••";
 // Ширина столбца, пока в ячейке два поля
 const EDIT_WIDTH = 176;
+// …у ПК справа ещё ＋ (этап 70)
+const PLUS_WIDTH = 18;
 // Справа от показанных значений – ✎ и поля ячейки
 const SHOWN_PAD = 34;
 
 export default {
     data() {
         return {
-            webShown: null,     // показанные логин и пароль: { key, login, password, where }
+            webShown: null,     // показанные записи: { key, entries: [{ login, password }], where }
             // Показаны в ячейке – по ключу строки (этап 69): строка таблицы читает только свой
             // ключ, показ и скрытие не перерисовывают остальные 600 строк
             webShownKeys: {},
             webAsk: null,       // окошко пароля под ячейкой
-            webEdit: null,      // правка: { key, id, row, where, login, password, saving }
+            webEdit: null,      // правка: { key, id, row, where, entries: [{ login, password }], saving }
             cellWiden: {}       // поле → ширина столбца, пока ячейка шире обычного
         };
     },
@@ -52,6 +57,25 @@ export default {
         // Адрес «Доступа» строки: /api/computers/12/web-auth, /api/printers/3/web-auth
         webAuthUrl(row) {
             return (row._printer ? "/api/printers/" : "/api/computers/") + row.id + "/web-auth";
+        },
+
+        // У ПК – «Учётная запись» (этап 70, слова пользователя), у принтера – логин Web
+        webLoginLabel(row) {
+            return row && row._printer ? "Логин" : "Учётная запись";
+        },
+
+        webNoLogin(row) {
+            return row && row._printer ? "без логина" : "без учётной записи";
+        },
+
+        // ＋ справа от последнего пароля в правке – у ПК, когда в последней записи что-то есть
+        webEditCanAdd(row) {
+            const ed = this.webEdit;
+            if (!ed || row._printer) {
+                return false;
+            }
+            const last = ed.entries[ed.entries.length - 1];
+            return !!(last.login.trim() || last.password);
         },
 
         // Подсказка у ячейки и строки карточки: что сделает двойной клик
@@ -179,7 +203,9 @@ export default {
                     return;
                 }
                 this.closeWebAsk();
-                this.showWebValues(ask.row, shown.login || "", shown.password || "", ask.where, ask.el);
+                // У ПК – записи (этап 70), у принтера – одна пара
+                const entries = (shown.entries || [shown]).map(function (e) { return { login: e.login || "", password: e.password || "" }; });
+                this.showWebValues(ask.row, entries, ask.where, ask.el);
             } catch (e) {
                 ask.busy = false;
                 ask.error = String(e.message || e);
@@ -192,18 +218,19 @@ export default {
             }
         },
 
-        // ---------- Показанные логин и пароль ----------
+        // ---------- Показанные записи ----------
 
-        showWebValues(row, login, password, where, el) {
+        showWebValues(row, entries, where, el) {
             if (this.webShown) {
                 delete this.webShownKeys[this.webShown.key];
             }
-            this.webShown = { key: this.rowKey(row), login: login, password: password, where: where };
+            this.webShown = { key: this.rowKey(row), entries: entries, where: where };
             if (where === "cell") {
                 this.webShownKeys[this.webShown.key] = true;
                 const font = el && (el.querySelector(".cell-lines, span") || el);
-                const w = maxTextWidth([login || "без логина", password || "без пароля"], font);
-                this.setCellWiden("web_auth", w + SHOWN_PAD);
+                const lines = [];
+                entries.forEach((e) => lines.push(e.login || this.webNoLogin(row), e.password || "без пароля"));
+                this.setCellWiden("web_auth", maxTextWidth(lines, font) + SHOWN_PAD);
             }
         },
 
@@ -221,13 +248,18 @@ export default {
             }
         },
 
-        // ---------- Правка: два поля ----------
+        // ---------- Правка: по два поля на запись ----------
 
-        startWebEdit(row, where) {
+        // add – ＋ у показанных (этап 70): к записям – ещё одна пустая, фокус в неё
+        startWebEdit(row, where, add) {
             if (!this.canEditRow(row)) {
                 return;
             }
             const shown = this.webShownFor(row) ? this.webShown : null;
+            const entries = shown ? shown.entries.map(function (e) { return { login: e.login, password: e.password }; }) : [];
+            if (!entries.length || add) {
+                entries.push({ login: "", password: "" });
+            }
             this.closeWebAsk();
             this.closeSuggest();
             this.webEdit = {
@@ -235,21 +267,36 @@ export default {
                 id: row.id,
                 row: row,
                 where: where,
-                login: shown ? shown.login : "",
-                password: shown ? shown.password : "",
+                entries: entries,
                 saving: false
             };
             if (where === "cell") {
                 this.editingRowId = row.id;
                 this.editingField = "web_auth";
-                this.setCellWiden("web_auth", Math.max(EDIT_WIDTH, this.cellWiden.web_auth || 0));
+                const width = EDIT_WIDTH + (row._printer ? 0 : PLUS_WIDTH);
+                this.setCellWiden("web_auth", Math.max(width, this.cellWiden.web_auth || 0));
             } else if (row._printer) {
                 this.pcardEditKey = "web_auth";
             } else {
                 this.cardEditKey = "web_auth";
             }
+            this.focusWebEntry(add ? entries.length - 1 : 0);
+        },
+
+        // ＋ справа от пароля в правке (этап 70): ещё два поля, фокус – в учётную запись
+        addWebEntry() {
+            const ed = this.webEdit;
+            if (!ed || ed.saving) {
+                return;
+            }
+            ed.entries.push({ login: "", password: "" });
+            this.focusWebEntry(ed.entries.length - 1);
+        },
+
+        focusWebEntry(index) {
             this.$nextTick(() => {
-                const input = this.webEditLoginInput();
+                const box = this.webEditBox();
+                const input = box && box.querySelectorAll("input")[index * 2];
                 if (input) {
                     input.focus({ preventScroll: true });
                     input.setSelectionRange(input.value.length, input.value.length);
@@ -257,11 +304,16 @@ export default {
             });
         },
 
-        // Поле логина открытой правки: в карточке – ref, в ячейке – внутри строки таблицы
+        // Поля открытой правки: в карточке – ref, в ячейке – внутри строки таблицы
         // (компонент table-row, этап 52: её ref корню не виден)
+        webEditBox() {
+            const ref = this.$refs.webEditBox;
+            return (Array.isArray(ref) ? ref[0] : ref) || document.querySelector(".data-table .secret-edit");
+        },
+
         webEditLoginInput() {
-            const ref = this.$refs.webEditLogin;
-            return (Array.isArray(ref) ? ref[0] : ref) || document.querySelector(".data-table .secret-edit input");
+            const box = this.webEditBox();
+            return box ? box.querySelector("input") : null;
         },
 
         closeWebEdit() {
@@ -314,17 +366,21 @@ export default {
             }
             const printer = !!ed.row._printer;
             const row = (printer ? this.printerRows : this.rows).find(function (r) { return r.id === ed.id; }) || ed.row;
-            const shown = this.webShownFor(row) ? this.webShown : { login: "", password: "" };
-            const login = ed.login.trim();
-            if (login === shown.login && ed.password === shown.password) {
+            // Пустые записи не в счёт; сравнение – с показанными (не показаны – их нет)
+            const filled = function (list) {
+                return list.map(function (e) { return { login: e.login.trim(), password: e.password }; }).filter(function (e) { return e.login || e.password; });
+            };
+            const entries = filled(ed.entries);
+            const before = filled(this.webShownFor(row) ? this.webShown.entries : []);
+            if (JSON.stringify(entries) === JSON.stringify(before)) {
                 this.closeWebEdit();
                 this.hideWebShown();
                 return;
             }
             ed.saving = true;
-            if (!login && !ed.password && row.web_auth) {
-                const what = printer ? "Web у «" + (row.name || "принтера") + "»" : "у «" + (row.hostname || "компьютера") + "»";
-                const yes = await this.confirmDialog("Удалить логин и пароль " + what + "?", { okText: "Удалить", danger: true });
+            if (!entries.length && row.web_auth) {
+                const question = printer ? "Удалить логин и пароль Web у «" + (row.name || "принтера") + "»?" : "Удалить пароли у «" + (row.hostname || "компьютера") + "»?";
+                const yes = await this.confirmDialog(question, { okText: "Удалить", danger: true });
                 if (!yes) {
                     ed.saving = false;
                     this.$nextTick(() => {
@@ -337,7 +393,26 @@ export default {
                 }
             }
             try {
-                const response = await this.apiSend(this.webAuthUrl(row), "PUT", { login: login, password: ed.password });
+                // У ПК (этап 70) – и то, что было видно: записи успели изменить – 409, как у ячейки
+                const first = entries[0] || { login: "", password: "" };
+                const body = printer ? first : { entries: entries, before: before };
+                const response = await apiFetch(this.webAuthUrl(row), {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                if (response.status === 409) {
+                    if (this.webEdit === ed) {
+                        this.closeWebEdit();
+                    }
+                    this.hideWebShown();
+                    this.toastError(await this.errorText(response));
+                    await this.loadTable();
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(await this.errorText(response));
+                }
                 const data = await response.json();
                 if (data.updated) {
                     row.web_auth = data.updated.web_auth;

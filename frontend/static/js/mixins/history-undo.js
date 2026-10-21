@@ -348,7 +348,7 @@ export default {
             if (this.movesLoaded) {
                 tasks.push(this.loadMoves());
             }
-            if (this.view === "users" && this.isAdmin) {
+            if (this.view === "users") {
                 tasks.push(this.loadUsers());
             }
             if (this.view === "history") {

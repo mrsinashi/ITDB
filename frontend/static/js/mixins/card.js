@@ -57,7 +57,7 @@ export default {
                         room.always = !!(col && col.cardAlways);
                         rows.push(room);
                     } else if (col && col.secret) {
-                        // «Доступ» (этап 69) – как у принтера: точки, показ по паролю
+                        // «Пароль» (этапы 69, 70; как «Доступ» принтера): точки, показ по паролю
                         const auth = F(field, col.cardLabel, c[field], false, null);
                         auth.auth = true;
                         auth.always = true;
@@ -137,7 +137,7 @@ export default {
             if (event.target.closest(".copy-val, a.obj-link, .obj-tbl")) {
                 return;
             }
-            // «Доступ» (этап 69, как у принтера): показать по паролю – окошком под строкой, задать,
+            // «Пароль» (этапы 69, 70, как «Доступ» принтера): показать по паролю – окошком под строкой, задать,
             // изменить
             if (r.auth) {
                 const td = event.currentTarget.querySelector("td.ct-value");

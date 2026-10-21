@@ -74,9 +74,10 @@ class Computer(Base):
 
     extra = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     note = Column(Text, nullable=True)
-    # Логин и пароль от компьютера (этап 69, столбец «Доступ» – как у принтеров),
-    # зашифрованные ключом ITDB_SECRET_KEY (secret_box.py): {"login", "password"}
-    secrets = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    # Пароли от компьютера (столбец «Пароль»; этап 69 – один логин и пароль, с этапа 70 –
+    # несколько записей), зашифрованные ключом ITDB_SECRET_KEY (secret_box.py):
+    # [{"login", "password"}, …] – учётная запись и / или пароль
+    secrets = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
 
     # ПК убирается в архив (скрыт из таблицы, дерева, выгрузки); из архива администратор
     # может удалить насовсем (api_delete.py)

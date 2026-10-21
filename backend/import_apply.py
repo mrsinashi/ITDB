@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import func
 
-from auth import require_admin
+from auth import require_page
 from db import get_db
 from models import (
     Choice,
@@ -402,7 +402,7 @@ def import_row(session, rec, excel_row, anomalies):
 async def apply_import(
     file: UploadFile = File(...),
     confirm: bool = Form(False),
-    user=Depends(require_admin),
+    user=Depends(require_page("table", "edit", admin=True)),  # этап 70: и правка «Компьютеров»
     session=Depends(get_db),
 ):
     check_file_name(file)

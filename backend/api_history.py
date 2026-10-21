@@ -13,7 +13,7 @@ from db import get_db
 from history_search import search, search_words
 from history_undo import (
     ENTITIES, SIMPLE, Ref, cancel_changes, field_kind, field_label, find_object, moved_room, object_title, ref_of,
-    revert_value, value_history,
+    revert_value, role_perms, value_history,
 )
 from models import Computer, History, Location, Printer
 from scan_decisions import DECISION_ENTITIES
@@ -350,7 +350,7 @@ def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor)
         raise HTTPException(status_code=400, detail="Последнее действие – настройка: она не отменяется.")
 
     if any(
-        field_kind(record.entity, field) == "fixed" and not moved_room(record, field)
+        field_kind(record.entity, field) == "fixed" and not moved_room(record, field) and not role_perms(record, field)
         for record in records for field in record.changes or {}
     ):
         raise HTTPException(status_code=400, detail="Последнее действие – создание или удаление: оно не отменяется.")
@@ -359,7 +359,7 @@ def undo_last(payload: Optional[UndoLastIn] = None, user=Depends(require_editor)
         (record, field)
         for record in records
         for field, change in (record.changes or {}).items()
-        if not change.get("cancelled")
+        if not change.get("cancelled") and not role_perms(record, field)
     ]
 
     # Что отменяется – словами, пока значения ещё прежние

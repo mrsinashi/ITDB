@@ -9,8 +9,9 @@
 //
 // Права по страницам (этап 69, просьба пользователя): столбец «Права» – роль и значок справа;
 // значок – окошко справа от таблицы: таблица «Страница | Доступ», доступ – выпадающим списком во
-// всю ячейку. Роль – верхняя граница (у читателя правки нет), ниже – свои ограничения учётки;
-// сохраняется сразу. Свои права не меняются, «Пользователи» у администратора – тоже.
+// всю ячейку; сохраняется сразу. С этапа 70 – любой уровень страницы в границах роли (читатель
+// ничего не правит, редактор – настройки), «Запуск» – где есть сбор. Свои права не меняются.
+// Смотреть страницу можно по правам: без правки – окошко только показывает.
 
 import { ROLE_LABELS } from "../settings.js";
 import { apiFetch, rowPlate } from "../util.js";
@@ -19,7 +20,7 @@ import { PAGE_LEVELS } from "./auth.js";
 // Буквы и цифры без похожих друг на друга (l/1, O/0) – пароль диктуют голосом
 const PASSWORD_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
 
-const LEVEL_LABELS = { edit: "Правка", view: "Просмотр", none: "Нет доступа" };
+const LEVEL_LABELS = { edit: "Правка", run: "Запуск", view: "Просмотр", none: "Нет доступа" };
 // Окошко прав – правее плашки действий строки (она – справа от таблицы)
 const PERMS_GAP = 64;
 
@@ -77,7 +78,7 @@ export default {
         },
 
         // Строки окошка прав: разделы меню (Журналы, Сканер, Справочники) – строкой-группой,
-        // их вкладки – под ней; выбор – от границы роли вниз
+        // их вкладки – под ней; выбор – уровни страницы до границы роли (сверху – больший)
         permsRows() {
             const u = this.permsUser;
             if (!u) {
@@ -85,28 +86,24 @@ export default {
             }
             const rows = [];
             let group = null;
+            const canEdit = this.canPage("users", "edit");
             this.userPages.forEach((p) => {
                 if (p.group && p.group !== group) {
                     rows.push({ key: "g-" + p.group, group: p.group });
                 }
                 group = p.group;
-                const top = p.roles[u.role] || "none";
-                let fixed = null;
-                if (u.is_self) {
-                    fixed = "Свои права изменить нельзя";
-                } else if (p.fixed.indexOf(u.role) !== -1) {
-                    fixed = "У администратора не ограничивается";
-                } else if (top === "none") {
-                    fixed = "Роль «" + this.roleName(u.role) + "» не даёт";
-                }
+                const max = PAGE_LEVELS.indexOf(p.max[u.role] || "none");
+                const options = p.levels.filter(function (level) { return PAGE_LEVELS.indexOf(level) <= max; }).reverse();
                 rows.push({
                     key: p.key,
                     label: p.label,
                     sub: !!p.group,
                     level: u.perms[p.key] || "none",
-                    top: top,
-                    fixed: fixed,
-                    options: PAGE_LEVELS.slice(0, PAGE_LEVELS.indexOf(top) + 1).reverse()
+                    base: p.base[u.role] || "none",
+                    // Списком не выбрать: свои права; без правки «Пользователей» – только смотреть
+                    fixed: u.is_self && canEdit ? "Свои права изменить нельзя" : null,
+                    view: !canEdit,
+                    options: options
                 });
             });
             return rows;
@@ -122,14 +119,14 @@ export default {
             return LEVEL_LABELS[level] || level;
         },
 
-        // Страницы, где у учётки меньше, чем даёт роль
+        // Страницы, где у учётки не так, как у роли без своих настроек
         userPermsOwn(u) {
-            return this.userPages.filter(function (p) { return (u.perms[p.key] || "none") !== (p.roles[u.role] || "none"); });
+            return this.userPages.filter(function (p) { return (u.perms[p.key] || "none") !== (p.base[u.role] || "none"); });
         },
 
         userPermsTitle(u) {
             const own = this.userPermsOwn(u);
-            return own.length ? "Права: меньше роли – " + own.length : "Права по страницам";
+            return own.length ? "Права: не как у роли – " + own.length : "Права по страницам";
         },
 
         async loadUsers() {
@@ -375,7 +372,9 @@ export default {
             const frame = icon.closest(".history-frame");
             const row = icon.closest("tr").getBoundingClientRect();
             this.openAnchorPop("permsPop", frame, { userId: u.id, saving: false }, ".u-perms");
-            Object.assign(this.permsPop.anchor, { top: row.top, bottom: row.bottom, right: this.permsPop.anchor.right + PERMS_GAP });
+            // Без правки (этап 70) плашки действий нет – окошко сразу у таблицы
+            const gap = this.canEdit ? PERMS_GAP : 0;
+            Object.assign(this.permsPop.anchor, { top: row.top, bottom: row.bottom, right: this.permsPop.anchor.right + gap });
         },
 
         async setUserPerm(r, event) {
@@ -435,7 +434,7 @@ export default {
                 this.ownProfile = null;
                 this.closeMenus();
                 this.$nextTick(() => this.snapNavUser());
-                if (this.view === "users" && this.isAdmin) {
+                if (this.view === "users") {
                     this.loadUsers();
                 }
                 this.toast("Данные сохранены", "success");

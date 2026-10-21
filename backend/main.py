@@ -184,11 +184,11 @@ app.include_router(
     dependencies=[Depends(get_current_user)],
 )
 
-# Пользователи – только администратор (require_admin в каждом эндпоинте)
+# Пользователи: просмотр – по правам, правка – администратор (require_page в каждом эндпоинте)
 app.include_router(users_router)
 
-# Сканирование: подключения к источникам, подсети, сбор и сопоставление –
-# только администратор
+# Сканирование: подключения к источникам, подсети, сбор и сопоставление – по правам
+# страниц «Сканера» (require_page в каждом эндпоинте)
 app.include_router(scan_router)
 app.include_router(scan_records_router)
 app.include_router(scan_schedule_router)

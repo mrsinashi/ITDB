@@ -92,42 +92,66 @@ def get_current_user(request: Request, session=Depends(get_db)):
 #   reader – только просмотр
 WRITE_ROLES = ("admin", "editor")
 
-# ---------- Права по страницам (этап 69) ----------
+# ---------- Права по страницам (этапы 69, 70) ----------
 #
-# Роль даёт верхнюю границу (ROLE_PAGES); у пользователя – только ограничения ниже неё
-# (users.perms): «нет доступа» или «просмотр» вместо «правки». Ключ – как адрес страницы
-# (#scan/check). Проверка – здесь (require_page, check_page), фронт только прячет.
-# Общие данные, которые нужны нескольким страницам (списки ПК, принтеров, Структура,
+# У каждой учётки – уровень на каждой странице (users.perms; нет записи – как у роли,
+# ROLE_PAGES). Роль – только граница (ROLE_MAX, решение пользователя этапа 70): читатель
+# ничего не правит, но ему можно дать просмотр любой страницы и запуск; редактор не правит
+# настройки (SETTINGS_PAGES); администратору можно запретить правку где угодно. Ключ – как
+# адрес страницы (#scan/check). Проверка – здесь (require_page, check_page), фронт только
+# прячет. Общие данные, которые нужны нескольким страницам (списки ПК, принтеров, Структура,
 # справочники), читает любой вошедший – закрыты только запросы самой страницы.
 
-# (ключ, раздел меню, название) – в порядке меню
+# По возрастанию: «запуск» – просмотр и сбор сканера, «правка» – всё, вместе с запуском
+LEVELS = ("none", "view", "run", "edit")
+
+# Уровни страницы: где нечего запускать – без «запуска», где нечего править – без «правки»
+VIEW_EDIT = ("none", "view", "edit")
+VIEW_RUN = ("none", "view", "run")
+VIEW_RUN_EDIT = ("none", "view", "run", "edit")
+
+# (ключ, раздел меню, название, уровни) – в порядке меню
 PAGE_INFO = [
-    ("table", None, "Компьютеры"),
-    ("printers", None, "Принтеры"),
-    ("tree", None, "Структура"),
-    ("journals/moves", "Журналы", "Движение"),
-    ("vacuum", None, "Vacuum"),
-    ("scan/check", "Сканер", "GLPI / GSIT"),
-    ("scan/net", "Сканер", "Сеть"),
-    ("scan/names", "Сканер", "Названия"),
-    ("scan/schedule", "Сканер", "Расписание"),
-    ("scan/settings", "Сканер", "Подключения"),
-    ("choices/styles", "Справочники", "Оформление"),
-    ("choices/names", "Справочники", "Имена ПК"),
-    ("choices/models", "Справочники", "Модели принтеров"),
-    ("choices/cartridges", "Справочники", "Картриджи"),
-    ("history", None, "История"),
-    ("users", None, "Пользователи"),
+    ("table", None, "Компьютеры", VIEW_EDIT),
+    ("printers", None, "Принтеры", VIEW_EDIT),
+    ("tree", None, "Структура", VIEW_EDIT),
+    ("journals/moves", "Журналы", "Движение", VIEW_EDIT),
+    ("vacuum", None, "Vacuum", VIEW_RUN),
+    ("scan/check", "Сканер", "GLPI / GSIT", VIEW_RUN_EDIT),
+    ("scan/net", "Сканер", "Сеть", VIEW_RUN),
+    ("scan/names", "Сканер", "Названия", VIEW_EDIT),
+    ("scan/schedule", "Сканер", "Расписание", VIEW_RUN_EDIT),
+    ("scan/settings", "Сканер", "Подключения", VIEW_RUN_EDIT),
+    ("choices/styles", "Справочники", "Оформление", VIEW_EDIT),
+    ("choices/names", "Справочники", "Имена ПК", VIEW_EDIT),
+    ("choices/models", "Справочники", "Модели принтеров", VIEW_EDIT),
+    ("choices/cartridges", "Справочники", "Картриджи", VIEW_EDIT),
+    ("history", None, "История", VIEW_EDIT),
+    ("users", None, "Пользователи", VIEW_EDIT),
 ]
-PAGES = tuple(key for key, _, _ in PAGE_INFO)
-PAGE_TITLES = {key: f"{group} → {label}" if group else label for key, group, label in PAGE_INFO}
+PAGES = tuple(key for key, _, _, _ in PAGE_INFO)
+PAGE_TITLES = {key: f"{group} → {label}" if group else label for key, group, label, _ in PAGE_INFO}
+PAGE_LEVELS = {key: levels for key, _, _, levels in PAGE_INFO}
 
-LEVELS = ("none", "view", "edit")
+# Настройки (ответ пользователя, этап 70): редактор там только смотрит и запускает
+SETTINGS_PAGES = ("scan/schedule", "scan/settings", "users")
 
-# Как было до этапа 69: у редактора Vacuum и «Сеть» – только просмотр (сбор – у админа),
-# «Названия», «Расписание», «Подключения» и «Пользователи» – только у админа
+
+def no_edit(page):
+    """Высший уровень страницы без правки: запуск или просмотр."""
+    return [level for level in PAGE_LEVELS[page] if level != "edit"][-1]
+
+
+ROLE_MAX = {
+    "admin": {page: PAGE_LEVELS[page][-1] for page in PAGES},
+    "editor": {page: no_edit(page) if page in SETTINGS_PAGES else PAGE_LEVELS[page][-1] for page in PAGES},
+    "reader": {page: no_edit(page) for page in PAGES},
+}
+
+# Без своих настроек – как было до этапа 69: у редактора Vacuum и «Сеть» – просмотр,
+# «Названий», «Расписания», «Подключений» и «Пользователей» нет; у читателя нет сканера
 ROLE_PAGES = {
-    "admin": dict.fromkeys(PAGES, "edit"),
+    "admin": dict(ROLE_MAX["admin"]),
     "editor": dict.fromkeys(PAGES, "edit") | {
         "vacuum": "view", "scan/net": "view",
         "scan/names": "none", "scan/schedule": "none", "scan/settings": "none", "users": "none",
@@ -137,30 +161,43 @@ ROLE_PAGES = {
     ),
 }
 
-# У администратора «Пользователи» не ограничиваются: права всегда есть кому раздать
-FIXED_PAGES = {"admin": ("users",)}
+
+def level_allowed(role, page, level):
+    """Уровень есть у страницы и не выше границы роли."""
+    return (
+        page in PAGE_LEVELS and level in PAGE_LEVELS[page]
+        and LEVELS.index(level) <= LEVELS.index(ROLE_MAX[role][page])
+    )
+
+
+def fit_perms(role, perms, was=None):
+    """Свои уровни учётки, которые что-то значат при этой роли: допустимые и не как у роли.
+    Остальное не хранить – иначе при смене роли туда и обратно оно молча оживёт (этап 69).
+    was – прежняя роль: ограничение остаётся, только если и при новой роли это ограничение,
+    добавленное – если и при ней добавленное (читатель с «Пользователями», ставший
+    администратором, получает всё, как у роли)."""
+    def below(level, of_role, page):
+        return LEVELS.index(level) < LEVELS.index(ROLE_PAGES[of_role][page])
+
+    return {
+        page: level for page, level in (perms or {}).items()
+        if level_allowed(role, page, level) and level != ROLE_PAGES[role][page]
+        and (was not in ROLE_PAGES or below(level, was, page) == below(level, role, page))
+    }
 
 
 def page_levels(role, perms):
-    """Права по всем страницам: граница роли, ниже – свои ограничения пользователя."""
-    top = ROLE_PAGES.get(role, ROLE_PAGES["reader"])
+    """Права по всем страницам: свой уровень учётки, если роль его допускает, иначе – как у роли."""
+    role = role if role in ROLE_PAGES else "reader"
     own = perms or {}
-    levels = {}
-
-    for page in PAGES:
-        level = top[page]
-        mine = own.get(page)
-
-        if mine in LEVELS and page not in FIXED_PAGES.get(role, ()) and LEVELS.index(mine) < LEVELS.index(level):
-            level = mine
-
-        levels[page] = level
-
-    return levels
+    return {page: own[page] if level_allowed(role, page, own.get(page)) else ROLE_PAGES[role][page] for page in PAGES}
 
 
 def can(user, page, level="view"):
     return LEVELS.index(user["perms"].get(page, "none")) >= LEVELS.index(level)
+
+
+ONLY_WORDS = {"view": "только просмотр", "run": "только просмотр и запуск"}
 
 
 def check_page(user, *rules):
@@ -168,11 +205,12 @@ def check_page(user, *rules):
     if any(can(user, page, level) for page, level in rules):
         return
 
-    page, level = rules[0]
+    page, _ = rules[0]
     title = PAGE_TITLES[page]
+    have = user["perms"].get(page, "none")
 
-    if level == "edit" and can(user, page, "view"):
-        raise HTTPException(status_code=403, detail=f"Недостаточно прав: «{title}» – только просмотр.")
+    if have in ONLY_WORDS:
+        raise HTTPException(status_code=403, detail=f"Недостаточно прав: «{title}» – {ONLY_WORDS[have]}.")
 
     raise HTTPException(status_code=403, detail=f"Нет доступа: «{title}».")
 

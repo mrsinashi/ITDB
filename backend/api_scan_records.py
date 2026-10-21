@@ -1,5 +1,5 @@
 """Сбор из GLPI / GSIT (и Jabber – этап 26д) и сопоставление с ПК (этап 25).
-Только администратор.
+Сбор – по праву «запуск» (этап 70), решения по записям – администратор с правкой «GLPI / GSIT».
 
 - POST /api/scan/sources/{kind}/collect – начать сбор (в фоне; glpi, gsit, jabber, dhcp, net;
   у сети и DHCP тело – что собрать, CollectOnly); ответ – запуск;
@@ -24,8 +24,8 @@ from pydantic import BaseModel
 
 import scan_collect
 from api_computers import load_locations, location_path
-from api_scan import SOURCES, RunOut, load_source, run_out
-from auth import check_page, require_admin, require_page
+from api_scan import RUNS_VIEW, SOURCES, RunOut, load_source, run_out
+from auth import check_page, get_current_user, require_page
 from db import get_db
 from history_log import log_change
 from api_columns import COLUMNS_BY_KEY
@@ -46,7 +46,7 @@ def check_collect_kind(kind):
         raise HTTPException(status_code=404, detail="Нет такого источника.")
 
 
-# Где источник собирают (этап 69): сбор – с правкой там, в «Расписании» или в «Подключениях»
+# Где источник собирают (этапы 69, 70): сбор – с «запуском» там, в «Расписании» или в «Подключениях»
 COLLECT_PAGES = {"glpi": "scan/check", "gsit": "scan/check", "jabber": "vacuum", "dhcp": "scan/net", "net": "scan/net"}
 
 
@@ -68,9 +68,9 @@ class CollectOnly(BaseModel):
 
 
 @router.post("/sources/{kind}/collect", response_model=RunOut)
-def collect(kind: str, payload: Optional[CollectOnly] = Body(None), me=Depends(require_admin), session=Depends(get_db)):
+def collect(kind: str, payload: Optional[CollectOnly] = Body(None), me=Depends(get_current_user), session=Depends(get_db)):
     check_collect_kind(kind)
-    check_page(me, (COLLECT_PAGES[kind], "edit"), ("scan/schedule", "edit"), ("scan/settings", "edit"))
+    check_page(me, (COLLECT_PAGES[kind], "run"), ("scan/schedule", "run"), ("scan/settings", "run"))
 
     try:
         run = scan_collect.start(session, kind, me["login"], only=payload.model_dump(exclude_none=True) if payload else None)
@@ -84,7 +84,7 @@ def collect(kind: str, payload: Optional[CollectOnly] = Body(None), me=Depends(r
 def list_runs(
     source: Optional[str] = None,
     limit: int = Query(10, ge=1, le=RUNS_LIMIT),
-    me=Depends(require_admin),
+    me=Depends(require_page("scan/settings", "view", *RUNS_VIEW)),
     session=Depends(get_db),
 ):
     query = session.query(ScanRun)
@@ -96,7 +96,7 @@ def list_runs(
 
 
 @router.get("/runs/{run_id}", response_model=RunOut)
-def get_run(run_id: int, me=Depends(require_admin), session=Depends(get_db)):
+def get_run(run_id: int, me=Depends(require_page("scan/settings", "view", *RUNS_VIEW)), session=Depends(get_db)):
     run = session.get(ScanRun, run_id)
 
     if run is None:

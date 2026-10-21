@@ -6657,8 +6657,9 @@ a.obj-link:hover::after {
 
 /* Окошко прав учётки (этап 69, просьба пользователя): справа от таблицы «Пользователей», как
    окошко принтера; таблица «Страница | Доступ» с сеткой; доступ – выпадающий список во всю
-   ячейку, без своей рамки (не «ячейка в ячейке»). Меньше роли – полужирным; разделы меню –
-   строками-группами, их вкладки – с отступом */
+   ячейку, без своей рамки (не «ячейка в ячейке»). Не как у роли – полужирным; разделы меню –
+   строками-группами, их вкладки – с отступом. Без правки «Пользователей» (этап 70) – уровни
+   текстом (.pp-view) */
 .scan-pop.perms-pop {
     width: 300px;
 }
@@ -6725,11 +6726,13 @@ a.obj-link:hover::after {
 .pp-select:disabled {
     cursor: default;
 }
-.pp-select.pp-own {
+.pp-select.pp-own,
+.pp-table td.pp-view.pp-own {
     font-weight: 600;
     color: var(--text-strong);
 }
 .pp-table td.pp-fixed.pp-none,
+.pp-table td.pp-view.pp-none,
 .pp-select.pp-none {
     color: var(--text-muted);
 }
@@ -6888,6 +6891,50 @@ a.pr-web:hover {
     grid-column: 2;
     grid-row: 1 / span 2;
     align-self: center;
+}
+.pc-auth-shown .copy-line {
+    grid-column: 1;
+}
+
+/* «Пароль» ПК (этап 70): записей несколько – между ними отступ; ✎ – у первой строки, ＋ – у
+   последней (справа от пароля, слова пользователя); в правке ＋ – справа от последнего пароля */
+.secret-shown .cell-line.cl-next,
+.pc-auth-shown .copy-line.cl-next,
+.secret-edit .se-next {
+    margin-top: 4px;
+}
+.secret-tools {
+    display: inline-flex;
+    flex: none;
+    flex-direction: column;
+    justify-content: space-between;
+    align-self: stretch;
+}
+/* Значок – высотой в строку текста: ✎ – посередине первой строки, ＋ – последней */
+.secret-tools > .secret-pen {
+    align-items: center;
+    height: 1lh;
+}
+/* У принтера ✎ один – посередине, как раньше */
+.secret-tools > .secret-pen:only-child {
+    margin: auto 0;
+}
+.pc-auth-many .secret-pen {
+    grid-row: 1;
+}
+.secret-edit.secret-many {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 14px;
+    column-gap: 4px;
+    row-gap: 2px;
+    align-items: center;
+}
+.secret-edit.secret-many input {
+    grid-column: 1;
+}
+.secret-add {
+    grid-column: 2;
+    justify-content: center;
 }
 
 /* Окошко пароля под ячейкой «Доступ» – в манере выпадающего списка */

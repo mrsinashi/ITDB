@@ -94,8 +94,11 @@ def test_only_admin(admin, editor, reader, anon):
     ok(admin.get("/api/scan/sources"))
     ok(admin.get("/api/scan/subnets"))
 
+    # Этап 70: источники видит и тот, кто может собрать (у редактора – правка «GLPI / GSIT»)
+    ok(editor.get("/api/scan/sources"))
+
     for client in (editor, reader):
-        assert client.get("/api/scan/sources").status_code == 403
+        assert client.get("/api/scan/sources").status_code == (200 if client is editor else 403)
         assert client.get("/api/scan/subnets").status_code == 403
         assert client.patch("/api/scan/sources/glpi", json={"url": "http://x"}).status_code == 403
         assert client.post("/api/scan/subnets", json={"cidr": "10.0.0.0/24"}).status_code == 403

@@ -208,7 +208,7 @@ def test_decisions(admin, editor, reader, room, glpi_url):
     assert not [i for i in ok(editor.get("/api/history"))["items"] if i["entity"] == "scan_records"]
 
 
-def test_collect_refused(admin, editor, glpi_url):
+def test_collect_refused(admin, editor, reader, glpi_url):
     assert admin.post("/api/scan/sources/glpi/collect").status_code == 400          # нет адреса
     setup_source(admin, glpi_url, enabled=False)
     response = admin.post("/api/scan/sources/glpi/collect")
@@ -216,7 +216,9 @@ def test_collect_refused(admin, editor, glpi_url):
     assert admin.post("/api/scan/sources/jabber/collect").status_code == 400        # Jabber – тоже (этап 26д)
     assert admin.post("/api/scan/sources/nope/collect").status_code == 404
     assert admin.get("/api/scan/records", params={"source": "jabber"}).status_code == 404
-    assert editor.post("/api/scan/sources/glpi/collect").status_code == 403
+    # Этап 70: собирает и редактор (правка «GLPI / GSIT» – с запуском), читатель – нет
+    assert editor.post("/api/scan/sources/glpi/collect").status_code == 400
+    assert reader.post("/api/scan/sources/glpi/collect").status_code == 403
 
 
 def test_collect_errors_keep_old_records(admin, glpi_url):

@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from api_column_styles import is_empty
-from auth import check_page
+from auth import check_page, fit_perms
 from api_columns import (
     EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY, MOVE_COLUMNS_BY_KEY, MOVE_HISTORY_LABELS,
     PRINTER_COLUMNS_BY_KEY, PRINTER_EDITABLE_KEYS, PRINTER_HISTORY_LABELS,
@@ -56,7 +56,7 @@ from api_printers import (
     apply_printer_fields, check_model, clean_model_value, model_title, printer_display, printer_value,
     renumber_after_kind_change,
 )
-from api_users import ROLES, check_login_free, clean_login, clean_text, end_sessions
+from api_users import ROLES, check_login_free, clean_login, clean_text, end_sessions, keep_users_admin
 from cartridges import check_name as check_cartridge_name, model_cartridges_text, set_model_cartridges
 from history_labels import SIMPLE_FIELD_LABELS
 from history_log import choice_title, column_label
@@ -140,6 +140,12 @@ def moved_room(record, field):
         record.entity == "locations" and field == "created"
         and bool(((record.changes or {}).get("created") or {}).get("move"))
     )
+
+
+def role_perms(record, field):
+    """«Права», убранные сменой роли (этап 70), – следуют за ролью: отмена роли их не возвращает
+    и не мешает ей (отменяется роль, свои уровни снова подбирает fit_perms)."""
+    return record.entity == "users" and field == "perms" and "role" in (record.changes or {})
 
 
 def undo_phase(ref, field, cancel):
@@ -715,7 +721,17 @@ def set_simple_value(session, entity, obj, field, value, user, batch=None):
         if field == "archived" and value:
             end_sessions(session, obj.id)
 
+    was_admin = entity == "users" and obj.role == "admin" and not obj.archived
+
+    # Роль пользователя (этап 70): свои уровни – только те, что допускает новая роль
+    if entity == "users" and field == "role":
+        obj.perms = fit_perms(value, obj.perms, obj.role)
+
     setattr(obj, field, value)
+
+    # Правка «Пользователей» остаётся у кого-то из администраторов
+    if was_admin and field in ("role", "archived"):
+        keep_users_admin(session)
 
     # Оформление столбца: пустое удаляется, новое добавляется
     if entity == "column_styles":
@@ -752,7 +768,8 @@ def mark(record, field, cancelled_by):
 
     changes[field] = change
     record.changes = changes  # новый dict – иначе JSONB не заметит изменения
-    record.cancelled = all(item.get("cancelled") for item in changes.values())
+    # «Права» при смене роли (этап 70) не отменяются и отмене записи не мешают
+    record.cancelled = all(item.get("cancelled") or role_perms(record, key) for key, item in changes.items())
 
 
 def cancel_changes(session, items, cancel, user, batch):
@@ -764,7 +781,7 @@ def cancel_changes(session, items, cancel, user, batch):
     for record, field in items:
         change = (record.changes or {}).get(field)
 
-        if change is None or bool(change.get("cancelled")) == cancel:
+        if change is None or bool(change.get("cancelled")) == cancel or role_perms(record, field):
             continue
 
         # Решения сканера (этап 53) – своим снимком «до / после»

@@ -32,7 +32,7 @@
                 <a v-if="canOpenView('history')" href="#history" class="nav-icon nav-tab" @click="navClick($event, () => setView('history'))" :class="{ active: view === 'history' }" title="История">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
                 </a>
-                <a v-if="isAdmin" href="#users" class="nav-icon nav-tab" @click="navClick($event, () => setView('users'))" :class="{ active: view === 'users' }" title="Пользователи">
+                <a v-if="canOpenView('users')" href="#users" class="nav-icon nav-tab" @click="navClick($event, () => setView('users'))" :class="{ active: view === 'users' }" title="Пользователи">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </a>
                 <span class="dropdown-wrap nav-pop" ref="settingsWrap">
@@ -1110,14 +1110,14 @@
         </section>
 
         <!-- ================= Пользователи (только администратор) ================= -->
-        <section v-if="user && isAdmin && view === 'users'" class="view">
+        <section v-if="user && canOpenView('users') && view === 'users'" class="view">
             <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
                     <span class="tb-count">{{ usersCountText }}</span>
                     <span v-if="usersError" class="tb-error" :title="usersError">{{ usersError }}</span>
                 </div>
                 <div class="tb-right">
-                    <button class="btn icon-only" :class="{ active: userBar && userBar.kind === 'new' }" @click="openNewUser" title="Новый пользователь"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></button>
+                    <button v-if="canEdit" class="btn icon-only" :class="{ active: userBar && userBar.kind === 'new' }" @click="openNewUser" title="Новый пользователь"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></button>
                 </div>
             </div>
 
@@ -1172,7 +1172,7 @@
                                             </tr>
                                         </template>
                                         <tr v-else :class="{ 'is-hover': usersHover && usersHover.id === item.user.id }"
-                                            @mouseenter="setUsersHover(item.user, $event.currentTarget)" @dblclick="openEditUser(item.user)">
+                                            @mouseenter="canEdit && setUsersHover(item.user, $event.currentTarget)" @dblclick="canEdit && openEditUser(item.user)">
                                             <td class="u-login"><span class="u-name">{{ item.user.login }}</span><span v-if="item.user.is_self" class="u-self">это вы</span><span v-if="item.user.archived" class="u-off" title="Не может войти в систему">отключён</span></td>
                                             <td class="u-fio" :title="item.user.full_name || null">{{ item.user.full_name || "" }}</td>
                                             <td class="u-position" :title="item.user.position || null">{{ item.user.position || "" }}</td>
@@ -1204,7 +1204,7 @@
                             <span class="icon-btn" title="Закрыть (Esc)" @click="closeUserBar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
                         </span>
                     </div>
-                    <div class="side-add">
+                    <div v-if="canEdit" class="side-add">
                         <button class="btn icon-only" :class="{ active: userBar && userBar.kind === 'new' }" @click="openNewUser" title="Новый пользователь"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
                     </div>
                 </div>
@@ -1378,7 +1378,7 @@
                                             :placeholder="scanSecretPlaceholder(s.kind, name)"
                                             :title="name === 'user_token' ? 'Токен API пользователя: вход по нему, без логина и пароля' : (name === 'app_token' ? 'App-Token клиента API, если нужен' : (s.form === 'ssh' ? 'С ключом на сервере не нужен' : null))"
                                             @input="scanForms[s.kind].clear[name] = false">
-                                        <span v-if="s.secrets[name]" class="sf-clear" :class="{ on: scanForms[s.kind].clear[name] }"
+                                        <span v-if="canEdit && s.secrets[name]" class="sf-clear" :class="{ on: scanForms[s.kind].clear[name] }"
                                             :title="scanForms[s.kind].clear[name] ? 'Не удалять' : 'Удалить сохранённый при сохранении'" @click="toggleSecretClear(s.kind, name)">✕</span>
                                         <span v-if="name === 'password'" class="sf-eye" :class="{ on: scanForms[s.kind].show }" :title="scanForms[s.kind].show ? 'Скрыть' : 'Показать введённое'" @click="scanForms[s.kind].show = !scanForms[s.kind].show">
                                             <svg v-if="scanForms[s.kind].show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1398,7 +1398,7 @@
                                     <td class="sf-label">Отпечаток</td>
                                     <td><div class="sf-secret">
                                         <span class="sf-fp" :class="{ off: scanForms[s.kind].forget_host }" :title="'Ключ сервера: ' + s.host_key">{{ s.host_key }}</span>
-                                        <span class="sf-clear" :class="{ on: scanForms[s.kind].forget_host }"
+                                        <span v-if="canEdit" class="sf-clear" :class="{ on: scanForms[s.kind].forget_host }"
                                             :title="scanForms[s.kind].forget_host ? 'Не забывать' : 'Забыть при сохранении'" @click="scanForms[s.kind].forget_host = !scanForms[s.kind].forget_host">✕</span>
                                     </div></td>
                                 </tr>
@@ -1424,15 +1424,18 @@
                             <div v-if="scanForms[s.kind].error" class="scan-status bad"><span class="ss-text">{{ scanForms[s.kind].error }}</span></div>
                             <div v-if="scanRunInfo(s.kind) && scanRunInfo(s.kind).bad" class="scan-status bad"><span class="ss-text">Сбор: {{ scanRunInfo(s.kind).text }}</span></div>
                             </fieldset>
-                            <div v-if="canEdit" class="scan-buttons">
+                            <!-- «Запуск» без правки (этап 70) – проверить и собрать, без «Сохранить» -->
+                            <div v-if="canRun" class="scan-buttons">
                                 <button class="btn icon-only" :disabled="scanForms[s.kind].checking" @click="checkScanSource(s.kind)"
                                     :title="scanForms[s.kind].checking ? 'Проверяю…' : 'Проверить подключение'"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></svg></button>
                                 <button class="btn" :disabled="!!scanCollectBlock(s.kind)" @click="collectScan(s.kind)" :title="scanCollectTitle(s.kind)">{{ scanCollecting(s.kind) ? "Собираю…" : "Собрать" }}</button>
                                 <!-- Идёт сбор – полоса «сделано из» (этап 28) -->
                                 <span v-if="scanProgress(s.kind)" class="scan-progress sp-fit"><span class="sp-bar"><span class="sp-fill" :style="{ width: scanProgress(s.kind).percent + '%' }"></span></span><span class="sp-text">{{ scanProgress(s.kind).text }}</span></span>
                                 <span v-else class="sb-gap"></span>
-                                <button v-if="scanDirty(s.kind)" class="btn" @click="resetScanForm(s.kind)" title="Вернуть сохранённые значения">Отменить</button>
-                                <button class="btn btn-primary" :disabled="!scanDirty(s.kind) || scanForms[s.kind].saving" @click="saveScanSource(s.kind)">Сохранить</button>
+                                <template v-if="canEdit">
+                                    <button v-if="scanDirty(s.kind)" class="btn" @click="resetScanForm(s.kind)" title="Вернуть сохранённые значения">Отменить</button>
+                                    <button class="btn btn-primary" :disabled="!scanDirty(s.kind) || scanForms[s.kind].saving" @click="saveScanSource(s.kind)">Сохранить</button>
+                                </template>
                             </div>
                         </div>
                     </template>
@@ -1511,8 +1514,8 @@
             <div v-else-if="scanTab === 'check'" class="page scan-match-page check-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <!-- Сбор – своей строкой над фильтрами (этап 43): «Собрать ▾» – меню с галочками, что собрать;
                      когда собирали – в подсказке; идёт сбор – полоса -->
-                <div v-if="(isAdmin && canEdit) || checkProgress" class="sm-actions">
-                    <span v-if="isAdmin && canEdit" class="dropdown-wrap" ref="collectWrap">
+                <div v-if="canRun || checkProgress" class="sm-actions">
+                    <span v-if="canRun" class="dropdown-wrap" ref="collectWrap">
                         <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'collect' }" @click="toggleMenu('collect')" :title="openMenu === 'collect' ? null : checkCollectTitle">{{ checkCollecting ? "Собираю…" : "Собрать" }}</button>
                         <div v-if="openMenu === 'collect'" class="dropdown attached collect-menu">
                             <div class="dd-title">Что собрать</div>
@@ -1570,7 +1573,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-if="!checkShown.length" class="h-empty"><td :colspan="2 + checkSourceKinds.length">{{ check.loading ? "Загрузка…" : (!checkRows.length ? (isAdmin ? "Записей нет – нажми «Собрать»." : "Записей нет.") : (scanMatchQuery.trim() ? "Ничего не найдено." : "Здесь всё решено.")) }}</td></tr>
+                                    <tr v-if="!checkShown.length" class="h-empty"><td :colspan="2 + checkSourceKinds.length">{{ check.loading ? "Загрузка…" : (!checkRows.length ? (canRun ? "Записей нет – нажми «Собрать»." : "Записей нет.") : (scanMatchQuery.trim() ? "Ничего не найдено." : "Здесь всё решено.")) }}</td></tr>
                                     <template v-for="row in checkShown" :key="row.key">
                                         <tr class="ck-row" :data-key="row.key"
                                             :class="{ 'is-hover': check.hover && check.hover.key === row.key, 'sm-open': check.open === row.key, 'row-selected': isCheckSelected(row), 'ck-old': row.old }"
@@ -1670,8 +1673,8 @@
             <div v-else-if="scanTab === 'net'" class="page scan-match-page net-page" :class="{ 'accent-head': accentHeaders.scan }">
                 <!-- «Сканировать» (этап 43) – своей строкой: DHCP и проход подсетей; с этапа 45 – меню, как «Собрать»:
                      сканер, Leases, DHCP Config и подсети («только» – как в фильтре; при каждом открытии – все) -->
-                <div v-if="(isAdmin && canEdit) || netProgress" class="sm-actions">
-                    <span v-if="isAdmin && canEdit" class="dropdown-wrap" ref="netScanWrap">
+                <div v-if="canRun || netProgress" class="sm-actions">
+                    <span v-if="canRun" class="dropdown-wrap" ref="netScanWrap">
                         <button class="btn ck-collect" :class="{ 'menu-open': openMenu === 'netScan' }" @click="toggleNetScanMenu" :title="openMenu === 'netScan' ? null : netCollectTitle">{{ netCollecting ? "Сканирую…" : "Сканировать" }}</button>
                         <div v-if="openMenu === 'netScan'" class="dropdown attached collect-menu net-scan-menu">
                             <div class="dd-title">Что сканировать</div>
@@ -1770,7 +1773,7 @@
                                 <tbody>
                                     <tr v-if="!schedule.items.length" class="h-empty"><td colspan="6">{{ schedule.loading ? "Загрузка…" : "Источников нет." }}</td></tr>
                                     <tr v-for="it in schedule.items" :key="it.kind" class="sd-row" :class="{ 'is-hover': schedule.hover && schedule.hover.kind === it.kind }"
-                                        @mouseenter="canEdit && setScheduleHover(it, $event.currentTarget)">
+                                        @mouseenter="canRun && setScheduleHover(it, $event.currentTarget)">
                                         <td class="sd-title"><span class="u-name">{{ it.title }}</span><span v-if="!it.available" class="u-off" title="Настраивается в «Подключениях»">{{ scheduleOffText(it) }}</span></td>
                                         <td class="sd-cell"><select class="input er-input" :value="scheduleModeValue(it)" :disabled="!canEdit" title="Как часто собирать" @change="setScheduleMode(it, $event.target.value)">
                                             <option v-for="o in scheduleModeOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
@@ -1880,8 +1883,8 @@
             </div>
             <div class="page scan-match-page vacuum-page" :class="{ 'accent-head': accentHeaders.vacuum }">
                 <!-- Просканировать Vacuum заново (этап 31) – своей строкой (этап 43); идёт сбор – сколько пользователей просмотрено -->
-                <div v-if="(isAdmin && canEdit) || vacuumProgress" class="sm-actions">
-                    <button v-if="isAdmin && canEdit" class="btn ck-collect" :disabled="!!vacuumProgress || !!scanCollectBlock('jabber')" @click="refreshVacuum" :title="vacuumRefreshTitle">{{ vacuumProgress ? "Сканирую…" : "Сканировать" }}</button>
+                <div v-if="canRun || vacuumProgress" class="sm-actions">
+                    <button v-if="canRun" class="btn ck-collect" :disabled="!!vacuumProgress || !!scanCollectBlock('jabber')" @click="refreshVacuum" :title="vacuumRefreshTitle">{{ vacuumProgress ? "Сканирую…" : "Сканировать" }}</button>
                     <span v-if="vacuumProgress" class="scan-progress">
                         <span class="sp-bar"><span class="sp-fill" :style="{ width: vacuumProgress.percent + '%' }"></span></span>
                         <span class="sp-text">{{ vacuumProgress.text }}</span>
@@ -2096,9 +2099,11 @@
                             <tr v-else>
                                 <td class="pp-page" :class="{ 'pp-sub': r.sub }">{{ r.label }}</td>
                                 <td v-if="r.fixed" class="pp-fixed" :class="{ 'pp-none': r.level === 'none' }" :title="r.fixed">{{ levelLabel(r.level) }}</td>
+                                <td v-else-if="r.view" class="pp-view" :class="{ 'pp-own': r.level !== r.base, 'pp-none': r.level === 'none' }"
+                                    :title="r.level !== r.base ? 'По роли – ' + levelLabel(r.base).toLowerCase() : null">{{ levelLabel(r.level) }}</td>
                                 <td v-else class="pp-level" :class="{ 'pp-saved': savedFlash['u' + permsUser.id + ':' + r.key] }">
-                                    <select class="pp-select" :class="{ 'pp-own': r.level !== r.top, 'pp-none': r.level === 'none' }" :value="r.level" :disabled="permsPop.saving"
-                                        :title="r.level !== r.top ? 'По роли – ' + levelLabel(r.top).toLowerCase() : null" @change="setUserPerm(r, $event)">
+                                    <select class="pp-select" :class="{ 'pp-own': r.level !== r.base, 'pp-none': r.level === 'none' }" :value="r.level" :disabled="permsPop.saving"
+                                        :title="r.level !== r.base ? 'По роли – ' + levelLabel(r.base).toLowerCase() : null" @change="setUserPerm(r, $event)">
                                         <option v-for="o in r.options" :key="o" :value="o">{{ levelLabel(o) }}</option>
                                     </select>
                                 </td>
@@ -2154,10 +2159,12 @@
                                 <td class="ct-label">{{ r.label }}</td>
                                 <td class="ct-value" :class="{ editing: pcardEditKey === r.key }">
                                     <!-- «Доступ» (этап 45): точки; двойной клик – пароль окошком под строкой; показанные – строками (клик – скопировать), ✎ – изменить -->
-                                    <span v-if="r.auth && webEditIn(pcard, 'card')" class="secret-edit card-secret" @focusout="onWebEditFocusOut($event)"><input ref="webEditLogin" v-model="webEdit.login" class="input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="webEdit.password" class="input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></span>
+                                    <span v-if="r.auth && webEditIn(pcard, 'card')" ref="webEditBox" class="secret-edit card-secret" @focusout="onWebEditFocusOut($event)"><template v-for="(e, ei) in webEdit.entries" :key="ei"><input v-model="e.login" class="input" :class="{ 'se-next': ei > 0 }" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="e.password" class="input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></template></span>
                                     <span v-else-if="r.auth && webShownFor(pcard)" class="pc-auth-shown">
-                                        <span class="copy-line"><span v-if="webShown.login" class="copy-val" title="Скопировать" @click="copyText(webShown.login)">{{ webShown.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без логина</span></span>
-                                        <span class="copy-line"><span v-if="webShown.password" class="copy-val" title="Скопировать" @click="copyText(webShown.password)">{{ webShown.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без пароля</span></span>
+                                        <template v-for="(e, ei) in webShown.entries" :key="ei">
+                                            <span class="copy-line" :class="{ 'cl-next': ei > 0 }"><span v-if="e.login" class="copy-val" title="Скопировать" @click="copyText(e.login)">{{ e.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без логина</span></span>
+                                            <span class="copy-line"><span v-if="e.password" class="copy-val" title="Скопировать" @click="copyText(e.password)">{{ e.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без пароля</span></span>
+                                        </template>
                                         <span v-if="canEditPrinters" class="secret-pen" title="Изменить" @click.stop="startWebEdit(pcard, 'card')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
                                     </span>
                                     <span v-else-if="r.auth && r.value" class="secret-dots">{{ secretDots }}</span>
@@ -2231,12 +2238,15 @@
                                 :title="r.auth ? webAccessTitle(card) : (isCardEditable(r) && cardEditKey !== r.key ? 'Двойной клик – изменить' : null)">
                                 <td class="ct-label">{{ r.label }}</td>
                                 <td class="ct-value" :class="{ editing: cardEditKey === r.key }">
-                                    <!-- «Доступ» (этап 69, как у принтера): точки; двойной клик – пароль окошком под строкой; показанные – строками (клик – скопировать), ✎ – изменить -->
-                                    <span v-if="r.auth && webEditIn(card, 'card')" class="secret-edit card-secret" @focusout="onWebEditFocusOut($event)"><input ref="webEditLogin" v-model="webEdit.login" class="input" placeholder="Логин" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="webEdit.password" class="input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></span>
-                                    <span v-else-if="r.auth && webShownFor(card)" class="pc-auth-shown">
-                                        <span class="copy-line"><span v-if="webShown.login" class="copy-val" title="Скопировать" @click="copyText(webShown.login)">{{ webShown.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без логина</span></span>
-                                        <span class="copy-line"><span v-if="webShown.password" class="copy-val" title="Скопировать" @click="copyText(webShown.password)">{{ webShown.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без пароля</span></span>
+                                    <!-- «Пароль» (этапы 69, 70, как «Доступ» принтера): точки; двойной клик – пароль окошком под строкой; показанные – строками (клик – скопировать), ✎ – изменить, ＋ – ещё запись -->
+                                    <span v-if="r.auth && webEditIn(card, 'card')" ref="webEditBox" class="secret-edit card-secret secret-many" @focusout="onWebEditFocusOut($event)"><template v-for="(e, ei) in webEdit.entries" :key="ei"><input v-model="e.login" class="input" :class="{ 'se-next': ei > 0 }" placeholder="Учётная запись" spellcheck="false" autocomplete="off" @keydown="onWebEditKeydown"><input v-model="e.password" class="input" type="password" placeholder="Пароль" autocomplete="new-password" @keydown="onWebEditKeydown"></template><span v-if="webEditCanAdd(card)" class="secret-pen secret-add" title="Ещё пароль" :style="{ gridRow: webEdit.entries.length * 2 }" @mousedown.prevent.stop @click.stop="addWebEntry()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span></span>
+                                    <span v-else-if="r.auth && webShownFor(card)" class="pc-auth-shown pc-auth-many">
+                                        <template v-for="(e, ei) in webShown.entries" :key="ei">
+                                            <span class="copy-line" :class="{ 'cl-next': ei > 0 }"><span v-if="e.login" class="copy-val" title="Скопировать" @click="copyText(e.login)">{{ e.login }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без учётной записи</span></span>
+                                            <span class="copy-line"><span v-if="e.password" class="copy-val" title="Скопировать" @click="copyText(e.password)">{{ e.password }}<svg class="copy-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg></span><span v-else class="ct-empty">без пароля</span></span>
+                                        </template>
                                         <span v-if="canEditPc" class="secret-pen" title="Изменить" @click.stop="startWebEdit(card, 'card')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
+                                        <span v-if="canEditPc" class="secret-pen secret-add" title="Ещё пароль" :style="{ gridRow: webShown.entries.length * 2 }" @click.stop="startWebEdit(card, 'card', true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
                                     </span>
                                     <span v-else-if="r.auth && r.value" class="secret-dots">{{ secretDots }}</span>
                                     <template v-else-if="r.copy">

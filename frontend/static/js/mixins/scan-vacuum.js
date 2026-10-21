@@ -125,10 +125,11 @@ export default {
                     throw new Error(await this.errorText(response));
                 }
                 this.vacuum.data = await response.json();
-                // Сбор уже идёт – следить (номер запуска редактору не отдаётся – просто перечитаем позже)
+                // Сбор уже идёт – следить (ход сбора – только с «запуском», этап 70; без него – просто
+                // перечитаем позже)
                 const run = this.vacuum.data.last_run;
                 if (run && run.status === "running") {
-                    if (this.isAdmin) {
+                    if (this.canPage("vacuum", "run")) {
                         this.trackScanRun(run);
                     } else {
                         setTimeout(() => this.view === "vacuum" && this.loadVacuum(), 3000);
@@ -148,9 +149,9 @@ export default {
             await this.loadVacuum();
         },
 
-        // «Сканировать»: собрать из Jabber заново (admin)
+        // «Сканировать»: собрать из Jabber заново (с «запуском» Vacuum, этап 70)
         refreshVacuum() {
-            if (this.isAdmin && this.canEdit && !this.scanCollectBlock("jabber")) {
+            if (this.canRun && !this.scanCollectBlock("jabber")) {
                 this.collectScan("jabber");
             }
         },

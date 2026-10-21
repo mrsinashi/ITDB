@@ -3,13 +3,14 @@
 import { ROLE_LABELS, THEMES, applyNoRadius, applyTheme } from "../settings.js";
 import { apiFetch, shortName } from "../util.js";
 
-// Уровни доступа к странице по возрастанию (как LEVELS в auth.py)
-export const PAGE_LEVELS = ["none", "view", "edit"];
+// Уровни доступа к странице по возрастанию (как LEVELS в auth.py); «запуск» (этап 70) –
+// просмотр и сбор сканера, «правка» – всё, вместе с запуском
+export const PAGE_LEVELS = ["none", "view", "run", "edit"];
 
 export default {
     computed: {
-        // Права по страницам (этап 69): user.perms – страница → none / view / edit (роль и
-        // свои ограничения пользователя, считает сервер). Страница – как адрес (#scan/check)
+        // Права по страницам (этапы 69, 70): user.perms – страница → none / view / run / edit
+        // (роль и свои настройки пользователя, считает сервер). Страница – как адрес (#scan/check)
         viewPage() {
             if (this.view === "scan") {
                 return "scan/" + this.scanTab;
@@ -26,6 +27,17 @@ export default {
         // Правка на открытой странице (вкладке); карточки ПК и принтера – canEditPc / canEditPrinters
         canEdit() {
             return this.canPage(this.viewPage, "edit");
+        },
+
+        // Запуск на открытой странице (этап 70): сбор сканера – «Собрать», «Сканировать»
+        canRun() {
+            return this.canPage(this.viewPage, "run");
+        },
+
+        // Видны настройки источников и ход сбора (как SOURCES_VIEW в api_scan.py)
+        canSeeSources() {
+            return this.canPage("scan/settings") ||
+                ["scan/schedule", "scan/check", "scan/net", "vacuum"].some((page) => this.canPage(page, "run"));
         },
 
         canEditPc() {
@@ -247,16 +259,14 @@ export default {
                 this.loadUsers();
             } else if (view === "vacuum") {
                 this.loadVacuum();
-                if (this.isAdmin && !this.scanSources.length) {
-                    this.loadScanSources();     // «обновить» запускает сбор из Jabber
+                if (this.canPage("vacuum", "run") && !this.scanSources.length) {
+                    this.loadScanSources();     // «Сканировать» запускает сбор из Jabber
                 }
             } else if (view === "scan") {
                 // «Сканер» всегда открывается на первой вкладке слева – «GLPI / GSIT» (этап 28);
                 // нет прав на неё (этап 69) – на первой доступной
                 this.scanMatchQuery = "";
-                if (this.isAdmin) {
-                    this.loadScan();
-                }
+                this.loadScan();
                 this.setScanTab(this.firstTab("scan") || "check");
             }
             this.syncHash();

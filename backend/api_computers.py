@@ -6,7 +6,7 @@ import re
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy import func
 
-from access_secrets import AdminCheck, SecretsUpdate, check_admin, has_secrets, shown_secrets, update_secrets
+from access_secrets import AdminCheck, EntriesUpdate, check_admin, has_entries, shown_entries, update_entries
 from api_columns import COLUMNS, COLUMNS_BY_KEY, EDITABLE_KEYS, EXTRA_FIELDS, keys_of
 from api_import import split_vacuum_logins
 from auth import require_page
@@ -627,8 +627,8 @@ def column_values(computer, parts, user_name, vacuum, printers=(), models=None):
         elif column.kind == "scan":
             continue    # только из сканера: фронт берёт из /api/scan/diffs, выгрузка – сама
         elif column.kind == "secret":
-            # Логин и пароль (этап 69) – только задан ли
-            values[column.key] = "есть" if has_secrets(computer.secrets) else None
+            # Пароли (этапы 69, 70) – только заданы ли
+            values[column.key] = "есть" if has_entries(computer.secrets) else None
         else:
             values[column.key] = getattr(computer, column.key)
 
@@ -1154,33 +1154,36 @@ def update_computer(
     }
 
 
-# ---------- «Доступ»: логин и пароль от компьютера (этап 69, access_secrets.py) ----------
+# ---------- «Пароль»: учётные записи и пароли от компьютера (этапы 69, 70, access_secrets.py) ----------
 
 
 @router.put("/computers/{computer_id}/web-auth")
-def set_computer_auth(computer_id: int, payload: SecretsUpdate, user=Depends(require_page("table", "edit")), session=Depends(get_db)):
-    """Задать или удалить логин и пароль; в Историю – без значений."""
+def set_computer_auth(computer_id: int, payload: EntriesUpdate, user=Depends(require_page("table", "edit")), session=Depends(get_db)):
+    """Записи целиком (учётная запись и / или пароль, несколько); в Историю – без значений."""
     computer = lock_rows(session, Computer, [computer_id], "Компьютер не найден.")[0]
-    secrets, changes = update_secrets(computer.secrets, payload)
+    entries, changes = update_entries(computer.secrets, payload)
 
-    if changes:
-        computer.secrets = secrets
-        save_changes(session, computer, changes, user["login"])
+    if entries is not computer.secrets:
+        computer.secrets = entries
+
+        if changes:
+            save_changes(session, computer, changes, user["login"])
+
         session.commit()
 
-    return {"ok": True, "updated": {"web_auth": "есть" if has_secrets(computer.secrets) else None, "version": computer.version}}
+    return {"ok": True, "updated": {"web_auth": "есть" if has_entries(computer.secrets) else None, "version": computer.version}}
 
 
 @router.post("/computers/{computer_id}/web-auth/show")
 def show_computer_auth(computer_id: int, payload: AdminCheck, request: Request, user=Depends(require_page("table")), session=Depends(get_db)):
-    """Логин и пароль – по логину и паролю администратора ITDB (как у принтера)."""
+    """Записи – по логину и паролю администратора ITDB (как у принтера)."""
     check_admin(session, request, user, payload)
     computer = session.get(Computer, computer_id)
 
     if not computer:
         raise HTTPException(status_code=404, detail="Компьютер не найден.")
 
-    return shown_secrets(computer.secrets)
+    return {"entries": shown_entries(computer.secrets)}
 
 
 @router.get("/computers/{computer_id}")

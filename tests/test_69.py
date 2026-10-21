@@ -62,30 +62,31 @@ def test_pc_access(admin, editor, reader, room):
     keys = [column["key"] for column in info["columns"]]
     assert keys.index("web_auth") == keys.index("printers") + 1
     access = next(c for c in info["columns"] if c["key"] == "web_auth")
-    assert (access["short"], access["card"], access["kind"]) == ("Доступ", "Доступ", "secret")
+    # Этап 70: «Доступ» ПК – «Пароль», «Логин» – «Учётная запись», записей несколько (test_70.py)
+    assert (access["short"], access["card"], access["kind"]) == ("Пароль", "Пароль", "secret")
     assert "web_auth" in next(g for g in info["card_groups"] if g["title"] == "Сеть")["fields"]
     assert info["history_labels"]["web_password"] == "Пароль"
 
     pc = add_computer(editor, room["room"], hostname="pc-1")
     assert get_row(reader, pc)["web_auth"] is None
-    data = ok(editor.put(f"/api/computers/{pc}/web-auth", json={"login": " Administrator ", "password": "p@ss 1"}))
+    data = ok(editor.put(f"/api/computers/{pc}/web-auth", json={"entries": [{"login": " Administrator ", "password": "p@ss 1"}]}))
     assert data["updated"]["web_auth"] == "есть"
     assert get_row(reader, pc)["web_auth"] == "есть"
     # В строке и в Истории – без значений; не отменяется
     record = history(editor, "computers", pc)[0]
-    assert record["changes"] == {"web_login": {"old": None, "new": "задан новый"}, "web_password": {"old": None, "new": "задан новый"}}
+    assert record["changes"] == {"web_login": {"old": None, "new": "задана новая"}, "web_password": {"old": None, "new": "задан новый"}}
     response = editor.post("/api/history/cancel", json={"items": [{"id": record["id"]}]})
     assert response.status_code == 400
     # Обычной правкой поля не задать; читателю – нельзя
     version = get_row(editor, pc)["version"]
     assert editor.patch(f"/api/computers/{pc}", json={"web_auth": "x", "_version": version}).status_code == 400
-    assert reader.put(f"/api/computers/{pc}/web-auth", json={"password": "x"}).status_code == 403
+    assert reader.put(f"/api/computers/{pc}/web-auth", json={"entries": [{"password": "x"}]}).status_code == 403
 
     # Показать – по паролю администратора, как у принтера
     url = f"/api/computers/{pc}/web-auth/show"
-    assert ok(admin.post(url, json={"password": PASSWORDS["admin"]})) == {"login": "Administrator", "password": "p@ss 1"}
+    assert ok(admin.post(url, json={"password": PASSWORDS["admin"]})) == {"entries": [{"login": "Administrator", "password": "p@ss 1"}]}
     assert editor.post(url, json={"password": PASSWORDS["editor"]}).status_code == 403
-    assert ok(reader.post(url, json={"login": "admin", "password": PASSWORDS["admin"]}))["login"] == "Administrator"
+    assert ok(reader.post(url, json={"login": "admin", "password": PASSWORDS["admin"]}))["entries"][0]["login"] == "Administrator"
     # Попытки – общие с принтерами: пять неверных у ПК – и принтер не покажет
     printer = add_printer(editor, room["room"])
     for _ in range(5):
@@ -95,10 +96,10 @@ def test_pc_access(admin, editor, reader, room):
 
     # В выгрузку не идёт
     ws = load_workbook(BytesIO(admin.get("/api/export/computers.xlsx").content))["Компьютеры"]
-    assert "Доступ" not in [cell.value for cell in ws[1]]
+    assert not {"Доступ", "Пароль"} & {cell.value for cell in ws[1]}
 
-    # Оба пустых – удалить
-    ok(editor.put(f"/api/computers/{pc}/web-auth", json={"login": "", "password": ""}))
+    # Пустая запись – удалить
+    ok(editor.put(f"/api/computers/{pc}/web-auth", json={"entries": [{"login": "", "password": ""}]}))
     assert get_row(reader, pc)["web_auth"] is None
     assert set(history(editor, "computers", pc)[0]["changes"]) == {"web_login", "web_password"}
 
@@ -118,8 +119,10 @@ def test_role_levels(admin, editor, reader):
     pages = ok(admin.get("/api/users/pages"))
     assert [p["key"] for p in pages] == list(PAGES)
     net = next(p for p in pages if p["key"] == "scan/net")
-    assert (net["group"], net["label"], net["roles"]) == ("Сканер", "Сеть", {"admin": "edit", "editor": "view", "reader": "none"})
-    assert next(p for p in pages if p["key"] == "users")["fixed"] == ["admin"]
+    # Этап 70: у «Сети» нечего править – только запуск (сбор); роль – граница, base – без своих настроек
+    assert (net["group"], net["label"], net["levels"]) == ("Сканер", "Сеть", ["none", "view", "run"])
+    assert net["base"] == {"admin": "run", "editor": "view", "reader": "none"}
+    assert net["max"] == {"admin": "run", "editor": "run", "reader": "run"}
     assert editor.get("/api/users/pages").status_code == 403
 
 
@@ -146,13 +149,13 @@ def test_restrict_editor(admin, editor, reader, room):
     assert editor.get("/api/history").status_code == 403
     ok(editor.get("/api/computers"))
 
-    # «Как у роли» – ограничение снимается; больше роли не дать
+    # «Как у роли» – ограничение снимается; больше границы роли не дать (этап 70: читателю – правку)
     assert set_perms(admin, "editor", {"table": "edit", "history": "edit"})["perms"] == ROLE_PAGES["editor"]
     add_computer(editor, room["room"])
-    assert set_perms(admin, "reader", {"table": "edit", "vacuum": "view"})["perms"] == ROLE_PAGES["reader"]
+    assert "не даёт" in set_perms(admin, "reader", {"table": "edit"}, 400)["detail"]
     assert reader.post("/api/computers", json={"location_id": room["room"]}).status_code == 403
 
-    # Неизвестное – нельзя; свои права и «Пользователи» администратора – тоже
+    # Неизвестное – нельзя; свои права – тоже
     assert set_perms(admin, "editor", {"nope": "view"}, 400)
     assert set_perms(admin, "editor", {"table": "read"}, 400)
     assert "Свои права" in set_perms(admin, "admin", {"table": "view"}, 400)["detail"]
@@ -160,13 +163,12 @@ def test_restrict_editor(admin, editor, reader, room):
 
 def test_admin_limits(admin, admin2, room):
     set_perms(admin, "admin2", {"tree": "view", "scan/check": "view", "scan/schedule": "view", "scan/settings": "view"})
-    assert "не ограничивается" in set_perms(admin, "admin2", {"users": "none"}, 400)["detail"]
     assert admin2.post("/api/locations", json={"kind": "building", "name": "Новый"}).status_code == 403
-    # Сбор – с правкой там, где его запускают, в «Расписании» или «Подключениях»
+    # Сбор – с запуском (до этапа 70 – с правкой) там, где его запускают, в «Расписании» или «Подключениях»
     response = admin2.post("/api/scan/sources/glpi/collect")
     assert response.status_code == 403 and "GLPI / GSIT" in response.json()["detail"]
     assert admin2.patch("/api/scan/sources/glpi", json={"url": "http://x"}).status_code == 403
-    # «Пользователи» остаются: может вернуть права другим
+    # «Пользователи» не ограничены: может вернуть права другим
     ok(admin2.get("/api/users"))
 
 

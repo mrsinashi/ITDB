@@ -109,7 +109,7 @@ def me_out(db_user, user):
         "full_name": db_user.full_name if db_user else None,
         "position": db_user.position if db_user else None,
         "role": user["role"],
-        # Права по страницам (этап 69): страница → none / view / edit
+        # Права по страницам (этапы 69, 70): страница → none / view / run / edit
         "perms": user["perms"],
         "prefs": (db_user.prefs if db_user else None) or {},
         # Пометка копии рядом с «ITDB» (ITDB_LABEL=DEV в .env dev-копии)
