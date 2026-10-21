@@ -37,6 +37,7 @@
     --search-hit-chip: #f3e3a4;
     --radius: 3px;                 /* единое скругление: как у кнопок и поиска на панели */
     --block-head: 26px;             /* высота шапки блоков: таблицы Дерева, Истории, Справочники, Сканер… */
+    --ip-src-gap: 4px;              /* между источниками в ячейке журнала «IP» (SRC_GAP в mixins/ips.js) */
     --badge-bg: #8a8a8a;            /* счётчик в углу кнопки панели – серый */
     --copy-ico: #b98a4e;            /* значок копирования – в тон бежевой подсветки строки */
 
@@ -7472,4 +7473,28 @@ select.mw-in {
     top: 0;
     height: 50%;
     border-bottom: var(--px) solid var(--kit-line);
+}
+
+/* ============================================================
+   Журнал «IP» (этап 71): строка на адрес, значения источников – строками
+   ============================================================ */
+/* Источники – через запятую; перенос только между ними (ширина столбца – два в строку) */
+.data-table td .ip-src {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--ip-src-gap);
+}
+.data-table td .ip-src-part {
+    white-space: nowrap;
+}
+/* Давнее (старше срока «Актуальны» источника) – серым, как на «Сети» и в Vacuum */
+.data-table td .ip-stale {
+    color: var(--text-muted);
+}
+/* «Показать в таблице» у имени – при наведении на ячейку (просьба пользователя) */
+.data-table td:hover .ip-names .obj-tbl {
+    visibility: visible;
+}
+.data-table.alt-copy td:hover .ip-names .obj-tbl {
+    visibility: hidden;
 }

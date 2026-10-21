@@ -15,7 +15,7 @@ from history_undo import (
     ENTITIES, SIMPLE, Ref, cancel_changes, field_kind, field_label, find_object, moved_room, object_title, ref_of,
     revert_value, role_perms, value_history,
 )
-from models import Computer, History, Location, Printer
+from models import Computer, History, IpEntry, IpNote, Location, Printer
 from scan_decisions import DECISION_ENTITIES
 
 router = APIRouter(prefix="/api", tags=["history"])
@@ -74,6 +74,9 @@ NAMED_ENTITIES = {
     "computers": (Computer.hostname, lambda computer: computer.hostname),
     "locations": (Location.name, lambda location: location.name),
     "printers": (Printer.name, lambda printer: printer.name or f"#{printer.id}"),
+    # Запись и описание журнала IP (этап 71) – адрес
+    "ip_entries": (IpEntry.ip, lambda entry: entry.ip),
+    "ip_notes": (IpNote.ip, lambda note: note.ip),
 }
 
 

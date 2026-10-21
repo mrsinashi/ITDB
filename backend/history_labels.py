@@ -25,6 +25,8 @@ ENTITY_LABELS = {
     "cartridges": "Картридж",
     "moves": "Движение",
     "item_types": "Тип техники",
+    "ip_entries": "IP",
+    "ip_notes": "IP",
 }
 
 SIMPLE_FIELD_LABELS = {

@@ -6,7 +6,10 @@
 import json
 import re
 
-from api_columns import COLUMNS, HISTORY_LABELS, MOVE_COLUMNS, MOVE_HISTORY_LABELS, PRINTER_COLUMNS, PRINTER_HISTORY_LABELS
+from api_columns import (
+    COLUMNS, HISTORY_LABELS, IP_COLUMNS, IP_HISTORY_LABELS, MOVE_COLUMNS, MOVE_HISTORY_LABELS, PRINTER_COLUMNS,
+    PRINTER_HISTORY_LABELS,
+)
 from history_labels import ENTITY_LABELS, LOCATION_FIELD_LABELS, SIMPLE_FIELD_LABELS
 from models import FieldDef
 
@@ -83,6 +86,7 @@ class FieldLabels:
         self.computers = {column.key: column.card for column in COLUMNS} | HISTORY_LABELS
         self.printers = {column.key: column.card for column in PRINTER_COLUMNS} | PRINTER_HISTORY_LABELS
         self.moves = {column.key: column.card for column in MOVE_COLUMNS} | MOVE_HISTORY_LABELS
+        self.ips = {column.key: column.card for column in IP_COLUMNS} | IP_HISTORY_LABELS
         self.extra = {column.extra_key: column.key for column in COLUMNS if column.extra_key}
         self.defs = {fd.key: fd.label for fd in session.query(FieldDef).filter(FieldDef.archived == False)}  # noqa: E712
         self.known = {}
@@ -104,6 +108,9 @@ class FieldLabels:
 
         if entity == "moves":
             return self.moves.get(field) or field
+
+        if entity in ("ip_entries", "ip_notes"):
+            return self.ips.get(field) or field
 
         if entity == "printer_models" and field == "color":
             return "Печать"

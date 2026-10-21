@@ -4,7 +4,7 @@
 //   #table?pc=12   – Таблица с открытой карточкой ПК
 //   #table?loc=7   – Таблица с фильтром по узлу дерева
 //   #printers?pr=3 – Принтеры с открытой карточкой принтера (этап 44)
-//   #journals/moves – Журналы, вкладка «Движение» (этап 66)
+//   #journals/moves – Журналы, вкладка «Движение» (этап 66); #journals/ips – «IP» (этап 71)
 
 export const VIEWS = ["table", "tree", "vacuum", "printers", "journals", "scan", "choices", "history", "users"];
 

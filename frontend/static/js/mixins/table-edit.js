@@ -26,8 +26,13 @@ export default {
             }
             // Правка другой ячейки прячет показанные логин и пароль
             this.hideWebShown();
-            // Принтеры ПК, ПК принтера – окошко с поиском и галочками
-            if (col.links) {
+            // Журнал «IP» (этап 71): у каждой строки своё (описание – у всех, остальное – у записей)
+            if (row._ip) {
+                if (!this.ipCellEditable(row, col)) {
+                    return;
+                }
+            } else if (col.links) {
+                // Принтеры ПК, ПК принтера – окошко с поиском и галочками
                 this.cancelEdit();
                 this.openLinkPick(row, col, td);
                 return;
@@ -44,7 +49,7 @@ export default {
                 this.openMoveRecord(row, col.field);
                 return;
             }
-            if (!this.canEdit || !(col.editable || col.location)) {
+            if (!row._ip && (!this.canEdit || !(col.editable || col.location))) {
                 return;
             }
             if (this.editingRowId === row.id && this.editingField === col.field) {
@@ -60,7 +65,7 @@ export default {
             }
             this.editingRowId = row.id;
             this.editingField = col.field;
-            this.editValue = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
+            this.editValue = this.cellEditValue(row, col);
             // Картриджи (этап 47): в поле – через запятую
             if (col.cartridges) {
                 this.editValue = splitTokens(this.editValue).join(", ");
@@ -83,11 +88,11 @@ export default {
                     const len = el.value.length;
                     el.setSelectionRange(len, len);
                 }
-                if (!col.multiline || col.cartridges) {
+                if (!col.multiline || col.cartridges || col.ipCol) {
                     this.openSuggest(el, col, (value) => {
                         this.editValue = value;
                         this.saveEdit(row, col);
-                    }, row.id);
+                    }, row._ip ? null : row.id);
                 }
             });
         },
@@ -102,6 +107,10 @@ export default {
             } else if (event.key === "Escape") {
                 event.preventDefault();
                 this.cancelEdit();
+                // Журнал «IP» (этап 71): Esc в пустом адресе строки «Добавить» убирает её
+                if (row._draft && col.field === "ip_addr" && !row.form.ip_addr) {
+                    this.dropIpDraft();
+                }
             } else if (event.key === "Tab") {
                 event.preventDefault();
                 // Выбранная в списке подсказка – как по Enter (у картриджей выбор только дописывает
@@ -123,7 +132,7 @@ export default {
             let next = null;
             for (let i = cols.findIndex((c) => c.field === col.field) + dir; i >= 0 && i < cols.length; i += dir) {
                 const c = cols[i];
-                if (c.editable && !c.location && !c.secret && !c.links && !c.fromModel && !c.virtual) {
+                if (c.editable && !c.location && !c.secret && !c.links && !c.fromModel && !c.virtual && (!row._ip || this.ipCellEditable(row, c))) {
                     next = c;
                     break;
                 }
@@ -167,11 +176,19 @@ export default {
             }
         },
 
+        // Что в поле правки ячейки (у журнала «IP» – своё значение строки, не все строки ячейки)
+        cellEditValue(row, col) {
+            if (row._ip) {
+                return this.ipEditValue(row, col);
+            }
+            return row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
+        },
+
         saveEdit(row, col) {
             if (this.editingRowId !== row.id || this.editingField !== col.field) {
                 return;
             }
-            const oldValue = row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
+            const oldValue = this.cellEditValue(row, col);
             // Картриджи (этап 47): в поле – через запятую, в ячейке – строками
             const newValue = col.cartridges ? splitTokens(this.editValue).join("\n") : this.editValue;
             this.editingRowId = null;
@@ -247,6 +264,10 @@ export default {
         // Ответ – сохранилось ли (true / false). Строка принтера (этап 44) – в его таблицу.
         // sendValue – на сервер другое, чем в ячейке до ответа (связи ПК – принтер номерами, этап 45)
         async saveCellValue(row, col, value, sendValue) {
+            // Журнал «IP» (этап 71) – своя правка (mixins/ips.js)
+            if (row._ip) {
+                return this.saveIpCell(row, col, value);
+            }
             const printer = !!row._printer;
             const pendingKey = this.rowKey(row) + ":" + col.field;
             // По ключу, а не новым объектом: иначе перерисуются все строки таблицы (этап 52)

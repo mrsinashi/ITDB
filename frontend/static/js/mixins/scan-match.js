@@ -9,17 +9,15 @@
 // конфликт, нет в ITDB, дубль. Решения администратора: «это этот ПК», «не этот
 // ПК», «забыть».
 
-import { apiFetch, loadJson, saveJson, searchNorm, searchWordsIn, matchesAllWords, rowPlate } from "../util.js";
+import { apiFetch, searchNorm, searchWordsIn, matchesAllWords, rowPlate } from "../util.js";
 
 const POLL_MS = 1000;
 const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net"];
 // «Сканировать» на «Сети» (этап 43): DHCP и проход подсетей
 const NET_KINDS = ["dhcp", "net"];
-// Меню «Собрать» на «GLPI / GSIT» (этап 43): снятые галочки – в браузере
-const COLLECT_OFF_KEY = "itdb.collectOff.v1";
-// Меню «Сканировать» на «Сети» (этап 45): снятые части (net – сканер, leases, configs) – в
-// браузере; подсети – каждый раз все
-const NET_SCAN_OFF_KEY = "itdb.netScanOff.v1";
+// Меню «Собрать» на «GLPI / GSIT» (этап 43) и «Сканировать» на «Сети» (этап 45): снятые галочки
+// до этапа 71 запоминались в браузере; с этапа 71 (просьба пользователя) – при каждом заходе на
+// вкладку снова все (setScanTab)
 // Что считает полоса сбора: «20 из 155 ПК»
 const PROGRESS_UNITS = { jabber: " пользователей", net: " адресов", dhcp: "" };
 const KEY_LABELS = { id: "ID", mac: "MAC", serial: "серийному" };
@@ -69,9 +67,9 @@ function durationText(run) {
 export default {
     data() {
         return {
-            collectOff: loadJson(COLLECT_OFF_KEY, []),  // меню «Собрать»: источники со снятой галочкой
-            netScanOff: loadJson(NET_SCAN_OFF_KEY, []), // меню «Сканировать»: части со снятой галочкой
-            netScanSubnetsOff: []                       // …и подсети (при каждом открытии – снова все)
+            collectOff: [],         // меню «Собрать»: источники со снятой галочкой (заход на вкладку – все)
+            netScanOff: [],         // меню «Сканировать»: части со снятой галочкой (так же)
+            netScanSubnetsOff: []   // …и подсети (при каждом открытии меню – снова все)
         };
     },
 
@@ -233,6 +231,9 @@ export default {
             this.scanTab = tab;
             this.scanLinkBar = null;
             this.closeMenus();
+            // Зашли на вкладку – в «Собрать» и «Сканировать» снова все галочки (этап 71)
+            this.collectOff = [];
+            this.netScanOff = [];
             this.watchSchedule(tab === "schedule");
             if (tab === "names") {
                 this.loadScanNames();
@@ -418,7 +419,6 @@ export default {
         toggleCollectKind(kind) {
             const off = this.collectOff;
             this.collectOff = off.indexOf(kind) === -1 ? off.concat([kind]) : off.filter(function (k) { return k !== kind; });
-            saveJson(COLLECT_OFF_KEY, this.collectOff);
         },
 
         // «Собрать» в меню: из отмеченных источников
@@ -442,7 +442,6 @@ export default {
         toggleNetScanPart(key) {
             const off = this.netScanOff;
             this.netScanOff = off.indexOf(key) === -1 ? off.concat([key]) : off.filter(function (k) { return k !== key; });
-            saveJson(NET_SCAN_OFF_KEY, this.netScanOff);
         },
 
         toggleNetScanSubnet(cidr) {
@@ -563,6 +562,10 @@ export default {
             }
             if (this.view === "scan" && this.scanTab === "net" && NET_KINDS.includes(run.source)) {
                 this.loadNet();
+            }
+            // Журнал «IP» (этап 71): адреса приносят все источники
+            if (this.view === "journals" && this.journalTab === "ips") {
+                this.loadIps();
             }
             if (this.view === "scan" && this.scanTab === "check") {
                 this.loadCheck();

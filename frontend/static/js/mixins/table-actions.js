@@ -4,6 +4,7 @@
 
 import { apiFetch, fixIpTyping, searchNorm, splitMulti } from "../util.js";
 import { LOCATION_FIELDS } from "../columns.js";
+import { ipNumber } from "./ips.js";
 
 // Куда можно добавить кабинет
 const ROOM_PARENTS = ["department", "floor"];
@@ -541,7 +542,11 @@ export default {
 
         // id строки таблицы на экране (ПК, принтера или записи журнала)
         flashRow(id) {
-            const key = this.tableKind === "moves" ? "m" + id : (this.tableKind === "printer" ? "p" + id : id);
+            // Журнал «IP» (этап 71): сервер называет адреса – строка по адресу
+            if (this.tableKind === "ips" && typeof id === "string") {
+                id = ipNumber(id);
+            }
+            const key = this.tableKind === "moves" ? "m" + id : (this.tableKind === "printer" ? "p" + id : (this.tableKind === "ips" ? "i" + id : id));
             this.allColumns.forEach((col) => this.flashCell(key, col.field));
         },
 
@@ -588,16 +593,25 @@ export default {
             if (!ids.length || this.archiveSaving) {
                 return;
             }
-            this.archiveSaving = true;
             const printers = this.tableKind === "printer";
-            const moves = this.tableKind === "moves";
+            // Журнал «IP» (этап 71): в архив – записи журнала (номера записей, а не строк)
+            const ips = this.tableKind === "ips";
+            const moves = this.tableKind === "moves" || ips;
+            const send = ips ? this.ipEntryIds(ids) : ids;
+            if (!send.length) {
+                this.toast("В архив – только записи журнала IP");
+                return;
+            }
+            this.archiveSaving = true;
             try {
-                await this.apiSend(this.tableApi + "/archive", "POST", { ids: ids, archived: archived });
+                await this.apiSend(this.tableApi + "/archive", "POST", { ids: send, archived: archived });
                 let text;
-                if (ids.length === 1) {
-                    text = (archived ? "В архиве: " : (moves ? "Возвращена из архива: " : "Возвращён из архива: ")) + this.rowName(ids[0]);
+                if (send.length === 1) {
+                    // Журнал «IP»: выбраны и адреса без записи – назвать ту, что ушла
+                    const name = ips ? (this.ipRows.find(function (r) { return r.entry && r.entry.id === send[0]; }) || {}).ip_addr : this.rowName(ids[0]);
+                    text = (archived ? "В архиве: " : (moves ? "Возвращена из архива: " : "Возвращён из архива: ")) + name;
                 } else {
-                    text = (archived ? "В архив убрано " : "Возвращено из архива ") + (moves ? "записей: " : (printers ? "принтеров: " : "ПК: ")) + ids.length;
+                    text = (archived ? "В архив убрано " : "Возвращено из архива ") + (moves ? "записей: " : (printers ? "принтеров: " : "ПК: ")) + send.length;
                 }
                 this.selectedRows = [];
                 this.selectAnchorId = null;
@@ -626,14 +640,16 @@ export default {
                 return;
             }
             const printers = this.tableKind === "printer";
-            const moves = this.tableKind === "moves";
+            const ips = this.tableKind === "ips";
+            const moves = this.tableKind === "moves" || ips;
             const what = ids.length === 1 ? "«" + this.rowName(ids[0]) + "»" : (moves ? "записей: " : (printers ? "принтеров: " : "ПК: ")) + ids.length;
             if (!(await this.confirmDialog("Удалить насовсем " + what + "?\nВернуть будет нельзя.", { okText: "Удалить", danger: true }))) {
                 return;
             }
             this.archiveSaving = true;
             try {
-                await this.apiSend(this.tableApi + "/delete", "POST", { ids: ids });
+                // Журнал «IP» (этап 71): номера записей, а не строк
+                await this.apiSend(this.tableApi + "/delete", "POST", { ids: ips ? this.ipEntryIds(ids) : ids });
                 this.selectedRows = [];
                 this.selectAnchorId = null;
                 // Карточка или окно удалённого – закрыть
@@ -641,7 +657,7 @@ export default {
                     this.closePrinterCard();
                 } else if (!printers && !moves && this.card && ids.indexOf(this.card.id) !== -1) {
                     this.closeCard();
-                } else if (moves && this.moveWin && this.moveWin.mode === "edit" && ids.indexOf(this.moveWin.id) !== -1) {
+                } else if (moves && !ips && this.moveWin && this.moveWin.mode === "edit" && ids.indexOf(this.moveWin.id) !== -1) {
                     this.moveWin = null;
                 }
                 await this.reloadTableRows();
@@ -663,6 +679,9 @@ export default {
         },
 
         rowName(id) {
+            if (this.tableKind === "ips") {
+                return this.ipAddrOf(id) || "адрес";
+            }
             if (this.tableKind === "moves") {
                 const m = this.moveRows.find(function (r) { return r.id === id; });
                 return (m && (m.title || m.item_type)) || "запись";
@@ -719,7 +738,7 @@ export default {
             if (!bar) {
                 return "";
             }
-            const many = this.tableKind === "moves" ? " записей" : (this.tableKind === "printer" ? " принтеров" : " ПК");
+            const many = this.tableKind === "moves" ? " записей" : (this.tableKind === "printer" ? " принтеров" : (this.tableKind === "ips" ? " адресов" : " ПК"));
             const what = bar.ids.length === 1 ? "«" + this.rowName(bar.ids[0]) + "»" : bar.ids.length + many;
             if (bar.kind === "move") {
                 return "Переместить " + what + " в:";
@@ -800,6 +819,16 @@ export default {
                 }
                 url = this.tableApi + "/bulk-update";
                 body = { ids: bar.ids, field: bar.field, value: bar.value };
+                // Журнал «IP» (этап 71): адреса, а не номера строк
+                if (this.tableKind === "ips") {
+                    const ips = bar.ids.map((id) => this.ipAddrOf(id)).filter(Boolean);
+                    // В «Свободных» строки без записи становятся записями и остаются в списке
+                    const free = this.ipFree.length > 0;
+                    if (free) {
+                        ips.forEach((ip) => { this.ipFreeKeep[ip] = true; });
+                    }
+                    body = { ips: ips, field: bar.field, value: bar.value, own: free };
+                }
             }
             bar.error = "";
             bar.saving = true;
@@ -809,6 +838,9 @@ export default {
                 }
                 if (bar.kind === "replace") {
                     return "Заменён: " + this.rowName(bar.ids[0]) + " → " + this.rowName(bar.new_id);
+                }
+                if (this.tableKind === "ips") {
+                    return "Изменено у адресов: " + data.changed.length + " из " + bar.ids.length + (data.skipped ? " (не записи журнала IP: " + data.skipped + ")" : "");
                 }
                 const whose = this.tableKind === "moves" ? "записей: " : (this.tableKind === "printer" ? "принтеров: " : "ПК: ");
                 return "Изменено у " + whose + data.changed.length + " из " + bar.ids.length;

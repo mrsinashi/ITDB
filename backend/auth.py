@@ -116,6 +116,8 @@ PAGE_INFO = [
     ("printers", None, "Принтеры", VIEW_EDIT),
     ("tree", None, "Структура", VIEW_EDIT),
     ("journals/moves", "Журналы", "Движение", VIEW_EDIT),
+    # Журнал IP (этап 71): «Сканировать» на его панели – по запуску страниц источников
+    ("journals/ips", "Журналы", "IP", VIEW_EDIT),
     ("vacuum", None, "Vacuum", VIEW_RUN),
     ("scan/check", "Сканер", "GLPI / GSIT", VIEW_RUN_EDIT),
     ("scan/net", "Сканер", "Сеть", VIEW_RUN),

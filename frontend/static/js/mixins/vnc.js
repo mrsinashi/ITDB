@@ -246,7 +246,8 @@ export default {
                 !this.editingRowId && !this.cardEditKey && !this.editingHostname && !this.openMenu && !this.scanPop &&
                 !this.namePop && !this.actionBar && !this.newComputer && !this.newPrinter && !this.showArchive &&
                 !this.pcard && !this.printerPop && !this.webAsk && !this.webEdit && !this.linkPick && !this.moveWinOpen;
-            if (row && free) {
+            // Журнал «IP» (этап 71): у строки-адреса подключаться не к чему
+            if (row && free && !row._ip) {
                 event.preventDefault();
                 if (row._move) {
                     // Запись журнала (этап 66) – её окно
@@ -266,8 +267,8 @@ export default {
         // ПК для Alt+P / Alt+R: открытая карточка, иначе последняя нажатая строка, иначе
         // единственная выбранная. На странице «Принтеры» – принтер (Alt+P – ping, этап 44)
         activePc() {
-            // В журнале (этап 66) подключаться не к чему
-            if (this.tableKind === "moves") {
+            // В журналах (этапы 66, 71) подключаться не к чему
+            if (this.tableKind === "moves" || this.tableKind === "ips") {
                 return null;
             }
             if (this.tableKind === "printer" && this.pcard) {

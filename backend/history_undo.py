@@ -30,8 +30,8 @@ from fastapi import HTTPException
 from api_column_styles import is_empty
 from auth import check_page, fit_perms
 from api_columns import (
-    EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY, MOVE_COLUMNS_BY_KEY, MOVE_HISTORY_LABELS,
-    PRINTER_COLUMNS_BY_KEY, PRINTER_EDITABLE_KEYS, PRINTER_HISTORY_LABELS,
+    EDITABLE_KEYS, EXTRA_FIELDS, HISTORY_LABELS, COLUMNS_BY_KEY, IP_COLUMNS_BY_KEY, IP_HISTORY_LABELS,
+    MOVE_COLUMNS_BY_KEY, MOVE_HISTORY_LABELS, PRINTER_COLUMNS_BY_KEY, PRINTER_EDITABLE_KEYS, PRINTER_HISTORY_LABELS,
 )
 from api_computers import (
     DATE_FIELDS,
@@ -47,6 +47,10 @@ from api_computers import (
 from api_locations import (
     check_can_archive, check_duplicate, check_place, clean, move_room, room_parent, validate_name_code,
 )
+from api_ips import (
+    ENTRY_FIELDS as IP_ENTRY_FIELDS, NOTE as IP_NOTE, entry_change_value, entry_display, entry_value, set_entry_value,
+    set_note_value,
+)
 from api_moves import (
     DATE_FIELDS as MOVE_DATE_FIELDS, SPEC_FIELDS as MOVE_SPEC_FIELDS, TEXT_FIELDS as MOVE_TEXT_FIELDS,
     move_change_value, move_display, move_names, move_value, set_move_value,
@@ -60,7 +64,9 @@ from api_users import ROLES, check_login_free, clean_login, clean_text, end_sess
 from cartridges import check_name as check_cartridge_name, model_cartridges_text, set_model_cartridges
 from history_labels import SIMPLE_FIELD_LABELS
 from history_log import choice_title, column_label
-from models import Cartridge, Choice, ColumnStyle, Computer, FieldDef, History, Location, Move, Person, Printer, PrinterModel, User
+from models import (
+    Cartridge, Choice, ColumnStyle, Computer, FieldDef, History, IpEntry, IpNote, Location, Move, Person, Printer, PrinterModel, User,
+)
 from printer_links import computer_title, links_ids, links_text, printer_title, printers_by_computer
 from scan_decisions import DECISION_ENTITIES, apply_decision, check_decision
 
@@ -109,7 +115,7 @@ SIMPLE_LABELS = {
 # У модели принтера color – не «Цвет текста», а «Печать»
 MODEL_LABELS = {"color": "Печать"}
 
-ENTITIES = ("computers", "locations", "printers", "moves") + tuple(SIMPLE)
+ENTITIES = ("computers", "locations", "printers", "moves", "ip_entries", "ip_notes") + tuple(SIMPLE)
 
 # Записи журнала «Движение» (этап 66): поля со значением (тип, модель принтера, «Куда»,
 # «Установил» – по номерам, api_moves.move_value)
@@ -117,6 +123,9 @@ MOVE_VALUE_FIELDS = (
     set(MOVE_TEXT_FIELDS) | set(MOVE_DATE_FIELDS) | MOVE_SPEC_FIELDS
     | {"archived", "item_type", "printer_model", "dest", "installer"}
 )
+
+# Журнал IP (этап 71): у записи – поля ячеек и архив, у описания адреса – само описание
+IP_VALUE_FIELDS = set(IP_ENTRY_FIELDS) | {"archived"}
 
 # Не отменяются: создание, удаление (удалённое не вернуть), смена пароля
 # (с этапа 44 – и логина и пароля Web у принтера, с этапа 69 – у ПК), права пользователя
@@ -163,6 +172,7 @@ def undo_phase(ref, field, cancel):
 # Чья страница правит объект (этап 69): отмена и возврат – только с правкой на ней
 ENTITY_PAGES = {
     "computers": "table", "printers": "printers", "locations": "tree", "moves": "journals/moves",
+    "ip_entries": "journals/ips", "ip_notes": "journals/ips",
     "choices": "choices/styles", "field_defs": "choices/styles", "column_styles": "choices/styles",
     "users": "users", "printer_models": "choices/models", "cartridges": "choices/cartridges",
 }
@@ -212,6 +222,12 @@ def field_kind(entity, field):
     if entity == "moves":
         return "value" if field in MOVE_VALUE_FIELDS else "info"
 
+    if entity == "ip_entries":
+        return "value" if field in IP_VALUE_FIELDS else "info"
+
+    if entity == "ip_notes":
+        return "value" if field == IP_NOTE else "info"
+
     if field in ("archived", "location_id") or field.startswith("extra."):
         return "value"
 
@@ -240,6 +256,10 @@ def field_label(session, entity, field):
     if entity == "moves":
         column = MOVE_COLUMNS_BY_KEY.get(field)
         return column.card if column is not None else MOVE_HISTORY_LABELS.get(field, field)
+
+    if entity in ("ip_entries", "ip_notes"):
+        column = IP_COLUMNS_BY_KEY.get(field)
+        return column.card if column is not None else IP_HISTORY_LABELS.get(field, field)
 
     if entity == "locations":
         return LOCATION_LABELS.get(field, HISTORY_LABELS.get(field, field))
@@ -272,7 +292,8 @@ def find_object(session, ref, lock=True):
         obj = session.get(ColumnStyle, ref.entity_key)
         return obj or ColumnStyle(field=ref.entity_key, **{name: False for name in STYLE_FLAGS})
 
-    models = {"computers": Computer, "locations": Location, "printers": Printer, "moves": Move}
+    models = {"computers": Computer, "locations": Location, "printers": Printer, "moves": Move, "ip_entries": IpEntry,
+              "ip_notes": IpNote}
     model = models.get(ref.entity) or SIMPLE[ref.entity]["model"]
     query = session.query(model).filter(model.id == ref.entity_id)
 
@@ -303,6 +324,9 @@ def object_title(session, obj, ref):
 
     if entity == "moves":
         return move_names(session, [obj.id]).get(obj.id) or f"#{obj.id}"
+
+    if entity in ("ip_entries", "ip_notes"):
+        return obj.ip
 
     if entity == "printer_models":
         return model_title(obj)
@@ -396,6 +420,10 @@ class Values:
         if entity == "moves":
             return move_change_value(field, change, side)
 
+        # Журнал IP (этап 71): «Добавил» – по номеру пользователя
+        if entity == "ip_entries":
+            return entry_change_value(field, change, side)
+
         if (entity, field) in LINK_FIELDS and side + "_ids" in change:
             return change[side + "_ids"]
 
@@ -414,6 +442,12 @@ class Values:
 
         if entity == "moves":
             return move_value(self.session, obj, field)
+
+        if entity == "ip_entries":
+            return entry_value(self.session, obj, field)
+
+        if entity == "ip_notes":
+            return obj.note
 
         if field == "archived":
             return obj.archived
@@ -447,6 +481,9 @@ class Values:
 
         if entity == "moves":
             return move_display(self.session, field, value)
+
+        if entity == "ip_entries":
+            return entry_display(self.session, field, value)
 
         if (entity, field) in LINK_FIELDS and isinstance(value, list):
             return links_display(self.session, entity, value)
@@ -508,6 +545,12 @@ def set_value(session, entity, obj, field, value, batch, user, check=True):
 
     if entity == "moves":
         return set_move_value(session, obj, field, value)
+
+    if entity == "ip_entries":
+        return set_entry_value(session, obj, field, value)
+
+    if entity == "ip_notes":
+        return set_note_value(session, obj, field, value)
 
     if field == "archived":
         value = bool(value)
@@ -752,7 +795,7 @@ def set_simple_value(session, entity, obj, field, value, user, batch=None):
 def touch(entity, obj):
     """ПК или принтер изменился без новой записи истории – версия +1 (правка из
     таблицы со старой версией получит «обнови таблицу»)."""
-    if entity in ("computers", "printers", "moves"):
+    if entity in ("computers", "printers", "moves", "ip_entries", "ip_notes"):
         obj.version = (obj.version or 1) + 1
         obj.updated_at = datetime.now(timezone.utc)
 

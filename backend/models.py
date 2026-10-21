@@ -300,6 +300,39 @@ class Move(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class IpEntry(Base):
+    """Запись журнала «IP» (этап 71) – источник «IP»: адрес, тип, имя, кто добавил (пользователь
+    программы или вписанное имя). checked_at – «Актуальность» записи: создание и правка. У
+    рабочего адреса одна запись (uq_ip_entries_ip); архив – как у записей «Движения». Описание –
+    не здесь, а у адреса (IpNote)."""
+    __tablename__ = "ip_entries"
+
+    id = Column(Integer, primary_key=True)
+    ip = Column(Text, nullable=False)
+    ip_type = Column(Text, nullable=True)
+    name = Column(Text, nullable=True)
+    added_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    added_by = Column(Text, nullable=True)
+    checked_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    archived = Column(Boolean, nullable=False, server_default="false")
+
+    version = Column(Integer, nullable=False, server_default="1")
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class IpNote(Base):
+    """Описание адреса в журнале «IP» (этап 71): одно на адрес, у любого – записи журнала или
+    адреса из других источников; пустое (note None) – как нет. Остаётся у адреса, когда запись
+    уходит в архив или на другой адрес."""
+    __tablename__ = "ip_notes"
+
+    id = Column(Integer, primary_key=True)
+    ip = Column(Text, nullable=False, unique=True)
+    note = Column(Text, nullable=True)
+    version = Column(Integer, nullable=False, server_default="1")
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class History(Base):
     __tablename__ = "history"
 

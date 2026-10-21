@@ -62,7 +62,7 @@ export default {
     data() {
         return {
             // Таблица на экране: pc – ПК (страница «Таблица»), printer – «Принтеры», moves –
-            // журнал «Движение» (этап 66)
+            // журнал «Движение» (этап 66), ips – журнал «IP» (этап 71)
             tableKind: "pc",
             printerRows: [],
             printersLoading: false,
@@ -88,12 +88,18 @@ export default {
             if (this.tableKind === "moves") {
                 return this.moveRows;
             }
+            if (this.tableKind === "ips") {
+                return this.ipTableRows;
+            }
             return this.tableKind === "printer" ? this.printerRows : this.rows;
         },
 
         tableBuiltinColumns() {
             if (this.tableKind === "moves") {
                 return this.moveColumns;
+            }
+            if (this.tableKind === "ips") {
+                return this.ipColumns;
             }
             return this.tableKind === "printer" ? this.printerColumns : this.builtinColumns;
         },
@@ -118,6 +124,9 @@ export default {
             if (this.tableKind === "moves") {
                 return "title";
             }
+            if (this.tableKind === "ips") {
+                return "ip_name";
+            }
             return this.tableKind === "printer" ? "name" : "hostname";
         },
 
@@ -126,6 +135,9 @@ export default {
             if (this.tableKind === "moves") {
                 return this.movesError;
             }
+            if (this.tableKind === "ips") {
+                return this.ipError;
+            }
             return this.tableKind === "printer" ? this.printersError : this.tableError;
         },
 
@@ -133,6 +145,9 @@ export default {
         tableApi() {
             if (this.tableKind === "moves") {
                 return "/api/moves";
+            }
+            if (this.tableKind === "ips") {
+                return "/api/ips";
             }
             return this.tableKind === "printer" ? "/api/printers" : "/api/computers";
         },
@@ -180,7 +195,7 @@ export default {
     },
 
     methods: {
-        // Страница с таблицей: «Таблица», «Принтеры» или журнал «Движение» (этап 66)
+        // Страница с таблицей: «Таблица», «Принтеры» или журналы «Движение» (этап 66) и «IP» (этап 71)
         isTablePage() {
             return this.view === "table" || this.view === "printers" || this.view === "journals";
         },
@@ -190,6 +205,9 @@ export default {
             if (row._move) {
                 return "m" + row.id;
             }
+            if (row._ip) {
+                return "i" + row.id;
+            }
             return row._printer ? "p" + row.id : row.id;
         },
 
@@ -197,6 +215,9 @@ export default {
         rowKind(row) {
             if (row._move) {
                 return "moves";
+            }
+            if (row._ip) {
+                return "ips";
             }
             return row._printer ? "printer" : "pc";
         },
@@ -298,6 +319,9 @@ export default {
             if (this.tableKind === "moves") {
                 return this.loadMoves();
             }
+            if (this.tableKind === "ips") {
+                return this.loadIps();
+            }
             return this.tableKind === "printer" ? this.loadPrinters() : this.loadTable();
         },
 
@@ -379,9 +403,18 @@ export default {
                 return;
             }
             const el = event.currentTarget;
-            const run = () => {
+            const run = async () => {
                 this._objLinkTimer = null;
-                if (obj.kind === "printer") {
+                // Журнал «IP» (этап 71): имя записи «Движения» – её окно, принтера – его карточка
+                if (obj.kind === "move") {
+                    this.openMoveById(obj.id);
+                } else if (obj.kind === "printer" && obj.card) {
+                    if (!this.printerRows.length) {
+                        await this.loadPrinters();
+                    }
+                    this.closeCard();
+                    this.openPrinterCardById(obj.id);
+                } else if (obj.kind === "printer") {
                     this.openPrinterPop(obj.id, el, obj.usb);
                 } else {
                     this.closePrinterCard();
@@ -405,6 +438,11 @@ export default {
         // Значок таблицы у ссылки: ПК – в Таблице, принтер – в Принтерах; без поиска и
         // фильтров, чтобы строка была видна; полоска у строки
         showObjInTable(obj) {
+            // Запись «Движения» (из журнала «IP», этап 71) – на вкладке «Движение»
+            if (obj.kind === "move") {
+                this.showMoveInTable(obj.id);
+                return;
+            }
             const pc = obj.kind === "pc";
             const rows = pc ? this.rows : this.printerRows;
             const row = rows.find(function (r) { return r.id === obj.id; });
@@ -727,6 +765,10 @@ export default {
         pickOptions(col) {
             if (col.pick === "flag") {
                 return [{ key: "есть", value: "есть", count: "" }, { key: "нет", value: "нет", count: "" }];
+            }
+            // «Добавил» журнала «IP» (этап 71): пользователи программы; вписать можно и другое имя
+            if (col.pick === "user") {
+                return this.moveInstallers.map(function (u) { return { key: u.name.toLowerCase(), value: u.name, count: "" }; });
             }
             const counts = new Map();
             this.printerRows.forEach(function (row) {

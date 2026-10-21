@@ -170,11 +170,14 @@ export default {
         },
 
         countText() {
-            const total = this.showArchive ? "В архиве: " : "Всего: ";
+            // Журнал «IP» (этап 71): в «Свободных» – свободные адреса; строка «Добавить» – не адрес
+            const ips = this.tableKind === "ips" && !this.showArchive;
+            const total = this.showArchive ? "В архиве: " : (ips && this.ipFree.length ? "Свободных: " : "Всего: ");
+            const draft = ips && this.ipDraft ? 1 : 0;
             if (this.displayedCount === this.rowCount) {
-                return total + this.rowCount;
+                return total + (ips && this.ipFree.length ? this.ipFreeCount : this.rowCount - draft);
             }
-            return "Показано: " + this.displayedCount + " из " + this.rowCount + (this.showArchive ? " в архиве" : "");
+            return "Показано: " + (this.displayedCount - draft) + " из " + (this.rowCount - draft) + (this.showArchive ? " в архиве" : "");
         },
 
         // В this.rows – все ПК, и рабочие, и из архива (признак archived); на странице
@@ -216,7 +219,12 @@ export default {
 
         // Фильтр по дереву, фильтры по столбцам (mixins/col-filters.js), поиск
         filteredRows() {
-            const rows = this.searchRows(this.applyColFilters(this.locationRows, null));
+            let rows = this.searchRows(this.applyColFilters(this.locationRows, null));
+            // Журнал «IP» (этап 71): строка «Добавить», только что добавленные и заполненные в
+            // «Свободных» видны и тогда, когда поиск или фильтры их не нашли бы
+            if (this.tableKind === "ips") {
+                rows = this.ipKeepShown(rows);
+            }
             // Значок-воронка у кнопки «Значения сканера»: только строки с предложениями;
             // у кнопки «Имена по правилам» – только ПК с именем не по правилу
             return this.scanOnlyOn || this.nameOnlyOn
@@ -240,6 +248,10 @@ export default {
         // строки прячут, а не удаляют (этап 65): очистка поиска не создаёт 600 строк заново
         sortedRows() {
             const rows = this.columnSortedRows;
+            // Журнал «IP» (этап 71): строка «Добавить» и только что добавленные – сверху
+            if (this.tableKind === "ips") {
+                return this.ipPinTop(rows);
+            }
             // Журнал: записи с одним инвентарным – подряд (правки этапа 66)
             return this.tableKind === "moves" ? groupKits(rows, rows === this.modeRows) : rows;
         },
@@ -325,6 +337,10 @@ export default {
             if (this.tableKind === "moves" && this.movesLoaded && !this.tableRows.length) {
                 return "Записей нет.";
             }
+            // Журнал «IP» (этап 71): в отмеченных подсетях свободных нет
+            if (this.tableKind === "ips" && this.ipFree.length && !this.showArchive && !this.rowCount) {
+                return "Свободных адресов нет.";
+            }
             if (this.displayRows.length || !this.tableRows.length) {
                 return "";
             }
@@ -394,6 +410,9 @@ export default {
                 // Журнал «Движение» (этап 66)
                 setIfChanged(this, "moveColumns", (data.move_columns || []).map(toColumnDef));
                 setIfChanged(this, "moveHistoryLabels", data.move_history_labels || {});
+                // Журнал «IP» (этап 71)
+                setIfChanged(this, "ipColumns", (data.ip_columns || []).map(toColumnDef));
+                setIfChanged(this, "ipHistoryLabels", data.ip_history_labels || {});
                 this.applyDefaultHidden();
             } catch (e) {
                 this.tableError = String(e.message || e);
@@ -459,6 +478,8 @@ export default {
             try {
                 if (this.tableKind === "moves") {
                     await Promise.all([this.loadMoves(), this.loadItemTypes()]);
+                } else if (this.tableKind === "ips") {
+                    await this.loadIps();
                 } else if (this.tableKind === "printer") {
                     await Promise.all([this.loadPrinters(), this.loadPrinterDiffs()]);
                 } else {
@@ -617,8 +638,9 @@ export default {
                 if (col.field === "antivirus") {
                     return { pad: CHIP_PAD, bold: avBold };
                 }
-                // Принтеры у ПК, ПК у принтера (этап 44): справа от ссылки – значок таблицы
-                if (col.links) {
+                // Принтеры у ПК, ПК у принтера (этап 44): справа от ссылки – значок таблицы; так же –
+                // имена журнала «IP» (этап 71)
+                if (col.links || col.ipCol === "iname") {
                     return { pad: LINK_ICON, bold: false };
                 }
                 const ms = this.markStyle(this.lineMarkKinds(this.lineMarks(row, col, line)));
@@ -627,6 +649,10 @@ export default {
                 return ms || chip || dot ? { pad: ((ms && ms.backgroundColor) || chip ? CHIP_PAD : 0) + dot, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» – запас не мешает
             };
             const widths = computeAutoWidths(this.tableRows, this.widthColumns, this.tableUserDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
+            // Журнал «IP» (этап 71): «Источники» – в строку хотя бы два, длинные – переносом
+            if (this.tableKind === "ips" && widths.ip_sources) {
+                widths.ip_sources = this.ipSourcesWidth(widths.ip_sources);
+            }
             // Те же ширины – данные не трогать: новый объект перерисовал бы все строки (этап 52)
             if (!sameWidths(this.autoWidths, widths)) {
                 this.autoWidths = widths;
@@ -1103,6 +1129,8 @@ export default {
                 checkFields: this.$refs.checkFieldsWrap,
                 collect: this.$refs.collectWrap,
                 netScan: this.$refs.netScanWrap,
+                ipScan: this.$refs.ipScanWrap,
+                ipFree: this.$refs.ipFreeWrap,
                 namesHelp: this.$refs.namesHelpWrap,
                 namingHelp: this.$refs.namingHelpWrap,
                 historyFilter: this.$refs.historyFilterWrap,

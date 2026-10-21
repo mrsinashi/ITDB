@@ -1,4 +1,4 @@
-// Строка главной таблицы (Компьютеры и Принтеры) – своим компонентом (этап 52). Vue
+// Строка главной таблицы (Компьютеры, Принтеры, журналы) – своим компонентом (этап 52). Vue
 // перерисовывает её, только когда меняется то, что она читает (её данные, выделение, правка в
 // ней, оформление и столбцы), а не на каждое изменение страницы (тост, подсказка, буква в поле,
 // наведение): 600 строк перерисовывались за 0,3 с, на слабом ПК – больше секунды.
@@ -22,6 +22,9 @@ const ROW_TEMPLATE = `
                     :title="root.nameChipTitle(row)" @mousedown.stop @dblclick.stop @click.stop="$event.altKey ? root.copyCellValue($event) : root.openNamePop(row, $event)">{{ root.nameChip(row) }}</button>
                 <span v-else-if="root.nameKept(row)" class="name-kept" :title="'Своё имя · правило ' + root.nameChipTitle(row)">своё</span>
             </template>
+            <!-- Журнал «IP» (этап 71): источники – через запятую с переносом между ними; тип, имя, «Добавил» – строками
+                 (откуда – в подсказке); имя ПК, принтера, записи «Движения» – ссылкой, при наведении – «Показать в таблице» -->
+            <span v-else-if="col.ipCol && root.ipCellParts(row, col)" :class="col.ipCol === 'isrc' ? 'ip-src' : (col.ipCol === 'iname' ? 'cell-lines ip-names' : 'cell-lines')" :style="root.cellSpanStyle(row, col, editField === col.field)"><template v-for="(p, pi) in root.ipCellParts(row, col)" :key="pi"><span v-if="col.ipCol === 'isrc'" class="ip-src-part" :class="p.cls" :title="p.title">{{ p.text }}{{ p.sep }}</span><span v-else-if="p.obj" class="cell-line obj-line"><a class="obj-link" :class="p.cls" :href="p.href" draggable="false" :title="p.title" @click.prevent="root.onObjLinkClick($event, p.obj)">{{ p.text }}</a><span class="obj-tbl" :title="p.tblTitle" @mousedown.stop @click.stop="root.showObjInTable(p.obj)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></span><span v-else class="cell-line" :class="p.cls" :title="p.title">{{ p.text }}</span></template></span>
             <!-- Антивирусы (этап 26д): строкой каждый, цвет – по состоянию (Справочники) -->
             <span v-else-if="col.field === 'antivirus'" class="av-cell"><span v-for="(a, ai) in root.avItems(row)" :key="ai" class="av-line" :class="{ 'av-chip': !!(root.avCellStyle(a) || {}).backgroundColor }" :style="root.avCellStyle(a)" :title="root.avTitle(a)">{{ a.title }}</span></span>
             <!-- Значения по строкам: повтор – блочком, логина нет в Jabber – красным, номер GLPI / GSIT – ссылкой -->
@@ -43,14 +46,14 @@ const ROW_TEMPLATE = `
                 <location-picker v-else-if="col.location" editor input-class="cell-edit" :value="row.location_id" :options="root.locationOptions"
                     :move-room="root.roomMove(row, col)" placeholder="Расположение…" @pick="root.onCellLocationPick(row, $event)"
                     @move-room="root.onRoomMove(row, $event)" @cancel="root.cancelEdit"></location-picker>
-                <textarea v-else-if="col.multiline && !col.cartridges" v-model="root.editValue"
+                <textarea v-else-if="col.multiline && !col.cartridges && !col.ipCol" v-model="root.editValue"
                     @keydown="root.handleEditKeydown($event, row, col)"
                     @input="col.field === 'ip' && root.onIpInput($event, null, 'editValue'); root.onEditInput($event, col)"
                     @blur="root.saveEdit(row, col)"
                     class="cell-edit cell-edit-multi"></textarea>
                 <input v-else v-model="root.editValue"
                     @keydown="root.handleEditKeydown($event, row, col)"
-                    @input="root.onEditInput($event, col); root.onSuggestInput($event.target.value)"
+                    @input="col.field === 'ip_addr' && root.onIpInput($event, null, 'editValue'); root.onEditInput($event, col); root.onSuggestInput($event.target.value)"
                     @blur="root.saveEdit(row, col)"
                     class="cell-edit">
             </template>

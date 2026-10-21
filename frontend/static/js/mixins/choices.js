@@ -181,7 +181,8 @@ export default {
         // подсказок при вводе. [{ key, value, choice, count }]
         collectValues(field, multiline, subnet) {
             const byField = this.choicesByField;
-            const rows = this.activeRows;
+            // Журнал «IP» (этап 71): в «Свободных» на экране почти пусто – подсказки из всех адресов
+            const rows = this.tableKind === "ips" ? this.ipRows.filter(function (row) { return !row.archived; }) : this.activeRows;
             const map = new Map();
             (byField[field] || []).forEach(function (ch) {
                 const key = ch.value.trim().toLowerCase();

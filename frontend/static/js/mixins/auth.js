@@ -221,14 +221,23 @@ export default {
             this.hideWebShown();
             this.closeLinkPick();
             this.closePop("permsPop");
-            // Таблица показывает ПК, принтеры или журнал (этапы 44, 66): её настройки – меняются местами
-            this.switchTableKind(view === "printers" ? "printer" : (view === "journals" ? "moves" : "pc"));
+            // Журналы: вкладка, на которую нет прав (этап 69), – первая доступная
+            if (view === "journals" && !this.canPage("journals/" + this.journalTab)) {
+                this.journalTab = this.firstTab("journals") || "moves";
+            }
+            // Таблица показывает ПК, принтеры или журнал (этапы 44, 66, 71): её настройки – меняются местами
+            const journal = this.journalTab === "ips" ? "ips" : "moves";
+            this.switchTableKind(view === "printers" ? "printer" : (view === "journals" ? journal : "pc"));
             this.view = view;
             this.scanPop = null;
             if (view === "table") {
                 this.loadDiffs();
             } else if (view === "journals") {
-                this.openJournals();
+                if (journal === "ips") {
+                    this.openIps();
+                } else {
+                    this.openJournals();
+                }
             } else if (view === "printers") {
                 this.loadPrinters();
                 this.loadPrinterModels();

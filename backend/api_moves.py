@@ -915,8 +915,8 @@ def install_move(move_id: int, payload: InstallIn, user=Depends(require_page("jo
 
 
 @router.get("/moves/installers")
-def list_installers(user=Depends(require_page("journals/moves", "edit")), session=Depends(get_db)):
-    """Кого можно выбрать в «Установил»: рабочие пользователи программы."""
+def list_installers(user=Depends(require_page("journals/moves", "edit", ("journals/ips", "edit"))), session=Depends(get_db)):
+    """Кого можно выбрать в «Установил» (и в «Добавил» журнала IP, этап 71): рабочие пользователи программы."""
     users = session.query(User).filter(User.archived == False).all()  # noqa: E712
     items = [
         {"id": item.id, "name": short_name(item.full_name, item.login), "full_name": item.full_name, "login": item.login}

@@ -13,7 +13,7 @@ import { FIXED_HISTORY_FIELDS } from "../columns.js";
 // Чья страница правит объект (этап 69, как ENTITY_PAGES в history_undo.py); правила имён у
 // узлов – «Справочники → Имена ПК»
 const ENTITY_PAGES = {
-    computers: "table", printers: "printers", locations: "tree", moves: "journals/moves",
+    computers: "table", printers: "printers", locations: "tree", moves: "journals/moves", ip_entries: "journals/ips", ip_notes: "journals/ips",
     choices: "choices/styles", field_defs: "choices/styles", column_styles: "choices/styles",
     users: "users", printer_models: "choices/models", cartridges: "choices/cartridges"
 };
@@ -40,7 +40,9 @@ const ENTITY_FILTERS = {
     printer_models: "Модели принтеров",
     cartridges: "Картриджи",
     moves: "Журнал «Движение»",
-    item_types: "Типы техники"
+    item_types: "Типы техники",
+    ip_entries: "Журнал «IP»",
+    ip_notes: "Журнал «IP»: описания"
 };
 // Только администратор видит эти записи
 const ADMIN_ENTITIES = ["users", "scan_sources", "scan_subnets", "scan_records", "scan_aliases", "scan_schedule"];
@@ -347,6 +349,10 @@ export default {
             // Журнал «Движение» (этап 66) – если открывали
             if (this.movesLoaded) {
                 tasks.push(this.loadMoves());
+            }
+            // Журнал «IP» (этап 71) – если он на экране (при заходе на вкладку и так перечитывается)
+            if (this.view === "journals" && this.journalTab === "ips") {
+                tasks.push(this.loadIps());
             }
             if (this.view === "users") {
                 tasks.push(this.loadUsers());

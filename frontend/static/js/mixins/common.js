@@ -25,6 +25,10 @@ export default {
         moveFieldLabelMap() {
             return buildFieldLabels(this.moveColumns, this.moveHistoryLabels);
         },
+
+        ipFieldLabelMap() {
+            return buildFieldLabels(this.ipColumns, this.ipHistoryLabels);
+        },
     },
 
     methods: {
@@ -100,6 +104,9 @@ export default {
             }
             if (entity === "moves") {
                 return this.moveFieldLabelMap[field] || field;
+            }
+            if (entity === "ip_entries" || entity === "ip_notes") {
+                return this.ipFieldLabelMap[field] || field;
             }
             // У модели принтера color – не цвет текста, а печать
             if (entity === "printer_models" && field === "color") {

@@ -167,7 +167,7 @@ export default {
                     if (ob === -1) return -1;
                     return oa - ob;
                 }
-                if (col.date) {
+                if (col.date || col.day) {
                     return (dateKey(a.value) || 0) - (dateKey(b.value) || 0);
                 }
                 return a.value.localeCompare(b.value, "ru", { numeric: true, sensitivity: "base" });

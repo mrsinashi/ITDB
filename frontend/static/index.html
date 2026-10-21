@@ -137,11 +137,51 @@
 
             <div class="toolbar tb-with-refresh" v-tb-fit>
                 <div class="tb-left">
-                    <!-- Журналы (этап 66): вкладки страницы, как у «Сканера»; пока одна -->
-                    <nav v-if="tableKind === 'moves'" class="tb-tabs">
-                        <a href="#journals/moves" :class="{ active: journalTab === 'moves' }" @click="navClick($event, () => setView('journals'))" title="Получение и установка техники и компонентов">Движение</a>
+                    <!-- Журналы (этап 66): вкладки страницы, как у «Сканера»; с этапа 71 – «IP». Права – у каждой своё -->
+                    <nav v-if="tableKind === 'moves' || tableKind === 'ips'" class="tb-tabs">
+                        <a v-if="canPage('journals/moves')" href="#journals/moves" :class="{ active: journalTab === 'moves' }" @click="navClick($event, () => setJournalTab('moves'))" title="Получение и установка техники и компонентов">Движение</a>
+                        <a v-if="canPage('journals/ips')" href="#journals/ips" :class="{ active: journalTab === 'ips' }" @click="navClick($event, () => setJournalTab('ips'))" title="Занятые и свободные адреса">IP</a>
                     </nav>
                     <span class="tb-count">{{ countText }}</span>
+                    <!-- Журнал «IP» (этап 71): «Свободные» – подсети из «Подключений» (по умолчанию ни одной), «Сканировать» –
+                         всё, что приносит адреса (при каждом заходе на вкладку – все галочки) -->
+                    <span v-if="tableKind === 'ips' && !showArchive" class="dropdown-wrap" ref="ipFreeWrap">
+                        <button class="btn" :class="{ 'menu-open': openMenu === 'ipFree', active: ipFree.length > 0 }" @click="toggleMenu('ipFree')" :title="ipFree.length ? 'Свободные адреса: ' + ipFree.join(', ') : 'Свободные адреса подсетей'">Свободные</button>
+                        <div v-if="openMenu === 'ipFree'" class="dropdown attached collect-menu net-scan-menu">
+                            <div class="dd-title">Подсети</div>
+                            <div v-if="!ipFreeOptions.length" class="dd-note">Подсетей нет</div>
+                            <div v-else class="ns-list">
+                                <label v-for="sn in ipFreeOptions" :key="sn.cidr" class="ns-subnet" :class="{ off: sn.big }" :title="sn.title">
+                                    <input type="checkbox" :checked="sn.checked" :disabled="sn.big" @change="toggleIpFree(sn.cidr)"><span class="ns-cidr">{{ sn.cidr }}</span>
+                                    <span v-if="!sn.big && ipFreeOptions.length > 1" class="ns-only" title="Только эту" @click.prevent.stop="onlyIpFree(sn.cidr)">только</span>
+                                </label>
+                            </div>
+                            <template v-if="ipFree.length">
+                                <div class="dd-sep"></div>
+                                <button @click="setIpFree([]); closeMenus()">Занятые адреса</button>
+                            </template>
+                        </div>
+                    </span>
+                    <span v-if="tableKind === 'ips' && ipCanScan" class="dropdown-wrap" ref="ipScanWrap">
+                        <button class="btn" :class="{ 'menu-open': openMenu === 'ipScan' }" @click="toggleIpScanMenu" title="Собрать адреса заново">{{ ipCollecting ? "Сканирую…" : "Сканировать" }}</button>
+                        <div v-if="openMenu === 'ipScan'" class="dropdown attached collect-menu net-scan-menu">
+                            <div class="dd-title">Что сканировать</div>
+                            <label v-for="o in ipScanOptions" :key="o.key" :class="{ off: !!o.block }" :title="o.title">
+                                <input type="checkbox" :checked="o.checked" :disabled="!!o.block" @change="toggleIpScanPart(o.key)"> {{ o.label }}<span v-if="o.running" class="dd-count">идёт</span>
+                            </label>
+                            <template v-if="ipScanSubnets.length">
+                                <div class="dd-sep"></div>
+                                <div class="ns-list">
+                                    <label v-for="sn in ipScanSubnets" :key="sn.cidr" class="ns-subnet" :class="{ off: !ipScanOn.net }" :title="sn.title">
+                                        <input type="checkbox" :checked="sn.checked" :disabled="!ipScanOn.net" @change="toggleIpScanSubnet(sn.cidr)"><span class="ns-cidr">{{ sn.cidr }}</span>
+                                        <span v-if="ipScanOn.net && ipScanSubnets.length > 1" class="ns-only" title="Только эту" @click.prevent.stop="onlyIpScanSubnet(sn.cidr)">только</span>
+                                    </label>
+                                </div>
+                            </template>
+                            <div class="dd-sep"></div>
+                            <button class="btn btn-primary cm-go" :disabled="!ipScanReady" @click="collectIpChosen">Сканировать</button>
+                        </div>
+                    </span>
                     <!-- Фильтры: по дереву и по столбцам. Не помещаются – сжимаются, полный текст в подсказке -->
                     <span v-if="locationFilter || activeColFilters.length" class="tb-chips">
                         <button v-if="locationFilter" class="chip" @click="clearLocationFilter"
@@ -173,8 +213,8 @@
                             Выбрано: {{ selectedRows.length }}
                         </button>
                         <div v-if="openMenu === 'selection'" class="dropdown attached">
-                            <!-- Журнал (этап 66): изменить значения, архив -->
-                            <template v-if="canEdit && tableKind === 'moves'">
+                            <!-- Журналы (этапы 66, 71): изменить значения, архив -->
+                            <template v-if="canEdit && (tableKind === 'moves' || tableKind === 'ips')">
                                 <template v-if="!showArchive">
                                     <button @click="openAction('bulk')" title="Одно значение у всех выбранных">Изменить значения…</button>
                                     <div class="dd-sep"></div>
@@ -224,7 +264,7 @@
                 <span class="tb-search">
                     <!-- Обновить (этап 47): изменения, значения сканера; у ПК – и кто в сети из VACUUM -->
                     <button class="btn icon-only tb-refresh" :disabled="tableRefreshing" @click="refreshTablePage" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
-                    <input id="quickFilter" v-model="quickFilter" :placeholder="tableKind === 'moves' ? 'Поиск по журналу' : (tableKind === 'printer' ? 'Поиск по принтерам' : 'Поиск по компьютерам')" autocomplete="off"
+                    <input id="quickFilter" v-model="quickFilter" :placeholder="tableKind === 'moves' || tableKind === 'ips' ? 'Поиск по журналу' : (tableKind === 'printer' ? 'Поиск по принтерам' : 'Поиск по компьютерам')" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'quickFilter')">
                     <span v-if="quickFilter" class="clear" title="Очистить (Esc)" @click="quickFilter = ''">×</span>
                 </span>
@@ -268,8 +308,8 @@
                         </div>
                     </span>
                     <span class="tb-divider"></span>
-                    <!-- У журнала (этап 66) значений сканера и имён по правилам нет -->
-                    <template v-if="tableKind !== 'moves'">
+                    <!-- У журналов (этапы 66, 71) значений сканера и имён по правилам нет -->
+                    <template v-if="tableKind !== 'moves' && tableKind !== 'ips'">
                     <!-- Значения сканера (этапы 26б, 26в): кнопка дописывает в ячейки блочки с тем,
                          что предлагают GLPI / GSIT; у включённой при наведении – что значат цвета -->
                     <span class="scan-btn-wrap" @mouseenter="showScanLegend(true)" @mouseleave="showScanLegend(false)">
@@ -312,6 +352,8 @@
                                 <button @click="openMoveAdd('tech')" title="Компьютер, монитор, принтер…"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Техника</button>
                                 <button @click="openMoveAdd('part')" title="Диск, память…"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>Компонент</button>
                             </template>
+                            <!-- Журнал «IP» (этап 71): пустая строка сверху -->
+                            <button v-else-if="tableKind === 'ips'" @click="openIpAdd" title="Адрес, тип, имя, описание"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>Адрес</button>
                             <button v-else-if="tableKind === 'pc'" @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
                             <!-- Принтер (этап 44): расположение, модель, №, имя, IP -->
                             <button v-else @click="toggleNewPrinter" title="Расположение, модель, №, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Принтер</button>
@@ -320,8 +362,8 @@
                         </div>
                     </span>
                     <!-- Выгрузка – у Компьютеров и Принтеров (у журнала не просили) -->
-                    <span v-if="canEdit && tableKind !== 'moves'" class="tb-divider"></span>
-                    <span v-if="tableKind !== 'moves'" class="dropdown-wrap" ref="exportWrap">
+                    <span v-if="canEdit && tableKind !== 'moves' && tableKind !== 'ips'" class="tb-divider"></span>
+                    <span v-if="tableKind !== 'moves' && tableKind !== 'ips'" class="dropdown-wrap" ref="exportWrap">
                         <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'export' }" @click="toggleMenu('export')" title="Выгрузить">
                             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
                         </button>

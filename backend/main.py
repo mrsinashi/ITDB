@@ -17,6 +17,7 @@ from api_locations import router as locations_router
 from api_naming import router as naming_router
 from api_printers import router as printers_router
 from api_moves import router as moves_router
+from api_ips import router as ips_router
 from api_delete import router as delete_router
 from cartridges import router as cartridges_router
 from auth import get_current_user
@@ -176,6 +177,11 @@ app.include_router(
 # Журнал «Движение» и типы техники (этап 66): смотреть – все, менять – редактор и администратор
 app.include_router(
     moves_router,
+    dependencies=[Depends(get_current_user)],
+)
+# Журнал «IP» (этап 71): по правам вкладки (require_page в каждом эндпоинте)
+app.include_router(
+    ips_router,
     dependencies=[Depends(get_current_user)],
 )
 # Удаление насовсем из архива (ПК, принтеры, журнал; правки этапа 66): только администратор

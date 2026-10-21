@@ -72,7 +72,8 @@ export default {
             if (!col.suggest && !scan.length) {
                 return;
             }
-            const values = col.suggest ? this.collectValues(col.field, false, false) : [];
+            // Журнал «IP» (этап 71): значения в ячейке строками – подсказки по строкам
+            const values = col.suggest ? this.collectValues(col.field, !!col.ipCol, false) : [];
             const scanKeys = new Set(scan.map(function (o) { return o.value.toLowerCase(); }));
             const options = scan.concat(values.filter(function (o) { return !scanKeys.has(String(o.value).toLowerCase()); }));
             this.openSuggestList(el, col.field, options, onPick);

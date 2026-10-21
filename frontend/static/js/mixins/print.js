@@ -276,8 +276,12 @@ export default {
             } else if (parts) {
                 html = parts.map(function (p) { return line(p.text, p.style); }).join("");
             } else {
-                // «Доступ» принтера (этап 45) – точками, как в таблице
-                const value = col.secret && row[col.field] ? this.secretDots : row[col.field];
+                // «Доступ» принтера (этап 45) – точками, как в таблице; источники журнала «IP» (этап 71) –
+                // через запятую, как в таблице
+                let value = col.secret && row[col.field] ? this.secretDots : row[col.field];
+                if (col.ipCol === "isrc" && value) {
+                    value = String(value).split("\n").join(", ");
+                }
                 if (value !== null && value !== undefined && value !== "") {
                     const st = this.printStyle(this.cellTextStyle(row, col), opt);
                     html = "<span class=\"" + (col.note ? "n" : "t") + "\"" + (st.css ? " style=\"" + st.css + "\"" : "") + ">" + esc(value) + "</span>";

@@ -10,7 +10,7 @@ export function normalizeKey(value) {
 // Дубли: поле → множество значений, встречающихся больше одного раза.
 // Какие поля проверять и какие из них многострочные – из описания столбцов.
 // У таблицы ПК, принтеров (этап 44) и журнала «Движение» (этап 66) – свои
-const duplicateSets = { pc: {}, printer: {}, moves: {} };
+const duplicateSets = { pc: {}, printer: {}, moves: {}, ips: {} };
 
 export function buildDuplicateSets(rows, columns) {
     const dupColumns = (columns || []).filter(function (col) { return col.dup; });
@@ -74,6 +74,10 @@ export const kindLabels = {
 // Столбцы журнала со сложным значением (этап 66; комплект – правки): только в окне записи, в
 // «Изменить значения…» их нет. Запись журнала целиком правится в окне (правки 2), не в ячейке
 const MOVE_WINDOW_KINDS = ["mtype", "mtitle", "mkit", "pdate", "mdest", "muser"];
+// Журнал «IP» (этап 71): значения источников – строками (ipCol – как рисовать, mixins/ips.js);
+// источники и «Актуальность» не правятся, остальное – по строке (ipCellEditable)
+const IP_KINDS = ["isrc", "ilines", "iname", "iday"];
+const IP_FIXED_KINDS = ["isrc", "iday"];
 
 // Встроенные столбцы описаны на сервере (backend/api_columns.py, GET /api/columns).
 // Здесь описание переводится в вид, который ждут таблица, карточка и Справочники.
@@ -94,16 +98,20 @@ export function toColumnDef(c) {
         location: c.kind === "location",
         // scan: только из сканера (антивирусы, этап 26д) – не правится; у принтера (этап 44)
         // значения модели и вход Web в ячейке тоже не правятся
-        editable: ["location", "scan", "pattr", "secret"].concat(MOVE_WINDOW_KINDS).indexOf(c.kind) === -1,
+        editable: ["location", "scan", "pattr", "secret"].concat(MOVE_WINDOW_KINDS, IP_FIXED_KINDS).indexOf(c.kind) === -1,
         // Дата, где день и месяц можно не знать («08.2025», «2026»): сортировка по дате
         pdate: c.kind === "pdate",
+        // Журнал «IP» (этап 71): вид ячейки; «Актуальность» – дата без выделения «срок прошёл»
+        ipCol: IP_KINDS.indexOf(c.kind) !== -1 ? c.kind : null,
+        day: c.kind === "iday",
         // Значение модели у принтера (этап 61): двойной клик говорит, где оно меняется
         fromModel: c.kind === "pattr",
         scanOnly: c.kind === "scan",
         // Принтеры у ПК и ПК у принтера – ссылками (этап 44): к какой таблице ведут
         links: c.kind === "printers" ? "printer" : (c.kind === "computers" ? "pc" : null),
-        // Подсказки при правке – свой список: модели справочника, «есть» / «нет»
-        pick: c.kind === "pmodel" ? "model" : (c.kind === "flag" ? "flag" : null),
+        // Подсказки при правке – свой список: модели справочника, «есть» / «нет», пользователи
+        // программы («Добавил» журнала «IP», этап 71)
+        pick: c.kind === "pmodel" ? "model" : (c.kind === "flag" ? "flag" : (c.key === "ip_added" ? "user" : null)),
         // «Доступ» принтера и «Пароль» ПК (этап 70): в ячейке точки, двойной клик – показать по паролю,
         // задать, изменить (mixins/web-access.js)
         secret: c.kind === "secret",
@@ -196,7 +204,9 @@ export const ENTITY_LABELS = {
     printer_models: "Модель принтера",
     cartridges: "Картридж",
     moves: "Движение",
-    item_types: "Тип техники"
+    item_types: "Тип техники",
+    ip_entries: "IP",
+    ip_notes: "IP"
 };
 export const SIMPLE_FIELD_LABELS = {
     value: "Значение",
@@ -317,12 +327,15 @@ export const NAME_RULE_COLUMN = {
     editable: false
 };
 
-// Ключ в браузере для таблицы принтеров (этап 44) и журнала «Движение» (этап 66): у них свои
-// столбцы, ширины, порядок, закрепление и виды – «itdb.hiddenColumns.v1» →
-// «itdb.printers.hiddenColumns.v1», «itdb.moves.hiddenColumns.v1»
+// Ключ в браузере для таблицы принтеров (этап 44) и журналов «Движение» (этап 66) и «IP» (этап 71):
+// у них свои столбцы, ширины, порядок, закрепление и виды – «itdb.hiddenColumns.v1» →
+// «itdb.printers.hiddenColumns.v1», «itdb.moves.hiddenColumns.v1», «itdb.ips.hiddenColumns.v1»
 export function tableStoreKey(key, kind) {
     if (kind === "printer") {
         return key.replace(/^itdb\./, "itdb.printers.");
+    }
+    if (kind === "ips") {
+        return key.replace(/^itdb\./, "itdb.ips.");
     }
     return kind === "moves" ? key.replace(/^itdb\./, "itdb.moves.") : key;
 }
@@ -609,7 +622,7 @@ export function compareCellValues(a, b, col) {
     if (bEmpty) {
         return -1;
     }
-    if (col && col.date) {
+    if (col && (col.date || col.day)) {
         return (dateKey(a) || 0) - (dateKey(b) || 0);
     }
     if (col && col.pdate) {

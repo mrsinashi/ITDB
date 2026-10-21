@@ -39,7 +39,8 @@
 //                        link-picker (подключение принтеров к ПК: окошко с поиском и галочками),
 //                        cartridges (Справочники → «Картриджи», подсказки по частям через запятую),
 //                        pop (всплывающие окошки у ссылки и блочка: место, Esc и клик мимо, перетаскивание),
-//                        moves («Журналы» → «Движение»: та же Таблица с записями журнала, окно записи)
+//                        moves («Журналы» → «Движение»: та же Таблица с записями журнала, окно записи),
+//                        ips («Журналы» → «IP»: та же Таблица, строка на адрес, свободные адреса)
 //   route.js           – адреса страниц после «#» (ссылки открываются в новой вкладке)
 //   toolbar-fit.js     – панель под меню: левой части тесно – поиск сдвигается и сужается (v-tb-fit)
 //   components/        – tree-node, tree-form, style-controls, location-picker, count-select,
@@ -94,6 +95,7 @@ import linkPicker from "./mixins/link-picker.js";
 import cartridges from "./mixins/cartridges.js";
 import pop from "./mixins/pop.js";
 import moves from "./mixins/moves.js";
+import ips from "./mixins/ips.js";
 
 import treeNode from "./components/tree-node.js";
 import styleControls from "./components/style-controls.js";
@@ -107,7 +109,7 @@ import dateParts from "./components/date-parts.js";
 const DIFFS_WAIT_MS = 3000;
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableEdit, tableSelect, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker, cartridges, pop, moves],
+    mixins: [common, auth, table, tableEdit, tableSelect, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker, cartridges, pop, moves, ips],
 
     // Дерево получает корень через inject, а не через window
     provide() {

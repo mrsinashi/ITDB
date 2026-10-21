@@ -8,7 +8,7 @@ import { pageLink, parseHash } from "../route.js";
 // (этап 69: «scan/net», «choices/models»)
 const MENU_VIEWS = ["table", "printers", "tree", "journals", "vacuum", "scan", "choices", "history", "users"];
 const VIEW_TABS = {
-    journals: ["moves"],
+    journals: ["moves", "ips"],
     scan: ["check", "net", "names", "schedule", "settings"],
     choices: ["styles", "names", "models", "cartridges"]
 };
@@ -80,6 +80,14 @@ export default {
                 const node = this.findTreeNode(Number(params.loc));
                 if (node) {
                     this.showLocationInTable(node);
+                }
+            }
+            // Вкладка «Журналов» (этап 71) – до перехода: страница откроется сразу на ней
+            if (route.view === "journals" && VIEW_TABS.journals.indexOf(route.tab) !== -1 && this.canPage("journals/" + route.tab) && this.journalTab !== route.tab) {
+                if (this.view === "journals") {
+                    this.setJournalTab(route.tab);
+                } else {
+                    this.journalTab = route.tab;
                 }
             }
             if (this.view !== route.view || route.view === "scan") {

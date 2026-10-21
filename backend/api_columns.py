@@ -5,7 +5,8 @@
 Новый встроенный столбец – одна строка в COLUMNS (и, если нужно, в CARD_GROUPS).
 Пользовательские поля сюда не входят: они в field_defs и добавляются к
 встроенным перед «Статус». Столбцы таблицы принтеров (этап 44) – здесь же,
-PRINTER_COLUMNS и PRINTER_CARD_GROUPS; журнала «Движение» (этап 66) – MOVE_COLUMNS."""
+PRINTER_COLUMNS и PRINTER_CARD_GROUPS; журнала «Движение» (этап 66) – MOVE_COLUMNS, журнала
+«IP» (этап 71) – IP_COLUMNS."""
 import re
 from typing import Literal, Optional
 
@@ -47,10 +48,16 @@ router = APIRouter(prefix="/api", tags=["columns"])
 #   pdate     – дата, где день и месяц можно не знать: «02.08.2026», «08.2026», «2026»
 #   mdest     – куда: узел дерева или ПК, строками («Терапия», «[326] Ординаторская», имя ПК)
 #   muser     – кто установил: пользователь программы («Фамилия И.О.») или вписанное имя
+# Журнал «IP» (этап 71, api_ips.py) – строка на адрес, значения источников строками:
+#   isrc      – источники адреса: короткими названиями через запятую (полное – в подсказке)
+#   ilines    – значения нескольких источников строками (тип, «Добавил»); в ячейке правится своё
+#   iname     – имена: ПК, принтер, запись Движения – ссылкой на карточку
+#   iday      – «Актуальность»: дата, когда значение последний раз проверяли или меняли
 Kind = Literal[
     "text", "multiline", "ip", "mac", "seat", "date", "extra", "user", "vacuum", "location", "scan",
     "printers", "computers", "pmodel", "pattr", "flag", "secret", "cartridges",
     "mtype", "mtitle", "mkit", "pdate", "mdest", "muser",
+    "isrc", "ilines", "iname", "iday",
 ]
 
 
@@ -292,6 +299,30 @@ MOVE_HISTORY_LABELS = dict(
 )
 
 
+# ---------- Журнал «IP» (этап 71) ----------
+
+# Порядок и названия – как в журнале пользователя (Excel). Ключи свои: у ПК «ip» и «type» –
+# оформление из Справочников (подсети, значения), общий ключ смешал бы их
+IP_COLUMNS = [
+    col("ip_sources", "Источники", kind="isrc", multiline=True, values="no", bulk=False, export_width=24),
+    col("ip_type", "Тип", kind="ilines", center=True, multiline=True, values="no", suggest=True, export_width=14),
+    col("ip_addr", "IP", "IP адрес", values="subnet", bulk=False, export_width=16),
+    col("ip_name", "Имя", kind="iname", multiline=True, values="no", bulk=False, export_width=24),
+    col("ip_note", "Описание", kind="multiline", multiline=True, note=True, max_width=250, values="no", export_width=30),
+    col("ip_checked", "Актуальность", kind="iday", center=True, values="no", bulk=False, export_width=12),
+    col("ip_added", "Добавил", kind="ilines", multiline=True, values="no", bulk=False, export_width=16),
+]
+
+IP_COLUMNS_BY_KEY = {column.key: column for column in IP_COLUMNS}
+
+# Подписи в Истории записи журнала для полей, которые не столбцы (описание адреса – столбец)
+IP_HISTORY_LABELS = {
+    "archived": "Архив",
+    "created": "Создан",
+    "deleted": "Удалено",
+}
+
+
 class CardGroup(BaseModel):
     title: Optional[str]
     fields: list[str]
@@ -308,6 +339,9 @@ class ColumnsInfo(BaseModel):
     # Журнал «Движение» (этап 66)
     move_columns: list[Column]
     move_history_labels: dict[str, str]
+    # Журнал «IP» (этап 71)
+    ip_columns: list[Column]
+    ip_history_labels: dict[str, str]
 
 
 @router.get("/columns", response_model=ColumnsInfo)
@@ -321,4 +355,6 @@ def list_columns():
         printer_history_labels=PRINTER_HISTORY_LABELS,
         move_columns=MOVE_COLUMNS,
         move_history_labels=MOVE_HISTORY_LABELS,
+        ip_columns=IP_COLUMNS,
+        ip_history_labels=IP_HISTORY_LABELS,
     )

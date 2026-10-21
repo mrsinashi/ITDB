@@ -92,9 +92,9 @@ export default {
             return !!this.avSettings && this.avSettings.statuses.some(function (st) { return !!st.bg_color && st.chip === false; });
         },
 
-        // Предложения таблицы на экране: ПК или принтеров (этап 47); у журнала (этап 66) – нет
+        // Предложения таблицы на экране: ПК или принтеров (этап 47); у журналов (этапы 66, 71) – нет
         tableDiffs() {
-            if (this.tableKind === "moves") {
+            if (this.tableKind === "moves" || this.tableKind === "ips") {
                 return NO_DIFFS;
             }
             return this.tableKind === "printer" ? this.printerDiffs : this.diffs;
@@ -233,7 +233,7 @@ export default {
         // Расхождения таблицы на экране: id строки → { поле → расхождение } (без отклонённых).
         // На странице «Принтеры» – предложения принтеров (этап 47; до него – пусто)
         diffIndex() {
-            if (this.tableKind === "moves") {
+            if (this.tableKind === "moves" || this.tableKind === "ips") {
                 return NO_DIFF_INDEX;
             }
             return this.tableKind === "printer" ? this.printerDiffIndex : this.pcDiffIndex;

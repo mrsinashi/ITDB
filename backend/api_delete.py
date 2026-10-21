@@ -1,5 +1,5 @@
 """Удаление насовсем из архива (правки этапа 66, просьба пользователя 15.10): ПК, принтеры,
-записи журнала «Движение» – только те, что в архиве, и только администратор (ответ
+записи журналов «Движение» и «IP» (этап 71) – только те, что в архиве, и только администратор (ответ
 пользователя). Вернуть нельзя: в Историю – «Удалено» с названием (Ctrl+Z его не отменяет);
 прежние записи Истории объекта остаются, название им – из этой записи (api_history.entry_titles).
 
@@ -14,12 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api_computers import COMPUTERS_MISSING, load_locations, lock_rows, save_changes
+from api_ips import IPS_MISSING
 from api_moves import MOVES_MISSING, dest_path, dest_ref, distinct, move_names, record, ref_note
 from api_printers import PRINTERS_MISSING
 from auth import require_page
 from db import get_db
 from models import (
-    Computer, ComputerPerson, History, Move, Printer, PrinterComputer, ScanLink, ScanReject, VacuumAccountComputer,
+    Computer, ComputerPerson, History, IpEntry, Move, Printer, PrinterComputer, ScanLink, ScanReject, VacuumAccountComputer,
 )
 from printer_links import computers_by_printer, printer_title, printers_by_computer, set_computer_printers, set_printer_computers
 
@@ -146,3 +147,15 @@ def delete_moves(payload: IdsIn, user=Depends(require_page("journals/moves", "ed
 
     session.commit()
     return {"ok": True, "deleted": [move.id for move in moves]}
+
+
+@router.post("/ips/delete")
+def delete_ips(payload: IdsIn, user=Depends(require_page("journals/ips", "edit", admin=True)), session=Depends(get_db)):
+    """Записи журнала IP из архива (ids – номера записей)."""
+    entries = archived_rows(session, IpEntry, payload.ids, IPS_MISSING)
+
+    for entry in entries:
+        forget(session, entry, "ip_entries", entry.ip, user["login"])
+
+    session.commit()
+    return {"ok": True, "deleted": [entry.id for entry in entries]}
