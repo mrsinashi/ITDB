@@ -31,6 +31,7 @@
 //                        table-views (виды таблицы: наборы столбцов, окно «Виды таблицы»),
 //                        naming (имена ПК по правилам: вкладка Справочников, проверка в Таблице),
 //                        vacuum-online (кружок «в сети» у логинов VACUUM: быстрая проверка Jabber),
+//                        router-ips (синий кружок у IP из адрес-листа Mikrotik, этап 73),
 //                        page-mark (полоска нажатой строки на «GLPI / GSIT», «Сети», «Vacuum»: Enter – VNC),
 //                        printers (страница «Принтеры»: та же Таблица с принтерами, ссылки ПК ↔ принтер),
 //                        printer-card (карточка принтера; общее с карточкой ПК – в card),
@@ -86,6 +87,7 @@ import colOrder from "./mixins/col-order.js";
 import tableViews from "./mixins/table-views.js";
 import naming from "./mixins/naming.js";
 import vacuumOnline from "./mixins/vacuum-online.js";
+import routerIps from "./mixins/router-ips.js";
 import pageMark from "./mixins/page-mark.js";
 import printers from "./mixins/printers.js";
 import printerCard from "./mixins/printer-card.js";
@@ -109,7 +111,7 @@ import dateParts from "./components/date-parts.js";
 const DIFFS_WAIT_MS = 3000;
 
 const app = Vue.createApp({
-    mixins: [common, auth, table, tableEdit, tableSelect, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, pageMark, printers, printerCard, printerModels, webAccess, linkPicker, cartridges, pop, moves, ips],
+    mixins: [common, auth, table, tableEdit, tableSelect, tableActions, card, tree, history, choices, suggest, users, historyUndo, colFilters, scan, scanMatch, scanDiffs, scanCheck, scanVacuum, scanSchedule, tableMarks, scanNet, nav, vnc, print, tableFit, colOrder, tableViews, naming, vacuumOnline, routerIps, pageMark, printers, printerCard, printerModels, webAccess, linkPicker, cartridges, pop, moves, ips],
 
     // Дерево получает корень через inject, а не через window
     provide() {
@@ -388,7 +390,7 @@ const app = Vue.createApp({
             this.startLoading();
             this.loadVacuumOnline();
             const others = [this.loadPrinterDiffs(), this.loadScanMarks(), this.loadAvSettings(), this.loadTableMarks(),
-                this.loadAppSettings()];
+                this.loadAppSettings(), this.loadRouterIps()];
             const diffs = Promise.race([this.loadDiffs(), new Promise((resolve) => setTimeout(resolve, DIFFS_WAIT_MS))]);
             await Promise.all([this.loadColumns(), this.loadChoices(), this.loadColumnStyles(), this.loadFieldDefs()]);
             await Promise.all([this.loadTable(), this.loadPrinters(), diffs].concat(others));

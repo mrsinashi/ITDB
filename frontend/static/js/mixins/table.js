@@ -5,7 +5,7 @@
 
 import { apiFetch, loadJson, saveJson, searchNorm, searchWords, searchWordsIn, setCtrlDown, setIfChanged, wrapLine } from "../util.js";
 import { DEFAULT_HIDDEN_SEEN_KEY, HIDDEN_COLUMNS_KEY, NAME_RULE_COLUMN, PINNED_COLUMNS_KEY, ROOM_COLUMN, ROOM_PARTS, SEARCH_HIDDEN_KEY, columnTitle, orderColumns, roomText, tableStoreKey, toColumnDef, compareCellValues, decoration, frameColorFor, groupKits, isDuplicateLine, isOverdue, keepSameRows, kitKey, kitKeys, kitMarksOf, refreshDuplicates, styleKey, todayKey } from "../columns.js";
-import { CHIP_PAD, KIT_PAD, LINK_ICON, ONLINE_DOT, TABLE_WIDTHS_KEY, computeAutoWidths, sameWidths } from "../widths.js";
+import { CHIP_PAD, KIT_PAD, LINK_ICON, ONLINE_DOT, ROUTER_DOT, TABLE_WIDTHS_KEY, computeAutoWidths, sameWidths } from "../widths.js";
 import { pageLink } from "../route.js";
 
 // Порядок состояний антивируса при сортировке; AV_NONE – антивирусов нет
@@ -469,7 +469,7 @@ export default {
         },
 
         // «Обновить» слева от поиска (этап 47): изменения таблицы и значения сканера; у ПК –
-        // ещё и кто в сети из VACUUM (быстрая проверка Jabber сейчас)
+        // ещё и кто в сети из VACUUM (быстрая проверка Jabber сейчас); у всех – кружки Router
         async refreshTablePage() {
             if (this.tableRefreshing) {
                 return;
@@ -477,13 +477,13 @@ export default {
             this.tableRefreshing = true;
             try {
                 if (this.tableKind === "moves") {
-                    await Promise.all([this.loadMoves(), this.loadItemTypes()]);
+                    await Promise.all([this.loadMoves(), this.loadItemTypes(), this.loadRouterIps()]);
                 } else if (this.tableKind === "ips") {
-                    await this.loadIps();
+                    await Promise.all([this.loadIps(), this.loadRouterIps()]);
                 } else if (this.tableKind === "printer") {
-                    await Promise.all([this.loadPrinters(), this.loadPrinterDiffs()]);
+                    await Promise.all([this.loadPrinters(), this.loadPrinterDiffs(), this.loadRouterIps()]);
                 } else {
-                    await Promise.all([this.loadTable(), this.loadDiffs(), this.loadVacuumOnline(true), this.loadPrinters()]);
+                    await Promise.all([this.loadTable(), this.loadDiffs(), this.loadVacuumOnline(true), this.loadPrinters(), this.loadRouterIps()]);
                     this.refreshCardRow();
                     // Карточка – и её история, «Пользователи», «VACUUM» (этап 62)
                     if (this.card) {
@@ -627,7 +627,8 @@ export default {
             };
             // Блочок повтора и антивируса шире текста, выделенные логины VACUUM – жирные
             const avBold = !!this.avSettings && this.avSettings.statuses.some(function (st) { return st.bold; });
-            // Кружок «в сети» слева от логина VACUUM (этап 41) – ещё ONLINE_DOT
+            // Кружок «в сети» слева от логина VACUUM (этап 41) – ещё ONLINE_DOT; кружок Router
+            // справа от IP (этап 73) – ещё ROUTER_DOT
             const dots = this.vacuumDots;
             // Журнал: у инвентарного комплекта справа скобка (правки этапа 66)
             const kits = this.tableKind === "moves" ? kitKeys(this.tableRows) : null;
@@ -645,7 +646,8 @@ export default {
                 }
                 const ms = this.markStyle(this.lineMarkKinds(this.lineMarks(row, col, line)));
                 const chip = this.chipColumn(col) && this.lineLook(col.field, line).chip;
-                const dot = dots && col.field === "vacuum" && !row.archived && line.trim() ? ONLINE_DOT : 0;
+                const dot = (dots && col.field === "vacuum" && !row.archived && line.trim() ? ONLINE_DOT : 0) +
+                    (this.routerDot(row, col, line) ? ROUTER_DOT : 0);
                 return ms || chip || dot ? { pad: ((ms && ms.backgroundColor) || chip ? CHIP_PAD : 0) + dot, bold: !!ms && !!ms.fontWeight } : null;   // фон «на всю ячейку» – запас не мешает
             };
             const widths = computeAutoWidths(this.tableRows, this.widthColumns, this.tableUserDefs, this.choiceStyleMap, this.tableColumnStyles, scanChip, lineInfo);
@@ -744,7 +746,8 @@ export default {
         // другое, логин VACUUM, срок – вид из Справочников, фон – блочком у самого
         // значения), фон из Справочников блочком, номер записи GLPI / GSIT – ссылкой.
         // VACUUM – всегда по строкам (этап 41): у логина своя подсказка и кружок «в сети».
-        // Принтеры у ПК и ПК у принтера (этап 44) – ссылками на них
+        // Принтеры у ПК и ПК у принтера (этап 44) – ссылками на них. IP из адрес-листа Router
+        // (этап 73) – с синим кружком справа (rt)
         cellParts(row, col) {
             void this.dupVersion; // дубли считаются вне Vue – зависимость вручную
             const value = row[col.field];
@@ -758,7 +761,8 @@ export default {
             const chips = this.chipColumn(col);
             const host = col.field === "hostname";
             const marks = col.dup || col.date || col.field === "vacuum" || host;
-            if (!link && !chips && !marks) {
+            const router = this.routerColumn(row, col);
+            if (!link && !chips && !marks && !router) {
                 return null;
             }
             // Имя ПК – всегда ссылкой на его карточку: средняя кнопка открывает её в новой вкладке
@@ -773,11 +777,12 @@ export default {
                 const chip = !!look && look.chip;
                 const kinds = this.lineMarkKinds(m);
                 const ms = this.markStyle(kinds);
-                if (kinds.length || href || chip) {
+                const rt = router && this.routerIpSet.has(line.trim());
+                if (kinds.length || href || chip || rt) {
                     special = true;
                 }
                 const checked = m.verified || m.checked;
-                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", checked ? "Проверен: " + checked.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : ""].filter(Boolean);
+                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", checked ? "Проверен: " + checked.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : "", rt ? "Router: Enabled" : ""].filter(Boolean);
                 const online = vacuum && !row.archived && line.trim() ? this.vacuumIsOnline(line) : null;
                 const style = Object.assign({}, chip ? {
                     backgroundColor: look.bg_color,
@@ -797,7 +802,8 @@ export default {
                     text: line, href: href, card: host ? pageLink("table", { pc: row.id }) : null,
                     title: (vacuum ? this.vacuumTitle(line, m.gone ? null : online, titles) : titles.join(" · ")) || null,
                     cls: { "fill-chip": !!style.backgroundColor, "vac-dot": online !== null, "vac-on": !!online },
-                    style: style
+                    style: style,
+                    rt: rt
                 };
             });
             return special ? parts : null;

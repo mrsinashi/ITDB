@@ -1,6 +1,6 @@
 // Сканирование (этап 24, страница только у администратора): подключения к
-// источникам данных (GLPI, GSIT, Jabber; с этапа 28 – DHCP по SSH и «Сеть») и
-// подсети для сетевого сканирования.
+// источникам данных (GLPI, GSIT, Jabber; с этапа 28 – DHCP по SSH и «Сеть»; с этапа 73 –
+// Router: адрес-лист Mikrotik) и подсети для сетевого сканирования.
 //
 // Форма источника правится прямо в блоке: «Сохранить» отправляет только
 // изменённое, «Проверить подключение» проверяет то, что сейчас в форме (даже
@@ -11,7 +11,9 @@
 
 import { apiFetch, fixIpTyping, rowPlate } from "../util.js";
 
-const SOURCE_TEXT_FIELDS = ["url", "domain", "login"];
+const SOURCE_TEXT_FIELDS = ["url", "domain", "login", "address_list"];
+// Поля только своего вида источника
+const FORM_ONLY = { domain: "jabber", address_list: "router" };
 const SECRET_FIELDS = ["password", "user_token", "app_token"];
 
 export default {
@@ -114,6 +116,7 @@ export default {
                 ports: s.ports,
                 online_watch: s.online_watch,       // Jabber: кружки «в сети» в Таблице (этап 41)
                 online_minutes: s.online_minutes,
+                address_list: s.address_list || "",   // Router: имя адрес-листа (этап 73)
                 forget_host: false,   // DHCP: забыть запомненный ключ сервера при сохранении
                 keyBusy: false,
                 show: false,
@@ -140,7 +143,7 @@ export default {
                 body.enabled = f.enabled;
             }
             SOURCE_TEXT_FIELDS.forEach(function (name) {
-                if (s.form === "net" || (name === "domain" && s.form !== "jabber")) {
+                if (s.form === "net" || (FORM_ONLY[name] && s.form !== FORM_ONLY[name])) {
                     return;
                 }
                 if ((f[name] || "").trim() !== (s[name] || "")) {
@@ -309,7 +312,7 @@ export default {
         },
 
         // Число в шапке: ПК в GLPI / GSIT, пользователи Jabber, аренды DHCP, ответившие
-        // адреса сети – по последнему сбору
+        // адреса сети, адреса в адрес-листе Router – по последнему сбору
         scanSourceCount(kind) {
             const run = this.scanRunOf(kind);
             const st = run && run.status === "ok" ? run.stats || {} : null;
@@ -329,6 +332,9 @@ export default {
             if (s.form === "ssh") {
                 return { placeholder: "192.168.0.5", title: "Имя или IP сервера DHCP (SSH); порт – через двоеточие" };
             }
+            if (s.form === "router") {
+                return { placeholder: "192.168.0.1", title: "Имя или IP Mikrotik, как в сертификате; порт api-ssl – через двоеточие (по умолчанию 8729)" };
+            }
             return { placeholder: "https://glpi.lan", title: "Адрес " + s.title + ", как в браузере" };
         },
 
@@ -336,7 +342,8 @@ export default {
             return {
                 jabber: "Кто не подключался дольше – выделяется в VACUUM, на странице Vacuum – серым",
                 ssh: "Аренды старше – в «Сети» серым, в предложения не идут",
-                net: "Адреса, молчащие дольше, – в «Сети» серым, в предложения не идут"
+                net: "Адреса, молчащие дольше, – в «Сети» серым, в предложения не идут",
+                router: "Не собирали дольше – в «Сети» серым, кружков у IP нет"
             }[s.form] || "Записи старше не берутся";
         },
 

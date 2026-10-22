@@ -59,6 +59,7 @@ SOURCES = {
     "conf": ("DHCP Config", "Сканер – DHCP Config"),
     "rec": ("GSIT / GLPI", "Сканер – GSIT / GLPI"),
     "jabber": ("Vacuum", "Vacuum"),
+    "router": ("Router", "Сканер – Router"),
 }
 
 # Чья страница показывает источник (права этапа 69): нет к ней доступа – нет и его данных в
@@ -66,7 +67,7 @@ SOURCES = {
 # читает любой вошедший (общие списки), записи и описания журнала – страница «IP» сама
 SOURCE_PAGES = {
     "move": "journals/moves", "net": "scan/net", "dhcp": "scan/net", "conf": "scan/net",
-    "rec": "scan/check", "jabber": "vacuum",
+    "rec": "scan/check", "jabber": "vacuum", "router": "scan/net",
 }
 
 # Что считается правкой значения для «Актуальности» (История): у ПК, принтера, записи Движения
@@ -512,6 +513,17 @@ def collect_rows(session, allowed):
                 row = row_of(ip)
                 row.seen("jabber", at, stale, "в сети" if item.online else None)
                 row.value(row.names, item.login, "jabber", stale=stale)
+
+    # Router (этап 73): адрес-лист Mikrotik – Enabled / Disabled, комментарий – имя; давний – не
+    # собирали дольше срока «Актуальны»
+    if "router" in allowed:
+        router_since = now - timedelta(days=fresh_days_of(load_source(session, scan_collect.ROUTER), scan_collect.ROUTER))
+
+        for host in session.query(ScanHost).filter(ScanHost.source == scan_collect.ROUTER):
+            row = row_of(host.ip)
+            stale = host.seen_at < router_since
+            row.seen("router", host.seen_at, stale, "Disabled" if (host.data or {}).get("disabled") else "Enabled")
+            row.value(row.names, host.name, "router", stale=stale, same=same_host)
 
     # Описания адресов: непустое – и у адреса без источников; пустое – только у строки, которая
     # уже есть (версия описания нужна правке: иначе 409)

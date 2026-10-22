@@ -154,6 +154,7 @@
     --pop-border: #c4c4c4;          /* окошко значения сканера */
     --sm-open-line: #c4c4c4;        /* линии раскрытой записи «GLPI / GSIT» */
     --dot-off: #c4c4c4;             /* кружок «не в сети» */
+    --dot-router: #1a73e8;          /* кружок «есть в адрес-листе Router» (этап 73) */
     --icon-hover-bg: #e6e6e6;
     --count-bg: #e6e6e6;            /* число блочком: узел Структуры, кнопки-фильтры */
     --sec-count-bg: #dedede;        /* число у раздела карточки */
@@ -5161,6 +5162,33 @@ button.scan-chip {
 .card-sec-body .vac-dot.on {
     background: var(--success);
 }
+/* Router (этап 73): адрес есть в адрес-листе Mikrotik и включён – синий кружок у правого края
+   ячейки IP (Таблица, Принтеры, журналы); в «Сети» – у Enabled синий, у Disabled серый.
+   Строка с кружком – своя полоса во всю ширину ячейки: блочок повтора остаётся по тексту */
+.rt-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.rt-row > :first-child {
+    min-width: 0;
+}
+.rt-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--tint-line, var(--dot-off));
+}
+.rt-dot.on {
+    background: var(--dot-router);
+}
+.data-table td .rt-chip + .rt-chip,
+.data-table td .cell-line.fill-chip + .rt-chip,
+.data-table td .rt-chip + .cell-line.fill-chip {
+    margin-top: 1px;
+}
 .card-sec-body .vac-dot {
     display: inline-block;
     width: 7px;
@@ -5249,7 +5277,8 @@ html.no-radius *::after {
 }
 html.no-radius .vacuum-table .vc-dot,
 html.no-radius .data-table td .cell-line.vac-dot::before,
-html.no-radius .card-sec-body .vac-dot {
+html.no-radius .card-sec-body .vac-dot,
+html.no-radius .rt-dot {
     border-radius: 50% !important;
 }
 

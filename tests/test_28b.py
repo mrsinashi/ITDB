@@ -62,7 +62,7 @@ def test_hosts_page(admin, editor, reader, room):
     assert reader.get("/api/scan/hosts").status_code == 403
     data = ok(editor.get("/api/scan/hosts"))
     assert [h["ip"] for h in data["hosts"]] == ["10.0.5.2", "10.0.5.11", "10.0.5.12", "10.0.5.13"]   # по порядку адресов
-    assert [s["kind"] for s in data["sources"]] == ["dhcp", "net"]
+    assert [s["kind"] for s in data["sources"]] == ["dhcp", "net", "router"]
     hosts = {h["ip"]: h for h in data["hosts"]}
 
     # Источники говорят разное – оба значения, у каждого – откуда; привязка – последней

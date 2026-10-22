@@ -12,7 +12,8 @@
 scan_jabber_users (Jabber – пользователи не заменяются, а обновляются: у
 ушедших из сети остаются последний IP и время) и scan_hosts (этап 28: DHCP –
 аренды обновляются, привязки из настроек заменяются целиком; Сеть – ответившие
-адреса обновляются). Наблюдения по сроку не удаляются (этап 31): то, что старше
+адреса обновляются; этап 73: Router – адрес-лист Mikrotik, заменяется целиком, как привязки
+DHCP). Наблюдения по сроку не удаляются (этап 31): то, что старше
 срока «Актуальны», остаётся последним известным – в «Сети» серым, в предложения
 не идёт.
 """
@@ -33,6 +34,7 @@ from scan_dhcp import CONF_SOURCE, collect as dhcp_collect
 from scan_glpi import collect as glpi_collect
 from scan_jabber import collect as jabber_collect
 from scan_net import collect as net_collect
+from scan_router import collect as router_collect
 from scan_http import SourceError
 from scan_match import drop_shared_keys, find_duplicates, key_values, match_all
 from scan_normalize import build
@@ -44,6 +46,7 @@ logger = logging.getLogger("uvicorn.error")
 
 COLLECTORS = {
     "glpi": glpi_collect, "gsit": glpi_collect, "jabber": jabber_collect, "dhcp": dhcp_collect, "net": net_collect,
+    "router": router_collect,
 }
 # Источники записей о ПК (scan_records): сопоставление, названия, расхождения
 RECORD_KINDS = ("glpi", "gsit")
@@ -51,6 +54,9 @@ RECORD_KINDS = ("glpi", "gsit")
 HOST_KINDS = ("dhcp", "net")
 # Какие строки scan_hosts пишет источник: DHCP – аренды и привязки из настроек
 HOST_SOURCES = {"dhcp": ("dhcp", CONF_SOURCE), "net": ("net",)}
+# Адрес-лист Mikrotik (этап 73) – тоже в scan_hosts, но это настройка роутера, а не наблюдение
+# сети: в предложения (HOST_KINDS) не идёт, только «Сеть», журнал «IP» и кружки у IP
+ROUTER = "router"
 # Запуск, который «идёт» дольше, – оборвался (программу перезапускали)
 RUN_TIMEOUT = timedelta(hours=2)
 STATES = ("key", "link", "name", "conflict", "none", "dup")
@@ -221,6 +227,8 @@ def collect_into(session, run):
     elif kind in HOST_KINDS:
         save_hosts(session, kind, run, result["items"], fresh_days, only)
         remember_host(load_source(session, kind), result.get("seen"))
+    elif kind == ROUTER:
+        save_router(session, run, result["items"])
     else:
         save_jabber(
             session, run, result["items"],
@@ -355,6 +363,19 @@ def save_hosts(session, kind, run, items, fresh_days, only=None):
         for ip, row in existing.items():
             if ip not in found and not (row.data or {}).get("gone"):
                 row.data = dict(row.data or {}, active=False, gone=True)
+
+
+def save_router(session, run, items):
+    """Адрес-лист Mikrotik: настройка, а не наблюдение – заменяется целиком (как привязки DHCP).
+    Пустой список сюда не доходит (сбор отказывает: опечатка в названии стёрла бы прежний)."""
+    session.query(ScanHost).filter(ScanHost.source == ROUTER).delete(synchronize_session=False)
+    seen_at = now()
+
+    for item in items:
+        session.add(ScanHost(
+            source=ROUTER, ip=item["ip"], name=item.get("name"), data=item.get("data") or {}, seen_at=seen_at,
+            run_id=run.id,
+        ))
 
 
 def save_jabber(session, run, items, keep_groups=False, users_ok=False):

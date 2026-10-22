@@ -38,8 +38,9 @@ FILE_MARK = "#ITDB-FILE "
 FILE_LINE = re.compile(r"(?m)^" + re.escape(FILE_MARK) + r"(\S+)[ \t]*\r?$\n?")
 
 
-def split_host(address):
-    """«dhcp.lan», «192.168.0.5:2222», «ssh://dhcp.lan» → (имя, порт)."""
+def split_host(address, default_port=22):
+    """«dhcp.lan», «192.168.0.5:2222», «ssh://dhcp.lan» → (имя, порт); порта нет – default_port
+    (22; у Router – порт api-ssl, этап 73)."""
     text = (address or "").strip()
 
     if "://" in text:
@@ -58,12 +59,12 @@ def split_host(address):
     if port and not (port.isdigit() and 0 < int(port) < 65536):
         raise SourceError(f"Порт «{port}» – не число от 1 до 65535.")
 
-    return host, int(port) if port else 22
+    return host, int(port) if port else default_port
 
 
-def clean_address(address):
-    host, port = split_host(address)
-    return host if port == 22 else f"{host}:{port}"
+def clean_address(address, default_port=22):
+    host, port = split_host(address, default_port)
+    return host if port == default_port else f"{host}:{port}"
 
 
 def split_paths(text):

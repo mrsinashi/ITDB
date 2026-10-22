@@ -48,7 +48,9 @@ def check_collect_kind(kind):
 
 
 # Где источник собирают (этапы 69, 70): сбор – с «запуском» там, в «Расписании» или в «Подключениях»
-COLLECT_PAGES = {"glpi": "scan/check", "gsit": "scan/check", "jabber": "vacuum", "dhcp": "scan/net", "net": "scan/net"}
+COLLECT_PAGES = {
+    "glpi": "scan/check", "gsit": "scan/check", "jabber": "vacuum", "dhcp": "scan/net", "net": "scan/net", "router": "scan/net",
+}
 
 
 def check_record_kind(kind):

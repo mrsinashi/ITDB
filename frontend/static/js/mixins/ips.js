@@ -29,13 +29,14 @@ const SOURCES = {
     dhcp: ["DHCP Leases", "Сканер – DHCP Leases"],
     conf: ["DHCP Config", "Сканер – DHCP Config"],
     rec: ["GSIT / GLPI", "Сканер – GSIT / GLPI"],
-    jabber: ["Vacuum", "Vacuum"]
+    jabber: ["Vacuum", "Vacuum"],
+    router: ["Router", "Сканер – Router"]
 };
 // Своя запись журнала – источник «IP»
 const OWN = "own";
 // Чья страница запускает сбор источника (как COLLECT_PAGES в api_scan_records.py); ещё можно с
 // «Расписания» и «Подключений»
-const COLLECT_PAGES = { net: "scan/net", dhcp: "scan/net", glpi: "scan/check", gsit: "scan/check", jabber: "vacuum" };
+const COLLECT_PAGES = { net: "scan/net", dhcp: "scan/net", glpi: "scan/check", gsit: "scan/check", jabber: "vacuum", router: "scan/net" };
 // Подсеть больше – свободные адреса не перебираются (строк было бы слишком много)
 const FREE_MAX = 4096;
 // id строки «Добавить»: не адрес (числа ≥ 0) и не запись из архива (целые < 0); не 0 – правка
@@ -231,6 +232,7 @@ export default {
             add("glpi", "GLPI", "glpi");
             add("gsit", "GSIT", "gsit");
             add("jabber", "Vacuum", "jabber");
+            add("router", "Router", "router");
             return list;
         },
 
@@ -832,7 +834,7 @@ export default {
             if (on.leases || on.configs) {
                 jobs.push({ kind: "dhcp", only: on.leases && on.configs ? null : { leases: !!on.leases, configs: !!on.configs } });
             }
-            ["glpi", "gsit", "jabber"].forEach(function (kind) {
+            ["glpi", "gsit", "jabber", "router"].forEach(function (kind) {
                 if (on[kind]) {
                     jobs.push(kind);
                 }

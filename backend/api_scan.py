@@ -1,5 +1,6 @@
 """Сканирование, этап 24: подключения к источникам (GLPI, GSIT, Jabber; с этапа 28 –
-DHCP по SSH и «Сеть» – проход подсетей) и подсети для сетевого сканирования.
+DHCP по SSH и «Сеть» – проход подсетей; с этапа 73 – Router: адрес-лист Mikrotik) и подсети
+для сетевого сканирования.
 По правам «Подключений» (этап 70: смотреть, проверить подключение – «запуск», менять – «правка»).
 
 У каждого источника одна строка настроек; строки в базе появляются при
@@ -18,6 +19,7 @@ import scan_dhcp
 import scan_glpi
 import scan_jabber
 import scan_net
+import scan_router
 import scan_ssh
 from auth import check_page, require_page
 from db import get_db
@@ -30,18 +32,21 @@ router = APIRouter(prefix="/api/scan", tags=["scan"])
 
 # Источники: название, какие поля есть в форме, чем проверять подключение
 # form – какая форма у источника: glpi, jabber, ssh (DHCP: адрес, файл, логин,
-# пароль, ключ), net (проход подсетей: адреса нет, только что проверять).
+# пароль, ключ), net (проход подсетей: адреса нет, только что проверять), router (Mikrotik:
+# адрес, адрес-лист, логин, пароль).
 # fresh – срок «Актуальны» по умолчанию и наибольший:
 # - GLPI / GSIT: записи, проверенные не раньше, чем N дней назад;
 # - Jabber: кто не подключался дольше – «давно не в сети» (выделяется в VACUUM);
 # - DHCP: аренды, которые действуют или кончились не раньше N дней назад;
-# - Сеть: сколько дней помнить адрес, который перестал отвечать.
+# - Сеть: сколько дней помнить адрес, который перестал отвечать;
+# - Router: не собирали дольше – список в «Сети» серым, кружков у IP нет.
 SOURCES = {
     "glpi": {"title": "GLPI", "check": scan_glpi.check, "glpi": True, "form": "glpi", "fresh": (3, 60)},
     "gsit": {"title": "GSIT", "check": scan_glpi.check, "glpi": True, "form": "glpi", "fresh": (3, 60)},
     "jabber": {"title": "Jabber", "check": scan_jabber.check, "glpi": False, "form": "jabber", "fresh": (7, 365)},
     "dhcp": {"title": "DHCP", "check": scan_dhcp.check, "glpi": False, "form": "ssh", "fresh": (30, 365)},
     "net": {"title": "Сеть", "check": scan_net.check, "glpi": False, "form": "net", "fresh": (7, 365)},
+    "router": {"title": "Router", "check": scan_router.check, "glpi": False, "form": "router", "fresh": (7, 365)},
 }
 # Jabber: быстрая проверка «кто в сети» для кружков у VACUUM в Таблице (этап 41) – по
 # умолчанию включена, раз в 2 минуты; можно 1–60
@@ -125,6 +130,7 @@ class SourceOut(BaseModel):
     ports: Optional[bool] = None      # Сеть: проверять порты
     online_watch: Optional[bool] = None   # Jabber: быстрая проверка «кто в сети» (этап 41)
     online_minutes: Optional[int] = None  # …раз в столько минут
+    address_list: Optional[str] = None    # Router: имя адрес-листа Mikrotik (этап 73)
 
 
 class SourcesOut(BaseModel):
@@ -150,6 +156,7 @@ class SourceUpdate(BaseModel):
     online_watch: Optional[bool] = None
     online_minutes: Optional[int] = None
     forget_host: Optional[bool] = None
+    address_list: Optional[str] = None
 
 
 class CheckOut(BaseModel):
@@ -231,6 +238,7 @@ def source_out(kind, source, last_run=None, ready=None):
     watch, minutes = online_settings(source) if form == "jabber" else (None, None)
 
     return SourceOut(
+        address_list=option_of(source, "address_list", None) if form == "router" else None,
         online_watch=watch,
         online_minutes=minutes,
         form=form,
@@ -317,6 +325,10 @@ def connection_params(kind, source, overlay=None, session=None):
             if field in data:
                 params[field] = data[field] or None
 
+    if form == "router":
+        data = overlay.model_dump(exclude_none=True) if overlay is not None else {}
+        params["address_list"] = clean(data["address_list"]) if "address_list" in data else option_of(source, "address_list", None)
+
     if form == "ssh":
         data = overlay.model_dump(exclude_none=True) if overlay is not None else {}
         token = secrets.get(SSH_KEY)
@@ -379,11 +391,12 @@ FORM_FIELDS = {
     "jabber": ("domain", "online_watch", "online_minutes"),
     "ssh": ("path", "configs", "forget_host"),
     "net": ("names", "ports"),
+    "router": ("address_list",),
 }
 # У «Сети» нет адреса и входа
 NOT_NET_FIELDS = ("url", "login", "password", "verify_tls")
 # Параметры подключения: изменились – прошлая проверка больше ничего не говорит
-CONNECTION_FIELDS = {"url", "domain", "login", "verify_tls", "path", "configs", "host_key"} | set(SECRET_FIELDS)
+CONNECTION_FIELDS = {"url", "domain", "login", "verify_tls", "path", "configs", "host_key", "address_list"} | set(SECRET_FIELDS)
 
 
 def form_data(kind, payload):
@@ -423,7 +436,10 @@ def save_address(source, form, data, changes):
 
         if field == "url" and value:
             try:
-                value = scan_ssh.clean_address(value) if form == "ssh" else check_url(value, "Адрес")
+                if form == "router":
+                    value = scan_ssh.clean_address(value, scan_router.PORT)
+                else:
+                    value = scan_ssh.clean_address(value) if form == "ssh" else check_url(value, "Адрес")
             except SourceError as err:
                 raise HTTPException(status_code=400, detail=str(err))
 
@@ -446,6 +462,14 @@ def save_options(source, kind, data, changes):
         if field in data:
             changes[field] = {"old": option_of(source, field, default), "new": data[field]}
             source.options = dict(source.options or {}, **{field: data[field]})
+
+
+def save_address_list(source, data, changes):
+    """Router: имя адрес-листа Mikrotik (этап 73)."""
+    if "address_list" in data:
+        value = clean(data["address_list"], 100)
+        changes["address_list"] = {"old": option_of(source, "address_list", None), "new": value}
+        source.options = dict(source.options or {}, address_list=value)
 
 
 def save_dhcp_files(source, data, changes):
@@ -529,6 +553,7 @@ def update_source(kind: str, payload: SourceUpdate, me=Depends(require_page("sca
 
     save_address(source, form, data, changes)
     save_options(source, kind, data, changes)
+    save_address_list(source, data, changes)
     save_dhcp_files(source, data, changes)
     save_online(source, data, changes)
     forget_host_key(source, form, data, changes)

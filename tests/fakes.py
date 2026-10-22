@@ -1,11 +1,16 @@
 """Поддельные источники сканера для тестов (этап 54): GLPI и веб-админка ejabberd 14.12 –
-маленькие HTTP-серверы, DHCP – сервер SSH на paramiko, все в этом же процессе. Серверы
-поднимают фикстуры `glpi_url`, `jabber_url`, `ssh_port` из conftest.py, данные задаёт
-каждый тест (`Glpi`, `Ejabberd`, `Ssh`), перед каждым тестом они сбрасываются
-(`reset_fakes`). Здесь же – подключить источник и собрать с него."""
+маленькие HTTP-серверы, DHCP – сервер SSH на paramiko, Router (этап 73) – API RouterOS по TLS,
+все в этом же процессе. Серверы поднимают фикстуры `glpi_url`, `jabber_url`, `ssh_port`,
+`router_port` из conftest.py, данные задаёт каждый тест (`Glpi`, `Ejabberd`, `Ssh`, `Router`),
+перед каждым тестом они сбрасываются (`reset_fakes`). Здесь же – подключить источник и собрать
+с него."""
 import base64
+import ipaddress
 import json
+import os
 import socket
+import ssl
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -13,6 +18,10 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import paramiko
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 
 import scan_dhcp
 from conftest import ago, ok
@@ -380,6 +389,175 @@ def serve_ssh():
     listener.close()
 
 
+# ---------- Router: API RouterOS 6.49 по TLS (этап 73) ----------
+
+
+class Router:
+    login = "itdb"
+    password = "pw"
+    version = "6.49.17 (long-term)"
+    lists = {}      # имя адрес-листа → [{address, comment?, disabled?, dynamic?, timeout?}]
+    asked = []      # команды (первое слово)
+    bad_login = "trap"  # неверный пароль: trap – !trap и !done, close – закрыть соединение молча
+
+
+def router_word(value):
+    raw = value if isinstance(value, bytes) else value.encode("utf-8", errors="surrogateescape")
+    n = len(raw)
+    # Слова короче 0x4000 – одним или двумя байтами длины (длиннее в тестах не бывает)
+    return (bytes([n]) if n < 0x80 else (n | 0x8000).to_bytes(2, "big")) + raw
+
+
+def router_reply(*sentences):
+    return b"".join(b"".join(router_word(word) for word in words) + b"\x00" for words in sentences)
+
+
+def router_read(conn):
+    """Предложение клиента: [слова]; клиент закрыл соединение – None."""
+    def take(n):
+        data = b""
+
+        while len(data) < n:
+            chunk = conn.recv(n - len(data))
+
+            if not chunk:
+                raise EOFError
+            data += chunk
+        return data
+
+    words = []
+
+    try:
+        while True:
+            first = take(1)[0]
+            n = first if first < 0x80 else ((first & 0x3F) << 8) | take(1)[0]
+
+            if n == 0:
+                return words
+            # Не UTF-8 (имя списка из Winbox в cp1251) – байты как есть, суррогатами
+            words.append(take(n).decode("utf-8", errors="surrogateescape"))
+    except (EOFError, OSError):
+        return None
+
+
+def router_rows(words):
+    """Строки адрес-листа из «?list=имя»."""
+    name = next((word[len("?list="):] for word in words if word.startswith("?list=")), None)
+    sentences = []
+
+    for i, row in enumerate(Router.lists.get(name, [])):
+        words = ["!re", f"=.id=*{i + 1:X}", f"=list={name}", "=address=" + row["address"]]
+        words += [f"=disabled={'true' if row.get('disabled') else 'false'}", f"=dynamic={'true' if row.get('dynamic') else 'false'}"]
+
+        if row.get("timeout"):
+            words.append("=timeout=" + row["timeout"])
+
+        comment = row.get("comment")
+
+        if comment is not None:
+            words.append((b"=comment=" + comment) if isinstance(comment, bytes) else "=comment=" + comment)
+
+        words.append("=creation-time=oct/22/2026 10:00:00")
+        sentences.append(words)
+
+    return sentences + [["!done"]]
+
+
+def router_session(conn):
+    logged = False
+
+    try:
+        while True:
+            words = router_read(conn)
+
+            if words is None:
+                return
+
+            Router.asked.append(words[0])
+            attrs = {word[1:].split("=", 1)[0]: word[1:].split("=", 1)[1] for word in words[1:] if word.startswith("=")}
+
+            if words[0] == "/login":
+                logged = (attrs.get("name"), attrs.get("password")) == (Router.login, Router.password)
+
+                if not logged and Router.bad_login == "close":
+                    return
+
+                reply = [["!done"]] if logged else [["!trap", "=message=invalid user name or password (6)"], ["!done"]]
+            elif not logged:
+                reply = [["!fatal", "not logged in"]]
+            elif words[0] == "/system/resource/print":
+                reply = [["!re", "=version=" + Router.version, "=board-name=RB4011"], ["!done"]]
+            elif words[0] == "/ip/firewall/address-list/print":
+                reply = router_rows(words)
+            else:
+                reply = [["!trap", "=message=no such command"], ["!done"]]
+
+            conn.sendall(router_reply(*reply))
+
+            if reply[0][0] == "!fatal":
+                return
+    finally:
+        conn.close()
+
+
+def router_tls():
+    """Самоподписанный сертификат на 127.0.0.1 – как у Mikrotik без корня организации."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "router.test")])
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+        .serial_number(x509.random_serial_number()).not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=30))
+        .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+
+    with tempfile.TemporaryDirectory(prefix="itdb-router-") as folder:
+        cert_path, key_path = os.path.join(folder, "cert.pem"), os.path.join(folder, "key.pem")
+
+        with open(cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        with open(key_path, "wb") as f:
+            f.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+
+        context.load_cert_chain(cert_path, key_path)
+
+    return context
+
+
+def serve_router():
+    """API RouterOS (api-ssl) на свободном порту (для фикстуры): порт, после модуля – остановить."""
+    context = router_tls()
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(20)
+
+    def handle(client):
+        try:
+            conn = context.wrap_socket(client, server_side=True)
+        except (OSError, ssl.SSLError):
+            client.close()
+            return
+
+        router_session(conn)
+
+    def serve():
+        while True:
+            try:
+                client, _ = listener.accept()
+            except OSError:
+                return
+
+            threading.Thread(target=handle, args=(client,), daemon=True).start()
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield listener.getsockname()[1]
+    listener.close()
+
+
 def reset_fakes():
     """Данные всех поддельных источников – как в начале (перед каждым тестом)."""
     Glpi.computers = {}
@@ -399,6 +577,11 @@ def reset_fakes():
     Ssh.authorized = []
     Ssh.commands = []
 
+    Router.password = "pw"
+    Router.lists = {}
+    Router.asked = []
+    Router.bad_login = "trap"
+
 
 # ---------- Подключить источник и собрать ----------
 
@@ -415,6 +598,11 @@ def setup_jabber(admin, url):
 
 def setup_dhcp(admin, port, **more):
     return setup_source(admin, f"127.0.0.1:{port}", "dhcp", login="itdbscan", **more)
+
+
+def setup_router(admin, port, **more):
+    """Router: адрес-лист «allowed», сертификат не проверять (у подделки самоподписанный)."""
+    return setup_source(admin, f"127.0.0.1:{port}", "router", **dict({"verify_tls": False, "address_list": "allowed"}, **more))
 
 
 def source(client, kind):

@@ -244,6 +244,7 @@ export const SIMPLE_FIELD_LABELS = {
     ports: "Проверять порты",
     online_watch: "Проверять «в сети»",
     online_minutes: "Проверка «в сети», мин",
+    address_list: "Адрес-лист",
     run_mode: "Запуск",
     run_time: "Время",
     run_days: "Дни",

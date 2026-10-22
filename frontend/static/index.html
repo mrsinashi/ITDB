@@ -1443,6 +1443,12 @@
                                         </span>
                                     </div></td>
                                 </tr>
+                                <!-- Router (этап 73): какой список из IP → Firewall → Address List -->
+                                <tr v-if="s.form === 'router'">
+                                    <td class="sf-label">Адрес-лист</td>
+                                    <td><input class="input" v-model="scanForms[s.kind].address_list" spellcheck="false" autocomplete="off" placeholder="allowed"
+                                        title="Имя списка в IP → Firewall → Address List"></td>
+                                </tr>
                                 <tr v-if="s.form === 'jabber'">
                                     <td class="sf-label">Домен XMPP</td>
                                     <td><input class="input" v-model="scanForms[s.kind].domain" spellcheck="false" autocomplete="off" placeholder="jabber.lan"
@@ -1487,7 +1493,7 @@
                                 </tr>
                                 <tr v-if="s.form !== 'ssh'">
                                     <td class="sf-label">Сертификат</td>
-                                    <td><label class="sf-check" title="Снять, если сертификат самоподписанный"><input type="checkbox" v-model="scanForms[s.kind].verify_tls"> проверять (для https)</label></td>
+                                    <td><label class="sf-check" title="Снять, если сертификат самоподписанный"><input type="checkbox" v-model="scanForms[s.kind].verify_tls"> {{ s.form === 'router' ? 'проверять' : 'проверять (для https)' }}</label></td>
                                 </tr>
                                 </template>
                                 <!-- Jabber: кружки «в сети» у VACUUM в Таблице – быстрая проверка (этап 41) -->
@@ -1818,7 +1824,7 @@
                                     </th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-if="!netShown.length" class="h-empty"><td colspan="8">{{ netEmptyText() }}</td></tr>
+                                    <tr v-if="!netShown.length" class="h-empty"><td :colspan="netColumns.length">{{ netEmptyText() }}</td></tr>
                                     <!-- Давно не видели (старше срока «Актуальны») – не удаляется, а серым (этап 31) -->
                                     <tr v-for="h in netShown" :key="h.ip" :data-key="h.ip" :class="{ 'nt-stale': h.stale }" @mousedown="onPageRowMouseDown($event, 'net', h.ip)">
                                         <td class="nt-ip" :title="netIpTitle(h)">{{ h.ip }}</td>
@@ -1827,6 +1833,8 @@
                                         <td class="nt-name"><div v-for="n in h.name" :key="n.value" class="vc-line" :class="{ 'nt-old': n.stale }" :title="netValueTitle(n)">{{ n.value }}</div></td>
                                         <td class="nt-src" :class="{ 'nt-old': h.dhcp && h.dhcp.stale && !h.conf }" :title="netDhcpTitle(h)">{{ netDhcpText(h) }}</td>
                                         <td class="nt-src" :class="{ 'nt-old': h.net && h.net.stale }" :title="netSeenTitle(h.net, 'Сканер')">{{ h.net ? h.net.text : "" }}</td>
+                                        <!-- Адрес-лист Mikrotik (этап 73): кружок у правого края – синий Enabled, серый Disabled -->
+                                        <td class="nt-src nt-router" :class="{ 'nt-old': h.router && h.router.stale }" :title="netRouterTitle(h)"><span v-if="h.router" class="rt-row"><span>{{ h.router.text }}</span><i class="rt-dot" :class="{ on: h.router.text === 'Enabled' && !h.router.stale }"></i></span></td>
                                         <td class="nt-ports" :class="{ 'nt-none': h.ports && !h.ports.length, 'nt-old': h.net && h.net.stale }" :title="netPortsTitle(h)">{{ h.ports ? (h.ports.join(", ") || "–") : "" }}</td>
                                         <td class="nt-when" :title="netWhenTitle(h)">{{ h.seen_at ? formatTime(h.seen_at) : "" }}</td>
                                         <td class="nt-pc">

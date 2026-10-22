@@ -77,6 +77,8 @@ export const FILTER_ICON_SPACE = 14;
 export const CHIP_PAD = 10;
 // Кружок «в сети» слева от логина VACUUM (этап 41): 7px и отступ 4px (.cell-line.vac-dot)
 export const ONLINE_DOT = 11;
+// Кружок Router справа от IP (этап 73): 7px и отступ 4px (.rt-row)
+export const ROUTER_DOT = 11;
 // Значок «показать в таблице» справа от ссылки на принтер / ПК (этап 44, .obj-tbl): 12px и отступ 4px
 export const LINK_ICON = 16;
 // Скобка комплекта справа у инвентарного журнала (правки этапа 66, td.kit-*): запас в отступе ячейки

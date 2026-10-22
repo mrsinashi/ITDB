@@ -7,9 +7,13 @@ GET /api/scan/hosts – адреса из scan_hosts, по строке на а�
 откуда оно (этап 28в); первым – то, что видно на самом деле (сеть, потом аренда),
 последним – привязка из настроек DHCP. Наблюдения по сроку не удаляются (этап 31):
 что старше срока «Актуальны» своего источника – stale (на странице серым); имя
-источника у значений – как их зовёт пользователь: Сканер, Leases, DHCP Config.
+источника у значений – как их зовёт пользователь: Сканер, Leases, DHCP Config. Этап 73:
+адрес-лист Mikrotik (Router) – столбец Enabled / Disabled, комментарий – в именах.
 Ничего не пишет.
-Сбор – POST /api/scan/sources/{dhcp|net}/collect. Смотреть – редактор и администратор.
+Сбор – POST /api/scan/sources/{dhcp|net|router}/collect. Смотреть – по правам «Сети».
+
+GET /api/scan/hosts/router – включённые адреса адрес-листа для кружков у IP в таблицах (любому
+вошедшему, как «кто в сети» Vacuum; без права на «Сеть» – только адреса из его таблиц).
 """
 import ipaddress
 from datetime import datetime, timedelta, timezone
@@ -20,10 +24,11 @@ from pydantic import BaseModel
 
 import scan_collect
 from api_computers import load_locations, location_path
+from api_moves import IP as MOVE_IP
 from api_scan import SOURCES, RunOut, fresh_days_of, last_run_of, load_source
-from auth import require_page
+from auth import can, get_current_user, require_page
 from db import get_db
-from models import Computer, ScanHost
+from models import Computer, IpEntry, Move, Printer, ScanHost
 from scan_dhcp import CONF_SOURCE
 from scan_hostmatch import lines, same_name
 from scan_normalize import is_virtual_mac, norm_mac, usable_ipv4
@@ -64,6 +69,7 @@ class HostOut(BaseModel):
     dhcp: Optional[SeenOut] = None    # аренда
     conf: Optional[SeenOut] = None    # привязка из настроек DHCP
     net: Optional[SeenOut] = None
+    router: Optional[SeenOut] = None  # адрес-лист Mikrotik: text – Enabled / Disabled (этап 73)
     ports: Optional[list[int]] = None   # открытые порты; None – не проверялись
     rfb: Optional[str] = None           # версия VNC на порту 5900
     seen_at: Optional[datetime] = None  # когда адрес был занят на самом деле (привязка не в счёт)
@@ -85,6 +91,11 @@ class HostsOut(BaseModel):
     sources: list[HostSource]
 
 
+class RouterIpsOut(BaseModel):
+    enabled: bool          # Router включён
+    ips: list[str]         # включённые (Enabled) адреса адрес-листа по последнему сбору в сроке
+
+
 def moment(value):
     """«2026-10-02T03:00:00+00:00» → время; не разобрать – None."""
     try:
@@ -93,9 +104,10 @@ def moment(value):
         return None
 
 
-WHO = {"net": "Сканер", "dhcp": "Leases", "conf": "DHCP Config"}
+WHO = {"net": "Сканер", "dhcp": "Leases", "conf": "DHCP Config", "router": "Router"}
 # Сначала – что видно на самом деле; привязка из настроек – последней
 ORDER = ("net", "dhcp", "conf")
+ROUTER = scan_collect.ROUTER
 
 
 def dhcp_seen(row, stale=False):
@@ -144,6 +156,28 @@ def net_seen(row, stale=False):
         mac=row.mac, name=row.name, seen_at=row.seen_at,
         text=", ".join(HOW.get(item, str(item)) for item in how) or "ответил", details=details, stale=stale,
     )
+
+
+def router_seen(row, stale=False):
+    """Адрес из адрес-листа Mikrotik: включён ли, комментарий, динамический ли."""
+    data = row.data or {}
+    details = []
+
+    if data.get("dynamic"):
+        details.append("динамический" + (", timeout " + str(data["timeout"]) if data.get("timeout") else ""))
+
+    if data.get("created"):
+        details.append("создан: " + str(data["created"]))
+
+    return SeenOut(
+        mac=None, name=row.name, seen_at=row.seen_at, text="Disabled" if data.get("disabled") else "Enabled",
+        details=details, stale=stale,
+    )
+
+
+def router_since(session, at=None):
+    """Раньше этого времени адрес-лист – давний (срок «Актуальны» Router)."""
+    return (at or datetime.now(timezone.utc)) - timedelta(days=fresh_days_of(load_source(session, ROUTER), ROUTER))
 
 
 def ports_of(row):
@@ -210,7 +244,7 @@ def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
                 by_mac.setdefault(mac, []).append(c.id)
 
     found = {}
-    kinds = [kind for group in scan_collect.HOST_SOURCES.values() for kind in group]
+    kinds = [kind for group in scan_collect.HOST_SOURCES.values() for kind in group] + [ROUTER]
     seen_macs = {}   # MAC → адреса, где он виден на самом деле (сеть, аренда) и недавно
     moment_now = datetime.now(timezone.utc)
     # Раньше этого времени – «давно» (срок «Актуальны» источника)
@@ -218,6 +252,7 @@ def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
         kind: moment_now - timedelta(days=fresh_days_of(load_source(session, kind), kind))
         for kind in scan_collect.HOST_KINDS
     }
+    since[ROUTER] = router_since(session, moment_now)
     old = {}         # адрес → виды строк, которые видели давно
 
     for row in session.query(ScanHost).filter(ScanHost.source.in_(kinds)):
@@ -240,13 +275,13 @@ def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
         macs = merge(
             [(entry[kind].mac, WHO[kind], kind in stale) for kind in ORDER if kind in entry], lambda a, b: a == b,
         )
-        names = merge(
-            [
-                ((entry[kind].data or {}).get("host") if kind == "conf" else entry[kind].name, WHO[kind], kind in stale)
-                for kind in ORDER if kind in entry
-            ],
-            same_host,
-        )
+        host_names = [
+            ((entry[kind].data or {}).get("host") if kind == "conf" else entry[kind].name, WHO[kind], kind in stale)
+            for kind in ORDER if kind in entry
+        ]
+        # Комментарий Router – последним; это подпись, а не имя машины: в «Расхождения» не идёт
+        listed = entry.get(ROUTER)
+        names = merge(host_names + ([(listed.name, WHO[ROUTER], ROUTER in stale)] if listed else []), same_host)
         conf = entry.get("conf")
         pcs = {}
 
@@ -266,7 +301,7 @@ def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
         real = [(entry[kind].seen_at, kind) for kind in ("net", "dhcp") if kind in entry]
         last = max(real) if real else None
         # Давнее значение рядом с нынешним – не расхождение, а прошлое
-        fresh = [[value for value in values if not value.stale] or values for values in (macs, names)]
+        fresh = [[value for value in values if not value.stale] or values for values in (macs, merge(host_names, same_host))]
         elsewhere = sorted(seen_macs.get(conf.mac, set()) - {ip}, key=ip_key) if conf is not None and conf.mac else []
         net = entry.get("net")
 
@@ -275,11 +310,13 @@ def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
             dhcp=dhcp_seen(entry["dhcp"], "dhcp" in stale) if "dhcp" in entry else None,
             conf=conf_seen(conf, elsewhere) if conf is not None else None,
             net=net_seen(net, "net" in stale) if net is not None else None,
+            router=router_seen(listed, ROUTER in stale) if listed is not None else None,
             ports=ports_of(net),
             rfb=(net.data or {}).get("rfb") if net is not None else None,
             seen_at=last[0] if last else None,
             seen_by=WHO[last[1]] if last else None,
-            stale=bool(real) and all(kind in stale for _, kind in real),
+            # Адрес только из настроек: давний – если это лишь давний адрес-лист Router
+            stale=all(kind in stale for _, kind in real) if real else (conf is None and ROUTER in stale),
             differ=any(len(values) > 1 for values in fresh),
             computers=[
                 HostPc(computer_id=computer_id, hostname=computers[computer_id]["hostname"],
@@ -291,7 +328,7 @@ def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
     hosts.sort(key=lambda host: ip_key(host.ip))
     sources = []
 
-    for kind in scan_collect.HOST_KINDS:
+    for kind in scan_collect.HOST_KINDS + (ROUTER,):
         source = load_source(session, kind)
         sources.append(HostSource(
             kind=kind, title=SOURCES[kind]["title"], enabled=bool(source and source.enabled),
@@ -299,3 +336,48 @@ def list_hosts(me=Depends(require_page("scan/net")), session=Depends(get_db)):
         ))
 
     return HostsOut(hosts=hosts, sources=sources)
+
+
+def table_ips(session, user):
+    """Адреса в таблицах, которые пользователь видит: Компьютеры, Принтеры, «Движение», «IP»."""
+    found = set()
+    texts = []
+
+    if can(user, "table"):
+        texts += [ip for (ip,) in session.query(Computer.ip).filter(Computer.archived == False)]  # noqa: E712
+    if can(user, "printers"):
+        texts += [ip for (ip,) in session.query(Printer.ip).filter(Printer.archived == False)]  # noqa: E712
+    if can(user, "journals/moves"):
+        texts += [
+            specs.get(MOVE_IP) for (specs,) in
+            session.query(Move.specs).filter(Move.archived == False, Move.specs.has_key(MOVE_IP))  # noqa: E712
+        ]
+    if can(user, "journals/ips"):
+        texts += [ip for (ip,) in session.query(IpEntry.ip).filter(IpEntry.archived == False)]  # noqa: E712
+
+    for text in texts:
+        found.update(ip for ip in (usable_ipv4(line) for line in lines(text)) if ip)
+
+    return found
+
+
+@router.get("/router", response_model=RouterIpsOut)
+def router_ips(me=Depends(get_current_user), session=Depends(get_db)):
+    """Кружки у IP в таблицах (этап 73): адрес есть в адрес-листе и включён. Router выключен или
+    не собирали дольше срока «Актуальны» – кружков нет. Сам список – с правом на «Сеть»; без него –
+    только адреса, которые и так есть в таблицах пользователя."""
+    source = load_source(session, ROUTER)
+
+    if not (source and source.enabled):
+        return RouterIpsOut(enabled=False, ips=[])
+
+    rows = session.query(ScanHost.ip, ScanHost.data).filter(
+        ScanHost.source == ROUTER, ScanHost.seen_at >= router_since(session),
+    )
+    ips = [row.ip for row in rows if not (row.data or {}).get("disabled")]
+
+    if not can(me, "scan/net"):
+        known = table_ips(session, me)
+        ips = [ip for ip in ips if ip in known]
+
+    return RouterIpsOut(enabled=True, ips=sorted(ips, key=ip_key))

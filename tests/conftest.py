@@ -297,6 +297,12 @@ def ssh_port():
     yield from serve_ssh()
 
 
+@pytest.fixture(scope="module")
+def router_port():
+    from fakes import serve_router
+    yield from serve_router()
+
+
 @pytest.fixture(autouse=True)
 def fresh_memory():
     """Перед каждым тестом – поддельные источники и память процесса (попытки входа и

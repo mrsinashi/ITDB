@@ -12,14 +12,16 @@
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords, rowPlate } from "../util.js";
 
 const POLL_MS = 1000;
-const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net"];
-// «Сканировать» на «Сети» (этап 43): DHCP и проход подсетей
-const NET_KINDS = ["dhcp", "net"];
+const COLLECT_KINDS = ["glpi", "gsit", "jabber", "dhcp", "net", "router"];
+// «Сканировать» на «Сети» (этап 43): DHCP и проход подсетей; с этапа 73 – и Router
+const NET_KINDS = ["dhcp", "net", "router"];
+// Наблюдения сети – по ним MAC принтеров (этап 47); адрес-лист Router – не наблюдение
+const HOST_KINDS = ["dhcp", "net"];
 // Меню «Собрать» на «GLPI / GSIT» (этап 43) и «Сканировать» на «Сети» (этап 45): снятые галочки
 // до этапа 71 запоминались в браузере; с этапа 71 (просьба пользователя) – при каждом заходе на
 // вкладку снова все (setScanTab)
 // Что считает полоса сбора: «20 из 155 ПК»
-const PROGRESS_UNITS = { jabber: " пользователей", net: " адресов", dhcp: "" };
+const PROGRESS_UNITS = { jabber: " пользователей", net: " адресов", dhcp: "", router: "" };
 const KEY_LABELS = { id: "ID", mac: "MAC", serial: "серийному" };
 // Поля, у которых названия сопоставляются по смыслу и словарю (этап 25б)
 const NAME_FIELDS = ["model", "motherboard", "os", "cpu", "gpu", "vnc", "drive"];
@@ -113,7 +115,7 @@ export default {
             return this.collectOptions.filter(function (o) { return o.checked; }).map(function (o) { return o.kind; });
         },
 
-        // «Сканировать» на «Сети» (этап 43): DHCP и проход подсетей
+        // «Сканировать» на «Сети» (этап 43): DHCP, проход подсетей, Router
         netCollectSources() {
             return this.scanSources.filter(function (s) { return NET_KINDS.includes(s.kind); });
         },
@@ -127,7 +129,7 @@ export default {
         },
 
         netCollectTitle() {
-            return this.sourcesCollectTitle(this.netCollectSources, "Собрать из DHCP и сети");
+            return this.sourcesCollectTitle(this.netCollectSources, "Собрать из DHCP, сети и Router");
         },
 
         netProgress() {
@@ -135,7 +137,7 @@ export default {
         },
 
         // Меню «Сканировать» (этап 45): сканер (проход подсетей), аренды и привязки из файлов
-        // настроек DHCP; нельзя – серым, причина в подсказке
+        // настроек DHCP, адрес-лист Router (этап 73); нельзя – серым, причина в подсказке
         netScanOptions() {
             const list = [];
             const add = (key, label, s, extraBlock) => {
@@ -157,6 +159,7 @@ export default {
             add("net", "Сканер", this.scanSource("net"));
             add("leases", "Leases", dhcp);
             add("configs", "DHCP Config", dhcp, dhcp && !(dhcp.configs || []).length ? "Файлы настроек не указаны" : "");
+            add("router", "Router", this.scanSource("router"));
             return list;
         },
 
@@ -178,7 +181,7 @@ export default {
 
         netScanReady() {
             const on = this.netScanOn;
-            return !!(on.leases || on.configs || (on.net && this.netScanSubnets.some(function (sn) { return sn.checked; })));
+            return !!(on.leases || on.configs || on.router || (on.net && this.netScanSubnets.some(function (sn) { return sn.checked; })));
         },
 
         scanNamesShown() {
@@ -447,7 +450,7 @@ export default {
         },
 
         // «Сканировать» в меню: отмеченное; у сканера – отмеченные подсети, у DHCP – аренды
-        // и / или привязки (всё – без уточнений)
+        // и / или привязки (всё – без уточнений), Router – весь адрес-лист
         collectNetChosen() {
             const on = this.netScanOn;
             const subnets = this.netScanSubnets.filter(function (sn) { return sn.checked; }).map(function (sn) { return sn.cidr; });
@@ -457,6 +460,9 @@ export default {
             }
             if (on.leases || on.configs) {
                 jobs.push({ kind: "dhcp", only: on.leases && on.configs ? null : { leases: !!on.leases, configs: !!on.configs } });
+            }
+            if (on.router) {
+                jobs.push({ kind: "router", only: null });
             }
             this.closeMenus();
             this.collectKinds(jobs);
@@ -539,6 +545,8 @@ export default {
                 this.toast(title + ": собрано – аренд " + (run.stats.total - run.stats.fixed) + ", действуют " + run.stats.active, "success");
             } else if (run.status === "ok" && run.source === "net") {
                 this.toast(title + ": адресов " + run.stats.total + ", ответили " + run.stats.alive, "success");
+            } else if (run.status === "ok" && run.source === "router") {
+                this.toast(title + ": собрано – адресов " + run.stats.total + ", Enabled " + run.stats.enabled, "success");
             } else if (run.status === "ok") {
                 const st = run.stats;
                 this.toast(title + ": собрано – свежих " + st.fresh + "; сопоставлено " + ((st.key || 0) + (st.link || 0)) +
@@ -559,14 +567,21 @@ export default {
             if (this.view === "journals" && this.journalTab === "ips") {
                 this.loadIps();
             }
-            if (this.view === "scan" && this.scanTab === "check") {
-                this.loadCheck();
-            } else {
-                this.loadDiffs();
+            // Router на предложения и «GLPI / GSIT» не влияет (этап 73)
+            if (run.source !== "router") {
+                if (this.view === "scan" && this.scanTab === "check") {
+                    this.loadCheck();
+                } else {
+                    this.loadDiffs();
+                }
             }
             // Сеть собрана – MAC принтеров по IP (этап 47)
-            if (NET_KINDS.includes(run.source)) {
+            if (HOST_KINDS.includes(run.source)) {
                 this.loadPrinterDiffs();
+            }
+            // Адрес-лист Router (этап 73) – кружки у IP в таблицах
+            if (run.source === "router") {
+                this.loadRouterIps();
             }
         },
 
@@ -629,6 +644,9 @@ export default {
                     parts.push("старше " + st.fresh_days + " дн.: " + st.stale);
                 }
                 return { text: parts.join(", "), note: run.message || "", bad: false, running: false };
+            }
+            if (kind === "router") {
+                return { text: "Адресов: " + st.total + ", Enabled: " + st.enabled + ", Disabled: " + st.disabled, note: run.message || "", bad: false, running: false };
             }
             if (kind === "net") {
                 return {

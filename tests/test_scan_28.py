@@ -534,7 +534,7 @@ def test_next_run():
 def test_schedule_api(admin, editor, ssh_port):
     assert editor.get("/api/scan/schedule").status_code == 403
     data = ok(admin.get("/api/scan/schedule"))
-    assert [item["kind"] for item in data["items"]] == ["glpi", "gsit", "jabber", "dhcp", "net"]
+    assert [item["kind"] for item in data["items"]] == ["glpi", "gsit", "jabber", "dhcp", "net", "router"]
     assert all(item["mode"] == "off" and item["next_at"] is None and not item["available"] for item in data["items"])
 
     for bad in ({"mode": "often"}, {"minutes": 7}, {"time_at": "7 утра"}, {"days": "sunday"}):

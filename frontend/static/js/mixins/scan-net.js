@@ -9,7 +9,9 @@
 // («Сканировать» над фильтрами, «Собрать» на «GLPI / GSIT», расписание). Этап 43: фильтр
 // по давности – «Актуальные» / «Неактуальные» (серые строки). Этап 47: фильтры по столбцам
 // (воронка и правый клик по шапке – то же меню, что в Таблице, col-filters.js; у IP –
-// подсети) и сортировка кликом по шапке; Shift+Enter – адрес строки в браузере.
+// подсети) и сортировка кликом по шапке; Shift+Enter – адрес строки в браузере. Этап 73:
+// адрес-лист Mikrotik – столбец «Router» (Enabled – синий кружок, Disabled – серый), комментарий –
+// в «Имени», фильтр «Router».
 
 import { apiFetch, searchNorm, searchWordsIn, matchesAllWords } from "../util.js";
 import { activeFilters } from "./col-filters.js";
@@ -26,7 +28,8 @@ export const NET_FILTERS = [
 export const NET_SOURCES = [
     { key: "net", label: "Сканер", title: "Ответили при проходе подсетей" },
     { key: "dhcp", label: "Leases", title: "Есть аренда DHCP" },
-    { key: "conf", label: "DHCP Config", title: "Есть привязка в настройках DHCP" }
+    { key: "conf", label: "DHCP Config", title: "Есть привязка в настройках DHCP" },
+    { key: "router", label: "Router", title: "Есть в адрес-листе Mikrotik" }
 ];
 
 // По давности (этап 43): адрес видели в сроке «Актуальны» или давно (строка серым).
@@ -77,6 +80,7 @@ function netColumns(vm) {
         { field: "name", headerName: "Имя", lines: (h) => textOf(h.name), sort: (h) => textOf(h.name)[0] || null },
         { field: "dhcp", headerName: "DHCP", lines: (h) => [h.dhcp, h.conf].filter(Boolean).map((s) => s.text), sort: (h) => vm.netDhcpText(h) || null },
         { field: "net", headerName: "Сеть", lines: (h) => (h.net ? [h.net.text] : []), sort: (h) => (h.net ? h.net.text : null) },
+        { field: "router", headerName: "Router", lines: (h) => (h.router ? [h.router.text] : []), sort: (h) => (h.router ? h.router.text : null) },
         {
             field: "ports", headerName: "Порты",
             lines: (h) => (h.ports ? (h.ports.length ? h.ports.map(String) : ["–"]) : []),
@@ -278,6 +282,15 @@ export default {
             // У привязки времени нет: это настройка, а не наблюдение
             const conf = h.conf ? [fromText(["DHCP Config"]), h.conf.mac ? "MAC: " + h.conf.mac : ""].concat(h.conf.details || []).filter(Boolean).join("\n") : null;
             return [lease, conf].filter(Boolean).join("\n\n") || null;
+        },
+
+        // Столбец «Router»: когда собран адрес-лист, комментарий, динамический ли
+        netRouterTitle(h) {
+            const r = h.router;
+            if (!r) {
+                return null;
+            }
+            return [fromText(["Router"]), this.formatTime(r.seen_at) + (r.stale ? " – давно" : ""), r.name ? "Комментарий: " + r.name : ""].concat(r.details || []).filter(Boolean).join("\n");
         },
 
         netPortsTitle(h) {
