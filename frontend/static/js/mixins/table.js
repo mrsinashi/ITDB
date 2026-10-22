@@ -747,7 +747,9 @@ export default {
         // значения), фон из Справочников блочком, номер записи GLPI / GSIT – ссылкой.
         // VACUUM – всегда по строкам (этап 41): у логина своя подсказка и кружок «в сети».
         // Принтеры у ПК и ПК у принтера (этап 44) – ссылками на них. IP из адрес-листа Router
-        // (этап 73) – с синим кружком справа (rt)
+        // (этап 73) – с синим кружком справа (rt: "on"), в журнале «IP» выключенный – с серым ("off",
+        // этап 74); подсказка кружка в Компьютерах, Принтерах и «Движении» – «Прямой IP» (ответ
+        // пользователя), в журнале «IP» – как у значения
         cellParts(row, col) {
             void this.dupVersion; // дубли считаются вне Vue – зависимость вручную
             const value = row[col.field];
@@ -777,12 +779,12 @@ export default {
                 const chip = !!look && look.chip;
                 const kinds = this.lineMarkKinds(m);
                 const ms = this.markStyle(kinds);
-                const rt = router && this.routerIpSet.has(line.trim());
+                const rt = router ? this.routerDot(row, col, line) : null;
                 if (kinds.length || href || chip || rt) {
                     special = true;
                 }
                 const checked = m.verified || m.checked;
-                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", checked ? "Проверен: " + checked.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : "", rt ? "Router: Enabled" : ""].filter(Boolean);
+                const titles = [m.dup ? "Повтор" : "", m.host ? "На ПК: " + m.host : "", checked ? "Проверен: " + checked.join(", ") : "", this.vacuumMarkTitle(m), m.overdue ? "Срок прошёл" : "", href ? this.idLinkTitle(col.field) : "", this.routerDotTitle(rt)].filter(Boolean);
                 const online = vacuum && !row.archived && line.trim() ? this.vacuumIsOnline(line) : null;
                 const style = Object.assign({}, chip ? {
                     backgroundColor: look.bg_color,
@@ -798,13 +800,15 @@ export default {
                         style.backgroundColor = look.bg_color;
                     }
                 }
-                return {
+                const part = {
                     text: line, href: href, card: host ? pageLink("table", { pc: row.id }) : null,
                     title: (vacuum ? this.vacuumTitle(line, m.gone ? null : online, titles) : titles.join(" · ")) || null,
                     cls: { "fill-chip": !!style.backgroundColor, "vac-dot": online !== null, "vac-on": !!online },
                     style: style,
                     rt: rt
                 };
+                part.rtTitle = rt && this.tableKind !== "ips" ? this.routerDotTitle(rt) : part.title;
+                return part;
             });
             return special ? parts : null;
         },

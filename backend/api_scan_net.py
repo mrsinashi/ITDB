@@ -94,6 +94,7 @@ class HostsOut(BaseModel):
 class RouterIpsOut(BaseModel):
     enabled: bool          # Router включён
     ips: list[str]         # включённые (Enabled) адреса адрес-листа по последнему сбору в сроке
+    disabled: list[str] = []   # выключенные (Disabled) – серые кружки в журнале «IP» (этап 74)
 
 
 def moment(value):
@@ -363,9 +364,10 @@ def table_ips(session, user):
 
 @router.get("/router", response_model=RouterIpsOut)
 def router_ips(me=Depends(get_current_user), session=Depends(get_db)):
-    """Кружки у IP в таблицах (этап 73): адрес есть в адрес-листе и включён. Router выключен или
-    не собирали дольше срока «Актуальны» – кружков нет. Сам список – с правом на «Сеть»; без него –
-    только адреса, которые и так есть в таблицах пользователя."""
+    """Кружки у IP в таблицах (этап 73): адрес есть в адрес-листе и включён; выключенные – серыми
+    в журнале «IP» (этап 74). Router выключен или не собирали дольше срока «Актуальны» – кружков
+    нет. Сам список – с правом на «Сеть»; без него – только адреса, которые и так есть в таблицах
+    пользователя."""
     source = load_source(session, ROUTER)
 
     if not (source and source.enabled):
@@ -373,11 +375,12 @@ def router_ips(me=Depends(get_current_user), session=Depends(get_db)):
 
     rows = session.query(ScanHost.ip, ScanHost.data).filter(
         ScanHost.source == ROUTER, ScanHost.seen_at >= router_since(session),
-    )
-    ips = [row.ip for row in rows if not (row.data or {}).get("disabled")]
+    ).all()
+    known = None if can(me, "scan/net") else table_ips(session, me)
+    ips = {False: [], True: []}
 
-    if not can(me, "scan/net"):
-        known = table_ips(session, me)
-        ips = [ip for ip in ips if ip in known]
+    for row in rows:
+        if known is None or row.ip in known:
+            ips[bool((row.data or {}).get("disabled"))].append(row.ip)
 
-    return RouterIpsOut(enabled=True, ips=sorted(ips, key=ip_key))
+    return RouterIpsOut(enabled=True, ips=sorted(ips[False], key=ip_key), disabled=sorted(ips[True], key=ip_key))

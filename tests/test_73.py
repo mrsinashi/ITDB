@@ -256,10 +256,10 @@ def test_router_ips(admin, reader, room, router_port, own_perms):
     setup_router(admin, router_port)
     collect(admin, "router")
     # Кружки – только включённые адреса; список целиком – с правом на «Сеть»
-    assert ok(admin.get("/api/scan/hosts/router")) == {"enabled": True, "ips": ["10.0.0.5", "10.0.0.9"]}
+    assert ok(admin.get("/api/scan/hosts/router")) == {"enabled": True, "ips": ["10.0.0.5", "10.0.0.9"], "disabled": ["10.0.0.6"]}
     # Без него – только адреса из таблиц, которые он видит (иначе «свободный» адрес журнала «IP»
     # был бы с кружком, а список – виден без права)
-    assert ok(reader.get("/api/scan/hosts/router")) == {"enabled": True, "ips": ["10.0.0.5"]}
+    assert ok(reader.get("/api/scan/hosts/router")) == {"enabled": True, "ips": ["10.0.0.5"], "disabled": []}
     set_perms(admin, "reader", {"table": "none"})
     assert ok(reader.get("/api/scan/hosts/router"))["ips"] == []
     set_perms(admin, "reader", {"scan/net": "view"})
@@ -272,13 +272,13 @@ def test_router_ips(admin, reader, room, router_port, own_perms):
     assert ok(admin.get("/api/scan/hosts/router"))["ips"] == []
 
     ok(admin.patch("/api/scan/sources/router", json={"enabled": False}))
-    assert ok(reader.get("/api/scan/hosts/router")) == {"enabled": False, "ips": []}
+    assert ok(reader.get("/api/scan/hosts/router")) == {"enabled": False, "ips": [], "disabled": []}
 
     session = SessionLocal()
     session.query(ScanSource).filter(ScanSource.kind == "router").delete()
     session.commit()
     session.close()
-    assert ok(reader.get("/api/scan/hosts/router")) == {"enabled": False, "ips": []}
+    assert ok(reader.get("/api/scan/hosts/router")) == {"enabled": False, "ips": [], "disabled": []}
 
 
 def test_ips_journal(admin, reader, room, router_port):

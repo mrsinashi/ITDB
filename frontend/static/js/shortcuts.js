@@ -152,6 +152,11 @@ window.addEventListener("keydown", function (event) {
             vm.closeNewComputer();
             return;
         }
+        // Строка «Добавить» журнала «IP», где ещё ничего не вписано (этап 74)
+        if (vm.isTablePage() && vm.tableKind === "ips" && vm.ipDraft && !vm.editingRowId && vm.ipDraftEmpty(vm.ipDraft)) {
+            vm.dropIpDraft();
+            return;
+        }
         if (vm.isTablePage() && vm.actionBar) {
             vm.closeAction();
             return;

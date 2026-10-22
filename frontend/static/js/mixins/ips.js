@@ -8,11 +8,14 @@
 // «Показать в таблице». «Актуальность» – дата, когда значение последний раз проверяли или меняли.
 // Правка в ячейке: описание – у всех строк; тип, IP, имя, «Добавил» – у записей журнала (источник
 // «IP»), остальное – в своей таблице (просьба пользователя).
-// «Свободные» – меню подсетей из «Подключений» (по умолчанию ни одной): отмечены – в таблице
-// свободные адреса этих подсетей; заполненный свободный адрес становится записью, но из списка не
-// пропадает, пока «Свободные» не выключили. «Добавить» – пустая строка сверху: источник «IP»,
-// «Актуальность» и «Добавил» уже стоят; запись появляется, когда вписан адрес. «Сканировать» –
-// меню источников, которые приносят адреса (галочки – при каждом заходе на вкладку снова все).
+// «Свободные» – меню подсетей из «Подключений» (по умолчанию ни одной; у подсети – число свободных):
+// отмечены – в таблице свободные адреса этих подсетей; заполненный свободный адрес становится
+// записью, но из списка не пропадает, пока «Свободные» не выключили (нажатием на включённую кнопку
+// или «Сбросить» в меню, этап 74). «Добавить» – пустая строка сверху: источник «IP», «Актуальность»
+// и «Добавил» уже стоят; запись появляется, когда вписан адрес; ничего не вписано – Esc убирает её.
+// «Сканировать» – меню источников, которые приносят адреса (галочки – при каждом заходе на вкладку
+// снова все). Выделяются (Ctrl, Shift, Ctrl+A) только строки с записью журнала (этап 74, просьба
+// пользователя): архив и «Изменить значения…» – про них.
 
 import { apiFetch, fullIps, ipDots } from "../util.js";
 import { keepSameRows } from "../columns.js";
@@ -145,14 +148,24 @@ export default {
             return ip && !this.ipByAddr.has(ip) ? ip : null;
         },
 
-        // Подсети для «Свободных»: большие – серым (перебирать нечего)
+        // Подсети для «Свободных»: большие – серым (перебирать нечего); у остальных – число свободных
+        // адресов (как в фильтре, этап 74)
         ipFreeOptions() {
-            return this.ipSubnets.map((sn) => ({
-                cidr: sn.cidr,
-                checked: this.ipFree.indexOf(sn.cidr) !== -1,
-                big: sn.size > FREE_MAX,
-                title: sn.size > FREE_MAX ? "Подсеть больше " + FREE_MAX + " адресов" : [sn.note, "адресов: " + sn.size].filter(Boolean).join(" · ")
-            }));
+            return this.ipSubnets.map((sn) => {
+                const big = sn.size > FREE_MAX;
+                return {
+                    cidr: sn.cidr,
+                    checked: this.ipFree.indexOf(sn.cidr) !== -1,
+                    big: big,
+                    count: big ? 0 : subnetHosts(sn.cidr).filter((ip) => this.ipIsFree(ip)).length,
+                    title: big ? "Подсеть больше " + FREE_MAX + " адресов" : [sn.note, "адресов: " + sn.size].filter(Boolean).join(" · ")
+                };
+            });
+        },
+
+        // Включённая «Свободные» – нажатие сбрасывает (этап 74, просьба пользователя)
+        ipFreeButtonTitle() {
+            return this.ipFree.length ? "Сбросить свободные: " + this.ipFree.join(", ") : "Свободные адреса подсетей";
         },
 
         // Строки «Свободных»: свободные адреса отмеченных подсетей и заполненные за это время.
@@ -176,7 +189,7 @@ export default {
                     // Адрес без источников, но с описанием, – свободный (со своим описанием)
                     const busy = this.ipByAddr.get(ip);
                     if (busy) {
-                        if (!busy.sources.length || this.ipFreeKeep[ip]) {
+                        if (this.ipIsFree(ip) || this.ipFreeKeep[ip]) {
                             rows.push(busy);
                         }
                         return;
@@ -626,7 +639,7 @@ export default {
                     ip_type: null, types: [], ip_name: null, names: [], ip_note: null,
                     checked_at: now, ip_checked: this.formatDate(now),
                     ip_added: name, added: ownItems(name), entry: null,
-                    form: { ip_added: name }
+                    form: { ip_added: name }, addedDefault: name
                 };
             }
             const wrap = this.$refs.tableWrap;
@@ -757,7 +770,16 @@ export default {
             }
         },
 
-        // Esc в пустом адресе строки «Добавить» – убрать её (без адреса запись не сохранить)
+        // Ничего не вписано в строку «Добавить» («Добавил» – как поставлен сам)
+        ipDraftEmpty(draft) {
+            const form = draft.form;
+            return Object.keys(form).every(function (field) {
+                return !form[field] || (field === "ip_added" && form[field] === draft.addedDefault);
+            });
+        },
+
+        // Esc в строке «Добавить», где ещё ничего не вписано (этап 74: в любой ячейке и без правки) –
+        // убрать её
         dropIpDraft() {
             this.ipDraft = null;
         },
@@ -773,6 +795,21 @@ export default {
         },
 
         // ---------- «Свободные» ----------
+
+        // Свободный адрес: в журнале нет или без источников (только описание)
+        ipIsFree(ip) {
+            const row = this.ipByAddr.get(ip);
+            return !row || !row.sources.length;
+        },
+
+        // Кнопка «Свободные»: включённая (и меню закрыто) – сбросить, иначе – меню подсетей
+        onIpFreeButton() {
+            if (this.ipFree.length && this.openMenu !== "ipFree") {
+                this.setIpFree([]);
+                return;
+            }
+            this.toggleMenu("ipFree");
+        },
 
         toggleIpFree(cidr) {
             const on = this.ipFree.indexOf(cidr) === -1;
@@ -891,6 +928,12 @@ export default {
         },
 
         // ---------- Выбранные строки ----------
+
+        // Выделяется только строка с записью журнала (этап 74, просьба пользователя); в архиве –
+        // все (там только записи)
+        ipRowSelectable(row) {
+            return row.archived || !!row.entry;
+        },
 
         // Записи журнала у выбранных строк (архив, удаление): номера записей
         ipEntryIds(ids) {

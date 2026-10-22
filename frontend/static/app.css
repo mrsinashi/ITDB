@@ -6432,7 +6432,8 @@ html.no-radius .subnets-table tr.er-row input {
     box-shadow: inset 0 2px 0 var(--sm-detail-line), inset 3px 0 0 var(--row-active-bar);
 }
 
-/* Фильтр столбца VACUUM: «В сети» / «Не в сети» – с кружком, как у логина */
+/* Фильтр столбца VACUUM: «В сети» / «Не в сети» – с кружком, как у логина; так же «Прямые» /
+   «Не прямые» у IP журнала «IP» (этап 74) */
 .cf-menu .cf-value .vac-dot {
     display: inline-block;
     width: 7px;
@@ -6444,6 +6445,10 @@ html.no-radius .subnets-table tr.er-row input {
 }
 .cf-menu .cf-value .vac-dot.on {
     background: var(--success);
+}
+/* «Прямые» у IP журнала «IP» (этап 74) – кружок Router */
+.cf-menu .cf-value .vac-dot.rt.on {
+    background: var(--dot-router);
 }
 html.no-radius .cf-menu .cf-value .vac-dot {
     border-radius: 50% !important;
@@ -7221,6 +7226,23 @@ a.pr-web:hover {
 }
 .net-scan-menu .ns-only:hover {
     color: var(--menu-hover-text);
+}
+/* «Свободные» журнала «IP» (этап 74): у подсети ещё и число свободных адресов – как в фильтре
+   столбца; меню шире, если подсеть с числом не помещается */
+.dropdown.collect-menu.net-scan-menu.ip-free-menu {
+    width: max-content;
+    min-width: 208px;
+}
+.net-scan-menu .ns-count {
+    margin-left: auto;
+    min-width: 16px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--menu-muted);
+    font-variant-numeric: tabular-nums;
+}
+.net-scan-menu .ns-only + .ns-count {
+    margin-left: 0;
 }
 
 /* ============================================================

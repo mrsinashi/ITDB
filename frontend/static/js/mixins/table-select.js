@@ -32,7 +32,7 @@ export default {
                 return;
             }
             this.selectAnchorId = row.id;
-            if (ctrl) {
+            if (ctrl && this.rowSelectable(row)) {
                 this.startDragSelect(row);
             }
         },
@@ -78,12 +78,22 @@ export default {
         // строки по пути; Shift+клик – строки от прошлой (выбранной или просто
         // нажатой) до этой вместо прежнего выделения; Ctrl+Shift+клик – добавить их.
 
+        // Журнал «IP» (этап 74): выделяются только строки с записью журнала
+        rowSelectable(row) {
+            return this.tableKind !== "ips" || this.ipRowSelectable(row);
+        },
+
+        // id строк на экране, которые можно выделить
+        selectableIds() {
+            return this.displayRows.filter((r) => this.rowSelectable(r)).map(function (r) { return r.id; });
+        },
+
         // Ctrl+нажатие: строка выделяется (или снимается), дальше – протягивание.
         // Что делать со строками по пути, решает первая: была выбрана – снимаем.
         startDragSelect(row) {
             this.startRowDrag({
                 start: row.id,
-                keys: () => this.displayRows.map(function (r) { return r.id; }),
+                keys: () => this.selectableIds(),
                 selected: () => this.selectedRows,
                 select: (list) => { this.selectedRows = list; },
                 wrap: this.$refs.tableWrap,
@@ -204,7 +214,8 @@ export default {
             const from = this.selectAnchorId === null ? -1 : ids.indexOf(this.selectAnchorId);
             if (shift && from !== -1) {
                 const to = ids.indexOf(row.id);
-                const range = ids.slice(Math.min(from, to), Math.max(from, to) + 1);
+                const allowed = new Set(this.selectableIds());
+                const range = ids.slice(Math.min(from, to), Math.max(from, to) + 1).filter(function (id) { return allowed.has(id); });
                 if (ctrl) {
                     const have = this.selectedSet;
                     this.selectedRows = this.selectedRows.concat(range.filter(function (id) { return !have.has(id); }));
@@ -214,6 +225,10 @@ export default {
                 return;
             }
             const index = this.selectedRows.indexOf(row.id);
+            if (!this.rowSelectable(row)) {
+                this.selectAnchorId = row.id;
+                return;
+            }
             if (index === -1) {
                 this.selectedRows.push(row.id);
             } else if (!shift) {
@@ -222,9 +237,9 @@ export default {
             this.selectAnchorId = row.id;
         },
 
-        // Ctrl+A – все видимые строки (с учётом поиска и фильтра по дереву)
+        // Ctrl+A – все видимые строки (с учётом поиска и фильтра по дереву), которые можно выделить
         selectAllVisible() {
-            this.selectedRows = this.displayRows.map(function (r) { return r.id; });
+            this.selectedRows = this.selectableIds();
             if (this.selectedRows.length) {
                 this.selectAnchorId = this.selectedRows[0];
             }

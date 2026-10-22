@@ -110,9 +110,10 @@ export default {
             } else if (event.key === "Escape") {
                 event.preventDefault();
                 this.cancelEdit();
-                // Журнал «IP» (этап 71): Esc в пустом адресе строки «Добавить» убирает её; с адресом из
-                // поиска (этап 72) – в любом столбце: пока ничего не сохранено
-                if (row._draft && (row.prefillIp || (col.field === "ip_addr" && !row.form.ip_addr))) {
+                // Журнал «IP» (этап 71): Esc в пустом адресе строки «Добавить» убирает её; в строке, где
+                // ничего не вписано, – в любом столбце (этап 74); с адресом из поиска (этап 72) – тоже:
+                // пока ничего не сохранено
+                if (row._draft && (row.prefillIp || this.ipDraftEmpty(row) || (col.field === "ip_addr" && !row.form.ip_addr))) {
                     this.dropIpDraft();
                 }
             } else if (event.key === "Tab") {

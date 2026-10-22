@@ -304,7 +304,8 @@ class IpEntry(Base):
     """Запись журнала «IP» (этап 71) – источник «IP»: адрес, тип, имя, кто добавил (пользователь
     программы или вписанное имя). checked_at – «Актуальность» записи: создание и правка. У
     рабочего адреса одна запись (uq_ip_entries_ip); архив – как у записей «Движения». Описание –
-    не здесь, а у адреса (IpNote)."""
+    не здесь, а у адреса (IpNote). snapshot (этап 74) – строка адреса от других источников и
+    описание на момент «В архив» (api_ips.snapshot_of); из архива – остаётся (для отмены в Истории)."""
     __tablename__ = "ip_entries"
 
     id = Column(Integer, primary_key=True)
@@ -315,6 +316,7 @@ class IpEntry(Base):
     added_by = Column(Text, nullable=True)
     checked_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     archived = Column(Boolean, nullable=False, server_default="false")
+    snapshot = Column(JSONB(none_as_null=True), nullable=True)
 
     version = Column(Integer, nullable=False, server_default="1")
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

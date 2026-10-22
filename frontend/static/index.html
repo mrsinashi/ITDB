@@ -143,22 +143,24 @@
                         <a v-if="canPage('journals/ips')" href="#journals/ips" :class="{ active: journalTab === 'ips' }" @click="navClick($event, () => setJournalTab('ips'))" title="Занятые и свободные адреса">IP</a>
                     </nav>
                     <span class="tb-count">{{ countText }}</span>
-                    <!-- Журнал «IP» (этап 71): «Свободные» – подсети из «Подключений» (по умолчанию ни одной), «Сканировать» –
-                         всё, что приносит адреса (при каждом заходе на вкладку – все галочки) -->
+                    <!-- Журнал «IP» (этап 71): «Свободные» – подсети из «Подключений» (по умолчанию ни одной; включённая
+                         кнопка – нажатие сбрасывает, этап 74), «Сканировать» – всё, что приносит адреса (при каждом заходе
+                         на вкладку – все галочки) -->
                     <span v-if="tableKind === 'ips' && !showArchive" class="dropdown-wrap" ref="ipFreeWrap">
-                        <button class="btn" :class="{ 'menu-open': openMenu === 'ipFree', active: ipFree.length > 0 }" @click="toggleMenu('ipFree')" :title="ipFree.length ? 'Свободные адреса: ' + ipFree.join(', ') : 'Свободные адреса подсетей'">Свободные</button>
-                        <div v-if="openMenu === 'ipFree'" class="dropdown attached collect-menu net-scan-menu">
+                        <button class="btn" :class="{ 'menu-open': openMenu === 'ipFree', active: ipFree.length > 0 }" @click="onIpFreeButton" :title="ipFreeButtonTitle">Свободные</button>
+                        <div v-if="openMenu === 'ipFree'" class="dropdown attached collect-menu net-scan-menu ip-free-menu">
                             <div class="dd-title">Подсети</div>
                             <div v-if="!ipFreeOptions.length" class="dd-note">Подсетей нет</div>
                             <div v-else class="ns-list">
                                 <label v-for="sn in ipFreeOptions" :key="sn.cidr" class="ns-subnet" :class="{ off: sn.big }" :title="sn.title">
                                     <input type="checkbox" :checked="sn.checked" :disabled="sn.big" @change="toggleIpFree(sn.cidr)"><span class="ns-cidr">{{ sn.cidr }}</span>
                                     <span v-if="!sn.big && ipFreeOptions.length > 1" class="ns-only" title="Только эту" @click.prevent.stop="onlyIpFree(sn.cidr)">только</span>
+                                    <span v-if="!sn.big" class="ns-count" title="Свободных адресов">{{ sn.count }}</span>
                                 </label>
                             </div>
                             <template v-if="ipFree.length">
                                 <div class="dd-sep"></div>
-                                <button @click="setIpFree([]); closeMenus()">Занятые адреса</button>
+                                <button @click="setIpFree([]); closeMenus()">Сбросить</button>
                             </template>
                         </div>
                     </span>
@@ -2002,7 +2004,7 @@
                 <div v-if="colFilterStates.length" class="cf-states">
                     <label v-for="st in colFilterStates" :key="'cfs-' + st.kind" class="cf-item" :title="st.title">
                         <input type="checkbox" :checked="st.checked" @change="toggleColState(st.kind)">
-                        <span class="cf-value" :class="{ 'val-chip': st.chip }" :style="st.style"><span v-if="st.dot !== undefined" class="vac-dot" :class="{ on: st.dot }"></span>{{ st.label }}</span>
+                        <span class="cf-value" :class="{ 'val-chip': st.chip }" :style="st.style"><span v-if="st.dot !== undefined" class="vac-dot" :class="{ on: st.dot, rt: st.rt }"></span>{{ st.label }}</span>
                         <span class="cf-only" title="Только это" @click.prevent.stop="setColStates({ only: [st.kind] })">только</span>
                         <span class="cf-count" title="Число ПК">{{ st.count }}</span>
                     </label>

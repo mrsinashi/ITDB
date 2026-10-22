@@ -21,7 +21,8 @@
 // ситуации, и когда кнопка «Значения сканера» выключена) и «Обычные» – без них.
 // ПК виден, если у значения есть отмеченное выделение (и значение отмечено ниже).
 // У VACUUM (этап 43) первыми – «В сети» / «Не в сети» (кружок у логина): это отдельная
-// группа – ПК виден, если подходит и по ней, и по выделениям.
+// группа – ПК виден, если подходит и по ней, и по выделениям. Так же у IP журнала «IP» (этап 74,
+// просьба пользователя) – «Прямые» / «Не прямые» (синий кружок Router).
 //
 // Этап 47: то же меню – у таблицы «Сети» «Сканера» (colFilterMenu.target = "net"): свои
 // столбцы (netColumns, значения ячейки – col.lines), строки (netFilterRows) и фильтры
@@ -37,10 +38,11 @@ const AV_STATES = ["on", "old", "off"];
 const MARK_STATES = ["dup", "hostname", "gone", "stale", "overdue", "verified", "checked"];
 const SCAN_STATES = ["diff", "fill", "unsure", "partial", "link"].map(function (kind) { return "scan-" + kind; });
 const PLAIN_STATE = "none";
-// В сети ли логины VACUUM (этап 43) – своя группа отметок
+// В сети ли логины VACUUM (этап 43), прямой ли IP журнала «IP» (этап 74) – свои группы отметок
 const ONLINE_STATES = ["online", "offline"];
-const ONLINE_LABELS = { online: "В сети", offline: "Не в сети" };
-const VALUE_STATES = ONLINE_STATES.concat(MARK_STATES, SCAN_STATES, [PLAIN_STATE]);
+const ROUTER_STATES = ["direct", "indirect"];
+const DOT_LABELS = { online: "В сети", offline: "Не в сети", direct: "Прямые", indirect: "Не прямые" };
+const VALUE_STATES = ONLINE_STATES.concat(ROUTER_STATES, MARK_STATES, SCAN_STATES, [PLAIN_STATE]);
 const NO_STATES = { only: null, off: [] };
 
 // Отмечено ли состояние в фильтре
@@ -52,9 +54,11 @@ function statesActive(states) {
     return !!states && (!!states.only || states.off.length > 0);
 }
 
-function isOnlineState(kind) {
-    return ONLINE_STATES.indexOf(kind) !== -1;
+// Группа отметки: «в сети», «прямой» или выделения значения (с «Обычными»)
+function stateGroup(kind) {
+    return ONLINE_STATES.indexOf(kind) !== -1 ? "online" : (ROUTER_STATES.indexOf(kind) !== -1 ? "router" : "mark");
 }
+const STATE_GROUPS = ["online", "router", "mark"];
 
 // Значения ячейки для фильтра: [{ key, value }]; пустая – [{ key: "" }]. У столбцов
 // «Сети» (этап 47) строки ячейки даёт col.lines(row)
@@ -244,17 +248,19 @@ export default {
             if (!list.length) {
                 return [];
             }
-            // «Обычные» – если есть выделения (у «в сети» своей «обычной» нет)
-            if (list.some(function (kind) { return !isOnlineState(kind); })) {
+            // «Обычные» – если есть выделения (у «в сети» и «прямых» своей «обычной» нет)
+            if (list.some(function (kind) { return stateGroup(kind) === "mark"; })) {
                 list.push(PLAIN_STATE);
             }
             return list.map((kind) => {
                 const style = this.valueStateStyle(kind);
+                const group = stateGroup(kind);
                 return {
                     kind: kind, label: this.valueStateLabel(kind), count: counts[kind] || 0,
                     checked: stateOn(states, kind), style: style,
                     chip: !!style && !!(style.backgroundColor || style.boxShadow),
-                    dot: isOnlineState(kind) ? kind === "online" : undefined,
+                    dot: group !== "mark" ? kind === "online" || kind === "direct" : undefined,
+                    rt: group === "router",
                     title: kind === PLAIN_STATE ? "Без выделений и значений сканера" : this.valueStateLabel(kind)
                 };
             });
@@ -344,6 +350,10 @@ export default {
                     }
                 });
             }
+            // IP журнала «IP»: прямой ли (синий кружок Router) – когда кружки показываются (этап 74)
+            if (this.tableKind === "ips" && col.field === "ip_addr" && value && this.routerColumn(row, col)) {
+                kinds.add(this.routerDot(row, col, value) === "on" ? "direct" : "indirect");
+            }
             return kinds;
         },
 
@@ -352,15 +362,15 @@ export default {
             if (kind === PLAIN_STATE) {
                 return "Обычные";
             }
-            if (isOnlineState(kind)) {
-                return ONLINE_LABELS[kind];
+            if (stateGroup(kind) !== "mark") {
+                return DOT_LABELS[kind];
             }
             const m = kind.indexOf("scan-") === 0 ? this.scanMarkByKind[kind.slice(5)] : this.tableMarkMap[kind];
             return m ? m.label : kind;
         },
 
         valueStateStyle(kind) {
-            if (kind === PLAIN_STATE || isOnlineState(kind)) {
+            if (kind === PLAIN_STATE || stateGroup(kind) !== "mark") {
                 return null;
             }
             if (kind.indexOf("scan-") === 0) {
@@ -371,17 +381,18 @@ export default {
         },
 
         // Отметки выделений: у значения есть отмеченное выделение (отметок нет – фильтра нет).
-        // «В сети» / «Не в сети» – своя группа: подходить надо по обеим (этап 43); у пустой
-        // ячейки VACUUM отметок «в сети» нет – по ней не отбирается, только после «только»
+        // «В сети» / «Не в сети» и «Прямые» / «Не прямые» – свои группы: подходить надо по всем
+        // (этапы 43, 74); у пустой ячейки VACUUM отметок «в сети» нет – по ней не отбирается,
+        // только после «только»
         statesPass(row, f) {
             if (!statesActive(f.states)) {
                 return true;
             }
             const kinds = Array.from(this.valueStates(row, f.col));
-            return [true, false].every(function (online) {
-                const own = kinds.filter(function (kind) { return isOnlineState(kind) === online; });
+            return STATE_GROUPS.every(function (group) {
+                const own = kinds.filter(function (kind) { return stateGroup(kind) === group; });
                 if (f.states.only) {
-                    const only = f.states.only.filter(function (kind) { return isOnlineState(kind) === online; });
+                    const only = f.states.only.filter(function (kind) { return stateGroup(kind) === group; });
                     return !only.length || own.some(function (kind) { return only.indexOf(kind) !== -1; });
                 }
                 return !own.length || own.some(function (kind) { return f.states.off.indexOf(kind) === -1; });

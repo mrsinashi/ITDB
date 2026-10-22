@@ -61,6 +61,8 @@ SOURCES = {
     "jabber": ("Vacuum", "Vacuum"),
     "router": ("Router", "Сканер – Router"),
 }
+# Своя запись журнала – источник «IP»
+OWN = "own"
 
 # Чья страница показывает источник (права этапа 69): нет к ней доступа – нет и его данных в
 # журнале (ревью этапа 71: читатель видел логины Vacuum и имена из DHCP). Компьютеры и принтеры
@@ -241,6 +243,36 @@ def apply_entry_fields(session, entry, payload):
     return changes
 
 
+def all_rows(session):
+    """Строки адресов всех источников – один раз на запрос: отмена в Истории убирает записи в архив
+    по одной (ревью этапа 74)."""
+    if "ip_rows" not in session.info:
+        session.info["ip_rows"] = collect_rows(session, set(SOURCES))
+
+    return session.info["ip_rows"]
+
+
+def set_archived(session, entries, archived, keep=False):
+    """Записи в архив и обратно (кнопка, отмена в Истории). В архив – строка адреса целиком
+    (этап 74, просьба пользователя): что было у адреса от других источников и описание – снимком
+    у записи (snapshot_of), а из журнала уходят только значения «IP». Из архива снимок остаётся:
+    отмена в Истории (keep) возвращает в архив с ним, а не с сегодняшней строкой (ревью этапа 74).
+    Ответ – изменённые записи."""
+    changed = [entry for entry in entries if entry.archived != archived]
+
+    for entry in changed:
+        if not archived:
+            check_free(session, entry.ip, entry.id)
+        elif not (keep and entry.snapshot):
+            row = all_rows(session).get(entry.ip)
+            entry.snapshot = snapshot_of(row) if row else None
+
+        entry.archived = archived
+        flush_unique(session)
+
+    return changed
+
+
 def set_entry_value(session, entry, field, value):
     """Поле записи – значением из Истории, как правкой в ячейке."""
     if field == "archived":
@@ -249,11 +281,8 @@ def set_entry_value(session, entry, field, value):
         if entry.archived == value:
             return {}
 
-        if not value:
-            check_free(session, entry.ip, entry.id)
-
         old = entry.archived
-        entry.archived = value
+        set_archived(session, [entry], value, keep=True)
         return {field: {"old": old, "new": value}}
 
     # Вписанное имя, совпавшее с именем пользователя, осталось бы вписанным, а не им
@@ -610,39 +639,93 @@ def row_out(session, row):
     }
 
 
-def archived_out(session, entry):
-    """Запись журнала из архива – своей строкой (номер строки – минус номер записи)."""
-    added = added_name(session, entry.added_user_id, entry.added_by)
-    row = {
-        "id": -entry.id,
-        "ip_addr": entry.ip,
-        "ip_sources": SOURCES["own"][0],
-        "sources": [{"key": "own", "at": iso(entry.checked_at)}],
-        "ip_note": None,
-        "note_version": 0,
-        "checked_at": iso(entry.checked_at),
-        "entry": entry_out(session, entry),
-        "archived": True,
+def snapshot_of(row):
+    """Строка адреса без записи журнала – для архива (этап 74): источники, значения (откуда –
+    ключами источников), описание; даты – строками ISO. Права не учитываются – их применяет
+    archived_out тому, кто смотрит. Кроме записи, ничего нет – None."""
+    if not set(row.sources) - {OWN} and not (row.note and row.note.note):
+        return None
+
+    def items_of(values):
+        result = []
+
+        for item in values:
+            keys = [key for key in item["from"] if key != OWN]
+
+            if keys:
+                result.append(dict(items_out([item])[0], **{"from": keys}))
+
+        return result
+
+    return {
+        "sources": {
+            key: {"at": iso(source["at"]), "stale": source["stale"], "details": source["details"]}
+            for key, source in row.sources.items() if key != OWN
+        },
+        "types": items_of(row.types),
+        "names": items_of(row.names),
+        "added": items_of(row.added),
+        "note": row.note.note if row.note else None,
     }
 
-    for field, items, value in (("ip_type", "types", entry.ip_type), ("ip_name", "names", entry.name), ("ip_added", "added", added)):
-        row[field] = value
-        row[items] = [{"value": value, "from": ["own"]}] if value else []
 
-    return row
+def archived_out(session, entry, allowed):
+    """Запись журнала из архива – своей строкой (номер строки – минус номер записи): её значения и
+    снимок строки адреса (snapshot_of) из источников allowed. Описание – из снимка, только
+    показом (правится у рабочего адреса)."""
+    row = Row(entry.ip)
+    snapshot = entry.snapshot or {}
+
+    for key, source in (snapshot.get("sources") or {}).items():
+        if key in allowed and key in SOURCES:
+            at = datetime.fromisoformat(source["at"]) if source.get("at") else None
+            row.sources[key] = {"at": at, "stale": bool(source.get("stale")), "details": list(source.get("details") or [])}
+
+    for name in ("types", "names", "added"):
+        for item in snapshot.get(name) or []:
+            keys = [key for key in item.get("from") or [] if key in allowed]
+
+            if keys:
+                value = dict(item, **{"from": keys})
+
+                # Ссылка на запись «Движения» – только тем, кому оно открыто (ревью этапа 74)
+                if value.get("obj") and value["obj"].get("kind") not in allowed:
+                    del value["obj"]
+
+                getattr(row, name).append(value)
+
+    row.entry = entry
+    row.seen(OWN, entry.checked_at)
+    row.value(row.types, entry.ip_type, OWN)
+    row.value(row.names, entry.name, OWN, same=same_host)
+    row.value(row.added, added_name(session, entry.added_user_id, entry.added_by), OWN)
+    # Значения записи – на своё место, как в журнале: после Компьютеров, Принтеров и Движения
+    order = list(SOURCES)
+
+    def place(item):
+        position = order.index(item["from"][0]) - order.index(OWN)
+        return 0 if position < 0 else (1 if position == 0 else 2)
+
+    for items in (row.types, row.names, row.added):
+        items.sort(key=place)
+
+    out = row_out(session, row)
+    out.update({"id": -entry.id, "ip_note": snapshot.get("note"), "note_version": 0, "archived": True})
+    return out
 
 
 def ip_rows(session, user, archived="no", only=None):
     """Строки журнала по порядку адресов; only – только эти адреса (ответ на правку)."""
     rows = []
+    allowed = visible_sources(user)
 
     if archived in ("no", "all"):
-        found = collect_rows(session, visible_sources(user))
+        found = collect_rows(session, allowed)
         rows = [row_out(session, found[ip]) for ip in sorted(found, key=ip_number) if only is None or ip in only]
 
     if archived in ("yes", "all") and only is None:
         entries = session.query(IpEntry).filter(IpEntry.archived == True).all()  # noqa: E712
-        rows += [archived_out(session, entry) for entry in sorted(entries, key=lambda item: (ip_number(item.ip), item.id))]
+        rows += [archived_out(session, entry, allowed) for entry in sorted(entries, key=lambda item: (ip_number(item.ip), item.id))]
 
     return rows
 
@@ -782,24 +865,16 @@ class ArchiveIn(BaseModel):
 
 @router.post("/ips/archive")
 def archive_entries(payload: ArchiveIn, user=Depends(require_page("journals/ips", "edit")), session=Depends(get_db)):
-    """Записи журнала в архив и обратно (ids – номера записей); описание остаётся у адреса."""
+    """Записи журнала в архив и обратно (ids – номера записей); описание остаётся у адреса, в
+    архиве – строка адреса целиком (set_archived)."""
     ids = parse_ids(payload.ids)
-    changed = []
+    changed = set_archived(session, lock_rows(session, IpEntry, ids, IPS_MISSING), payload.archived)
 
-    for entry in lock_rows(session, IpEntry, ids, IPS_MISSING):
-        if entry.archived == payload.archived:
-            continue
-
-        if not payload.archived:
-            check_free(session, entry.ip, entry.id)
-
-        save_changes(session, entry, {"archived": {"old": entry.archived, "new": payload.archived}}, user["login"])
-        entry.archived = payload.archived
-        flush_unique(session)
-        changed.append(entry.id)
+    for entry in changed:
+        save_changes(session, entry, {"archived": {"old": not payload.archived, "new": payload.archived}}, user["login"])
 
     session.commit()
-    return {"ok": True, "changed": sorted(changed)}
+    return {"ok": True, "changed": sorted(entry.id for entry in changed)}
 
 
 class BulkIn(BaseModel):
