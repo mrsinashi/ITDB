@@ -274,9 +274,12 @@ body.ui-light-toolbar {
     --tb-ctrl-border: #cfcfcf;
     --tb-ctrl-text: #333;
     --tb-ctrl-hover-bg: #f0f0f0;
-    /* Выбранная вкладка панели (этап 72) – серая, светлее включённой кнопки (просьба пользователя:
-       #555 – «слишком тёмный», #888 – «ещё чуть светлее»); до этапа 72 – цветом схемы */
-    --tb-tab-on-bg: #9e9e9e;
+    /* Выбранная вкладка панели (этап 72, цвета пользователя): светло-серая, тёмный текст, серая
+       черта снизу; до этапа 72 – цветом схемы. Невыбранная под курсором – светлее выбранной */
+    --tb-tab-on-bg: #d2d2d2;
+    --tb-tab-on-text: #383838;
+    --tb-tab-on-line: #9b9b9b;
+    --tb-tab-hover-bg: rgba(60, 60, 60, 0.11);
     /* Включённая кнопка панели – тёмно-серая, не цветом схемы (07.10) */
     --tb-ctrl-on-bg: #555;
     --tb-ctrl-on-border: #444;
@@ -3995,7 +3998,7 @@ body.login-page {
 
 /* Вкладки страницы на второй панели – как вкладки верхнего меню: во всю высоту
    панели, от её левого края, выбранная – залита (этап 26, просьба пользователя);
-   с этапа 72 (просьба пользователя) – серым (--tb-tab-on-bg), а не цветом схемы */
+   с этапа 72 (просьба пользователя) – светло-серым с чертой снизу (--tb-tab-on-*), а не цветом схемы */
 .toolbar .tb-tabs {
     display: flex;
     align-items: stretch;
@@ -4019,7 +4022,8 @@ body.login-page {
 }
 .toolbar .tb-tabs a.active {
     background: var(--tb-tab-on-bg, var(--tb-ctrl-on-bg));
-    color: var(--tb-ctrl-on-text);
+    color: var(--tb-tab-on-text, var(--tb-ctrl-on-text));
+    box-shadow: inset 0 -2px 0 var(--tb-tab-on-line, transparent);
     font-weight: 600;
 }
 
