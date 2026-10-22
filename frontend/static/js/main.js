@@ -247,6 +247,7 @@ const app = Vue.createApp({
             ownPassword: null,   // форма смены своего пароля в меню пользователя
             ownProfile: null,    // форма «Редактировать» (логин, ФИО, должность) там же
             ownMenu: false,      // открыт список ✎ ▾ в меню пользователя
+            ownLook: false,      // «Внешний вид» в меню пользователя (этап 72; до него – шестерёнка «Настройки»)
 
             scanSources: [],     // источники: GLPI, GSIT, Jabber, DHCP, Сеть (с сервера)
             scanForms: {},       // формы источников: kind → поля формы
@@ -276,7 +277,7 @@ const app = Vue.createApp({
                 selected: [],    // ключи выделенных строк
                 anchor: null     // строка, от которой идёт Shift+клик
             },
-            scanMatchQuery: "",  // поиск на «Проверке» и «Названиях»
+            scanMatchQuery: "",  // поиск на «Проверке» и «Сети»
             // Страница «Vacuum» – пользователи Jabber (/api/scan/jabber)
             vacuum: { data: null, loading: false, error: "", filter: "all" },
             // Вкладка «Сеть»: адреса из DHCP и прохода подсетей (/api/scan/hosts)
@@ -287,7 +288,9 @@ const app = Vue.createApp({
             undone: [],          // что отменил Ctrl+Z – для возврата Ctrl+Y
             undoBusy: false,
             vacuumQuery: "",
+            // Справочники → «Значения» (этап 72; до него – «Названия» сканера): соответствия и поиск по ним
             scanNames: { items: [], loading: false, error: "", hover: null },
+            valuesQuery: "",
             // «Расписание»: настройка каждого источника и журнал запусков (/api/scan/schedule, /api/scan/runs)
             schedule: { items: [], minutes: [], runs: [], loading: false, error: "", hover: null },
             // Этапы 26б–26г: значения сканера в Таблице (кнопка на панели)

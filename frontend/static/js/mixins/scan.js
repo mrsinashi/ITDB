@@ -70,7 +70,7 @@ export default {
             if (this.scanTab === "net") {
                 return this.netCountText;
             }
-            return this.scanTab === "settings" ? this.scanCountText : this.scanNamesCountText;
+            return this.scanCountText;
         },
 
         async loadScanSources() {

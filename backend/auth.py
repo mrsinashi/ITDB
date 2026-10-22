@@ -121,12 +121,14 @@ PAGE_INFO = [
     ("vacuum", None, "Vacuum", VIEW_RUN),
     ("scan/check", "Сканер", "GLPI / GSIT", VIEW_RUN_EDIT),
     ("scan/net", "Сканер", "Сеть", VIEW_RUN),
-    ("scan/names", "Сканер", "Названия", VIEW_EDIT),
     ("scan/schedule", "Сканер", "Расписание", VIEW_RUN_EDIT),
     ("scan/settings", "Сканер", "Подключения", VIEW_RUN_EDIT),
     ("choices/styles", "Справочники", "Оформление", VIEW_EDIT),
+    # Как значения источников названы в таблице (этап 72; до него – «Сканер → Названия», scan/names)
+    ("choices/values", "Справочники", "Значения", VIEW_EDIT),
     ("choices/names", "Справочники", "Имена ПК", VIEW_EDIT),
-    ("choices/models", "Справочники", "Модели принтеров", VIEW_EDIT),
+    # Модели принтеров (с этапа 72 вкладка называется «Принтеры»)
+    ("choices/models", "Справочники", "Принтеры", VIEW_EDIT),
     ("choices/cartridges", "Справочники", "Картриджи", VIEW_EDIT),
     ("history", None, "История", VIEW_EDIT),
     ("users", None, "Пользователи", VIEW_EDIT),
@@ -151,15 +153,16 @@ ROLE_MAX = {
 }
 
 # Без своих настроек – как было до этапа 69: у редактора Vacuum и «Сеть» – просмотр,
-# «Названий», «Расписания», «Подключений» и «Пользователей» нет; у читателя нет сканера
+# «Значений» (до этапа 72 – «Названия» сканера), «Расписания», «Подключений» и «Пользователей»
+# нет; у читателя нет сканера и «Значений»
 ROLE_PAGES = {
     "admin": dict(ROLE_MAX["admin"]),
     "editor": dict.fromkeys(PAGES, "edit") | {
         "vacuum": "view", "scan/net": "view",
-        "scan/names": "none", "scan/schedule": "none", "scan/settings": "none", "users": "none",
+        "choices/values": "none", "scan/schedule": "none", "scan/settings": "none", "users": "none",
     },
     "reader": dict.fromkeys(PAGES, "view") | dict.fromkeys(
-        ("vacuum", "scan/check", "scan/net", "scan/names", "scan/schedule", "scan/settings", "users"), "none",
+        ("vacuum", "scan/check", "scan/net", "choices/values", "scan/schedule", "scan/settings", "users"), "none",
     ),
 }
 

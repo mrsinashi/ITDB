@@ -25,7 +25,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/></svg>
             </a>
             <span class="menu-right">
-                <!-- Значки справа: Справочники, История, Пользователи, Настройки -->
+                <!-- Значки справа: Справочники, История, Пользователи; дальше – меню пользователя (в нём «Внешний вид») -->
                 <a v-if="canOpenView('choices')" href="#choices" class="nav-icon nav-tab" @click="navClick($event, () => setView('choices'))" :class="{ active: view === 'choices' }" title="Справочники">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
                 </a>
@@ -35,34 +35,6 @@
                 <a v-if="canOpenView('users')" href="#users" class="nav-icon nav-tab" @click="navClick($event, () => setView('users'))" :class="{ active: view === 'users' }" title="Пользователи">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </a>
-                <span class="dropdown-wrap nav-pop" ref="settingsWrap">
-                    <a class="nav-icon" :class="{ open: openMenu === 'settings' }" @click.prevent="toggleMenu('settings')" title="Настройки">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    </a>
-                    <div v-if="openMenu === 'settings'" class="nav-card settings-card">
-                        <div class="nc-title">Цветовая схема</div>
-                        <button v-for="t in themes" :key="t.key" class="theme-opt" :class="{ on: theme === t.key }" @click="setTheme(t.key)">
-                            <span class="theme-sw" :style="{ background: t.color }"></span>
-                            <span class="theme-name">{{ t.label }}</span>
-                            <svg v-if="theme === t.key" class="theme-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>
-                        </button>
-                        <div class="nc-sep"></div>
-                        <label class="nc-check" title="Рамки блоков – цветом схемы">
-                            <input type="checkbox" :checked="accentBorders" @change="toggleAccentBorders"> Акцентные границы блоков
-                        </label>
-                        <label class="nc-check">
-                            <input type="checkbox" :checked="!noRadius" @change="togglePref('noRadius', 'no_radius')"> Закругления
-                        </label>
-                        <label class="nc-check">
-                            <input type="checkbox" :checked="buttonCounts" @change="togglePref('buttonCounts', 'button_counts')"> Счётчики на кнопках
-                        </label>
-                        <div class="nc-sep"></div>
-                        <div class="nc-title" title="Шапки таблиц – цветом схемы">Акцентные шапки</div>
-                        <label v-for="p in accentHeaderPages" :key="p.key" class="nc-check">
-                            <input type="checkbox" :checked="accentHeaders[p.key]" @change="toggleAccentHeader(p.key)"> {{ p.label }}
-                        </label>
-                    </div>
-                </span>
                 <span class="dropdown-wrap nav-pop" ref="userWrap">
                     <a class="nav-user" ref="navUser" :class="{ open: openMenu === 'user' }" @click.prevent="toggleMenu('user')" :title="navUserTitle">
                         {{ navUserName }}
@@ -74,9 +46,37 @@
                                 <span class="uc-login">{{ user.login }}</span>
                                 <span class="uc-role">{{ roleLabel }}</span>
                             </span>
+                            <!-- Внешний вид (этап 72, просьба пользователя; до него – шестерёнка «Настройки» в меню):
+                                 значок, не кнопка; внутри – то, что было в «Настройках» -->
+                            <span class="uc-look" :class="{ on: ownLook }" title="Внешний вид" @click="toggleOwnLook">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(-1 -1) scale(.82)" stroke-width="2.07"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".6" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".6" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".6" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".6" fill="currentColor"/></g><path d="m22 12-6.5 6.5"/><path d="M15.5 18.5c-1.2-1.2-3.2-.9-3.8.7-.4 1.2-1.4 2-2.7 2.3 2.4 1.1 5.5.7 6.8-1.1.5-.6.4-1.4-.3-1.9z"/></svg>
+                            </span>
+                        </div>
+                        <div v-if="ownLook" class="settings-card uc-look-pane">
+                            <div class="nc-title">Цветовая схема</div>
+                            <button v-for="t in themes" :key="t.key" class="theme-opt" :class="{ on: theme === t.key }" @click="setTheme(t.key)">
+                                <span class="theme-sw" :style="{ background: t.color }"></span>
+                                <span class="theme-name">{{ t.label }}</span>
+                                <svg v-if="theme === t.key" class="theme-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>
+                            </button>
+                            <div class="nc-sep"></div>
+                            <label class="nc-check" title="Рамки блоков – цветом схемы">
+                                <input type="checkbox" :checked="accentBorders" @change="toggleAccentBorders"> Акцентные границы блоков
+                            </label>
+                            <label class="nc-check">
+                                <input type="checkbox" :checked="!noRadius" @change="togglePref('noRadius', 'no_radius')"> Закругления
+                            </label>
+                            <label class="nc-check">
+                                <input type="checkbox" :checked="buttonCounts" @change="togglePref('buttonCounts', 'button_counts')"> Счётчики на кнопках
+                            </label>
+                            <div class="nc-sep"></div>
+                            <div class="nc-title" title="Шапки таблиц – цветом схемы">Акцентные шапки</div>
+                            <label v-for="p in accentHeaderPages" :key="p.key" class="nc-check">
+                                <input type="checkbox" :checked="accentHeaders[p.key]" @change="toggleAccentHeader(p.key)"> {{ p.label }}
+                            </label>
                         </div>
                         <!-- Смена своего пароля – прямо в меню, без отдельного окна -->
-                        <div v-if="ownPassword" class="uc-form" @keydown.enter.prevent="submitOwnPassword">
+                        <div v-else-if="ownPassword" class="uc-form" @keydown.enter.prevent="submitOwnPassword">
                             <input ref="op-current" class="input" type="password" v-model="ownPassword.current" placeholder="Текущий пароль" autocomplete="current-password">
                             <input class="input" type="password" v-model="ownPassword.next" placeholder="Новый пароль, от 6 знаков" autocomplete="new-password">
                             <input class="input" type="password" v-model="ownPassword.repeat" placeholder="Новый пароль ещё раз" autocomplete="new-password">
@@ -353,7 +353,7 @@
                                 <button @click="openMoveAdd('part')" title="Диск, память…"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>Компонент</button>
                             </template>
                             <!-- Журнал «IP» (этап 71): пустая строка сверху -->
-                            <button v-else-if="tableKind === 'ips'" @click="openIpAdd" title="Адрес, тип, имя, описание"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>Адрес</button>
+                            <button v-else-if="tableKind === 'ips'" @click="openIpAdd()" title="Адрес, тип, имя, описание"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>Адрес</button>
                             <button v-else-if="tableKind === 'pc'" @click="closeMenus(); toggleNewComputer()" title="Расположение, № места, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Компьютер</button>
                             <!-- Принтер (этап 44): расположение, модель, №, имя, IP -->
                             <button v-else @click="toggleNewPrinter" title="Расположение, модель, №, имя, IP"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Принтер</button>
@@ -503,8 +503,9 @@
                         <template v-if="tableReady">
                             <tr is="vue:table-row" v-for="(row, i) in sortedRows" :key="row.id" :row="row" :below="belowRows[i]" :kit="kitMarks[i]"
                                 :selected="selectedSet.has(row.id)" :edit-field="editingRowId === row.id ? editingField : null"></tr>
-                            <!-- Ничего не нашлось, архив пуст (этап 61) – строкой, как в Истории -->
-                            <tr v-if="emptyTableText" class="tbl-empty"><td :colspan="viewColumns.length"><span>{{ emptyTableText }}</span></td></tr>
+                            <!-- Ничего не нашлось, архив пуст (этап 61) – строкой, как в Истории; в журнале «IP» двойной
+                                 клик по «Ничего не найдено» – добавить адрес (этап 72) -->
+                            <tr v-if="emptyTableText" class="tbl-empty" @dblclick="onEmptyRowDblclick($event)"><td :colspan="viewColumns.length"><span>{{ emptyTableText }}</span></td></tr>
                         </template>
                     </tbody>
                 </table>
@@ -600,16 +601,19 @@
         <section v-if="user && view === 'choices'" class="view">
             <div class="toolbar" v-tb-fit>
                 <div class="tb-left">
-                    <!-- Вкладки (этап 35): оформление таблицы и правила имён ПК; модели принтеров (этап 44) -->
+                    <!-- Вкладки (этап 35): оформление таблицы и правила имён ПК; модели принтеров (этап 44,
+                         с этапа 72 – «Принтеры»); «Значения» (этап 72) – бывшие «Названия» сканера -->
                     <nav class="tb-tabs">
                         <a v-if="canPage('choices/styles')" href="#choices" :class="{ active: choicesTab === 'styles' }" @click="navClick($event, () => setChoicesTab('styles'))" title="Оформление столбцов и значений">Оформление</a>
+                        <a v-if="canPage('choices/values')" href="#choices/values" :class="{ active: choicesTab === 'values' }" @click="navClick($event, () => setChoicesTab('values'))" title="Как значения GLPI / GSIT называются в таблице">Значения</a>
                         <a v-if="canPage('choices/names')" href="#choices/names" :class="{ active: choicesTab === 'names' }" @click="navClick($event, () => setChoicesTab('names'))" title="Правила имён компьютеров и принтеров">Имена ПК</a>
-                        <a v-if="canPage('choices/models')" href="#choices/models" :class="{ active: choicesTab === 'models' }" @click="navClick($event, () => setChoicesTab('models'))" title="Модели принтеров и МФУ">Модели принтеров</a>
+                        <a v-if="canPage('choices/models')" href="#choices/models" :class="{ active: choicesTab === 'models' }" @click="navClick($event, () => setChoicesTab('models'))" title="Модели принтеров и МФУ">Принтеры</a>
                         <a v-if="canPage('choices/cartridges')" href="#choices/cartridges" :class="{ active: choicesTab === 'cartridges' }" @click="navClick($event, () => setChoicesTab('cartridges'))" title="Картриджи и модели, которым они подходят">Картриджи</a>
                     </nav>
                     <template v-if="choicesTab === 'styles'">
                         <span v-if="choicesQuery.trim()" class="tb-count">Найдено значений: {{ choicesMatch.hits }}<template v-if="choicesMatch.blocks.length > 1"> · раздел {{ choicesMatch.pos + 1 }} из {{ choicesMatch.blocks.length }} (Enter – следующий)</template></span>
                     </template>
+                    <span v-else-if="choicesTab === 'values'" class="tb-count">{{ scanNamesCountText }}</span>
                     <span v-else-if="choicesTab === 'names'" class="tb-count">{{ namesCountText }}</span>
                     <span v-else-if="choicesTab === 'cartridges'" class="tb-count">{{ cartridgesCountText }}</span>
                     <span v-else class="tb-count">{{ modelsCountText }}</span>
@@ -618,6 +622,11 @@
                     <input v-model="choicesQuery" placeholder="Поиск: раздел и значение" autocomplete="off"
                         @keydown.enter.prevent="nextChoicesBlock" @keydown.esc.prevent="onSearchEsc($event, 'choicesQuery')">
                     <span v-if="choicesQuery" class="clear" title="Очистить (Esc)" @click="choicesQuery = ''">×</span>
+                </span>
+                <span v-else-if="choicesTab === 'values'" class="tb-search">
+                    <input v-model="valuesQuery" placeholder="Поиск: поле, значение" autocomplete="off"
+                        @keydown.esc.prevent="onSearchEsc($event, 'valuesQuery')">
+                    <span v-if="valuesQuery" class="clear" title="Очистить (Esc)" @click="valuesQuery = ''">×</span>
                 </span>
                 <span v-else-if="choicesTab === 'names'" class="tb-search">
                     <input v-model="namesQuery" placeholder="Поиск: расположение, часть, имя" autocomplete="off"
@@ -641,6 +650,15 @@
                     <template v-if="choicesTab === 'cartridges' && canEdit">
                         <button class="btn icon-only" :class="{ active: cartridgesBar && cartridgesBar.kind === 'new' }" @click="openNewCartridgeRow" title="Новый картридж"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
                     </template>
+                    <!-- «Значения»: пояснение – по кнопке «?», а не текстом над таблицей (этап 26д) -->
+                    <span v-if="choicesTab === 'values'" class="dropdown-wrap" ref="namesHelpWrap">
+                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namesHelp' }" @click="toggleMenu('namesHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+                        <div v-if="openMenu === 'namesHelp'" class="dropdown right attached names-help">
+                            <p>Значения сканера показываются так, как названы в таблице.</p>
+                            <p>Изменить – двойной клик по отметке на «GLPI / GSIT»:</p>
+                            <p class="nh-marks"><b>=</b> одно и то же, <b>≠</b> разное, <b>⇐</b> своё в таблице, <b>→</b> мат. плата</p>
+                        </div>
+                    </span>
                     <template v-if="choicesTab === 'names'">
                         <!-- Все предложения «по таблице» разом -->
                         <button v-if="canEdit" class="btn icon-only" :class="{ 'has-badge': nameSuggestions.size > 0 }" :disabled="!nameLearnItems.length || nameSaving" @click="learnAllNames"
@@ -815,6 +833,39 @@
                                 <td><label title="Показывать всегда"><input type="checkbox" :checked="m.always" :disabled="!canEdit || !m.enabled" @change="updateScanMark(m.kind, { always: $event.target.checked })"> Без кнопки</label></td>
                             </tr>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Значения (этап 72; до него – «Названия» на «Сканере»): как значения GLPI / GSIT названы в таблице -->
+            <div v-else-if="choicesTab === 'values'" class="page scan-match-page scan-names-page" :class="{ 'accent-head': accentHeaders.choices }">
+                <div v-if="scanNames.error" class="sm-error">{{ scanNames.error }}</div>
+                <div class="users-wrap sm-wrap names-wrap" @mouseleave="scanNames.hover = null">
+                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.choices }">
+                        <div class="history-scroll" @scroll="scanNames.hover = null">
+                            <table class="history-table users-table sm-table names-table" :class="{ 'accent-head': accentHeaders.choices }">
+                                <thead>
+                                    <tr><th>Поле</th><th>В GLPI / GSIT</th><th class="sm-c"></th><th>В таблице</th><th>Откуда</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="!scanNamesShown.length" class="h-empty"><td colspan="5">{{ scanNames.loading ? "Загрузка…" : (scanNames.items.length ? "Ничего не найдено." : "Соответствий пока нет.") }}</td></tr>
+                                    <tr v-for="n in scanNamesShown" :key="n.field + '|' + n.source + '|' + n.table + '|' + n.kind"
+                                        :class="{ 'is-hover': scanNames.hover && scanNames.hover.name === n }" @mouseenter="canEdit && setScanNameHover(n, $event.currentTarget)">
+                                        <td>{{ scanFieldLabel(n.field) }}</td>
+                                        <td>{{ n.source }}</td>
+                                        <td class="sm-c nm-kind" :class="{ differ: n.kind === 'differ' }" :title="scanNameKindTitle(n)">{{ n.kind === "differ" ? "≠" : (n.kind === "keep" ? "⇐" : (n.kind === "board" ? "→" : "=")) }}</td>
+                                        <td class="nm-table">{{ n.table }}</td>
+                                        <td class="nm-origin" :class="{ learned: n.origin === 'learned' }">{{ scanNameOrigin(n) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-if="scanNames.hover" class="tree-actions" :style="{ top: scanNames.hover.top + 'px', height: scanNames.hover.height + 'px' }">
+                        <span class="na-box">
+                            <span v-if="scanNames.hover.name.origin === 'manual'" class="icon-btn danger" title="Удалить" @click="deleteScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+                            <span v-else class="icon-btn danger" title="Это разное" @click="differScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14"/><path d="M5 15h14"/><path d="M19 5 5 19"/></svg></span>
+                        </span>
                     </div>
                 </div>
             </div>
@@ -1255,13 +1306,12 @@
 
         <!-- ================= Сканер (этап 24; вкладки – по правам, этап 69) ================= -->
         <section v-if="user && canOpenView('scan') && view === 'scan'" class="view">
-            <div class="toolbar" :class="{ 'tb-with-refresh': scanTab === 'check' || scanTab === 'names' || scanTab === 'net' }" v-tb-fit>
+            <div class="toolbar" :class="{ 'tb-with-refresh': scanTab === 'check' || scanTab === 'net' }" v-tb-fit>
                 <div class="tb-left">
                     <nav class="tb-tabs">
                         <a v-if="canPage('scan/check')" href="#scan/check" :class="{ active: scanTab === 'check' }" @click="navClick($event, () => setScanTab('check'))" title="Что сканер предлагает изменить">GLPI / GSIT</a>
                         <!-- «Сеть» (этап 28б): что собрали DHCP и проход подсетей -->
                         <a v-if="canPage('scan/net')" href="#scan/net" :class="{ active: scanTab === 'net' }" @click="navClick($event, () => setScanTab('net'))" title="DHCP и проход подсетей">Сеть</a>
-                        <a v-if="canPage('scan/names')" href="#scan/names" :class="{ active: scanTab === 'names' }" @click="navClick($event, () => setScanTab('names'))" title="Как значения источников называются в таблице">Названия</a>
                         <a v-if="canPage('scan/schedule')" href="#scan/schedule" :class="{ active: scanTab === 'schedule' }" @click="navClick($event, () => setScanTab('schedule'))" title="Когда собирать">Расписание</a>
                         <!-- «Подключения» – последней, значком-шестерёнкой -->
                         <a v-if="canPage('scan/settings')" href="#scan/settings" class="tb-tab-ico" :class="{ active: scanTab === 'settings' }" @click="navClick($event, () => setScanTab('settings'))" title="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
@@ -1303,7 +1353,7 @@
                     </span>
                     <span v-if="scanError" class="tb-error" :title="scanError">{{ scanError }}</span>
                 </div>
-                <span v-if="scanTab === 'check' || scanTab === 'names' || scanTab === 'net'" class="tb-search">
+                <span v-if="scanTab === 'check' || scanTab === 'net'" class="tb-search">
                     <button class="btn icon-only tb-refresh" @click="reloadScanTab()" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                     <input v-model="scanMatchQuery" :placeholder="scanSearchPlaceholder" autocomplete="off"
                         @keydown.esc.prevent="onSearchEsc($event, 'scanMatchQuery')">
@@ -1311,15 +1361,6 @@
                 </span>
                 <div class="tb-right">
                     <button v-if="scanTab === 'settings' && canEdit" class="btn icon-only" :class="{ active: subnetBar && subnetBar.kind === 'new' }" @click="openNewSubnet()" title="Новая подсеть"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
-                    <!-- «Названия»: пояснение – по кнопке «?», а не текстом над таблицей (этап 26д) -->
-                    <span v-if="scanTab === 'names'" class="dropdown-wrap" ref="namesHelpWrap">
-                        <button class="btn icon-only" :class="{ 'menu-open': openMenu === 'namesHelp' }" @click="toggleMenu('namesHelp')" title="Как это работает"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
-                        <div v-if="openMenu === 'namesHelp'" class="dropdown right attached names-help">
-                            <p>Значения сканера показываются так, как названы в таблице.</p>
-                            <p>Изменить – двойной клик по отметке на «GLPI / GSIT»:</p>
-                            <p class="nh-marks"><b>=</b> одно и то же, <b>≠</b> разное, <b>⇐</b> своё в таблице, <b>→</b> мат. плата</p>
-                        </div>
-                    </span>
                     <button v-if="scanTab === 'schedule'" class="btn icon-only" @click="reloadScanTab()" title="Обновить"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
                 </div>
             </div>
@@ -1871,37 +1912,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                </div>
-            </div>
-            <div v-else-if="scanTab === 'names'" class="page scan-match-page scan-names-page" :class="{ 'accent-head': accentHeaders.scan }">
-                <div v-if="scanNames.error" class="sm-error">{{ scanNames.error }}</div>
-                <div class="users-wrap sm-wrap names-wrap" @mouseleave="scanNames.hover = null">
-                    <div class="history-frame" :class="{ 'accent-head': accentHeaders.scan }">
-                        <div class="history-scroll" @scroll="scanNames.hover = null">
-                            <table class="history-table users-table sm-table names-table" :class="{ 'accent-head': accentHeaders.scan }">
-                                <thead>
-                                    <tr><th>Поле</th><th>В GLPI / GSIT</th><th class="sm-c"></th><th>В таблице</th><th>Откуда</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-if="!scanNamesShown.length" class="h-empty"><td colspan="5">{{ scanNames.loading ? "Загрузка…" : (scanNames.items.length ? "Ничего не найдено." : "Соответствий пока нет.") }}</td></tr>
-                                    <tr v-for="n in scanNamesShown" :key="n.field + '|' + n.source + '|' + n.table + '|' + n.kind"
-                                        :class="{ 'is-hover': scanNames.hover && scanNames.hover.name === n }" @mouseenter="canEdit && setScanNameHover(n, $event.currentTarget)">
-                                        <td>{{ scanFieldLabel(n.field) }}</td>
-                                        <td>{{ n.source }}</td>
-                                        <td class="sm-c nm-kind" :class="{ differ: n.kind === 'differ' }" :title="scanNameKindTitle(n)">{{ n.kind === "differ" ? "≠" : (n.kind === "keep" ? "⇐" : (n.kind === "board" ? "→" : "=")) }}</td>
-                                        <td class="nm-table">{{ n.table }}</td>
-                                        <td class="nm-origin" :class="{ learned: n.origin === 'learned' }">{{ scanNameOrigin(n) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div v-if="scanNames.hover" class="tree-actions" :style="{ top: scanNames.hover.top + 'px', height: scanNames.hover.height + 'px' }">
-                        <span class="na-box">
-                            <span v-if="scanNames.hover.name.origin === 'manual'" class="icon-btn danger" title="Удалить" @click="deleteScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
-                            <span v-else class="icon-btn danger" title="Это разное" @click="differScanName(scanNames.hover.name)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14"/><path d="M5 15h14"/><path d="M19 5 5 19"/></svg></span>
-                        </span>
                     </div>
                 </div>
             </div>

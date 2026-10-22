@@ -124,7 +124,7 @@ def find_model(session, value):
     if not found:
         raise HTTPException(
             status_code=400,
-            detail=f"Модели «{text}» нет в справочнике – добавь её: Справочники → Модели принтеров.",
+            detail=f"Модели «{text}» нет в справочнике – добавь её: Справочники → Принтеры.",
         )
 
     if len(found) > 1:

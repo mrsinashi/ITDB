@@ -1122,7 +1122,6 @@ export default {
                 treeAddSide: this.$refs.treeAddSideWrap,
                 add: this.$refs.addWrap,
                 export: this.$refs.exportWrap,
-                settings: this.$refs.settingsWrap,
                 user: this.$refs.userWrap,
                 historySel: this.$refs.historySelWrap,
                 checkSel: this.$refs.checkSelWrap,

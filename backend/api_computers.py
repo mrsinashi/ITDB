@@ -88,6 +88,21 @@ def normalize_multiline(value):
     return "\n".join(lines)
 
 
+# Короткая запись адреса (этап 72, просьба пользователя): «24.46» – это 192.168.24.46
+SHORT_IP_PREFIX = "192.168."
+SHORT_IP = re.compile(r"(\d{1,3})\.(\d{1,3})")
+
+
+def full_ip(part):
+    """«24.46» → «192.168.24.46»; всё остальное – как есть."""
+    match = SHORT_IP.fullmatch(part)
+
+    if not match or any(int(number) > 255 for number in match.groups()):
+        return part
+
+    return SHORT_IP_PREFIX + ".".join(str(int(number)) for number in match.groups())
+
+
 def normalize_ip(value):
     if value is None:
         return None
@@ -103,7 +118,7 @@ def normalize_ip(value):
         part = part.strip()
 
         if part:
-            parts.append(part)
+            parts.append(full_ip(part))
 
     if not parts:
         return None

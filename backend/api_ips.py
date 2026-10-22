@@ -31,7 +31,7 @@ from sqlalchemy.exc import IntegrityError
 import scan_collect
 from api_columns import IP_COLUMNS
 from api_computer_actions import parse_ids
-from api_computers import lock_rows, normalize_multiline, normalize_single, save_changes
+from api_computers import full_ip, lock_rows, normalize_multiline, normalize_single, save_changes
 from api_moves import IP as MOVE_IP, USER_REF, distinct, move_title, record, short_name
 from api_printers import KINDS as PRINTER_KINDS
 from api_scan import fresh_days_of, load_source
@@ -94,9 +94,9 @@ def visible_sources(user):
 
 
 def parse_ip(value):
-    """Один адрес IPv4 («192.168.0.10»); пусто или не адрес – ошибка."""
+    """Один адрес IPv4 («192.168.0.10», коротко – «0.10», этап 72); пусто или не адрес – ошибка."""
     text = normalize_single(value)
-    ip = usable_ipv4(text) if text else None
+    ip = usable_ipv4(full_ip(text)) if text else None
 
     if ip is None:
         raise HTTPException(status_code=400, detail="IP: один адрес вида 192.168.0.10.")

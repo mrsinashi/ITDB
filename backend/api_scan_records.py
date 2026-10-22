@@ -11,7 +11,8 @@
 - POST /api/scan/records/{kind}/{source_id}/reject {computer_id} – «не этот ПК»;
 - DELETE /api/scan/records/{kind}/{source_id}/decisions – забыть решения;
 - GET /api/scan/names, POST /api/scan/names, DELETE /api/scan/names/{id} –
-  соответствия названий источника и таблицы (этап 25б, scan_values.py).
+  соответствия названий источника и таблицы (этап 25б, scan_values.py); страница – «Справочники →
+  Значения» (этап 72, до него – «Сканер → Названия»).
 
 Решения пишутся в Историю (видит администратор) со снимком «до / после» – отменяются
 там и Ctrl+Z (этап 53, scan_decisions.py).
@@ -424,7 +425,7 @@ def field_title(field):
 
 
 @router.get("/names", response_model=list[NameOut])
-def list_names(me=Depends(require_page("scan/names")), session=Depends(get_db)):
+def list_names(me=Depends(require_page("choices/values")), session=Depends(get_db)):
     """Соответствия, заданные вручную, и выученные по таблице (как значения
     источников уже названы у сопоставленных ПК)."""
     result = [
@@ -509,7 +510,7 @@ def log_alias(session, me, field, title, change, old, new, undo):
 
 
 @router.post("/names")
-def add_name(payload: NameIn, me=Depends(require_page("scan/check", "edit", ("scan/names", "edit"), ("table", "edit"))), session=Depends(get_db)):
+def add_name(payload: NameIn, me=Depends(require_page("scan/check", "edit", ("choices/values", "edit"), ("table", "edit"))), session=Depends(get_db)):
     """Решение по паре «значение источника – значение таблицы»: same («одно и то
     же» – для всех ПК, одно на значение источника), differ («это разное»), keep
     («в таблице своё» – не расхождение, но и не одно и то же), board (название
@@ -521,7 +522,7 @@ def add_name(payload: NameIn, me=Depends(require_page("scan/check", "edit", ("sc
 
 
 @router.delete("/names/{alias_id}")
-def delete_name(alias_id: int, me=Depends(require_page("scan/names", "edit")), session=Depends(get_db)):
+def delete_name(alias_id: int, me=Depends(require_page("choices/values", "edit")), session=Depends(get_db)):
     alias = session.get(ScanAlias, alias_id)
 
     if alias is None:

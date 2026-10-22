@@ -116,9 +116,9 @@ def test_role_bounds():
     assert [page for page in PAGES if "run" in PAGE_LEVELS[page]] == [
         "vacuum", "scan/check", "scan/net", "scan/schedule", "scan/settings"]
     assert ROLE_MAX["editor"]["scan/settings"] == "run" and ROLE_MAX["editor"]["users"] == "view"
-    assert ROLE_MAX["editor"]["scan/names"] == "edit"
+    assert ROLE_MAX["editor"]["choices/values"] == "edit"
     # Без своих настроек – как было
-    assert ROLE_PAGES["editor"]["scan/names"] == "none" and ROLE_PAGES["reader"]["vacuum"] == "none"
+    assert ROLE_PAGES["editor"]["choices/values"] == "none" and ROLE_PAGES["reader"]["vacuum"] == "none"
 
 
 def test_fit_perms_on_role_change():
@@ -165,10 +165,10 @@ def test_reader_can_view_and_run(admin, reader, room, glpi_url):
 
 
 def test_editor_settings_pages(admin, editor):
-    # Настройки – не выше запуска и просмотра; «Названия» – можно и правку
+    # Настройки – не выше запуска и просмотра; «Значения» (до этапа 72 – «Названия») – можно и правку
     assert "не даёт" in set_perms(admin, "editor", {"scan/settings": "edit"}, 400)["detail"]
     assert "не даёт" in set_perms(admin, "editor", {"users": "edit"}, 400)["detail"]
-    set_perms(admin, "editor", {"scan/settings": "run", "users": "view", "scan/names": "edit", "vacuum": "run"})
+    set_perms(admin, "editor", {"scan/settings": "run", "users": "view", "choices/values": "edit", "vacuum": "run"})
     assert editor.patch("/api/scan/sources/glpi", json={"enabled": False}).status_code == 403
     ok(editor.get("/api/scan/sources"))
     ok(editor.get("/api/users"))
@@ -176,7 +176,7 @@ def test_editor_settings_pages(admin, editor):
     ok(editor.get("/api/scan/names"))
 
     # Без своих настроек – как было: сбор GLPI / GSIT – с правкой страницы (правка включает запуск)
-    set_perms(admin, "editor", {"scan/settings": "none", "users": "none", "scan/names": "none", "vacuum": "view"})
+    set_perms(admin, "editor", {"scan/settings": "none", "users": "none", "choices/values": "none", "vacuum": "view"})
     assert ok(editor.get("/api/auth/me"))["perms"] == ROLE_PAGES["editor"]
     response = editor.post("/api/scan/sources/jabber/collect")
     assert response.status_code == 403 and "Vacuum" in response.json()["detail"]

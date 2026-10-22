@@ -308,6 +308,10 @@ export default {
                 this.cartridgesBar = null;
                 this.loadCartridges();
                 this.loadPrinterModels();
+            } else if (tab === "values") {
+                // Значения (этап 72, бывшие «Названия» сканера): как значения источников названы в таблице
+                this.scanNames.hover = null;
+                this.loadScanNames();
             }
             this.syncHash();
         },
@@ -670,8 +674,7 @@ export default {
             }
             this.closeNamePop();
             this.namesQuery = "";
-            this.setView("choices");
-            this.setChoicesTab("names");
+            this.setView("choices", "names");
             this.nameSelId = pop.check.entry.node.id;
             this.$nextTick(() => {
                 const el = document.querySelector('.nr-table tr[data-id="' + this.nameSelId + '"]');

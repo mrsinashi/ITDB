@@ -39,6 +39,7 @@ export default {
                 this.ownPassword = null;
                 this.ownProfile = null;
                 this.ownMenu = false;
+                this.ownLook = false;
             }
         },
     },
@@ -400,6 +401,16 @@ export default {
             } finally {
                 pop.saving = false;
             }
+        },
+
+        // ---------- Внешний вид (меню пользователя, этап 72) ----------
+
+        // Значок палитры в шапке меню: вместо низа меню – схема, галочки вида, акцентные шапки
+        toggleOwnLook() {
+            this.ownLook = !this.ownLook;
+            this.ownMenu = false;
+            this.ownPassword = null;
+            this.ownProfile = null;
         },
 
         // ---------- Свой пароль (меню пользователя) ----------

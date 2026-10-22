@@ -187,6 +187,16 @@ export function fixIpTyping(el, event, cidr) {
     return fixed;
 }
 
+// Короткая запись адреса (этап 72, просьба пользователя): «24.46» – это 192.168.24.46, как
+// full_ip в api_computers.py; в тексте с несколькими адресами – каждый
+const SHORT_IP_PREFIX = "192.168.";
+
+export function fullIps(text) {
+    return String(text).replace(/(^|[\s,;])(\d{1,3})\.(\d{1,3})(?=$|[\s,;])/g, function (all, before, a, b) {
+        return Number(a) > 255 || Number(b) > 255 ? all : before + SHORT_IP_PREFIX + Number(a) + "." + Number(b);
+    });
+}
+
 
 // Разбивка строки на части для подсветки найденного (любое из слов)
 export function highlightParts(text, words) {

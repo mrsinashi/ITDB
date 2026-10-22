@@ -25,7 +25,7 @@ DECISION_ENTITIES = ("scan_records", "scan_aliases")
 # (названия – и из Таблицы: «Своё», «для всех ПК», «Это материнская плата»)
 DECISION_PAGES = {
     "scan_records": ("scan/check", "table"),
-    "scan_aliases": ("scan/check", "scan/names", "table"),
+    "scan_aliases": ("scan/check", "choices/values", "table"),
 }
 
 

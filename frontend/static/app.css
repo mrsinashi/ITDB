@@ -49,6 +49,7 @@
     --nav-text: #f1d7d7;
     --nav-text-strong: #fff;
     --nav-load-bar: var(--nav-text);
+    --nav-active-line: var(--nav-load-bar);     /* полоска под выбранной вкладкой – как полоска загрузки */
 
     /* Панель под меню (поиск, кнопки) */
     --tb-bg: #9c3c3c;
@@ -208,7 +209,7 @@
     --shadow-login: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
-/* Цветовые схемы – тёмные спокойные оттенки. Выбор: шестерёнка в меню. */
+/* Цветовые схемы – тёмные спокойные оттенки. Выбор: «Внешний вид» в меню пользователя (этап 72). */
 html[data-theme="green"] {
     --brand: #417B54;
     --brand-dark: #244b31;
@@ -273,7 +274,9 @@ body.ui-light-toolbar {
     --tb-ctrl-border: #cfcfcf;
     --tb-ctrl-text: #333;
     --tb-ctrl-hover-bg: #f0f0f0;
-    --tb-tab-on-bg: var(--brand);   /* выбранная вкладка панели – по-прежнему цветом схемы */
+    /* Выбранная вкладка панели (этап 72) – серая, светлее включённой кнопки (просьба пользователя:
+       #555 – «слишком тёмный»); до этапа 72 – цветом схемы */
+    --tb-tab-on-bg: #888;
     /* Включённая кнопка панели – тёмно-серая, не цветом схемы (07.10) */
     --tb-ctrl-on-bg: #555;
     --tb-ctrl-on-border: #444;
@@ -394,9 +397,23 @@ body {
 }
 
 .top-menu a.active {
+    position: relative;
     background: var(--nav-active-bg);
     color: var(--nav-text-strong);
     font-weight: 600;
+}
+/* Полоска снизу у выбранной вкладки (22.10, просьба пользователя) – под полоской загрузки
+   (.load-bar, z-index 5) и того же цвета: пока идёт загрузка, та её закрывает */
+.top-menu a.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--nav-active-line);
+    z-index: 1;
+    pointer-events: none;
 }
 
 .top-menu .menu-right {
@@ -405,7 +422,8 @@ body {
     align-items: stretch;
 }
 
-/* Шестерёнка и пользователь справа в меню */
+/* Значки вкладок и пользователь справа в меню (шестерёнки «Настройки» с этапа 72 нет – «Внешний
+   вид» в меню пользователя) */
 .top-menu .nav-pop {
     align-items: stretch;
 }
@@ -421,13 +439,12 @@ body {
     justify-content: center;
     padding: 0 14px;
 }
-.top-menu .nav-icon.open,
 .top-menu .nav-user.open {
     background: var(--nav-active-bg);
     color: var(--nav-text-strong);
 }
 
-/* Всплывающие карточки из меню: пользователь, настройки.
+/* Всплывающая карточка из меню – меню пользователя (с этапа 72 в нём и «Внешний вид»).
    Та же манера, что у выпадающих меню панели: тонкая рамка, малый радиус. */
 .nav-card {
     position: absolute;
@@ -471,6 +488,24 @@ body {
     justify-content: center;
     font-size: 14px;
     font-weight: 600;
+}
+/* «Внешний вид» (этап 72, просьба пользователя) – значок палитры справа сверху в шапке меню,
+   без кнопки: под курсором и открытый – темнее */
+.user-card .uc-look {
+    flex: none;
+    align-self: flex-start;
+    display: flex;
+    margin-left: auto;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.user-card .uc-look svg {
+    width: 16px;
+    height: 16px;
+}
+.user-card .uc-look:hover,
+.user-card .uc-look.on {
+    color: var(--text-strong);
 }
 .uc-text {
     display: flex;
@@ -3828,6 +3863,7 @@ body.login-page {
 }
 .scan-form .sf-check input[type="checkbox"] {
     margin: 0;
+    accent-color: var(--brand);     /* галочки «Подключений» не в шапке – цветом схемы (22.10) */
 }
 .scan-form .sf-check .sf-days {
     width: 52px;
@@ -3926,6 +3962,7 @@ body.login-page {
 .subnets-table tr.er-row input[type="checkbox"] {
     margin: 0;
     vertical-align: middle;
+    accent-color: var(--brand);
 }
 /* Кнопка «Добавить» справа от шапки таблицы (Дерево, Пользователи, подсети) –
    дубль кнопки на панели (просьба пользователя 30.09); стоит там же, где
@@ -3957,7 +3994,8 @@ body.login-page {
    ============================================================ */
 
 /* Вкладки страницы на второй панели – как вкладки верхнего меню: во всю высоту
-   панели, от её левого края, выбранная – залита (этап 26, просьба пользователя) */
+   панели, от её левого края, выбранная – залита (этап 26, просьба пользователя);
+   с этапа 72 (просьба пользователя) – серым (--tb-tab-on-bg), а не цветом схемы */
 .toolbar .tb-tabs {
     display: flex;
     align-items: stretch;
@@ -3969,7 +4007,7 @@ body.login-page {
 .toolbar .tb-tabs a {
     display: flex;
     align-items: center;
-    padding: 0 14px;
+    padding: 0 10px;
     background: var(--tb-tab-bg);
     color: var(--tb-text);
     text-decoration: none;
@@ -5361,7 +5399,7 @@ html.no-radius .card-sec-body .vac-dot {
 
 /* «Сканер»: вкладка-значок «Подключения» – последней */
 .toolbar .tb-tabs a.tb-tab-ico {
-    padding: 0 12px;
+    padding: 0 9px;
 }
 .toolbar .tb-tabs a.tb-tab-ico svg {
     width: 16px;
@@ -6268,7 +6306,9 @@ html.no-radius input[type="checkbox"]:indeterminate:disabled {
 html.no-radius .settings-card .nc-check input,
 html.no-radius .dropdown label input,
 html.no-radius .cf-menu .cf-item input,
-html.no-radius .pr-opts .pr-check input {
+html.no-radius .pr-opts .pr-check input,
+html.no-radius .scan-form .sf-check input,
+html.no-radius .subnets-table tr.er-row input {
     --cb-on: var(--brand);
     --cb-hover: var(--cb-brand-hover);
     --cb-press: var(--cb-brand-press);

@@ -209,7 +209,11 @@ export default {
             }
         },
 
-        setView(view) {
+        // tab – вкладка страницы с вкладками (Журналы, Сканер, Справочники): названная, если на неё
+        // есть права, иначе первая слева из доступных (этап 69) – из меню страница всегда
+        // открывается на первой вкладке (этап 72, просьба пользователя; до него Журналы и
+        // Справочники помнили прошлую)
+        setView(view, tab) {
             // Страница закрыта правами (этап 69): ссылки из других страниц («Принтеры модели»,
             // «Показать в таблице») туда не ведут
             if (!this.canOpenView(view)) {
@@ -221,9 +225,9 @@ export default {
             this.hideWebShown();
             this.closeLinkPick();
             this.closePop("permsPop");
-            // Журналы: вкладка, на которую нет прав (этап 69), – первая доступная
-            if (view === "journals" && !this.canPage("journals/" + this.journalTab)) {
-                this.journalTab = this.firstTab("journals") || "moves";
+            const pageTab = tab && this.canPage(view + "/" + tab) ? tab : this.firstTab(view);
+            if (view === "journals") {
+                this.journalTab = pageTab || "moves";
             }
             // Таблица показывает ПК, принтеры или журнал (этапы 44, 66, 71): её настройки – меняются местами
             const journal = this.journalTab === "ips" ? "ips" : "moves";
@@ -248,22 +252,13 @@ export default {
             } else if (view === "history") {
                 this.loadHistory();
             } else if (view === "choices") {
-                // Вкладка, на которую нет прав (этап 69), – первая доступная
-                if (!this.canPage("choices/" + this.choicesTab)) {
-                    this.choicesTab = this.firstTab("choices") || "styles";
-                }
                 this.loadChoices();
                 this.loadColumnStyles();
                 this.loadFieldDefs();
                 this.loadAvSettings();
                 this.loadTableMarks();
                 this.loadAppSettings();
-                if (this.choicesTab === "names") {
-                    this.ensureTree();
-                    this.loadNameKeep();
-                } else if (this.choicesTab === "models") {
-                    this.loadPrinterModels();
-                }
+                this.setChoicesTab(pageTab || "styles");
             } else if (view === "users") {
                 this.loadUsers();
             } else if (view === "vacuum") {
@@ -272,11 +267,10 @@ export default {
                     this.loadScanSources();     // «Сканировать» запускает сбор из Jabber
                 }
             } else if (view === "scan") {
-                // «Сканер» всегда открывается на первой вкладке слева – «GLPI / GSIT» (этап 28);
-                // нет прав на неё (этап 69) – на первой доступной
+                // «Сканер» открывается на первой вкладке слева – «GLPI / GSIT» (этап 28)
                 this.scanMatchQuery = "";
                 this.loadScan();
-                this.setScanTab(this.firstTab("scan") || "check");
+                this.setScanTab(pageTab || "check");
             }
             this.syncHash();
         },

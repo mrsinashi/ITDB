@@ -9,8 +9,9 @@ import { pageLink, parseHash } from "../route.js";
 const MENU_VIEWS = ["table", "printers", "tree", "journals", "vacuum", "scan", "choices", "history", "users"];
 const VIEW_TABS = {
     journals: ["moves", "ips"],
-    scan: ["check", "net", "names", "schedule", "settings"],
-    choices: ["styles", "names", "models", "cartridges"]
+    scan: ["check", "net", "schedule", "settings"],
+    // «Значения» (этап 72) – бывшие «Названия» сканера
+    choices: ["styles", "values", "names", "models", "cartridges"]
 };
 // Ctrl+Y возвращает отменённое Ctrl+Z только столько после отмены (этап 47)
 const REDO_WINDOW_MS = 60 * 1000;
@@ -70,6 +71,10 @@ export default {
 
         // Открыть то, что названо в адресе (при загрузке страницы и при смене адреса)
         async applyRoute(route) {
+            // «Названия» сканера с этапа 72 – «Значения» в Справочниках: старые ссылки ведут туда
+            if (route && route.view === "scan" && route.tab === "names") {
+                route = Object.assign({}, route, { view: "choices", tab: "values" });
+            }
             if (!route || !this.canOpenView(route.view)) {
                 this.syncHash();
                 return;
@@ -82,23 +87,11 @@ export default {
                     this.showLocationInTable(node);
                 }
             }
-            // Вкладка «Журналов» (этап 71) – до перехода: страница откроется сразу на ней
-            if (route.view === "journals" && VIEW_TABS.journals.indexOf(route.tab) !== -1 && this.canPage("journals/" + route.tab) && this.journalTab !== route.tab) {
-                if (this.view === "journals") {
-                    this.setJournalTab(route.tab);
-                } else {
-                    this.journalTab = route.tab;
-                }
-            }
-            if (this.view !== route.view || route.view === "scan") {
-                this.setView(route.view);
-            }
-            if (route.view === "scan" && route.tab && VIEW_TABS.scan.indexOf(route.tab) !== -1 && this.canPage("scan/" + route.tab)) {
-                this.setScanTab(route.tab);
-            }
-            if (route.view === "choices") {
-                const tab = VIEW_TABS.choices.indexOf(route.tab) !== -1 ? route.tab : "styles";
-                this.setChoicesTab(this.canPage("choices/" + tab) ? tab : this.firstTab("choices"));
+            // Вкладка из адреса – сразу при переходе (нет её или нет прав – первая слева, setView);
+            // у страницы с вкладками – и когда она уже открыта (адрес сменили на другую вкладку)
+            const tabs = VIEW_TABS[route.view];
+            if (this.view !== route.view || tabs) {
+                this.setView(route.view, tabs && tabs.indexOf(route.tab) !== -1 ? route.tab : null);
             }
             if (params.pc) {
                 this.openCardById(Number(params.pc));
@@ -142,8 +135,8 @@ export default {
             if (this.view === "scan" && this.scanTab === "check") {
                 this.loadCheck();
             }
-            // Решения сканера отменяются тоже (этап 53) – «Названия» на экране перечитать
-            if (this.view === "scan" && this.scanTab === "names") {
+            // Решения сканера отменяются тоже (этап 53) – «Значения» на экране перечитать
+            if (this.view === "choices" && this.choicesTab === "values") {
                 this.loadScanNames();
             }
         },

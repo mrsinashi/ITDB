@@ -1,5 +1,5 @@
-// Сканер, этап 25: сбор из GLPI / GSIT (с этапа 26д – и Jabber, с 28 – DHCP и сеть), вкладка
-// «Названия» и общее для записей источников (с этапа 26г записи показывает вкладка
+// Сканер, этап 25: сбор из GLPI / GSIT (с этапа 26д – и Jabber, с 28 – DHCP и сеть), «Названия»
+// (с этапа 72 – вкладка «Значения» Справочников) и общее для записей источников (с этапа 26г записи показывает вкладка
 // «Проверка», scan-check.js; пользователей Jabber – страница «Vacuum», scan-vacuum.js).
 //
 // Сбор идёт на сервере в фоне; страница спрашивает запуск раз в 1,5 с, пока он
@@ -183,16 +183,13 @@ export default {
 
         scanNamesShown() {
             const texts = this.scanNames.items.map((n) => searchNorm([this.scanFieldLabel(n.field), n.source, n.table].join(" ")));
-            const words = searchWordsIn(this.scanMatchQuery, texts);
+            const words = searchWordsIn(this.valuesQuery, texts);
             return this.scanNames.items.filter(function (n, i) {
                 return !words.length || matchesAllWords(texts[i], words);
             });
         },
 
         scanSearchPlaceholder() {
-            if (this.scanTab === "names") {
-                return "Поиск: поле, значение";
-            }
             if (this.scanTab === "net") {
                 return "Поиск: IP, MAC, имя, ПК";
             }
@@ -235,9 +232,6 @@ export default {
             this.collectOff = [];
             this.netScanOff = [];
             this.watchSchedule(tab === "schedule");
-            if (tab === "names") {
-                this.loadScanNames();
-            }
             if (tab === "schedule") {
                 this.schedule.hover = null;
                 this.loadSchedule();
@@ -254,9 +248,7 @@ export default {
 
         // «Обновить»: на «GLPI / GSIT» и «Сети» – ещё и изменения таблицы (этап 47)
         reloadScanTab() {
-            if (this.scanTab === "names") {
-                this.loadScanNames();
-            } else if (this.scanTab === "schedule") {
+            if (this.scanTab === "schedule") {
                 this.loadSchedule();
             } else if (this.scanTab === "net") {
                 this.loadNet();
@@ -761,7 +753,7 @@ export default {
             });
         },
 
-        // ---------- Вкладка «Названия» ----------
+        // ---------- Справочники → «Значения» (до этапа 72 – «Названия» сканера) ----------
 
         async loadScanNames() {
             this.scanNames.loading = true;

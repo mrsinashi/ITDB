@@ -110,11 +110,11 @@ def test_pc_access(admin, editor, reader, room):
 def test_role_levels(admin, editor, reader):
     for client, role in ((admin, "admin"), (editor, "editor"), (reader, "reader")):
         assert ok(client.get("/api/auth/me"))["perms"] == ROLE_PAGES[role]
-    # Как было до этапа: у читателя нет правки, Vacuum и «Сканера»; у редактора – «Названий»,
-    # «Расписания», «Подключений», «Пользователей»
+    # Как было до этапа: у читателя нет правки, Vacuum и «Сканера»; у редактора – «Названий» (с этапа
+    # 72 – «Справочники → Значения»), «Расписания», «Подключений», «Пользователей»
     assert set(ROLE_PAGES["reader"].values()) == {"view", "none"}
     assert [page for page in PAGES if ROLE_PAGES["editor"][page] == "none"] == [
-        "scan/names", "scan/schedule", "scan/settings", "users"]
+        "scan/schedule", "scan/settings", "choices/values", "users"]
 
     pages = ok(admin.get("/api/users/pages"))
     assert [p["key"] for p in pages] == list(PAGES)

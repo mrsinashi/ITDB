@@ -14,7 +14,7 @@
 // «Актуальность» и «Добавил» уже стоят; запись появляется, когда вписан адрес. «Сканировать» –
 // меню источников, которые приносят адреса (галочки – при каждом заходе на вкладку снова все).
 
-import { apiFetch } from "../util.js";
+import { apiFetch, fullIps, ipDots } from "../util.js";
 import { keepSameRows } from "../columns.js";
 import { pageLink } from "../route.js";
 import { cellOverhead, ensureWidthProbe, measureTextWidth } from "../widths.js";
@@ -133,6 +133,15 @@ export default {
                 }
             });
             return map;
+        },
+
+        // Адрес в поиске, которого в журнале нет (этап 72): полный; коротко «24.46» – 192.168.24.46;
+        // набранный с «ю», «б», «,» или «/» вместо точки – как в поиске (ipDots)
+        ipSearchMissing() {
+            const query = this.quickFilter.trim();
+            const n = ipNumber(fullIps(ipDots(query) || query));
+            const ip = n === null ? null : ipText(n);
+            return ip && !this.ipByAddr.has(ip) ? ip : null;
         },
 
         // Подсети для «Свободных»: большие – серым (перебирать нечего)
@@ -275,8 +284,7 @@ export default {
         setJournalTab(tab) {
             const next = tab === "ips" && this.canPage("journals/ips") ? "ips" : "moves";
             if (this.view !== "journals") {
-                this.journalTab = next;
-                this.setView("journals");
+                this.setView("journals", next);
                 return;
             }
             if (this.journalTab !== next) {
@@ -598,8 +606,12 @@ export default {
 
         // ---------- «Добавить» ----------
 
-        openIpAdd() {
+        // field – столбец, который править первым (двойной клик по строке «Ничего не найдено», этап 72);
+        // по умолчанию – IP. В поиске адрес, которого в журнале нет (коротко «24.46» – полностью), –
+        // он уже в поле IP (этап 72, просьба пользователя)
+        openIpAdd(field) {
             this.closeMenus();
+            const ip = this.ipSearchMissing;
             if (this.showArchive) {
                 this.setArchiveView(false);
             }
@@ -619,12 +631,47 @@ export default {
             if (wrap) {
                 wrap.scrollTop = 0;
             }
-            const col = this.allColumns.find(function (c) { return c.field === "ip_addr"; });
+            const draft = this.ipDraft;
+            const addrCol = this.allColumns.find(function (c) { return c.field === "ip_addr"; });
+            const picked = field && this.allColumns.find(function (c) { return c.field === field; });
+            const col = picked && this.ipCellEditable(draft, picked) ? picked : addrCol;
+            // Адрес из поиска в другом столбце – сразу в строке: сохранится с первым значением или
+            // Enter / Tab (ушли из поля, ничего не вписав, – снимается; Esc – убирает строку, saveEdit)
+            if (ip && !draft.form.ip_addr && col !== addrCol) {
+                draft.form.ip_addr = ip;
+                draft.ip_addr = ip;
+                draft.prefillIp = ip;
+            }
             this.$nextTick(() => {
                 if (this.ipDraft && col) {
+                    const open = this.isEditing(this.ipDraft, col);
                     this.startEdit(this.ipDraft, col);
+                    // В поле IP – адрес из поиска: сохранится Enter / Tab, как набранный
+                    if (ip && col === addrCol && !open && !this.ipDraft.form.ip_addr) {
+                        this.editValue = ip;
+                        this.ipDraft.prefillIp = ip;
+                    }
                 }
             });
+        },
+
+        // Двойной клик по строке «Ничего не найдено» (этап 72, просьба пользователя): «Добавить» с
+        // правкой столбца под курсором
+        onEmptyRowDblclick(event) {
+            if (this.tableKind !== "ips" || !this.canEdit || this.emptyTableText !== "Ничего не найдено.") {
+                return;
+            }
+            let field = null;
+            let sticky = false;
+            this.$refs.table.querySelectorAll("thead th").forEach(function (th) {
+                const r = th.getBoundingClientRect();
+                // Закреплённый столбец лежит поверх прокрученных – он главнее
+                if (event.clientX >= r.left && event.clientX < r.right && (!field || (!sticky && th.classList.contains("sticky")))) {
+                    field = th.dataset.field;
+                    sticky = th.classList.contains("sticky");
+                }
+            });
+            this.openIpAdd(field);
         },
 
         // Значение строки «Добавить»: пока нет адреса – только на экране; адрес есть – запись на сервер.
@@ -711,6 +758,16 @@ export default {
         // Esc в пустом адресе строки «Добавить» – убрать её (без адреса запись не сохранить)
         dropIpDraft() {
             this.ipDraft = null;
+        },
+
+        // Адрес из поиска в строке «Добавить» так и не сохранили (ушли из поля, ничего не вписав) –
+        // строка снова без адреса, как после «Добавить» без поиска
+        dropIpPrefill(draft) {
+            if (draft.form.ip_addr === draft.prefillIp) {
+                delete draft.form.ip_addr;
+                draft.ip_addr = null;
+            }
+            draft.prefillIp = null;
         },
 
         // ---------- «Свободные» ----------

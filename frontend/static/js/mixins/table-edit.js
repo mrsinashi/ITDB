@@ -1,9 +1,12 @@
 // Таблица: правка ячейки – поле правки, Enter / Esc, сохранение (этап 55 – из table.js).
 // Особые столбцы открывают своё: выбор узла, окошко «Доступа», подключения ПК – принтер
 
-import { apiFetch } from "../util.js";
+import { apiFetch, fullIps } from "../util.js";
 import { refreshDuplicates } from "../columns.js";
 import { splitTokens } from "./cartridges.js";
+
+// Поля-адреса: IP у ПК и принтера, адрес журнала «IP»
+const IP_FIELDS = ["ip", "ip_addr"];
 
 export default {
     methods: {
@@ -91,7 +94,7 @@ export default {
                 if (!col.multiline || col.cartridges || col.ipCol) {
                     this.openSuggest(el, col, (value) => {
                         this.editValue = value;
-                        this.saveEdit(row, col);
+                        this.saveEdit(row, col, true);
                     }, row._ip ? null : row.id);
                 }
             });
@@ -103,12 +106,13 @@ export default {
             }
             if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                this.saveEdit(row, col);
+                this.saveEdit(row, col, true);
             } else if (event.key === "Escape") {
                 event.preventDefault();
                 this.cancelEdit();
-                // Журнал «IP» (этап 71): Esc в пустом адресе строки «Добавить» убирает её
-                if (row._draft && col.field === "ip_addr" && !row.form.ip_addr) {
+                // Журнал «IP» (этап 71): Esc в пустом адресе строки «Добавить» убирает её; с адресом из
+                // поиска (этап 72) – в любом столбце: пока ничего не сохранено
+                if (row._draft && (row.prefillIp || (col.field === "ip_addr" && !row.form.ip_addr))) {
                     this.dropIpDraft();
                 }
             } else if (event.key === "Tab") {
@@ -137,7 +141,7 @@ export default {
                     break;
                 }
             }
-            this.saveEdit(row, col);
+            this.saveEdit(row, col, true);
             if (next) {
                 this.startEdit(row, next);
                 this.$nextTick(() => this.revealEditCell(row));
@@ -184,7 +188,8 @@ export default {
             return row[col.field] === null || row[col.field] === undefined ? "" : String(row[col.field]);
         },
 
-        saveEdit(row, col) {
+        // commit – Enter, Tab, выбор подсказки (иначе – ушли из поля)
+        saveEdit(row, col, commit) {
             if (this.editingRowId !== row.id || this.editingField !== col.field) {
                 return;
             }
@@ -194,6 +199,16 @@ export default {
             this.editingRowId = null;
             this.editingField = null;
             this.closeSuggest();
+            // Строка «Добавить» журнала «IP» с адресом из поиска (этап 72): ничего не вписали – запись
+            // только по Enter / Tab (и с пустым полем); ушли из поля – адрес из поиска снимается
+            if (row._draft && row.prefillIp && (newValue === oldValue || (col.field === "ip_addr" && newValue === row.prefillIp))) {
+                if (!commit) {
+                    this.dropIpPrefill(row);
+                    return;
+                }
+                this.saveCellValue(row, col, newValue);
+                return;
+            }
             if (newValue === oldValue) {
                 return;
             }
@@ -264,6 +279,10 @@ export default {
         // Ответ – сохранилось ли (true / false). Строка принтера (этап 44) – в его таблицу.
         // sendValue – на сервер другое, чем в ячейке до ответа (связи ПК – принтер номерами, этап 45)
         async saveCellValue(row, col, value, sendValue) {
+            // IP коротко (этап 72): «24.46» – 192.168.24.46 (ячейка, карточки ПК и принтера, журнал «IP»)
+            if (IP_FIELDS.indexOf(col.field) !== -1 && typeof value === "string") {
+                value = fullIps(value);
+            }
             // Журнал «IP» (этап 71) – своя правка (mixins/ips.js)
             if (row._ip) {
                 return this.saveIpCell(row, col, value);

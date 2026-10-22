@@ -30,7 +30,7 @@ const ENTITY_FILTERS = {
     scan_sources: "Сканер: подключения",
     scan_subnets: "Сканер: подсети",
     scan_records: "Сканер: сопоставление",
-    scan_aliases: "Сканер: названия",
+    scan_aliases: "Справочники: значения",     // до этапа 72 – «Сканер: названия»
     scan_schedule: "Сканер: расписание",
     scan_marks: "Пометки сканера",
     scan_antivirus: "Антивирусы (вид столбца)",
