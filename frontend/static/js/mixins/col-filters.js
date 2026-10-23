@@ -22,7 +22,8 @@
 // ПК виден, если у значения есть отмеченное выделение (и значение отмечено ниже).
 // У VACUUM (этап 43) первыми – «В сети» / «Не в сети» (кружок у логина): это отдельная
 // группа – ПК виден, если подходит и по ней, и по выделениям. Так же у IP журнала «IP» (этап 74,
-// просьба пользователя) – «Прямые» / «Не прямые» (синий кружок Router).
+// просьба пользователя), Компьютеров и Принтеров (этап 75) – «Прямые» / «Не прямые» (синий
+// кружок Router), если в строках есть хоть один прямой.
 //
 // Этап 47: то же меню – у таблицы «Сети» «Сканера» (colFilterMenu.target = "net"): свои
 // столбцы (netColumns, значения ячейки – col.lines), строки (netFilterRows) и фильтры
@@ -38,9 +39,11 @@ const AV_STATES = ["on", "old", "off"];
 const MARK_STATES = ["dup", "hostname", "gone", "stale", "overdue", "verified", "checked"];
 const SCAN_STATES = ["diff", "fill", "unsure", "partial", "link"].map(function (kind) { return "scan-" + kind; });
 const PLAIN_STATE = "none";
-// В сети ли логины VACUUM (этап 43), прямой ли IP журнала «IP» (этап 74) – свои группы отметок
+// В сети ли логины VACUUM (этап 43), прямой ли IP (этапы 74, 75) – свои группы отметок
 const ONLINE_STATES = ["online", "offline"];
 const ROUTER_STATES = ["direct", "indirect"];
+// Столбец IP с «Прямые» / «Не прямые» у таблицы (tableKind)
+const ROUTER_FILTER_FIELDS = { ips: "ip_addr", pc: "ip", printer: "ip" };
 const DOT_LABELS = { online: "В сети", offline: "Не в сети", direct: "Прямые", indirect: "Не прямые" };
 const VALUE_STATES = ONLINE_STATES.concat(ROUTER_STATES, MARK_STATES, SCAN_STATES, [PLAIN_STATE]);
 const NO_STATES = { only: null, off: [] };
@@ -242,8 +245,11 @@ export default {
             // Те, что есть в столбце, и выбранные (снятые / «только»), которых в строках
             // сейчас нет, – чтобы галочку можно было вернуть
             const picked = states.only || states.off;
+            // «Прямые» / «Не прямые» – только когда в строках есть прямой (этап 75, просьба
+            // пользователя) или они уже отмечены
+            const router = !!counts.direct || picked.some(function (kind) { return stateGroup(kind) === "router"; });
             const list = VALUE_STATES.filter(function (kind) {
-                return kind !== PLAIN_STATE && (counts[kind] || picked.indexOf(kind) !== -1);
+                return kind !== PLAIN_STATE && (counts[kind] || picked.indexOf(kind) !== -1) && (router || stateGroup(kind) !== "router");
             });
             if (!list.length) {
                 return [];
@@ -350,9 +356,14 @@ export default {
                     }
                 });
             }
-            // IP журнала «IP»: прямой ли (синий кружок Router) – когда кружки показываются (этап 74)
-            if (this.tableKind === "ips" && col.field === "ip_addr" && value && this.routerColumn(row, col)) {
-                kinds.add(this.routerDot(row, col, value) === "on" ? "direct" : "indirect");
+            // IP: прямой ли (синий кружок Router) – когда кружки показываются: журнал «IP» (этап 74),
+            // Компьютеры и Принтеры (этап 75) – по каждой строке ячейки
+            if (ROUTER_FILTER_FIELDS[this.tableKind] === col.field && value && this.routerColumn(row, col)) {
+                String(value).split("\n").forEach((line) => {
+                    if (line.trim()) {
+                        kinds.add(this.routerDot(row, col, line) === "on" ? "direct" : "indirect");
+                    }
+                });
             }
             return kinds;
         },
